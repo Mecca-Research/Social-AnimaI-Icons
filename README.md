@@ -49,3 +49,4 @@ Vite dev server & bundler
 Tailwind CSS for styling
 
 The core UI is a single React component (SocialAnimalsRPG) you can drop into any app.
+<img width="1596" height="949" alt="SA" src="https://github.com/user-attachments/assets/0642d87d-a94b-4ae2-ab81-ae284b0a758c" />
