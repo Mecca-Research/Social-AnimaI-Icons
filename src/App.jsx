@@ -1,5 +1,5 @@
 import React from 'react'
-import SocialAnimalsRPG from './SocialAnimalsRPG'
+import SocialAnimalsRPG from './SocialAnimalIcons'
 
 export default function App() {
   return (
