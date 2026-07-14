@@ -1,5 +1,9 @@
 # Social-AnimaI-Icons
 
+**▶️ [Live demo](https://mecca-research.github.io/Social-AnimaI-Icons/)** — runs entirely in your browser, no install required.
+
+![Social Animal Icons — animal emojis roaming a large map with Food, Water, and Play stations. Two pairs are mid‑interaction: red “fight” glows and a green “friendly” glow, while others wander or head to a station.](docs/screenshot.png)
+
 An interactive, emergent “living desktop” made of animal icons that socialize, argue, help each other, and roam a large map with stations for Food, Water, and Play. Every icon runs a tiny state machine (wander, idle, go-to-station, friendly, fight, flee, separate, cooldown, drag) and forms relationships via last-touch memory (friend or rival).
 
 Current release: v0.6 — Locked interactions (8s), visible separation, enforced wander cooldown, ally-assist with forced flee, edge warp, big playfield, tuned speeds/needs.
@@ -49,4 +53,23 @@ Vite dev server & bundler
 Tailwind CSS for styling
 
 The core UI is a single React component (SocialAnimalsRPG) you can drop into any app.
-<img width="1596" height="949" alt="SA" src="https://github.com/user-attachments/assets/0642d87d-a94b-4ae2-ab81-ae284b0a758c" />
+
+## 🌐 Live Demo & Deployment
+
+The repo ships a self‑contained [`index.html`](index.html) — React, Tailwind, and Babel are loaded from CDNs and the JSX is transpiled in the browser, so there is **no build step**. It's published with **GitHub Pages**:
+
+- **Live:** https://mecca-research.github.io/Social-AnimaI-Icons/
+- **Enable Pages:** repo *Settings → Pages → Build and deployment → Source: Deploy from a branch*, then pick branch `main` and folder `/ (root)`. The site goes live at the URL above within a minute or two.
+
+**Run it locally** — no tooling needed:
+
+```bash
+# Option A: just open the file
+open index.html            # macOS (use xdg-open on Linux)
+
+# Option B: serve the folder (recommended)
+python3 -m http.server 8000
+# then visit http://localhost:8000
+```
+
+`src/` holds the same simulation as a drop‑in React component (`SocialAnimalIcons.jsx`) plus an example `App.jsx` for use in a bundler-based project.
