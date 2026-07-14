@@ -184,7 +184,7 @@ export default function SocialAnimalsRPG() {
       </div>
 
       {/* Stage */}
-      <div ref={stageRef} className="relative rounded-2xl border border-neutral-800 bg-neutral-900/40 overflow-hidden min-h-[90vh]">
+      <div ref={stageRef} className="relative rounded-2xl border border-neutral-800 bg-neutral-900/40 overflow-hidden min-h-0">
         {/* Stations */}
         {snapshot.stations.map((st) => (
           <div key={st.key} className="absolute -translate-x-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none" style={{ left: st.x, top: st.y }}>

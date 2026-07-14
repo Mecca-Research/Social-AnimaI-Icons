@@ -46,30 +46,33 @@ Drag to intervene: grabbing an icon breaks an ongoing friendly/fight and trigger
 
 🖥️ Tech Stack
 
-React + TypeScript (optional but recommended)
+React 18 + Vite (dev server & production bundler)
 
-Vite dev server & bundler
+Tailwind CSS (compiled at build time, tree-shaken to the classes actually used)
 
-Tailwind CSS for styling
+Deployed to GitHub Pages via GitHub Actions on every push to `main`
 
-The core UI is a single React component (SocialAnimalsRPG) you can drop into any app.
+The core UI is a single React component (`SocialAnimalsRPG`, in `src/SocialAnimalIcons.jsx`) you can drop into any app.
 
 ## 🌐 Live Demo & Deployment
 
-The repo ships a self‑contained [`index.html`](index.html) — React, Tailwind, and Babel are loaded from CDNs and the JSX is transpiled in the browser, so there is **no build step**. It's published with **GitHub Pages**:
+**Live:** https://mecca-research.github.io/Social-AnimaI-Icons/
 
-- **Live:** https://mecca-research.github.io/Social-AnimaI-Icons/
-- **Enable Pages:** repo *Settings → Pages → Build and deployment → Source: Deploy from a branch*, then pick branch `main` and folder `/ (root)`. The site goes live at the URL above within a minute or two.
+The site is a standard [Vite](https://vitejs.dev) build (React + Tailwind) published to **GitHub Pages via GitHub Actions**. Every push to `main` runs [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml), which builds the app and deploys the `dist/` output. No build artifacts are committed — the root [`index.html`](index.html) is just the small Vite entry point, and the hashed JS/CSS bundles are generated during the build.
 
-**Run it locally** — no tooling needed:
+### One-time setup (repo owner)
+
+Enable Pages to build from Actions: **Settings → Pages → Build and deployment → Source → _GitHub Actions_**. After that, the next push to `main` (or a manual run from the **Actions** tab) builds and deploys automatically, and the URL above goes live within a minute or two.
+
+> The Vite `base` is set to `/Social-AnimaI-Icons/` in [`vite.config.js`](vite.config.js) so asset URLs resolve correctly under the project-pages path.
+
+### Run locally
 
 ```bash
-# Option A: just open the file
-open index.html            # macOS (use xdg-open on Linux)
-
-# Option B: serve the folder (recommended)
-python3 -m http.server 8000
-# then visit http://localhost:8000
+npm install
+npm run dev      # start the dev server (prints a localhost URL)
+npm run build    # production build into dist/
+npm run preview  # serve the production build locally
 ```
 
-`src/` holds the same simulation as a drop‑in React component (`SocialAnimalIcons.jsx`) plus an example `App.jsx` for use in a bundler-based project.
+`src/` holds the simulation as a drop-in React component (`SocialAnimalIcons.jsx`, which exports `SocialAnimalsRPG`) plus the `App.jsx` and `main.jsx` entry files that mount it.
