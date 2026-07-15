@@ -42,7 +42,13 @@ body {
 /* ==================== critter sprites ==================== */
 /* ================= sai-crit- : animated critter sprites ================= */
 .sai-crit-root{ display:block; overflow:visible; }
-.sai-crit-root *{ transform-box:fill-box; }
+/* fill-box ONLY on animated rig groups — putting it on every descendant breaks
+   attribute transforms like rotate(a cx cy) on leaf shapes (they paint displaced) */
+.sai-crit-body, .sai-crit-head, .sai-crit-ear, .sai-crit-tail, .sai-crit-leg,
+.sai-crit-lid, .sai-crit-wing, .sai-crit-shadow, .sai-crit-antler,
+.sai-crit-eyes-normal, .sai-crit-eyes-happy, .sai-crit-brows,
+.sai-crit-mouth-rest, .sai-crit-mouth-open, .sai-crit-blush,
+.sai-crit-dust, .sai-crit-streaks { transform-box: fill-box; }
 
 /* ---- resting transform origins (rig pivots) + always-on idle motion ---- */
 .sai-crit-body{ transform-origin:50% 100%; animation:sai-crit-breathe 3.6s ease-in-out infinite var(--sai-crit-ph,0s); }
@@ -83,18 +89,18 @@ body {
 }
 
 /* ================= WALK (ancestor .sai-sprite[data-walking="1"]) ================= */
-.sai-sprite[data-walking="1"] .sai-crit-root{ animation:sai-crit-lean .5s ease-in-out infinite; }
-.sai-sprite[data-walking="1"] .sai-crit-body{ animation:sai-crit-walkbody .5s ease-in-out infinite; }
-.sai-sprite[data-walking="1"] .sai-crit-head{ animation:sai-crit-walkhead .5s ease-in-out infinite; }
-.sai-sprite[data-walking="1"] .sai-crit-tail{ animation:sai-crit-tailwag .5s ease-in-out infinite; }
-.sai-sprite[data-walking="1"] .sai-crit-ear{ animation:sai-crit-earbounce .5s ease-in-out infinite; }
+.sai-sprite[data-walking="1"] .sai-crit-root{ animation:sai-crit-lean var(--sai-gait,.5s) ease-in-out infinite; }
+.sai-sprite[data-walking="1"] .sai-crit-body{ animation:sai-crit-walkbody var(--sai-gait,.5s) ease-in-out infinite; }
+.sai-sprite[data-walking="1"] .sai-crit-head{ animation:sai-crit-walkhead var(--sai-gait,.5s) ease-in-out infinite; }
+.sai-sprite[data-walking="1"] .sai-crit-tail{ animation:sai-crit-tailwag var(--sai-gait,.5s) ease-in-out infinite; }
+.sai-sprite[data-walking="1"] .sai-crit-ear{ animation:sai-crit-earbounce var(--sai-gait,.5s) ease-in-out infinite; }
 .sai-sprite[data-walking="1"] .sai-crit-leg-fr,
-.sai-sprite[data-walking="1"] .sai-crit-leg-bl{ animation:sai-crit-swingA .5s ease-in-out infinite; }
+.sai-sprite[data-walking="1"] .sai-crit-leg-bl{ animation:sai-crit-swingA var(--sai-gait,.5s) ease-in-out infinite; }
 .sai-sprite[data-walking="1"] .sai-crit-leg-fl,
-.sai-sprite[data-walking="1"] .sai-crit-leg-br{ animation:sai-crit-swingB .5s ease-in-out infinite; }
+.sai-sprite[data-walking="1"] .sai-crit-leg-br{ animation:sai-crit-swingB var(--sai-gait,.5s) ease-in-out infinite; }
 
-@keyframes sai-crit-swingA{ 0%,100%{transform:rotate(26deg);} 50%{transform:rotate(-24deg);} }
-@keyframes sai-crit-swingB{ 0%,100%{transform:rotate(-24deg);} 50%{transform:rotate(26deg);} }
+@keyframes sai-crit-swingA{ 0%,100%{transform:rotate(var(--sai-swing,24deg));} 50%{transform:rotate(calc(var(--sai-swing,24deg) * -0.92));} }
+@keyframes sai-crit-swingB{ 0%,100%{transform:rotate(calc(var(--sai-swing,24deg) * -0.92));} 50%{transform:rotate(var(--sai-swing,24deg));} }
 @keyframes sai-crit-walkbody{ 0%,100%{transform:translateY(0) scaleY(1);} 25%{transform:translateY(-3px) scaleY(1.02);} 50%{transform:translateY(0) scaleY(0.98);} 75%{transform:translateY(-3px) scaleY(1.02);} }
 @keyframes sai-crit-walkhead{ 0%,100%{transform:translateY(0) rotate(1deg);} 50%{transform:translateY(-3px) rotate(-2deg);} }
 @keyframes sai-crit-lean{ 0%,100%{transform:rotate(2.5deg);} 50%{transform:rotate(3.6deg);} }
@@ -946,4 +952,45 @@ body {
     animation: none !important;
   }
   .sai-play-spark { opacity: 0.85; }
+}
+
+
+/* ==================== v0.9 species rigs ==================== */
+/* per-species gait: stride angle + tempo */
+.sai-crit--bear{ --sai-swing:15deg; --sai-gait:.64s; }
+.sai-crit--tiger{ --sai-swing:18deg; --sai-gait:.56s; }
+.sai-crit--deer{ --sai-swing:13deg; --sai-gait:.55s; }
+.sai-crit--panda{ --sai-swing:16deg; --sai-gait:.6s; }
+.sai-crit--koala{ --sai-swing:18deg; --sai-gait:.58s; }
+.sai-crit--pig{ --sai-swing:20deg; --sai-gait:.5s; }
+.sai-crit--hedgehog{ --sai-swing:30deg; --sai-gait:.3s; }
+.sai-crit--rabbit{ --sai-swing:26deg; --sai-gait:.4s; }
+.sai-crit--cat{ --sai-swing:22deg; --sai-gait:.46s; }
+.sai-crit--raccoon{ --sai-swing:22deg; --sai-gait:.48s; }
+.sai-crit--penguin{ --sai-swing:16deg; --sai-gait:.42s; }
+.sai-crit--owl{ --sai-swing:14deg; --sai-gait:.4s; }
+.sai-crit--frog{ --sai-swing:10deg; --sai-gait:.56s; }
+
+/* wing: shoulder pivot; flap while walking (birds) */
+.sai-crit-wing{ transform-origin:50% 12%; }
+.sai-sprite[data-walking="1"] .sai-crit-wing{ animation:sai-crit-wingflap var(--sai-gait,.45s) ease-in-out infinite; }
+@keyframes sai-crit-wingflap{ 0%,100%{transform:rotate(0);} 50%{transform:rotate(-16deg);} }
+
+/* penguin waddle: rock side to side instead of the generic bob */
+.sai-sprite[data-walking="1"] .sai-crit--penguin .sai-crit-body{ animation:sai-crit-waddle var(--sai-gait,.42s) ease-in-out infinite; }
+@keyframes sai-crit-waddle{ 0%,100%{transform:rotate(-4deg) translateY(0);} 50%{transform:rotate(4deg) translateY(-1.6px);} }
+
+/* frog hop: springy bounce instead of a stride */
+.sai-sprite[data-walking="1"] .sai-crit--frog .sai-crit-body{ animation:sai-crit-hop .56s cubic-bezier(.36,.07,.19,.97) infinite; }
+.sai-sprite[data-walking="1"] .sai-crit--frog .sai-crit-head{ animation:sai-crit-hop .56s cubic-bezier(.36,.07,.19,.97) infinite; }
+@keyframes sai-crit-hop{ 0%,100%{transform:translateY(0) scaleY(.96);} 30%{transform:translateY(-7px) scaleY(1.05);} 62%{transform:translateY(-1px) scaleY(1);} }
+
+/* flee: sprint tempo */
+.sai-sprite[data-state="flee"] .sai-crit-root{ --sai-gait:.26s; }
+
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-walking="1"] .sai-crit-wing,
+  .sai-sprite[data-walking="1"] .sai-crit--penguin .sai-crit-body,
+  .sai-sprite[data-walking="1"] .sai-crit--frog .sai-crit-body,
+  .sai-sprite[data-walking="1"] .sai-crit--frog .sai-crit-head{ animation:none; }
 }
