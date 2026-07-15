@@ -2,21 +2,21 @@
 
 **▶️ [Live demo](https://mecca-research.github.io/Social-AnimaI-Icons/)** — runs entirely in your browser, no install required.
 
-![Social Animal Icons — animal emoji sprites roaming an animated top‑down forest floor with dappled sunlight and fireflies. A rippling lily‑pad pond (Water), a glowing berry grove (Food), and a sparkling flower meadow (Play) dot the map; one pair scuffles under a red “fight” glow while two pairs bond under green “friendly” glows.](media/screenshot.png)
+![Social Animal Icons — hand‑drawn animated animal sprites (tiger, fox, rabbit, raccoon, penguin, deer, pig…) roaming a lush, textured top‑down forest lit by volumetric god‑rays. A reed‑fringed lily‑pad pond (Water), a berry‑bush larder with a picnic basket (Food), and a bunting‑and‑pinwheel meadow (Play) dot the map.](media/screenshot.png)
 
 An interactive, emergent “living desktop” made of animal icons that socialize, argue, help each other, and roam a large map with stations for Food, Water, and Play. Every icon runs a tiny state machine (wander, idle, go-to-station, friendly, fight, flee, separate, cooldown, drag) and forms relationships via last-touch memory (friend or rival).
 
-Current release: v0.7 — New animated **forest theme**: a top‑down forest floor with swaying tree canopies, drifting dappled sunlight and fireflies; animated stations (a rippling pond, a glowing berry grove, a sparkling meadow); and lively animal sprites with ground shadows, idle bob, direction‑facing, and interaction emotes. Built on the v0.6 behavior model: locked interactions (8s), visible separation, enforced wander cooldown, ally‑assist with forced flee, edge warp, big playfield, tuned speeds/needs.
+Current release: v0.8 — **Hand‑rigged animated animal sprites.** Every creature is now a bespoke SVG character (not an emoji) with a real walk cycle, breathing, blinking, twitching ears and swaying tails, plus fight/friendly/flee expressions — 14 distinct species (fox, panda, rabbit, bear, cat, frog, penguin, owl, raccoon, deer, tiger, pig, koala, hedgehog). Set in a richly textured forest with volumetric god‑rays and real depth, and detailed animated stations. Built on the v0.6 behavior model: locked interactions (8s), separation, wander cooldown, ally‑assist flee, edge warp, tuned needs.
 
 ✨ Features
 
-Animated forest scene 🌲 — top‑down forest floor with swaying canopies, drifting sunlight, blinking fireflies, and scattered mushrooms & flowers.
+Hand‑rigged animal sprites — 14 bespoke SVG creatures (fox, panda, rabbit, bear, cat, frog, penguin, owl, raccoon, deer, tiger, pig, koala, hedgehog), each with a real walk cycle, idle breathing, blinking, ear/tail motion, and fight/friendly/flee faces. They face the way they move and cast a rigged shadow.
 
-Living sprites — each animal sits in a soft mossy disc with a ground shadow, a gentle idle bob, faces the way it moves, and pops an emote when it fights (💢), bonds (💚), or flees (💨).
+Richly textured forest 🌲 — a layered, painterly forest floor with volumetric god‑rays, depth, a fallen log, ferns, clover, flowers, mushrooms, pebbles, drifting leaves, fireflies, and fluttering butterflies.
 
-Animated stations — Water is a rippling lily‑pad pond, Food a glowing berry grove, Play a sparkling flower meadow.
+Detailed animated stations — Water is a reed‑fringed lily‑pad pond with a skimming dragonfly, Food a berry‑bush larder with a picnic basket and foraged nuts, Play a meadow with bunting, a bouncing ball, a spinning pinwheel and a kite.
 
-Animal-only icons 🦊🐼🐧… with gentle idle waits and random direction changes.
+A soft energy glow + floating emote signals each interaction (💢 fight · 💚 friendly · 💨 flee).
 
 Large, responsive map with edge warp (touching the boundary warps icon to a random in-bounds spot and heads toward center).
 
@@ -55,6 +55,8 @@ Drag to intervene: grabbing an icon breaks an ongoing friendly/fight and trigger
 React 18 + Vite (dev server & production bundler)
 
 Tailwind CSS (compiled at build time, tree-shaken to the classes actually used)
+
+Hand‑rigged SVG sprites & scene — pure inline SVG + CSS keyframe animation, no external image or sprite‑sheet assets
 
 Deployed to GitHub Pages via "Deploy from a branch" — the built site is committed and served directly
 
