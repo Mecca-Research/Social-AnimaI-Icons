@@ -50,29 +50,29 @@ React 18 + Vite (dev server & production bundler)
 
 Tailwind CSS (compiled at build time, tree-shaken to the classes actually used)
 
-Deployed to GitHub Pages from the committed `docs/` build (Pages → Deploy from a branch)
+Deployed to GitHub Pages via "Deploy from a branch" — the built site is committed and served directly
 
-The core UI is a single React component (`SocialAnimalsRPG`, in `src/SocialAnimalIcons.jsx`) you can drop into any app.
+The core UI is a single React component (`SocialAnimalsRPG`, in `app/src/SocialAnimalIcons.jsx`) you can drop into any app.
 
 ## 🌐 Live Demo & Deployment
 
 **Live:** https://mecca-research.github.io/Social-AnimaI-Icons/
 
-The site is a [Vite](https://vitejs.dev) build (React + Tailwind) published with **GitHub Pages → Deploy from a branch**. The production build is committed to [`docs/`](docs/) and GitHub serves those files directly — there is no build step on GitHub's side and no Actions workflow, so nothing has to be "enabled" beyond pointing Pages at the folder.
+The site is a [Vite](https://vitejs.dev) build (React + Tailwind) published with **GitHub Pages → Deploy from a branch** — no Actions workflow and no build step on GitHub's side. The Vite source lives in [`app/`](app/); `npm run build` compiles it and publishes the result to **both the repo root and [`docs/`](docs/)**, each with a `.nojekyll` file. Because the build uses a relative asset base, the live site renders whether Pages serves the **`/ (root)`** folder or the **`/docs`** folder.
 
 ### One-time setup (repo owner)
 
-**Settings → Pages → Build and deployment → Source: _Deploy from a branch_ → Branch: `main`, folder: `/docs`.** The site goes live at the URL above within a minute or two.
+**Settings → Pages → Build and deployment → Source: _Deploy from a branch_ → Branch: `main`.** Either folder — `/ (root)` or `/docs` — works, so no need to fuss over the folder dropdown. The site goes live at the URL above within a minute or two.
 
-> `vite.config.js` sets `base: '/Social-AnimaI-Icons/'` and `build.outDir: 'docs'`, and `docs/.nojekyll` tells Pages to serve the hashed asset files as-is (no Jekyll processing).
+> The Vite `base` is `./` (relative), so hashed-asset URLs resolve from any served path, and the `.nojekyll` files tell Pages to serve the built files as-is (no Jekyll processing).
 
 ### Develop & publish
 
 ```bash
 npm install
-npm run dev      # start the dev server (prints a localhost URL)
-npm run build    # rebuild the site into docs/
-npm run preview  # serve the production build locally
+npm run dev      # start the Vite dev server (prints a localhost URL)
+npm run build    # compile app/ and publish the build to the root + docs/
+npm run preview  # preview the production build locally
 ```
 
-Because Pages serves the committed build, **after changing the app run `npm run build` and commit the updated `docs/`** for the live site to change. `src/` holds the simulation as a drop-in React component (`SocialAnimalIcons.jsx`, which exports `SocialAnimalsRPG`) plus the `App.jsx` and `main.jsx` entry files that mount it.
+Because Pages serves the committed build, **after changing the app run `npm run build` and commit the updated files** (the root build and `docs/`) for the live site to change. `app/src/` holds the simulation as a drop-in React component (`SocialAnimalIcons.jsx`, which exports `SocialAnimalsRPG`) plus the `App.jsx` and `main.jsx` entry files that mount it.

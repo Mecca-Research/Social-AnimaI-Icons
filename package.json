@@ -6,7 +6,7 @@
   "description": "An interactive, emergent 'living desktop' of animal icons that wander, socialize, argue, and help each other.",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/publish.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
