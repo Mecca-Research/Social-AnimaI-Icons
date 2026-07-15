@@ -51,6 +51,39 @@ const ANIMALS = [
   "🦊","🐼","🐧","🐯","🦉","🐸","🦄","🐙","🐶","🐱","🦁","🐵","🐮","🐷","🦒","🐨","🦝","🐰","🐻","🦔"
 ];
 
+// ---------------- Decorative forest scene (positions in % of the stage) ----------------
+const TREES = [
+  { x: 6,  y: 15, s: 118, c1: "#2f6b49", c2: "#123a26", d: 0.0 },
+  { x: 16, y: 83, s: 132, c1: "#356f4d", c2: "#0f3221", d: 1.2 },
+  { x: 90, y: 12, s: 128, c1: "#2c6444", c2: "#0f3322", d: 0.6 },
+  { x: 94, y: 76, s: 120, c1: "#367251", c2: "#123825", d: 1.8 },
+  { x: 41, y: 6,  s: 100, c1: "#2b6042", c2: "#0e3020", d: 2.4 },
+  { x: 66, y: 93, s: 112, c1: "#317049", c2: "#0f3322", d: 0.9 },
+  { x: 3,  y: 49, s: 96,  c1: "#2a5e40", c2: "#0d2c1d", d: 1.5 },
+  { x: 97, y: 45, s: 104, c1: "#2e6647", c2: "#103524", d: 2.1 },
+];
+const GLEAMS = [
+  { x: 30, y: 30, s: 340, d: 0 },
+  { x: 72, y: 62, s: 400, d: 7 },
+  { x: 52, y: 18, s: 270, d: 13 },
+];
+const FIREFLIES = Array.from({ length: 16 }, (_, i) => ({
+  x: 8 + ((i * 61) % 84),
+  y: 12 + ((i * 37) % 74),
+  fx: ((i % 5) - 2) * 16,
+  fy: -14 - (i % 4) * 10,
+  d: (i % 8) * 0.7,
+  dur: 5 + (i % 5),
+}));
+const GROUND = [
+  { e: "🍄", x: 24, y: 61, s: 15, d: 0.0 },
+  { e: "🌿", x: 81, y: 22, s: 16, d: 1.0 },
+  { e: "🌸", x: 58, y: 41, s: 13, d: 2.0 },
+  { e: "🍄", x: 72, y: 85, s: 14, d: 1.6 },
+  { e: "🌿", x: 11, y: 33, s: 15, d: 0.6 },
+  { e: "🌼", x: 36, y: 89, s: 13, d: 2.3 },
+];
+
 // ---------------- Agent Factory ----------------
 function makeAgent(bounds) {
   const r = rand(18, 24);
@@ -167,9 +200,10 @@ export default function SocialAnimalsRPG() {
   const selected = snapshot.agents.find(a => a.id === snapshot.selectedId) || snapshot.agents[0];
 
   return (
-    <div className="w-full h-full bg-neutral-950 text-neutral-100 grid grid-rows-[44px_1fr_76px] p-2 gap-2">
+    <div className="w-full h-full bg-[#0b1f16] text-neutral-100 grid grid-rows-[44px_1fr_76px] p-2 gap-2">
       {/* Top Controls Bar */}
-      <div className="rounded-xl border border-neutral-800 bg-neutral-900/70 px-3 flex items-center gap-3 text-sm">
+      <div className="rounded-xl border border-emerald-900/60 bg-emerald-950/50 backdrop-blur-sm px-3 flex items-center gap-3 text-sm shadow-lg shadow-black/30">
+        <span className="hidden sm:inline text-sm font-semibold text-emerald-200/90 mr-1">🌲 Social Animals</span>
         <button onClick={() => (worldRef.current.running = !worldRef.current.running)} className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-xs">
           {worldRef.current.running ? "Pause" : "Run"}
         </button>
@@ -183,14 +217,13 @@ export default function SocialAnimalsRPG() {
         <div className="ml-auto opacity-70 text-xs">Animals: {snapshot.agents.length} / {MAX_AGENTS}</div>
       </div>
 
-      {/* Stage */}
-      <div ref={stageRef} className="relative rounded-2xl border border-neutral-800 bg-neutral-900/40 overflow-hidden min-h-0">
+      {/* Stage — top-down forest floor */}
+      <div ref={stageRef} className="relative rounded-2xl border border-emerald-900/60 overflow-hidden min-h-0 shadow-xl shadow-black/40" style={{ background: "linear-gradient(165deg,#1e4a37 0%,#173a2b 46%,#0f2a1f 100%)" }}>
+        <ForestBackdrop />
+
         {/* Stations */}
         {snapshot.stations.map((st) => (
-          <div key={st.key} className="absolute -translate-x-1/2 -translate-y-1/2 flex items-center gap-1 pointer-events-none" style={{ left: st.x, top: st.y }}>
-            <div className="w-24 h-24 rounded-full opacity-20" style={{ background: st.color }} />
-            <div className="text-xs px-2 py-0.5 rounded-full" style={{ background: st.color, color: "#111" }}>{st.label}</div>
-          </div>
+          <Station key={st.key} st={st} />
         ))}
 
         {/* Agents */}
@@ -200,7 +233,7 @@ export default function SocialAnimalsRPG() {
       </div>
 
       {/* Bottom Inspector Bar */}
-      <div className="rounded-xl border border-neutral-800 bg-neutral-900/70 px-3 py-2 grid grid-cols-12 items-center text-xs gap-2">
+      <div className="rounded-xl border border-emerald-900/60 bg-emerald-950/50 backdrop-blur-sm px-3 py-2 grid grid-cols-12 items-center text-xs gap-2 shadow-lg shadow-black/30">
         {selected ? (
           <>
             <div className="col-span-3 flex items-center gap-2">
@@ -217,6 +250,101 @@ export default function SocialAnimalsRPG() {
           </>
         ) : <div className="opacity-70">Select an icon…</div>}
       </div>
+    </div>
+  );
+}
+
+// --------------- Forest scene ---------------
+function ForestBackdrop() {
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none" style={{ zIndex: 0 }}>
+      {/* soft clearings + vignette */}
+      <div className="absolute inset-0" style={{ background:
+        "radial-gradient(600px 420px at 22% 34%, rgba(140,205,140,.10), transparent 60%)," +
+        "radial-gradient(680px 460px at 78% 66%, rgba(100,175,120,.10), transparent 60%)," +
+        "radial-gradient(1000px 760px at 50% 122%, rgba(5,22,13,.65), transparent 72%)" }} />
+      {/* drifting dappled sunlight */}
+      {GLEAMS.map((g, i) => (
+        <div key={"gl" + i} className="sai-gleam" style={{ left: `${g.x}%`, top: `${g.y}%`, width: g.s, height: g.s, marginLeft: -g.s / 2, marginTop: -g.s / 2, background: "radial-gradient(circle, rgba(255,244,190,.9), transparent 68%)", animationDelay: `${g.d}s, ${g.d}s` }} />
+      ))}
+      {/* tree canopies seen from above */}
+      {TREES.map((t, i) => (
+        <div key={"tr" + i} className="sai-tree" style={{ left: `${t.x}%`, top: `${t.y}%`, width: t.s, height: t.s, marginLeft: -t.s / 2, marginTop: -t.s / 2, background: `radial-gradient(circle at 40% 34%, ${t.c1}, ${t.c2} 74%)`, boxShadow: "0 10px 34px rgba(0,0,0,.4)", animationDelay: `${t.d}s` }} />
+      ))}
+      {/* ground flora */}
+      {GROUND.map((g, i) => (
+        <div key={"gd" + i} className="sai-ground" style={{ left: `${g.x}%`, top: `${g.y}%`, fontSize: g.s, opacity: 0.7, animationDelay: `${g.d}s`, filter: "drop-shadow(0 1px 1px rgba(0,0,0,.4))" }}>{g.e}</div>
+      ))}
+      {/* fireflies */}
+      {FIREFLIES.map((f, i) => (
+        <div key={"ff" + i} className="sai-firefly" style={{ left: `${f.x}%`, top: `${f.y}%`, "--fx": `${f.fx}px`, "--fy": `${f.fy}px`, animationDelay: `${f.d}s`, animationDuration: `${f.dur}s` }} />
+      ))}
+    </div>
+  );
+}
+
+function Station({ st }) {
+  return (
+    <div className="absolute -translate-x-1/2 -translate-y-1/2 pointer-events-none" style={{ left: st.x, top: st.y, zIndex: 1 }}>
+      {st.key === "water" && <WaterPond />}
+      {st.key === "food" && <FoodGrove />}
+      {st.key === "play" && <PlayMeadow />}
+      <div className="sai-station-label" style={{ background: "rgba(6,18,12,.74)", border: `1px solid ${st.color}88`, boxShadow: `0 0 12px ${st.color}55` }}>
+        {st.key === "water" ? "💧" : st.key === "food" ? "🍎" : "🎈"} {st.label}
+      </div>
+    </div>
+  );
+}
+
+function WaterPond() {
+  return (
+    <div className="relative" style={{ width: 158, height: 116 }}>
+      <div className="absolute inset-0" style={{ borderRadius: "50%", background: "radial-gradient(circle at 42% 34%, #7fe9f7 0%, #29bcd6 32%, #0e7490 74%, #0a5468 100%)", boxShadow: "0 0 34px rgba(34,211,238,.34), inset 0 6px 22px rgba(4,60,80,.55)" }} />
+      <div className="absolute inset-0" style={{ borderRadius: "50%", overflow: "hidden" }}>
+        <div className="sai-shimmer" />
+      </div>
+      <div className="sai-ripple" />
+      <div className="sai-ripple" style={{ animationDelay: "1.3s" }} />
+      <div className="sai-ripple" style={{ animationDelay: "2.6s" }} />
+      <div className="absolute" style={{ left: "58%", top: "28%", fontSize: 18, filter: "drop-shadow(0 1px 1px rgba(0,0,0,.4))" }}>🪷</div>
+    </div>
+  );
+}
+
+function FoodGrove() {
+  const berries = [
+    { e: "🫐", x: "22%", y: "30%" }, { e: "🍓", x: "64%", y: "24%" },
+    { e: "🌰", x: "70%", y: "62%" }, { e: "🍇", x: "30%", y: "64%" },
+  ];
+  return (
+    <div className="relative" style={{ width: 150, height: 124 }}>
+      <div className="absolute inset-0" style={{ borderRadius: "50%", background: "radial-gradient(circle, rgba(251,191,36,.4) 0%, rgba(180,120,20,.14) 52%, transparent 74%)", animation: "sai-pulse 3.4s ease-in-out infinite" }} />
+      <div className="absolute inset-0" style={{ borderRadius: "50%", background: "radial-gradient(circle at 50% 62%, rgba(120,80,30,.35), transparent 60%)" }} />
+      {berries.map((b, i) => (
+        <div key={i} className="sai-ground" style={{ left: b.x, top: b.y, fontSize: 18, animationDelay: `${i * 0.5}s`, filter: "drop-shadow(0 1px 1px rgba(0,0,0,.4))" }}>{b.e}</div>
+      ))}
+    </div>
+  );
+}
+
+function PlayMeadow() {
+  const flowers = [
+    { e: "🌸", x: "24%", y: "32%" }, { e: "🌼", x: "66%", y: "26%" },
+    { e: "🌷", x: "40%", y: "64%" }, { e: "🌻", x: "72%", y: "60%" },
+  ];
+  const sparks = [
+    { x: "18%", y: "22%", d: 0 }, { x: "78%", y: "36%", d: 0.8 },
+    { x: "46%", y: "14%", d: 1.5 }, { x: "60%", y: "72%", d: 2.1 }, { x: "30%", y: "70%", d: 1.1 },
+  ];
+  return (
+    <div className="relative" style={{ width: 150, height: 124 }}>
+      <div className="absolute inset-0" style={{ borderRadius: "50%", background: "radial-gradient(circle, rgba(196,151,255,.4) 0%, rgba(244,114,182,.16) 52%, transparent 74%)", animation: "sai-pulse 3.8s ease-in-out infinite" }} />
+      {flowers.map((f, i) => (
+        <div key={i} className="sai-ground" style={{ left: f.x, top: f.y, fontSize: 17, animationDelay: `${i * 0.6}s`, filter: "drop-shadow(0 1px 1px rgba(0,0,0,.4))" }}>{f.e}</div>
+      ))}
+      {sparks.map((s, i) => (
+        <div key={"s" + i} className="sai-sparkle" style={{ left: s.x, top: s.y, animationDelay: `${s.d}s` }}>✨</div>
+      ))}
     </div>
   );
 }
@@ -249,15 +377,29 @@ function IconNode({ a, iconsRef, worldRef, onSelect }) {
     return () => { el.removeEventListener("pointerdown", down); el.removeEventListener("pointermove", move); el.removeEventListener("pointerup", up); el.removeEventListener("pointercancel", up); };
   }, []);
 
+  const emote =
+    a.state === "fight" ? "💢" :
+    a.state === "friendly" ? "💚" :
+    a.state === "flee" ? "💨" :
+    a.state === "idle" ? "💤" : null;
+  const aura =
+    a.state === "fight" ? "0 0 18px 4px rgba(248,113,113,.9), inset 0 0 8px rgba(248,113,113,.4)" :
+    a.state === "friendly" ? "0 0 18px 4px rgba(74,222,128,.9), inset 0 0 8px rgba(74,222,128,.35)" :
+    a.state === "flee" ? "0 0 16px 3px rgba(250,204,21,.9)" :
+    "0 3px 10px rgba(0,0,0,.5)";
+  const bobDelay = `${(a.id.charCodeAt(0) % 10) * 0.18}s`;
+
   return (
-    <div ref={ref} onDoubleClick={onSelect} className="absolute -translate-x-1/2 -translate-y-1/2 select-none" style={{ left: a.x, top: a.y }}>
+    <div ref={ref} onDoubleClick={onSelect} className="absolute -translate-x-1/2 -translate-y-1/2 select-none cursor-grab active:cursor-grabbing" style={{ left: a.x, top: a.y, zIndex: 10 }}>
       <div className="flex flex-col items-center">
-        <div className="rounded-full border border-white/10 flex items-center justify-center" style={{ width: a.r*2, height: a.r*2, background: "#111", boxShadow: a.state==='fight' ? '0 0 14px 2px rgba(248,113,113,0.9)' : a.state==='friendly' ? '0 0 14px 2px rgba(52,211,153,0.9)' : a.state==='flee' ? '0 0 14px 2px rgba(248,231,28,0.9)' : '0 0 8px rgba(0,0,0,0.35)' }}>
-          <div className="text-xl">{a.emoji}</div>
+        <div className="relative" style={{ width: a.r * 2, height: a.r * 2 }}>
+          {emote && <div className="sai-emote">{emote}</div>}
+          <div className="sai-shadow" style={{ width: a.r * 1.7, height: a.r * 0.6 }} />
+          <div className="sai-body" style={{ width: a.r * 2, height: a.r * 2, boxShadow: aura, animationDelay: bobDelay }}>
+            <span className="sai-face" style={{ fontSize: a.r * 0.95 }}>{a.emoji}</span>
+          </div>
         </div>
-        <div className="text-[10px] mt-1 px-1 rounded bg-black/50">
-          {a.state}{a.targetId?`:${a.targetId}`:""}
-        </div>
+        <div className="sai-label">{a.state}</div>
       </div>
     </div>
   );
@@ -504,6 +646,12 @@ function renderWorld(world, iconsRef) {
         inner.style.transform = `translate(${sx}px, ${sy}px)`;
       } else {
         inner.style.transform = `translate(0px, 0px)`;
+      }
+      // sprite faces its direction of horizontal travel
+      const face = inner.querySelector(".sai-face");
+      if (face) {
+        if (a.vx > 14) face.style.transform = "scaleX(-1)";
+        else if (a.vx < -14) face.style.transform = "scaleX(1)";
       }
     }
   }

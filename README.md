@@ -2,13 +2,19 @@
 
 **▶️ [Live demo](https://mecca-research.github.io/Social-AnimaI-Icons/)** — runs entirely in your browser, no install required.
 
-![Social Animal Icons — animal emojis roaming a large map with Food, Water, and Play stations. Two pairs are mid‑interaction: red “fight” glows and a green “friendly” glow, while others wander or head to a station.](media/screenshot.png)
+![Social Animal Icons — animal emoji sprites roaming an animated top‑down forest floor with dappled sunlight and fireflies. A rippling lily‑pad pond (Water), a glowing berry grove (Food), and a sparkling flower meadow (Play) dot the map; one pair scuffles under a red “fight” glow while two pairs bond under green “friendly” glows.](media/screenshot.png)
 
 An interactive, emergent “living desktop” made of animal icons that socialize, argue, help each other, and roam a large map with stations for Food, Water, and Play. Every icon runs a tiny state machine (wander, idle, go-to-station, friendly, fight, flee, separate, cooldown, drag) and forms relationships via last-touch memory (friend or rival).
 
-Current release: v0.6 — Locked interactions (8s), visible separation, enforced wander cooldown, ally-assist with forced flee, edge warp, big playfield, tuned speeds/needs.
+Current release: v0.7 — New animated **forest theme**: a top‑down forest floor with swaying tree canopies, drifting dappled sunlight and fireflies; animated stations (a rippling pond, a glowing berry grove, a sparkling meadow); and lively animal sprites with ground shadows, idle bob, direction‑facing, and interaction emotes. Built on the v0.6 behavior model: locked interactions (8s), visible separation, enforced wander cooldown, ally‑assist with forced flee, edge warp, big playfield, tuned speeds/needs.
 
 ✨ Features
+
+Animated forest scene 🌲 — top‑down forest floor with swaying canopies, drifting sunlight, blinking fireflies, and scattered mushrooms & flowers.
+
+Living sprites — each animal sits in a soft mossy disc with a ground shadow, a gentle idle bob, faces the way it moves, and pops an emote when it fights (💢), bonds (💚), or flees (💨).
+
+Animated stations — Water is a rippling lily‑pad pond, Food a glowing berry grove, Play a sparkling flower meadow.
 
 Animal-only icons 🦊🐼🐧… with gentle idle waits and random direction changes.
 

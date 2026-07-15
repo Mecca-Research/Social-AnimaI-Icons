@@ -10,7 +10,188 @@ body,
 
 body {
   margin: 0;
-  background: #0a0a0a;
+  background: radial-gradient(1200px 820px at 50% -12%, #1f5340 0%, #123024 55%, #08190f 100%);
   font-family: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
     Roboto, sans-serif;
+}
+
+/* ============================================================
+   Forest scene + sprite animations (hand-written, not purged)
+   ============================================================ */
+
+/* --- sprites --- */
+.sai-body {
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 34% 28%, rgba(240, 252, 240, 0.28), rgba(17, 43, 30, 0.66) 72%);
+  border: 1px solid rgba(216, 255, 216, 0.2);
+  animation: sai-bob 2.6s ease-in-out infinite;
+  will-change: transform;
+}
+.sai-face {
+  line-height: 1;
+  transition: transform 0.18s ease;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.5));
+}
+.sai-shadow {
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translate(-50%, -52%);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 0, 0, 0.45) 0%, rgba(0, 0, 0, 0) 70%);
+  animation: sai-shadow-breathe 2.6s ease-in-out infinite;
+}
+.sai-label {
+  margin-top: 3px;
+  padding: 0 6px;
+  border-radius: 9999px;
+  font-size: 10px;
+  line-height: 15px;
+  color: #d9f4e2;
+  background: rgba(6, 18, 12, 0.6);
+  border: 1px solid rgba(120, 200, 150, 0.18);
+  white-space: nowrap;
+}
+.sai-emote {
+  position: absolute;
+  left: 50%;
+  top: -14px;
+  transform: translateX(-50%);
+  font-size: 15px;
+  animation: sai-emote 1.5s ease-out infinite;
+  pointer-events: none;
+}
+
+/* --- stations --- */
+.sai-ripple {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 72%;
+  height: 54%;
+  margin-left: -36%;
+  margin-top: -27%;
+  border-radius: 50%;
+  border: 2px solid rgba(198, 246, 255, 0.72);
+  animation: sai-ripple 3.8s ease-out infinite;
+}
+.sai-shimmer {
+  position: absolute;
+  inset: -20% -10%;
+  background: linear-gradient(115deg, transparent 40%, rgba(230, 253, 255, 0.5) 50%, transparent 60%);
+  animation: sai-shimmer 4.2s ease-in-out infinite;
+}
+.sai-sparkle {
+  position: absolute;
+  font-size: 12px;
+  animation: sai-sparkle 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+.sai-station-label {
+  position: absolute;
+  left: 50%;
+  bottom: -10px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  padding: 1px 9px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  color: #f2fff2;
+}
+
+/* --- backdrop --- */
+.sai-tree {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(2px);
+  animation: sai-sway 6s ease-in-out infinite;
+  will-change: transform;
+}
+.sai-gleam {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(24px);
+  animation: sai-drift 22s ease-in-out infinite, sai-gleam 9s ease-in-out infinite;
+}
+.sai-firefly {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #eaff9a;
+  box-shadow: 0 0 8px 2px rgba(214, 255, 130, 0.85);
+  animation: sai-firefly 6s ease-in-out infinite;
+}
+.sai-ground {
+  position: absolute;
+  animation: sai-sway 7s ease-in-out infinite;
+}
+
+/* --- keyframes --- */
+@keyframes sai-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+@keyframes sai-shadow-breathe {
+  0%, 100% { transform: translate(-50%, -52%) scale(1); opacity: 0.8; }
+  50% { transform: translate(-50%, -52%) scale(0.85); opacity: 0.55; }
+}
+@keyframes sai-sway {
+  0%, 100% { transform: scale(1) rotate(-1.3deg); }
+  50% { transform: scale(1.05) rotate(1.3deg); }
+}
+@keyframes sai-drift {
+  0% { transform: translate(0, 0); }
+  50% { transform: translate(46px, -26px); }
+  100% { transform: translate(0, 0); }
+}
+@keyframes sai-gleam {
+  0%, 100% { opacity: 0.05; }
+  50% { opacity: 0.17; }
+}
+@keyframes sai-firefly {
+  0% { transform: translate(0, 0); opacity: 0; }
+  18% { opacity: 1; }
+  50% { transform: translate(var(--fx, 22px), var(--fy, -26px)); opacity: 0.95; }
+  82% { opacity: 0.18; }
+  100% { transform: translate(0, 0); opacity: 0; }
+}
+@keyframes sai-ripple {
+  0% { transform: scale(0.35); opacity: 0.55; }
+  100% { transform: scale(1.28); opacity: 0; }
+}
+@keyframes sai-shimmer {
+  0%, 100% { opacity: 0.2; transform: translateX(-12%); }
+  50% { opacity: 0.55; transform: translateX(12%); }
+}
+@keyframes sai-sparkle {
+  0%, 100% { opacity: 0; transform: scale(0.4) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1) rotate(22deg); }
+}
+@keyframes sai-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.55; }
+  50% { transform: scale(1.12); opacity: 0.85; }
+}
+@keyframes sai-emote {
+  0% { transform: translate(-50%, 4px) scale(0.6); opacity: 0; }
+  30% { opacity: 1; }
+  100% { transform: translate(-50%, -16px) scale(1); opacity: 0; }
+}
+@keyframes sai-float {
+  0% { transform: translateY(0); opacity: 0; }
+  25% { opacity: 0.9; }
+  100% { transform: translateY(-24px); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sai-body, .sai-shadow, .sai-emote, .sai-ripple, .sai-shimmer, .sai-sparkle,
+  .sai-tree, .sai-gleam, .sai-firefly, .sai-ground {
+    animation-duration: 0.001ms;
+    animation-iteration-count: 1;
+  }
 }
