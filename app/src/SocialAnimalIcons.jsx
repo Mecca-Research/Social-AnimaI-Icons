@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { Critter, SPECIES } from "./Critters.jsx";
 
 /**
  * Social Animal Icons v0.6 — Separation & Wander Cooldown
@@ -27,7 +28,7 @@ const DEFAULTS = {
   speed: 80,                 // px/s nominal (UI rescaled)
   interactionRadius: 110,    // stations radius
 };
-const MAX_AGENTS = 16;
+const MAX_AGENTS = Object.keys(SPECIES).length; // one of each species, no repeats
 
 const ENGAGE_MS = 8000;      // locked interaction duration (both friendly & fight)
 const FLEE_MS = 2200;        // forced flee time
@@ -46,493 +47,10 @@ const STATIONS = [
   { key: "play",  label: "Play",  color: "#a78bfa" },
 ];
 
-// ---------------- Animated critter sprites (generated) ----------------
-/* ============================================================
-   PREFIX: sai-crit-   — Animated Critter sprite system
-   ============================================================ */
-
-// ---- SPECIES table: 14 distinct animals -------------------------------------
-// fur: [rim, mid, shadow] gradient stops. belly/earColor/earInner/muzzle/nose/eye/paw/accent.
-// ears: pointy|round|long|tuft|tiny|none   tail: bushy|ring|long|pom|stub|curl|none
-// feat: extra-feature key used for markings / props.
-const SPECIES = {
-  fox: {
-    name: "Fox", badge: "🦊",
-    fur: ["#ffb15a", "#f08a3c", "#c25e1f"], belly: "#ffe9ad", earColor: "#c25e1f",
-    earInner: "#2a1c10", muzzle: "#fff4dd", nose: "#2a1c10", eye: "#3a2410",
-    paw: "#2a1c10", accent: "#ffd27a", ears: "pointy", tail: "bushy", feat: "fox",
-  },
-  panda: {
-    name: "Panda", badge: "🐼",
-    fur: ["#ffffff", "#eef1f0", "#c7cfcb"], belly: "#ffffff", earColor: "#1c1c22",
-    earInner: "#3a3a44", muzzle: "#ffffff", nose: "#1c1c22", eye: "#1c1c22",
-    paw: "#1c1c22", accent: "#79c98a", ears: "round", tail: "stub", feat: "panda",
-  },
-  rabbit: {
-    name: "Rabbit", badge: "🐰",
-    fur: ["#f3ece6", "#ddd0c6", "#b09b8c"], belly: "#fff8f2", earColor: "#ddd0c6",
-    earInner: "#ff9ecb", muzzle: "#fff8f2", nose: "#e0527a", eye: "#5a3a2a",
-    paw: "#c9bab0", accent: "#ff9ecb", ears: "long", tail: "pom", feat: "rabbit",
-  },
-  bear: {
-    name: "Bear", badge: "🐻",
-    fur: ["#b07d47", "#8a5a2f", "#5e3a1c"], belly: "#c79a63", earColor: "#7a4d28",
-    earInner: "#4a2c14", muzzle: "#d9b483", nose: "#2a1c10", eye: "#2a1c10",
-    paw: "#5e3a1c", accent: "#ffd27a", ears: "round", tail: "stub", feat: "bear",
-  },
-  cat: {
-    name: "Cat", badge: "🐱",
-    fur: ["#a9b0b8", "#7f888f", "#565d64"], belly: "#e7eaec", earColor: "#7f888f",
-    earInner: "#ff9ecb", muzzle: "#e7eaec", nose: "#e0527a", eye: "#79c98a",
-    paw: "#565d64", accent: "#b98cff", ears: "pointy", tail: "long", feat: "cat",
-  },
-  frog: {
-    name: "Frog", badge: "🐸",
-    fur: ["#8fdc72", "#4e9c5f", "#2f6b45"], belly: "#dff6c4", earColor: "#4e9c5f",
-    earInner: "#2f6b45", muzzle: "#8fdc72", nose: "#2f6b45", eye: "#2a1c10",
-    paw: "#2f6b45", accent: "#ffd166", ears: "none", tail: "none", feat: "frog",
-  },
-  penguin: {
-    name: "Penguin", badge: "🐧",
-    fur: ["#3a4a5a", "#232f3c", "#141c26"], belly: "#fdfbf4", earColor: "#232f3c",
-    earInner: "#141c26", muzzle: "#ffd27a", nose: "#e79a2a", eye: "#141c26",
-    paw: "#ffab3a", accent: "#22c9d6", ears: "none", tail: "none", feat: "penguin",
-  },
-  owl: {
-    name: "Owl", badge: "🦉",
-    fur: ["#a97c4c", "#7d5a34", "#523a20"], belly: "#e4c48f", earColor: "#7d5a34",
-    earInner: "#523a20", muzzle: "#ffcf7a", nose: "#e79a2a", eye: "#ffd166",
-    paw: "#e79a2a", accent: "#b9ecab", ears: "tuft", tail: "none", feat: "owl",
-  },
-  raccoon: {
-    name: "Raccoon", badge: "🦝",
-    fur: ["#9aa2ad", "#6c7681", "#464e58"], belly: "#cfd4da", earColor: "#6c7681",
-    earInner: "#3a3f47", muzzle: "#eceff2", nose: "#2a2430", eye: "#2a2430",
-    paw: "#3a3f47", accent: "#b98cff", ears: "round", tail: "ring", feat: "raccoon",
-  },
-  deer: {
-    name: "Deer", badge: "🦌",
-    fur: ["#c79a63", "#a9743e", "#7a5027"], belly: "#f0dcb8", earColor: "#a9743e",
-    earInner: "#f0dcb8", muzzle: "#f0dcb8", nose: "#2a1c10", eye: "#3a2410",
-    paw: "#5e3a1c", accent: "#ffd27a", ears: "pointy", tail: "stub", feat: "deer",
-  },
-  tiger: {
-    name: "Tiger", badge: "🐯",
-    fur: ["#ffb45a", "#f28a2e", "#c9631a"], belly: "#fff4dd", earColor: "#f28a2e",
-    earInner: "#2a1c10", muzzle: "#fff4dd", nose: "#e0527a", eye: "#4e9c5f",
-    paw: "#c9631a", accent: "#ffd166", ears: "pointy", tail: "long", feat: "tiger",
-  },
-  pig: {
-    name: "Pig", badge: "🐷",
-    fur: ["#ffc7d6", "#f79bb4", "#d76f8e"], belly: "#ffe0e9", earColor: "#f79bb4",
-    earInner: "#e0527a", muzzle: "#ff9ecb", nose: "#d76f8e", eye: "#3a2430",
-    paw: "#d76f8e", accent: "#ffd166", ears: "round", tail: "curl", feat: "pig",
-  },
-  koala: {
-    name: "Koala", badge: "🐨",
-    fur: ["#b9c2c9", "#8f9aa3", "#646e77"], belly: "#dfe4e8", earColor: "#8f9aa3",
-    earInner: "#f3d0d8", muzzle: "#c8cfd4", nose: "#2a2430", eye: "#2a2430",
-    paw: "#646e77", accent: "#ff9ecb", ears: "round", tail: "none", feat: "koala",
-  },
-  hedgehog: {
-    name: "Hedgehog", badge: "🦔",
-    fur: ["#c79a63", "#a9743e", "#7a5027"], belly: "#f0dcb8", earColor: "#a9743e",
-    earInner: "#5e3a1c", muzzle: "#f5e6cf", nose: "#2a1c10", eye: "#2a1c10",
-    paw: "#5e3a1c", accent: "#b98cff", ears: "tiny", tail: "none", feat: "hedgehog",
-  },
-};
-
-// ---- small rig sub-parts ----------------------------------------------------
-
-function SaiEar(props) {
-  // side: "l" | "r"
-  const { type, side, color, inner } = props;
-  const flip = side === "l" ? -1 : 1;
-  const cls = "sai-crit-ear sai-crit-ear-" + side;
-  if (type === "none") return null;
-  if (type === "long") {
-    // tall rabbit ear
-    return (
-      <g className={cls}>
-        <ellipse cx={0} cy={-14} rx={7} ry={20} fill={color} />
-        <ellipse cx={0} cy={-14} rx={3.4} ry={14} fill={inner} opacity="0.85" />
-      </g>
-    );
-  }
-  if (type === "pointy") {
-    return (
-      <g className={cls}>
-        <path d={`M ${-8 * flip} 6 L ${2 * flip} -18 L ${9 * flip} 4 Z`} fill={color} />
-        <path d={`M ${-3 * flip} 2 L ${2 * flip} -11 L ${5 * flip} 1 Z`} fill={inner} />
-      </g>
-    );
-  }
-  if (type === "tuft") {
-    return (
-      <g className={cls}>
-        <path d={`M ${-5 * flip} 4 L ${4 * flip} -14 L ${7 * flip} 5 Z`} fill={color} />
-      </g>
-    );
-  }
-  if (type === "tiny") {
-    return (
-      <g className={cls}>
-        <circle cx={0} cy={-2} r={5} fill={color} />
-        <circle cx={0} cy={-2} r={2.4} fill={inner} />
-      </g>
-    );
-  }
-  // round (default)
-  return (
-    <g className={cls}>
-      <circle cx={0} cy={-6} r={9} fill={color} />
-      <circle cx={0} cy={-4} r={4.6} fill={inner} />
-    </g>
-  );
-}
-
-function SaiTail(props) {
-  const { type, mid, rim, dark, accent } = props;
-  if (type === "none") return null;
-  const cls = "sai-crit-tail";
-  if (type === "bushy") {
-    return (
-      <g className={cls}>
-        <path d="M 26 74 C 6 70 -2 52 8 40 C 14 60 24 62 30 66 Z" fill={mid} />
-        <path d="M 12 44 C 2 40 0 30 6 26 C 10 36 16 40 18 44 Z" fill={accent} />
-      </g>
-    );
-  }
-  if (type === "long") {
-    return (
-      <g className={cls}>
-        <path d="M 26 74 C 4 74 -6 58 2 44" stroke={mid} strokeWidth="8" fill="none" strokeLinecap="round" />
-      </g>
-    );
-  }
-  if (type === "ring") {
-    return (
-      <g className={cls}>
-        <path d="M 26 74 C 6 74 -4 58 4 44" stroke={mid} strokeWidth="9" fill="none" strokeLinecap="round" />
-        <path d="M 20 70 l -6 -8 M 12 62 l -6 -8 M 6 52 l -4 -7" stroke={dark} strokeWidth="5" strokeLinecap="round" />
-      </g>
-    );
-  }
-  if (type === "pom") {
-    return (
-      <g className={cls}>
-        <circle cx="20" cy="74" r="10" fill={rim} />
-        <circle cx="20" cy="74" r="6.5" fill="#ffffff" opacity="0.6" />
-      </g>
-    );
-  }
-  if (type === "curl") {
-    return (
-      <g className={cls}>
-        <path d="M 24 72 c -10 -2 -12 -12 -4 -14 c 6 -1 6 6 1 6" stroke={dark} strokeWidth="4.5" fill="none" strokeLinecap="round" />
-      </g>
-    );
-  }
-  // stub
-  return (
-    <g className={cls}>
-      <circle cx="24" cy="74" r="7" fill={mid} />
-    </g>
-  );
-}
-
-// species-specific body markings drawn OVER the torso/head
-function SaiMarks(props) {
-  const { s } = props;
-  const f = s.feat;
-  if (f === "panda") {
-    return (
-      <g>
-        <path d="M 42 96 q 4 16 -4 16 q -8 0 -6 -14 Z" fill="#1c1c22" />
-        <path d="M 62 96 q 4 16 -4 16 q -8 0 -6 -14 Z" fill="#1c1c22" />
-        <ellipse cx="24" cy="72" rx="8" ry="7" fill="#1c1c22" />
-      </g>
-    );
-  }
-  if (f === "tiger") {
-    return (
-      <g stroke="#2a1c10" strokeWidth="3.2" strokeLinecap="round" fill="none" opacity="0.9">
-        <path d="M 40 60 q 6 6 4 14" /><path d="M 52 56 q 5 8 3 18" /><path d="M 64 58 q 5 7 4 15" />
-        <path d="M 76 40 q 4 5 2 11" /><path d="M 90 34 q 3 5 1 10" />
-      </g>
-    );
-  }
-  if (f === "cat") {
-    return (
-      <g stroke="#565d64" strokeWidth="2.6" strokeLinecap="round" fill="none" opacity="0.75">
-        <path d="M 44 58 q 5 5 3 12" /><path d="M 56 55 q 4 6 3 14" /><path d="M 78 34 q 3 4 1 9" />
-      </g>
-    );
-  }
-  if (f === "deer") {
-    return (
-      <g fill="#f0dcb8" opacity="0.9">
-        <circle cx="42" cy="66" r="2.6" /><circle cx="52" cy="60" r="2.6" />
-        <circle cx="48" cy="74" r="2.4" /><circle cx="60" cy="68" r="2.4" /><circle cx="38" cy="76" r="2.2" />
-      </g>
-    );
-  }
-  return null;
-}
-
-// heavy per-species extras drawn behind or in front of the head/body
-function SaiExtrasBehind(props) {
-  const { s } = props;
-  const f = s.feat;
-  if (f === "deer") {
-    // antlers behind head
-    return (
-      <g stroke={s.fur[2]} strokeWidth="3.4" fill="none" strokeLinecap="round" className="sai-crit-antler">
-        <path d="M 74 24 q -4 -14 -12 -18 M 66 12 l -8 -1 M 68 6 l -6 -5" />
-        <path d="M 92 22 q 4 -14 12 -18 M 100 12 l 8 -1 M 98 6 l 6 -5" />
-      </g>
-    );
-  }
-  if (f === "owl") {
-    // wings behind body
-    return (
-      <g className="sai-crit-wing">
-        <path d="M 30 66 q -14 -6 -12 12 q 6 8 16 4 Z" fill={s.fur[2]} />
-        <path d="M 86 66 q 14 -6 12 12 q -6 8 -16 4 Z" fill={s.fur[2]} />
-      </g>
-    );
-  }
-  if (f === "hedgehog") {
-    // spiky mantle over the back
-    const spikes = [];
-    for (let i = 0; i < 11; i++) {
-      const bx = 30 + i * 4.4;
-      const by = 78 - Math.sin((i / 10) * Math.PI) * 26;
-      spikes.push(<path key={i} d={`M ${bx} ${by + 8} L ${bx - 4} ${by} L ${bx + 4} ${by} Z`} fill={s.fur[1]} />);
-      spikes.push(<path key={"d" + i} d={`M ${bx + 2} ${by + 8} L ${bx} ${by + 2} L ${bx + 5} ${by + 2} Z`} fill={s.fur[2]} />);
-    }
-    return <g>{spikes}</g>;
-  }
-  return null;
-}
-
-function SaiExtrasFront(props) {
-  const { s } = props;
-  const f = s.feat;
-  if (f === "penguin") {
-    // flipper arms in front of body
-    return (
-      <g className="sai-crit-wing">
-        <path d="M 34 66 q -10 6 -6 22 q 6 2 10 -6 Z" fill={s.fur[2]} />
-        <path d="M 80 66 q 10 6 6 22 q -6 2 -10 -6 Z" fill={s.fur[2]} />
-      </g>
-    );
-  }
-  return null;
-}
-
-// ---- main sprite ------------------------------------------------------------
-
-function Critter(props) {
-  const { speciesKey, r = 20 } = props;
-  const s = SPECIES[speciesKey] || SPECIES.fox;
-  const uid = React.useMemo(() => "sc" + Math.random().toString(36).slice(2, 8), []);
-  const w = r * 2.6, h = r * 2.4;
-  const seed = React.useMemo(() => Math.random(), []);
-  // stagger idle phases so a crowd doesn't pulse in unison
-  const st = { ["--sai-crit-ph"]: (seed * -4).toFixed(2) + "s", ["--sai-crit-ph2"]: (seed * -3).toFixed(2) + "s" };
-
-  const earType = s.ears || "round";
-  const earCol = s.earColor || s.fur[2];
-  const tailMid = s.fur[1], tailRim = s.fur[0], tailDark = s.fur[2];
-
-  const legDark = s.fur[2];
-  const Leg = (cls, x, color) => (
-    <g className={"sai-crit-leg " + cls}>
-      <rect x={x - 5} y={84} width={10} height={28} rx={5} fill={color} />
-      <ellipse cx={x} cy={112} rx={6.5} ry={4.2} fill={s.paw} />
-    </g>
-  );
-
-  // frog's eyes ride on top bumps instead of the face.
-  const bodyEyesOnTop = s.feat === "frog";
-
-  return (
-    <svg className="sai-crit-root" viewBox="0 0 120 120" width={w} height={h}
-      style={st} role="img" aria-label={s.name} overflow="visible">
-      <defs>
-        <radialGradient id={uid + "-fur"} cx="38%" cy="30%" r="80%">
-          <stop offset="0%" stopColor={s.fur[0]} />
-          <stop offset="55%" stopColor={s.fur[1]} />
-          <stop offset="100%" stopColor={s.fur[2]} />
-        </radialGradient>
-        <radialGradient id={uid + "-belly"} cx="50%" cy="35%" r="75%">
-          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.85" />
-          <stop offset="60%" stopColor={s.belly} />
-          <stop offset="100%" stopColor={s.belly} stopOpacity="0.6" />
-        </radialGradient>
-        <radialGradient id={uid + "-head"} cx="42%" cy="28%" r="82%">
-          <stop offset="0%" stopColor={s.fur[0]} />
-          <stop offset="52%" stopColor={s.fur[1]} />
-          <stop offset="100%" stopColor={s.fur[2]} />
-        </radialGradient>
-        <linearGradient id={uid + "-rim"} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#ffe9ad" stopOpacity="0.9" />
-          <stop offset="45%" stopColor="#ffe9ad" stopOpacity="0" />
-        </linearGradient>
-        <filter id={uid + "-soft"} x="-40%" y="-40%" width="180%" height="180%">
-          <feDropShadow dx="0" dy="2.2" stdDeviation="2.4" floodColor="#2a1c10" floodOpacity="0.45" />
-        </filter>
-        <filter id={uid + "-org"} x="-20%" y="-20%" width="140%" height="140%">
-          <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed={Math.floor(seed * 90)} result="n" />
-          <feDisplacementMap in="SourceGraphic" in2="n" scale="1.6" />
-        </filter>
-        <filter id={uid + "-grain"} x="0" y="0" width="100%" height="100%">
-          <feTurbulence type="fractalNoise" baseFrequency="0.75" numOctaves="2" seed={Math.floor(seed * 50)} result="g" />
-          <feColorMatrix in="g" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.05 0" />
-        </filter>
-      </defs>
-
-      {/* contact shadow on the forest floor */}
-      <ellipse className="sai-crit-shadow" cx="56" cy="113" rx={26} ry={6} fill="#0c2418" opacity="0.4" />
-
-      {/* far / behind props (antlers, owl wings, hedgehog spines) */}
-      <SaiExtrasBehind s={s} />
-
-      {/* tail (behind body) */}
-      <SaiTail type={s.tail} mid={tailMid} rim={tailRim} dark={tailDark} accent={s.accent} />
-
-      {/* BACK legs (darker, drawn first) */}
-      {Leg("sai-crit-leg-bl sai-crit-far", 40, legDark)}
-      {Leg("sai-crit-leg-fl sai-crit-far", 62, legDark)}
-
-      {/* TORSO */}
-      <g className="sai-crit-body" filter={`url(#${uid}-soft)`}>
-        <g filter={`url(#${uid}-org)`}>
-          <ellipse cx="52" cy="76" rx="31" ry="26" fill={`url(#${uid}-fur)`} />
-        </g>
-        <ellipse cx="58" cy="84" rx="21" ry="16" fill={`url(#${uid}-belly)`} />
-        {/* raking rim-light on the sun (upper-right) side */}
-        <path d="M 70 54 A 31 26 0 0 1 80 82" stroke="#ffe9ad" strokeWidth="3" fill="none" opacity="0.5" strokeLinecap="round" />
-        <SaiMarks s={s} />
-        <ellipse cx="52" cy="76" rx="31" ry="26" fill={`url(#${uid}-grain)`} />
-      </g>
-
-      {/* FRONT legs (near, brighter) */}
-      {Leg("sai-crit-leg-br sai-crit-near", 49, s.fur[1])}
-      {Leg("sai-crit-leg-fr sai-crit-near", 71, s.fur[1])}
-
-      {/* penguin flippers sit in front of the torso */}
-      <SaiExtrasFront s={s} />
-
-      {/* HEAD group */}
-      <g className="sai-crit-head">
-        {/* ears (behind head) */}
-        <g transform="translate(72 22)"><SaiEar type={earType} side="l" color={earCol} inner={s.earInner} /></g>
-        <g transform="translate(94 20)"><SaiEar type={earType} side="r" color={earCol} inner={s.earInner} /></g>
-
-        <g filter={`url(#${uid}-soft)`}>
-          <circle cx="84" cy="44" r="25" fill={`url(#${uid}-head)`} />
-        </g>
-        {/* owl facial disc */}
-        {s.feat === "owl" && <ellipse cx="84" cy="46" rx="20" ry="18" fill={s.belly} opacity="0.5" />}
-        {/* head rim-light */}
-        <path d="M 70 30 A 25 25 0 0 1 96 26" stroke="#ffe9ad" strokeWidth="3.2" fill="none" opacity="0.55" strokeLinecap="round" />
-
-        {/* cheek blush (friendly) */}
-        <ellipse className="sai-crit-blush" cx="74" cy="52" rx="5" ry="3.4" fill="#ff9ecb" />
-        <ellipse className="sai-crit-blush" cx="97" cy="52" rx="4.4" ry="3" fill="#ff9ecb" />
-
-        {/* muzzle / snout */}
-        {s.feat === "penguin" || s.feat === "owl" ? (
-          <path className="sai-crit-beak" d="M 100 44 l 12 5 l -12 5 Z" fill={s.nose} />
-        ) : s.feat === "pig" ? (
-          <g>
-            <ellipse cx="100" cy="50" rx="10" ry="8" fill={s.muzzle} />
-            <ellipse cx="100" cy="50" rx="7" ry="5.5" fill={s.nose} />
-            <circle cx="97" cy="50" r="1.6" fill="#5a2a3a" /><circle cx="103" cy="50" r="1.6" fill="#5a2a3a" />
-          </g>
-        ) : (
-          <g>
-            <ellipse cx="98" cy="52" rx="12" ry="9" fill={s.muzzle} />
-            <path className="sai-crit-nose" d="M 106 47 q 4 0 3 4 q -1 3 -4 2 q -3 -1 -2 -4 q 1 -2 3 -2 Z" fill={s.nose} />
-            {/* mouth (default resting) */}
-            <path className="sai-crit-mouth-rest" d="M 100 56 q 6 5 11 1" stroke={s.nose} strokeWidth="2" fill="none" strokeLinecap="round" />
-            {/* open/bared mouth (fight & flee) */}
-            <path className="sai-crit-mouth-open" d="M 101 55 q 6 8 12 1 q -6 -3 -12 -1 Z" fill="#6b1f2a" />
-          </g>
-        )}
-
-        {/* raccoon mask */}
-        {s.feat === "raccoon" && (
-          <g fill="#2a2430">
-            <path d="M 74 40 q 6 -6 12 0 q -2 8 -8 8 q -6 -1 -4 -8 Z" />
-            <path d="M 96 40 q 6 -5 12 1 q 0 8 -8 7 q -6 -2 -4 -8 Z" />
-            <path d="M 84 40 q 4 -3 8 0 l 0 4 q -4 2 -8 0 Z" opacity="0.9" />
-          </g>
-        )}
-
-        {/* EYES — normal (facial; frog's eyes ride on top bumps instead) */}
-        {!bodyEyesOnTop && (
-        <g className="sai-crit-eyes-normal">
-          <g className="sai-crit-eye">
-            <ellipse cx="82" cy="42" rx="6.5" ry="7.5" fill="#fff" />
-            <circle cx="83.5" cy="43" r="4.2" fill={s.eye === "#141c26" || s.feat === "panda" ? "#141c26" : s.eye} />
-            <circle cx="82" cy="41" r="1.5" fill="#fff" />
-            <rect className="sai-crit-lid" x="75" y="34" width="14" height="16" rx="6" fill={s.fur[1]} />
-          </g>
-          <g className="sai-crit-eye">
-            <ellipse cx="96" cy="44" rx="5.6" ry="6.6" fill="#fff" />
-            <circle cx="97.4" cy="45" r="3.7" fill={s.eye === "#141c26" || s.feat === "panda" ? "#141c26" : s.eye} />
-            <circle cx="96" cy="43" r="1.3" fill="#fff" />
-            <rect className="sai-crit-lid" x="90" y="37" width="13" height="15" rx="6" fill={s.fur[1]} />
-          </g>
-        </g>
-        )}
-
-        {/* EYES — happy arcs (friendly) */}
-        <g className="sai-crit-eyes-happy" stroke="#2a1c10" strokeWidth="2.6" fill="none" strokeLinecap="round">
-          <path d="M 77 44 q 5 -6 10 0" />
-          <path d="M 91 46 q 4.5 -5 9 0" />
-        </g>
-
-        {/* angry brows (fight) */}
-        <g className="sai-crit-brows" stroke="#2a1c10" strokeWidth="3" strokeLinecap="round">
-          <path d="M 76 33 l 11 4" />
-          <path d="M 103 35 l -10 4" />
-        </g>
-
-        {/* frog: eyes ride on top bumps */}
-        {bodyEyesOnTop && (
-          <g className="sai-crit-eyes-normal">
-            <circle cx="74" cy="24" r="9" fill={s.fur[0]} />
-            <circle cx="94" cy="24" r="9" fill={s.fur[0]} />
-            <circle cx="74" cy="24" r="5.5" fill="#fff" /><circle cx="94" cy="24" r="5.5" fill="#fff" />
-            <circle cx="75" cy="25" r="3.2" fill="#2a1c10" /><circle cx="95" cy="25" r="3.2" fill="#2a1c10" />
-          </g>
-        )}
-      </g>
-
-      {/* FIGHT dust puffs */}
-      <g className="sai-crit-dust">
-        <circle cx="30" cy="110" r="5" fill="#6b4a2a" opacity="0.6" />
-        <circle cx="86" cy="112" r="4" fill="#6b4a2a" opacity="0.6" />
-      </g>
-
-      {/* FLEE motion streaks */}
-      <g className="sai-crit-streaks" stroke="#ffe9ad" strokeWidth="2.4" strokeLinecap="round" opacity="0.7">
-        <path d="M 8 50 h 16" /><path d="M 2 70 h 20" /><path d="M 10 90 h 14" />
-      </g>
-    </svg>
-  );
-}
-
-
 // ---------------- Agent Factory ----------------
-function makeAgent(bounds) {
-  const r = rand(18, 24);
+function makeAgent(bounds, species) {
+  const r = rand(18, 24) * 1.1; // +10% sprite size
   const speed0 = DEFAULTS.speed;
-  const species = choice(Object.keys(SPECIES));
   return {
     id: idgen(),
     species,
@@ -562,6 +80,22 @@ function makeAgent(bounds) {
     intent: Math.random() < STATION_INTENT_SHARE ? "station" : "wander",
     intentUntil: performance.now() + rand(INTENT_MIN_S*1000, INTENT_MAX_S*1000),
   };
+}
+
+// spawn control: never repeat a species that's already in the world
+function pickSpecies(existing) {
+  const used = new Set(existing.map((a) => a.species));
+  const free = Object.keys(SPECIES).filter((k) => !used.has(k));
+  return free.length ? choice(free) : null;
+}
+function seedAgents(bounds, n) {
+  const arr = [];
+  for (let i = 0; i < n; i++) {
+    const s = pickSpecies(arr);
+    if (!s) break;
+    arr.push(makeAgent(bounds, s));
+  }
+  return arr;
 }
 
 function getRel(a, otherId, create = true) {
@@ -605,7 +139,7 @@ export default function SocialAnimalsRPG() {
     const ro = new ResizeObserver(fit); ro.observe(stage);
 
     // seed agents
-    worldRef.current.agents = Array.from({ length: DEFAULTS.numAgents }, () => makeAgent(worldRef.current.bounds));
+    worldRef.current.agents = seedAgents(worldRef.current.bounds, DEFAULTS.numAgents);
 
     // main loop
     worldRef.current.last = performance.now();
@@ -635,10 +169,10 @@ export default function SocialAnimalsRPG() {
   }, []);
 
   // controls
-  const addAgent = () => { if (worldRef.current.agents.length < MAX_AGENTS) worldRef.current.agents.push(makeAgent(worldRef.current.bounds)); };
+  const addAgent = () => { const w = worldRef.current; if (w.agents.length >= MAX_AGENTS) return; const s = pickSpecies(w.agents); if (s) w.agents.push(makeAgent(w.bounds, s)); };
   const removeAgent = () => { worldRef.current.agents.pop(); };
   const resetWorld = () => {
-    const { bounds } = worldRef.current; worldRef.current.agents = Array.from({ length: DEFAULTS.numAgents }, () => makeAgent(bounds));
+    const { bounds } = worldRef.current; worldRef.current.agents = seedAgents(bounds, DEFAULTS.numAgents);
   };
 
   const selectId = (id) => setSnapshot((s) => ({ ...s, selectedId: id }));

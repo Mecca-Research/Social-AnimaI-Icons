@@ -2,15 +2,19 @@
 
 **▶️ [Live demo](https://mecca-research.github.io/Social-AnimaI-Icons/)** — runs entirely in your browser, no install required.
 
-![Social Animal Icons — hand‑drawn animated animal sprites (tiger, fox, rabbit, raccoon, penguin, deer, pig…) roaming a lush, textured top‑down forest lit by volumetric god‑rays. A reed‑fringed lily‑pad pond (Water), a berry‑bush larder with a picnic basket (Food), and a bunting‑and‑pinwheel meadow (Play) dot the map.](media/screenshot.png)
+![Social Animal Icons — 14 distinct hand‑drawn animal characters (fox, raccoon, tiger, panda, deer, bear, rabbit, pig, frog, hedgehog, penguin, owl…) roaming a lush, textured top‑down forest lit by volumetric god‑rays, with a lily‑pad pond, a berry‑bush larder, and a flowery play meadow.](media/screenshot.png)
 
 An interactive, emergent “living desktop” made of animal icons that socialize, argue, help each other, and roam a large map with stations for Food, Water, and Play. Every icon runs a tiny state machine (wander, idle, go-to-station, friendly, fight, flee, separate, cooldown, drag) and forms relationships via last-touch memory (friend or rival).
 
-Current release: v0.8 — **Hand‑rigged animated animal sprites.** Every creature is now a bespoke SVG character (not an emoji) with a real walk cycle, breathing, blinking, twitching ears and swaying tails, plus fight/friendly/flee expressions — 14 distinct species (fox, panda, rabbit, bear, cat, frog, penguin, owl, raccoon, deer, tiger, pig, koala, hedgehog). Set in a richly textured forest with volumetric god‑rays and real depth, and detailed animated stations. Built on the v0.6 behavior model: locked interactions (8s), separation, wander cooldown, ally‑assist flee, edge warp, tuned needs.
+Current release: v0.9 — **Every species is its own character.** Each of the 14 animals now has a bespoke silhouette and rig: legs are part of the body (hips tucked under the torso, far legs shaded for depth), birds get real bird bodies (a waddling tuxedo penguin, a disc‑faced owl with folded wings and talons), the frog gets a squat hop rig, and every species walks with its own stride and tempo (bears lumber, hedgehogs scurry). Spawning never repeats a species — the world starts with 8 unique animals and caps at 14, one of each.
+
+![All 14 species in idle, walking, fight and friendly states](media/sprites.png)
 
 ✨ Features
 
-Hand‑rigged animal sprites — 14 bespoke SVG creatures (fox, panda, rabbit, bear, cat, frog, penguin, owl, raccoon, deer, tiger, pig, koala, hedgehog), each with a real walk cycle, idle breathing, blinking, ear/tail motion, and fight/friendly/flee faces. They face the way they move and cast a rigged shadow.
+Bespoke animal sprites — 14 hand‑drawn SVG characters, each with a unique silhouette and signature (fox's cream‑tipped brush tail, panda's eye patches and saddle, raccoon's bandit mask and ringed tail, deer's antlers and fawn spots, hedgehog's spike crown, koala's fluffy ears, tiger's bold stripes and cheek ruff, pig's snout and curly tail…). Rigged walk cycles with per‑species stride and tempo, idle breathing, double‑blinks, ear twitches, tail sway, and fight/friendly/flee faces. They face the way they move and cast a grounded shadow.
+
+One of each — new animals spawn only as species not already in the world; the population caps at 14 (one per species). Try the sprite viewer at [`/?gallery=1`](https://mecca-research.github.io/Social-AnimaI-Icons/?gallery=1).
 
 Richly textured forest 🌲 — a layered, painterly forest floor with volumetric god‑rays, depth, a fallen log, ferns, clover, flowers, mushrooms, pebbles, drifting leaves, fireflies, and fluttering butterflies.
 
@@ -40,7 +44,7 @@ Ally assist: a nearby third icon whose last-touch with one fighter was friend wi
 
 Last-touch relationships: each pair keeps only the last interaction tag (friend|rival); Inspector counts friends/enemies from that.
 
-Controls: Pause/Run, Speed slider (decently slow → brisk), Add/Remove Icon (start 8, cap 16), Reset World.
+Controls: Pause/Run, Speed slider (decently slow → brisk), Add/Remove Icon (start 8 unique species, cap 14 — one of each), Reset World.
 
 🧠 Behavior Model (quick reference)
 
