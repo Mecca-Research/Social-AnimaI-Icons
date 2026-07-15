@@ -1,16 +1,28 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "tailwindcss";
+import autoprefixer from "autoprefixer";
 
-// Project site is served from https://<owner>.github.io/Social-AnimaI-Icons/,
-// so every built asset URL must be prefixed with the repository name.
+// The Vite app source lives in app/. `vite build` compiles it to dist/, and
+// scripts/publish.mjs then copies that build to BOTH the repo root and docs/.
 //
-// GitHub Pages is configured as "Deploy from a branch" (main / docs), so the
-// production build is written to docs/ and committed — GitHub serves it as-is.
+// Why both: GitHub Pages "Deploy from a branch" serves committed files with no
+// build step, and the served folder ("/" root or "/docs") is a repo setting.
+// Publishing to both locations makes the live site work regardless of which
+// folder is selected. A relative `base` ("./") makes the hashed-asset URLs
+// resolve correctly no matter the served path.
 export default defineConfig({
-  base: "/Social-AnimaI-Icons/",
+  root: "app",
+  base: "./",
   plugins: [react()],
+  css: {
+    // Configure PostCSS inline so it resolves correctly with root: "app".
+    postcss: {
+      plugins: [tailwindcss(), autoprefixer()],
+    },
+  },
   build: {
-    outDir: "docs",
+    outDir: "../dist",
     emptyOutDir: true,
   },
 });
