@@ -2,7 +2,7 @@
 
 **▶️ [Live demo](https://mecca-research.github.io/Social-AnimaI-Icons/)** — runs entirely in your browser, no install required.
 
-![Social Animal Icons — animal emojis roaming a large map with Food, Water, and Play stations. Two pairs are mid‑interaction: red “fight” glows and a green “friendly” glow, while others wander or head to a station.](docs/screenshot.png)
+![Social Animal Icons — animal emojis roaming a large map with Food, Water, and Play stations. Two pairs are mid‑interaction: red “fight” glows and a green “friendly” glow, while others wander or head to a station.](media/screenshot.png)
 
 An interactive, emergent “living desktop” made of animal icons that socialize, argue, help each other, and roam a large map with stations for Food, Water, and Play. Every icon runs a tiny state machine (wander, idle, go-to-station, friendly, fight, flee, separate, cooldown, drag) and forms relationships via last-touch memory (friend or rival).
 
@@ -50,7 +50,7 @@ React 18 + Vite (dev server & production bundler)
 
 Tailwind CSS (compiled at build time, tree-shaken to the classes actually used)
 
-Deployed to GitHub Pages via GitHub Actions on every push to `main`
+Deployed to GitHub Pages from the committed `docs/` build (Pages → Deploy from a branch)
 
 The core UI is a single React component (`SocialAnimalsRPG`, in `src/SocialAnimalIcons.jsx`) you can drop into any app.
 
@@ -58,21 +58,21 @@ The core UI is a single React component (`SocialAnimalsRPG`, in `src/SocialAnima
 
 **Live:** https://mecca-research.github.io/Social-AnimaI-Icons/
 
-The site is a standard [Vite](https://vitejs.dev) build (React + Tailwind) published to **GitHub Pages via GitHub Actions**. Every push to `main` runs [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml), which builds the app and deploys the `dist/` output. No build artifacts are committed — the root [`index.html`](index.html) is just the small Vite entry point, and the hashed JS/CSS bundles are generated during the build.
+The site is a [Vite](https://vitejs.dev) build (React + Tailwind) published with **GitHub Pages → Deploy from a branch**. The production build is committed to [`docs/`](docs/) and GitHub serves those files directly — there is no build step on GitHub's side and no Actions workflow, so nothing has to be "enabled" beyond pointing Pages at the folder.
 
 ### One-time setup (repo owner)
 
-Enable Pages to build from Actions: **Settings → Pages → Build and deployment → Source → _GitHub Actions_**. After that, the next push to `main` (or a manual run from the **Actions** tab) builds and deploys automatically, and the URL above goes live within a minute or two.
+**Settings → Pages → Build and deployment → Source: _Deploy from a branch_ → Branch: `main`, folder: `/docs`.** The site goes live at the URL above within a minute or two.
 
-> The Vite `base` is set to `/Social-AnimaI-Icons/` in [`vite.config.js`](vite.config.js) so asset URLs resolve correctly under the project-pages path.
+> `vite.config.js` sets `base: '/Social-AnimaI-Icons/'` and `build.outDir: 'docs'`, and `docs/.nojekyll` tells Pages to serve the hashed asset files as-is (no Jekyll processing).
 
-### Run locally
+### Develop & publish
 
 ```bash
 npm install
 npm run dev      # start the dev server (prints a localhost URL)
-npm run build    # production build into dist/
+npm run build    # rebuild the site into docs/
 npm run preview  # serve the production build locally
 ```
 
-`src/` holds the simulation as a drop-in React component (`SocialAnimalIcons.jsx`, which exports `SocialAnimalsRPG`) plus the `App.jsx` and `main.jsx` entry files that mount it.
+Because Pages serves the committed build, **after changing the app run `npm run build` and commit the updated `docs/`** for the live site to change. `src/` holds the simulation as a drop-in React component (`SocialAnimalIcons.jsx`, which exports `SocialAnimalsRPG`) plus the `App.jsx` and `main.jsx` entry files that mount it.
