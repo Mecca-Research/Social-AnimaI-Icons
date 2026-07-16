@@ -967,8 +967,8 @@ body {
 .sai-crit--rabbit{ --sai-swing:26deg; --sai-gait:.4s; }
 .sai-crit--cat{ --sai-swing:22deg; --sai-gait:.46s; }
 .sai-crit--raccoon{ --sai-swing:22deg; --sai-gait:.48s; }
-.sai-crit--penguin{ --sai-swing:16deg; --sai-gait:.42s; }
-.sai-crit--owl{ --sai-swing:14deg; --sai-gait:.4s; }
+.sai-crit--penguin{ --sai-swing:13deg; --sai-gait:.34s; }
+.sai-crit--owl{ --sai-swing:10deg; --sai-gait:.32s; }
 .sai-crit--frog{ --sai-swing:10deg; --sai-gait:.56s; }
 
 /* wing: shoulder pivot; flap while walking (birds) */
@@ -993,4 +993,20 @@ body {
   .sai-sprite[data-walking="1"] .sai-crit--penguin .sai-crit-body,
   .sai-sprite[data-walking="1"] .sai-crit--frog .sai-crit-body,
   .sai-sprite[data-walking="1"] .sai-crit--frog .sai-crit-head{ animation:none; }
+}
+
+
+/* ==================== v0.9.1 gait polish ==================== */
+/* owl: light two-step hop with a head bob */
+.sai-sprite[data-walking="1"] .sai-crit--owl .sai-crit-body{ animation:sai-crit-owlhop .32s ease-in-out infinite; }
+.sai-sprite[data-walking="1"] .sai-crit--owl .sai-crit-head{ animation:sai-crit-owlhophead .32s ease-in-out infinite; }
+@keyframes sai-crit-owlhop{ 0%,100%{transform:translateY(0) scaleY(1);} 50%{transform:translateY(-2.6px) scaleY(1.02);} }
+@keyframes sai-crit-owlhophead{ 0%,100%{transform:translateY(0) rotate(0);} 50%{transform:translateY(-3.2px) rotate(-1.6deg);} }
+/* penguin: head counter-tilts against the waddle for a proper toddle */
+.sai-sprite[data-walking="1"] .sai-crit--penguin .sai-crit-head{ animation:sai-crit-pengbob var(--sai-gait,.34s) ease-in-out infinite; }
+@keyframes sai-crit-pengbob{ 0%,100%{transform:rotate(-2.4deg) translateY(0);} 50%{transform:rotate(2.4deg) translateY(-1px);} }
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-walking="1"] .sai-crit--owl .sai-crit-body,
+  .sai-sprite[data-walking="1"] .sai-crit--owl .sai-crit-head,
+  .sai-sprite[data-walking="1"] .sai-crit--penguin .sai-crit-head{ animation:none; }
 }

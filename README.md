@@ -6,7 +6,7 @@
 
 An interactive, emergent “living desktop” made of animal icons that socialize, argue, help each other, and roam a large map with stations for Food, Water, and Play. Every icon runs a tiny state machine (wander, idle, go-to-station, friendly, fight, flee, separate, cooldown, drag) and forms relationships via last-touch memory (friend or rival).
 
-Current release: v0.9 — **Every species is its own character.** Each of the 14 animals now has a bespoke silhouette and rig: legs are part of the body (hips tucked under the torso, far legs shaded for depth), birds get real bird bodies (a waddling tuxedo penguin, a disc‑faced owl with folded wings and talons), the frog gets a squat hop rig, and every species walks with its own stride and tempo (bears lumber, hedgehogs scurry). Spawning never repeats a species — the world starts with 8 unique animals and caps at 14, one of each.
+Current release: v0.9.1 — **Anatomy & animation polish.** Walk cycles now key off real on-screen movement (no more animals sliding with frozen legs — and they stop marching when paused), every body got a bespoke underbelly and back shading instead of the old uniform oval, the bear/panda/raccoon/owl/penguin/frog/hedgehog/deer received targeted anatomy fixes, birds walk like birds (penguin toddle, owl hop, feet that move with the legs), and the pond is now **twice the size** with a matching double-radius water zone — the forest's social hub. Built on v0.9: **every species is its own character.** Each of the 14 animals now has a bespoke silhouette and rig: legs are part of the body (hips tucked under the torso, far legs shaded for depth), birds get real bird bodies (a waddling tuxedo penguin, a disc‑faced owl with folded wings and talons), the frog gets a squat hop rig, and every species walks with its own stride and tempo (bears lumber, hedgehogs scurry). Spawning never repeats a species — the world starts with 8 unique animals and caps at 14, one of each.
 
 ![All 14 species in idle, walking, fight and friendly states](media/sprites.png)
 
@@ -18,7 +18,7 @@ One of each — new animals spawn only as species not already in the world; the 
 
 Richly textured forest 🌲 — a layered, painterly forest floor with volumetric god‑rays, depth, a fallen log, ferns, clover, flowers, mushrooms, pebbles, drifting leaves, fireflies, and fluttering butterflies.
 
-Detailed animated stations — Water is a reed‑fringed lily‑pad pond with a skimming dragonfly, Food a berry‑bush larder with a picnic basket and foraged nuts, Play a meadow with bunting, a bouncing ball, a spinning pinwheel and a kite.
+Detailed animated stations — Water is a big reed‑fringed lily‑pad pond (doubled in size, with a doubled interaction zone to build richer waterside behavior on), Food a berry‑bush larder with a picnic basket and foraged nuts, Play a meadow with bunting, a bouncing ball, a spinning pinwheel and a kite.
 
 A soft energy glow + floating emote signals each interaction (💢 fight · 💚 friendly · 💨 flee).
 
