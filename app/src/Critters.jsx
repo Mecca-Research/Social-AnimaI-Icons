@@ -54,6 +54,17 @@ function shade(hex) {
   return `#${((f(n >> 16) << 16) | (f((n >> 8) & 255) << 8) | f(n & 255)).toString(16).padStart(6, "0")}`;
 }
 
+// integrated underbelly: a lens that hugs the bottom curve of the body
+function Under({ cx, cy, rx, ry, color, k = 0.62, lift = 0.5, opacity = 1 }) {
+  const x1 = cx - rx * k, x2 = cx + rx * k, y1 = cy + ry * lift;
+  return <path d={`M ${x1} ${y1} Q ${cx} ${cy + ry * 1.16} ${x2} ${y1} Q ${cx} ${cy + ry * 0.4} ${x1} ${y1} Z`} fill={color} opacity={opacity} />;
+}
+// soft darker shading along the spine so backs read rounded, not flat
+function BackShade({ cx, cy, rx, ry, color, k = 0.78, op = 0.18 }) {
+  const x1 = cx - rx * k, x2 = cx + rx * k, y1 = cy - ry * 0.38;
+  return <path d={`M ${x1} ${y1} Q ${cx} ${cy - ry * 1.18} ${x2} ${y1} Q ${cx} ${cy - ry * 0.62} ${x1} ${y1} Z`} fill={color} opacity={op} />;
+}
+
 // soft contact shadow where the belly meets the legs
 const BellyShade = ({ cx = 57, cy = 92, rx = 19 }) => (
   <ellipse cx={cx} cy={cy} rx={rx} ry="4.2" fill="#1a0e04" opacity=".14" />
@@ -137,17 +148,19 @@ function FoxDraw({ uid }) {
       <Quad near={sock} far={sockF} top={70} len={33} w={8.5} fx={70} bx={43} />
       <g className="sai-crit-body">
         <ellipse cx="57" cy="75" rx="27" ry="19" fill={`url(#${uid}f)`} />
-        <ellipse cx="64" cy="83" rx="15" ry="9.5" fill={bib} opacity=".95" />
+        <BackShade cx={57} cy={75} rx={27} ry={19} color="#8a4514" />
+        <Under cx={58} cy={75} rx={25} ry={19} color={bib} k={.58} opacity={.95} />
+        <path d="M 72 60 C 77 66 78 76 74 84 C 70 80 68 70 69 62 Z" fill={bib} opacity=".92" />
         <BellyShade cx={57} cy={92} rx={20} />
       </g>
       <g className="sai-crit-head">
         <g className="sai-crit-ear sai-crit-ear-l">
-          <path d="M 66 38 L 71 11 L 85 31 Z" fill={F[1]} />
-          <path d="M 70 33 L 73 18 L 80 29 Z" fill={earIn} />
+          <path d="M 69 36 L 73 12 L 85 30 Z" fill={F[1]} />
+          <path d="M 72 31 L 75 19 L 81 28 Z" fill={earIn} />
         </g>
         <g className="sai-crit-ear sai-crit-ear-r">
-          <path d="M 87 31 L 97 8 L 106 30 Z" fill={F[1]} />
-          <path d="M 91 27 L 97 15 L 101 27 Z" fill={earIn} />
+          <path d="M 87 30 L 96 9 L 100 33 Z" fill={F[1]} />
+          <path d="M 90 26 L 95 15 L 98 29 Z" fill={earIn} />
         </g>
         <circle cx="85" cy="46" r="20" fill={`url(#${uid}f)`} />
         <path d="M 67 52 l -5 3 4 2 Z M 68 57 l -4 3 4 1.4 Z" fill={F[1]} />
@@ -173,7 +186,8 @@ function RabbitDraw({ uid }) {
       <g className="sai-crit-body">
         <ellipse cx="58" cy="78" rx="26" ry="17.5" fill={`url(#${uid}f)`} />
         <circle cx="45" cy="82" r="12.5" fill={F[1]} />
-        <ellipse cx="66" cy="85" rx="13" ry="8" fill="#fffdf8" />
+        <path d="M 40 89 q 3 -8 11 -8" stroke={F[2]} strokeWidth="1.4" fill="none" strokeLinecap="round" opacity=".45" />
+        <Under cx={61} cy={78} rx={22} ry={17.5} color="#fffdf8" k={.52} />
         <BellyShade cx={58} cy={93} rx={19} />
       </g>
       <g className="sai-crit-head">
@@ -205,8 +219,9 @@ function BearDraw({ uid }) {
       <g className="sai-crit-tail"><circle cx="28" cy="76" r="5.5" fill={F[2]} /></g>
       <Quad near={F[1]} far={F[2]} paw={F[2]} top={68} len={35} w={13} fx={70} bx={41} spread={9} />
       <g className="sai-crit-body">
-        <path d="M 26 78 C 25 58 38 48 52 50 C 66 52 84 58 86 74 C 88 90 74 96 55 96 C 38 96 27 92 26 78 Z" fill={`url(#${uid}f)`} />
-        <circle cx="46" cy="60" r="14" fill={`url(#${uid}f)`} />
+        <path d="M 26 78 C 25 60 34 51 47 49 C 60 47 78 53 85 65 C 89 73 89 84 82 90 C 73 96 56 97 44 95 C 32 93 27 88 26 78 Z" fill={`url(#${uid}f)`} />
+        <BackShade cx={55} cy={72} rx={29} ry={22} color="#4a2c12" op={.15} />
+        <Under cx={56} cy={73} rx={28} ry={21} color={muz} k={.52} opacity={.8} />
         <BellyShade cx={56} cy={93} rx={23} />
       </g>
       <g className="sai-crit-head">
@@ -234,18 +249,19 @@ function CatDraw({ uid }) {
       <Quad near={F[1]} far={F[2]} paw={belly} top={72} len={31} w={8} fx={69} bx={44} />
       <g className="sai-crit-body">
         <ellipse cx="57" cy="78" rx="23.5" ry="15.5" fill={`url(#${uid}f)`} />
-        <path d="M 42 68 q 8 -5 16 -1 M 38 76 q 7 -4 13 -1" stroke={F[2]} strokeWidth="2.4" fill="none" strokeLinecap="round" opacity=".55" />
-        <ellipse cx="66" cy="85" rx="12" ry="7" fill={belly} />
+        <path d="M 42 68 q 8 -5 16 -1 M 38 76 q 7 -4 13 -1 M 48 62 q 7 -3 13 0" stroke={F[2]} strokeWidth="2.4" fill="none" strokeLinecap="round" opacity=".5" />
+        <Under cx={58} cy={78} rx={21} ry={15.5} color={belly} k={.5} opacity={.95} />
+        <path d="M 71 66 C 74 71 74 78 71 83 C 68 79 67 71 68 67 Z" fill={belly} opacity=".9" />
         <BellyShade cx={57} cy={92} rx={17} />
       </g>
       <g className="sai-crit-head">
         <g className="sai-crit-ear sai-crit-ear-l">
-          <path d="M 67 36 L 70 13 L 84 28 Z" fill={F[1]} />
-          <path d="M 71 31 L 73 19 L 80 27 Z" fill={nose} opacity=".8" />
+          <path d="M 70 34 L 73 13 L 85 27 Z" fill={F[1]} />
+          <path d="M 73 29 L 75 18 L 81 26 Z" fill={nose} opacity=".8" />
         </g>
         <g className="sai-crit-ear sai-crit-ear-r">
-          <path d="M 88 28 L 96 9 L 106 27 Z" fill={F[1]} />
-          <path d="M 92 25 L 96 15 L 101 24 Z" fill={nose} opacity=".8" />
+          <path d="M 87 28 L 95 9 L 100 31 Z" fill={F[1]} />
+          <path d="M 90 25 L 95 15 L 98 27 Z" fill={nose} opacity=".8" />
         </g>
         <circle cx="85" cy="46" r="19" fill={`url(#${uid}f)`} />
         <path d="M 67 49 l -6 2.4 5.4 2.4 Z M 68.6 55 l -5.4 2.6 5 2 Z" fill={F[1]} />
@@ -276,8 +292,8 @@ function TigerDraw({ uid }) {
       <Quad near={F[1]} far={F[2]} paw={ruff} top={69} len={35} w={11.5} fx={71} bx={42} spread={9} />
       <g className="sai-crit-body">
         <ellipse cx="56" cy="74" rx="30" ry="21" fill={`url(#${uid}f)`} />
-        <path d="M 40 56 q 3 9 -1 16 L 33 70 q 3 -8 2 -13 Z M 53 54 q 3 10 -0.5 18 L 46 70 q 3.4 -9 2.6 -15 Z M 66 55 q 3.4 10 0 18 L 59 71 q 3.4 -9 2.4 -15 Z" fill={stripe} opacity=".88" />
-        <ellipse cx="64" cy="84" rx="14" ry="8.5" fill={ruff} opacity=".9" />
+        <Under cx={57} cy={74} rx={27} ry={21} color={ruff} k={.56} opacity={.95} />
+        <path d="M 40 56 q 3 9 -1 16 L 33 70 q 3 -8 2 -13 Z M 53 54 q 3 10 -0.5 18 L 46 70 q 3.4 -9 2.6 -15 Z M 66 55 q 3.4 10 0 18 L 59 71 q 3.4 -9 2.4 -15 Z M 44 82 q 3 5 9 6 L 49 92 q -5 -2 -8 -6 Z" fill={stripe} opacity=".88" />
         <BellyShade cx={56} cy={92} rx={22} />
       </g>
       <g className="sai-crit-head">
@@ -306,8 +322,8 @@ function DeerDraw({ uid }) {
     <g transform="translate(60 106) scale(1.05) translate(-60 -106)">
       <defs><Fur id={`${uid}f`} c={F} /></defs>
       <g className="sai-crit-tail">
-        <path d="M 34 62 L 26 68 L 34 72 Z" fill={cream} />
-        <path d="M 34 62 L 29 66 L 34 68 Z" fill={F[2]} />
+        <path d="M 34 63 L 28.5 67 L 34 70 Z" fill={cream} />
+        <path d="M 34 63 L 30.5 66 L 34 68 Z" fill={F[2]} />
       </g>
       <Quad near={F[1]} far={F[2]} hoof={hoofC} top={64} len={40} w={6.5} fx={68} bx={44} spread={7} />
       <g className="sai-crit-body">
@@ -360,7 +376,8 @@ function HedgehogDraw({ uid }) {
         <BellyShade cx={60} cy={99} rx={18} />
       </g>
       <g className="sai-crit-head">
-        <g className="sai-crit-ear sai-crit-ear-r"><circle cx="82" cy="70" r="4" fill={F[1]} /><circle cx="82" cy="70.5" r="2" fill={F[2]} /></g>
+        <g className="sai-crit-ear sai-crit-ear-l"><circle cx="74" cy="68.5" r="3.6" fill={F[2]} /><circle cx="74" cy="69" r="1.8" fill={F[1]} /></g>
+        <g className="sai-crit-ear sai-crit-ear-r"><circle cx="83" cy="70" r="4" fill={F[1]} /><circle cx="83" cy="70.5" r="2" fill={F[2]} /></g>
         <path d="M 72 74 C 84 70 96 74 105 84 C 96 90 84 92 74 90 Z" fill={`url(#${uid}f)`} />
         <circle cx="104.5" cy="83.5" r="3.2" fill={ink} />
         <FaceKit lid={F[1]} e1={[85, 79]} e2={[95, 79.5]} er={2.8} iris={ink} mouth={[98, 90]} />
@@ -378,8 +395,12 @@ function PandaDraw({ uid }) {
       <g className="sai-crit-tail"><circle cx="30" cy="78" r="6" fill={W[1]} /></g>
       <Quad near={K} far="#151312" top={69} len={34} w={12} fx={70} bx={42} spread={9} />
       <g className="sai-crit-body">
+        <clipPath id={`${uid}pb`}><ellipse cx="56" cy="75" rx="28.5" ry="20.5" /></clipPath>
         <ellipse cx="56" cy="75" rx="28.5" ry="20.5" fill={`url(#${uid}f)`} />
-        <path d="M 57 55.5 C 66 55.5 76 60 80 67 C 81.5 71 80 75 77 76 C 73 68 64 63.5 56 63 C 48 63.5 39 68 35 76 C 32 75 30.5 71 32 67 C 36 60 47 55.5 57 55.5 Z" fill={K} opacity=".94" />
+        <g clipPath={`url(#${uid}pb)`}>
+          <path d="M 58 51 C 71 53 82 61 86 71 C 88 79 86 87 80 93 L 64 98 C 71 88 72 76 66 67 C 62 60 56 55 48 53 Z" fill={K} opacity=".96" />
+        </g>
+        <BackShade cx={50} cy={75} rx={26} ry={20.5} color="#9aa39c" op={.22} />
         <BellyShade cx={56} cy={92} rx={21} />
       </g>
       <g className="sai-crit-head">
@@ -408,7 +429,9 @@ function KoalaDraw({ uid }) {
       <Quad near={F[1]} far={F[2]} paw={F[2]} top={71} len={32} w={10} fx={69} bx={43} />
       <g className="sai-crit-body">
         <ellipse cx="57" cy="77" rx="26" ry="19" fill={`url(#${uid}f)`} />
-        <ellipse cx="64" cy="84" rx="13" ry="8.5" fill={belly} />
+        <BackShade cx={57} cy={77} rx={26} ry={19} color="#4f5a62" op={.16} />
+        <Under cx={58} cy={77} rx={24} ry={19} color={belly} k={.55} />
+        <path d="M 35 67 l -3.2 -2.6 M 39 63 l -2.8 -3.2 M 44 60 l -2.2 -3.6" stroke={F[0]} strokeWidth="1.6" strokeLinecap="round" opacity=".65" />
         <BellyShade cx={57} cy={93} rx={19} />
       </g>
       <g className="sai-crit-head">
@@ -443,7 +466,8 @@ function PigDraw({ uid }) {
       <Quad near={F[1]} far={F[2]} hoof={hoofC} top={72} len={31} w={9.5} fx={70} bx={44} />
       <g className="sai-crit-body">
         <ellipse cx="57" cy="75" rx="29" ry="22" fill={`url(#${uid}f)`} />
-        <ellipse cx="63" cy="84" rx="15" ry="9.5" fill="#ffdde6" opacity=".9" />
+        <BackShade cx={57} cy={75} rx={29} ry={22} color="#c25a78" op={.14} />
+        <Under cx={57} cy={75} rx={26} ry={22} color="#ffd9e4" k={.52} opacity={.9} />
         <BellyShade cx={57} cy={93} rx={21} />
       </g>
       <g className="sai-crit-head">
@@ -472,25 +496,26 @@ function RaccoonDraw({ uid }) {
       </g>
       <Quad near={K} far="#141019" top={71} len={32} w={9} fx={69} bx={43} />
       <g className="sai-crit-body">
-        <ellipse cx="56" cy="76" rx="27" ry="18.5" fill={`url(#${uid}f)`} transform="rotate(-8 56 76)" />
-        <path d="M 34 68 q 10 -8 24 -6 M 38 78 q 8 -5 16 -4" stroke={F[0]} strokeWidth="1.6" strokeLinecap="round" opacity=".6" fill="none" />
-        <ellipse cx="63" cy="85" rx="13" ry="7.5" fill="#d7dce0" opacity=".85" />
+        <ellipse cx="56" cy="76" rx="27" ry="18.5" fill={`url(#${uid}f)`} />
+        <BackShade cx={56} cy={76} rx={27} ry={18.5} color="#3a424c" op={.2} />
+        <path d="M 34 66 q 10 -7 24 -5 M 38 76 q 8 -4 16 -3" stroke={F[0]} strokeWidth="1.6" strokeLinecap="round" opacity=".5" fill="none" />
+        <Under cx={57} cy={76} rx={24} ry={18.5} color="#d7dce0" k={.54} opacity={.9} />
         <BellyShade cx={56} cy={92} rx={19} />
       </g>
       <g className="sai-crit-head">
         <g className="sai-crit-ear sai-crit-ear-l"><path d="M 68 34 L 72 16 L 85 29 Z" fill={F[1]} /><path d="M 72 30 L 74 21 L 81 28 Z" fill={white} opacity=".85" /></g>
         <g className="sai-crit-ear sai-crit-ear-r"><path d="M 88 29 L 96 12 L 106 28 Z" fill={F[1]} /><path d="M 92 26 L 96 18 L 101 26 Z" fill={white} opacity=".85" /></g>
         <circle cx="85" cy="46" r="19.5" fill={`url(#${uid}f)`} />
-        <ellipse cx="78" cy="34" rx="7" ry="4.4" fill={white} opacity=".9" />
-        <ellipse cx="94" cy="32.5" rx="7" ry="4.4" fill={white} opacity=".9" />
-        <rect x="65" y="37.5" width="41" height="12.5" rx="6.2" fill={K} transform="rotate(-4 86 44)" />
+        <ellipse cx="78" cy="33.5" rx="7" ry="4.4" fill={white} opacity=".9" />
+        <ellipse cx="94" cy="33.5" rx="7" ry="4.4" fill={white} opacity=".9" />
+        <path d="M 68 43 Q 70 37.5 78 37.5 Q 84 37.5 86 41 Q 88 37.5 94 37.5 Q 102 37.5 104 43 Q 102 48.5 94 48.5 Q 88 48.5 86 45.5 Q 84 48.5 78 48.5 Q 70 48.5 68 43 Z" fill={K} />
         <path d="M 90 50 C 98 48 105 51 108 56 C 103 60 95 61 90 58 Z" fill={white} />
         <ellipse cx="107" cy="55" rx="3.2" ry="2.7" fill={ink} />
         <g className="sai-crit-eyes-normal">
-          <circle cx="78" cy="43.5" r="3.6" fill={white} /><circle cx="79" cy="43.5" r="2.1" fill={ink} />
-          <circle cx="94" cy="42" r="3.6" fill={white} /><circle cx="95" cy="42" r="2.1" fill={ink} />
+          <circle cx="78" cy="43" r="3.6" fill={white} /><circle cx="79" cy="43" r="2.1" fill={ink} />
+          <circle cx="94" cy="43" r="3.6" fill={white} /><circle cx="95" cy="43" r="2.1" fill={ink} />
         </g>
-        <FaceKit lid={K} e1={[78, 43.5]} e2={[94, 42]} er={3.6} drawEyes={false} mouth={[95, 61]} browCol="#0c0a10" />
+        <FaceKit lid={K} e1={[78, 43]} e2={[94, 43]} er={3.6} drawEyes={false} mouth={[95, 61]} browCol="#0c0a10" />
       </g>
     </g>
   );
@@ -523,11 +548,11 @@ function FrogDraw({ uid }) {
           <circle cx="92.8" cy="60.6" r="0.9" fill="#fff" />
         </g>
         <g className="sai-crit-mouth-rest">
-          <path d="M 69 77 q 15 10 30 -1" stroke={ink} strokeWidth="2.8" fill="none" strokeLinecap="round" />
+          <path d="M 71 78 q 10 7 20 -0.5" stroke={ink} strokeWidth="2.8" fill="none" strokeLinecap="round" />
         </g>
         <g className="sai-crit-mouth-open">
-          <ellipse cx="84" cy="80" rx="9" ry="6.5" fill="#5e1f2a" />
-          <ellipse cx="84" cy="83" rx="5" ry="2.8" fill="#ff8ba0" />
+          <ellipse cx="81" cy="80" rx="7" ry="5.5" fill="#5e1f2a" />
+          <ellipse cx="81" cy="82.6" rx="4" ry="2.4" fill="#ff8ba0" />
         </g>
         <FaceKit lid={F[1]} e1={[75, 60.5]} e2={[91, 61.5]} er={5} drawEyes={false} mouths={false} browCol={ink} blushCol="#f4a2b0" />
       </g>
@@ -541,10 +566,17 @@ function PenguinDraw({ uid }) {
   return (
     <g transform="translate(60 106) scale(.96) translate(-60 -106)">
       <defs><Fur id={`${uid}f`} c={K} /></defs>
-      <g className="sai-crit-tail"><path d="M 40 90 L 26 99 L 42 99 Z" fill={K[2]} /></g>
-      <Leg x={52} top={92} len={11} w={6} color={orange} cls="bl" />
-      <Leg x={70} top={92} len={11} w={6} color={orange} cls="fr" />
-      <path d="M 46 102.4 q 6 -3 11 0 Z M 64 102.4 q 6 -3 11 0 Z" fill="#d98a24" />
+      <g className="sai-crit-tail">
+        <path d="M 50 87 C 42 89 32 95 27 101 C 35 101 45 99 51 95 Z" fill={K[2]} />
+      </g>
+      <g className="sai-crit-leg sai-crit-leg-bl">
+        <rect x="49" y="92" width="6" height="10" rx="3" fill={orange} />
+        <path d="M 45 101.4 q 7 -3.2 12 0 q -6 2.6 -12 0 Z" fill="#d98a24" />
+      </g>
+      <g className="sai-crit-leg sai-crit-leg-fr">
+        <rect x="67" y="92" width="6" height="10" rx="3" fill={orange} />
+        <path d="M 63 101.4 q 7 -3.2 12 0 q -6 2.6 -12 0 Z" fill="#d98a24" />
+      </g>
       <g className="sai-crit-body">
         <ellipse cx="61" cy="69" rx="24.5" ry="31.5" fill={`url(#${uid}f)`} />
         <ellipse cx="67" cy="79" rx="13" ry="19" fill={white} />
@@ -571,42 +603,47 @@ function OwlDraw({ uid }) {
     <g transform="translate(60 106) scale(.94) translate(-60 -106)">
       <defs><Fur id={`${uid}f`} c={F} /></defs>
       <g className="sai-crit-tail">
-        <path d="M 42 92 L 30 103 L 38 92 Z M 46 94 L 38 105 L 48 94 Z" fill={F[2]} stroke={F[2]} strokeWidth="4" strokeLinejoin="round" />
+        <path d="M 52 86 C 44 92 36 99 31 104 L 45 101 C 50 97 55 92 57 88 Z" fill={F[2]} />
       </g>
-      <Leg x={52} top={94} len={9} w={5.5} color={orange} cls="bl" />
-      <Leg x={68} top={94} len={9} w={5.5} color={orange} cls="fr" />
-      <path d="M 48 103 l -4 2.6 M 52 103.4 l 0 3 M 56 103 l 4 2.6 M 64 103 l -4 2.6 M 68 103.4 l 0 3 M 72 103 l 4 2.6" stroke={orange} strokeWidth="2" strokeLinecap="round" />
+      <g className="sai-crit-leg sai-crit-leg-bl">
+        <rect x="51.5" y="94" width="5.5" height="9" rx="2.7" fill={orange} />
+        <path d="M 50.5 102.4 l -3.2 2.8 M 54.2 102.8 l 0 3 M 58 102.4 l 3.2 2.8" stroke={orange} strokeWidth="2" strokeLinecap="round" fill="none" />
+      </g>
+      <g className="sai-crit-leg sai-crit-leg-fr">
+        <rect x="65.5" y="94" width="5.5" height="9" rx="2.7" fill={orange} />
+        <path d="M 64.5 102.4 l -3.2 2.8 M 68.2 102.8 l 0 3 M 72 102.4 l 3.2 2.8" stroke={orange} strokeWidth="2" strokeLinecap="round" fill="none" />
+      </g>
       <g className="sai-crit-body">
-        <ellipse cx="59" cy="79" rx="21" ry="21.5" fill={`url(#${uid}f)`} />
+        <ellipse cx="61" cy="79" rx="21" ry="21.5" fill={`url(#${uid}f)`} />
         <ellipse cx="63" cy="82" rx="13.5" ry="15.5" fill={cream} />
         <path d="M 55 74 q 4 3.4 8 0 M 63 74 q 4 3.4 8 0 M 51 82 q 4 3.4 8 0 M 59 82 q 4 3.4 8 0 M 67 82 q 4 3.4 8 0 M 55 90 q 4 3.4 8 0 M 63 90 q 4 3.4 8 0" stroke={F[1]} strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".75" />
-        <BellyShade cx={59} cy={97} rx={15} />
+        <BellyShade cx={61} cy={97} rx={15} />
       </g>
       <g className="sai-crit-wing">
-        <ellipse cx="41" cy="78" rx="8.5" ry="16" fill={F[2]} transform="rotate(10 41 64)" />
-        <path d="M 38 70 q -2 8 0 15 M 43 70 q -2 8 0 16" stroke={F[1]} strokeWidth="1.6" fill="none" opacity=".7" />
+        <ellipse cx="43" cy="78" rx="8.5" ry="16" fill={F[2]} transform="rotate(10 43 64)" />
+        <path d="M 40 70 q -2 8 0 15 M 45 70 q -2 8 0 16" stroke={F[1]} strokeWidth="1.6" fill="none" opacity=".7" />
       </g>
       <g className="sai-crit-head">
-        <g className="sai-crit-ear sai-crit-ear-l"><path d="M 58 26 L 56 12 L 68 21 Z" fill={F[1]} /></g>
-        <g className="sai-crit-ear sai-crit-ear-r"><path d="M 92 22 L 98 8 L 104 21 Z" fill={F[1]} /></g>
-        <circle cx="78" cy="41" r="23" fill={`url(#${uid}f)`} />
-        <circle cx="69" cy="43" r="11" fill={cream} />
-        <circle cx="89" cy="41" r="11" fill={cream} />
+        <g className="sai-crit-ear sai-crit-ear-l"><path d="M 46 27 L 43 13 L 56 21 Z" fill={F[1]} /></g>
+        <g className="sai-crit-ear sai-crit-ear-r"><path d="M 76 21 L 82 7 L 88 20 Z" fill={F[1]} /></g>
+        <circle cx="63" cy="41" r="23" fill={`url(#${uid}f)`} />
+        <circle cx="54" cy="43" r="11" fill={cream} />
+        <circle cx="74" cy="41" r="11" fill={cream} />
         <g className="sai-crit-eyes-normal">
-          <circle cx="69" cy="43" r="7.4" fill="#fffbe8" />
-          <circle cx="69.8" cy="43" r="4.9" fill={gold} />
-          <circle cx="70.4" cy="43" r="2.5" fill={ink} />
-          <circle cx="71.5" cy="41.6" r="1.1" fill="#fff" />
-          <circle cx="89" cy="41" r="7.4" fill="#fffbe8" />
-          <circle cx="89.8" cy="41" r="4.9" fill={gold} />
-          <circle cx="90.4" cy="41" r="2.5" fill={ink} />
-          <circle cx="91.5" cy="39.6" r="1.1" fill="#fff" />
+          <circle cx="54" cy="43" r="7.4" fill="#fffbe8" />
+          <circle cx="54.8" cy="43" r="4.9" fill={gold} />
+          <circle cx="55.4" cy="43" r="2.5" fill={ink} />
+          <circle cx="56.5" cy="41.6" r="1.1" fill="#fff" />
+          <circle cx="74" cy="41" r="7.4" fill="#fffbe8" />
+          <circle cx="74.8" cy="41" r="4.9" fill={gold} />
+          <circle cx="75.4" cy="41" r="2.5" fill={ink} />
+          <circle cx="76.5" cy="39.6" r="1.1" fill="#fff" />
         </g>
-        <path d="M 79 47 L 84 51.6 L 79 58 Q 76 52.5 79 47 Z" fill={orange} />
+        <path d="M 64 47 L 69 51.6 L 64 58 Q 61 52.5 64 47 Z" fill={orange} />
         <g className="sai-crit-mouth-open">
-          <path d="M 79 50 L 86 54 L 79 61 Z" fill="#5e1f26" />
+          <path d="M 64 50 L 71 54 L 64 61 Z" fill="#5e1f26" />
         </g>
-        <FaceKit lid={F[1]} e1={[69, 43]} e2={[89, 41]} er={7.2} drawEyes={false} mouths={false} browCol={ink} blushCol="#e8a48e" />
+        <FaceKit lid={F[1]} e1={[54, 43]} e2={[74, 41]} er={7.2} drawEyes={false} mouths={false} browCol={ink} blushCol="#e8a48e" />
       </g>
     </g>
   );

@@ -42,9 +42,9 @@ const INTENT_MIN_S = 10, INTENT_MAX_S = 18;
 
 // Stations (need providers)
 const STATIONS = [
-  { key: "food",  label: "Food",  color: "#f59e0b" },
-  { key: "water", label: "Water", color: "#38bdf8" },
-  { key: "play",  label: "Play",  color: "#a78bfa" },
+  { key: "food",  label: "Food",  color: "#f59e0b", r: 110 },
+  { key: "water", label: "Water", color: "#38bdf8", r: 220 }, // pond is 2x — bigger zone
+  { key: "play",  label: "Play",  color: "#a78bfa", r: 110 },
 ];
 
 // ---------------- Agent Factory ----------------
@@ -1516,12 +1516,12 @@ function Station({ st }) {
   const isPlay = st.key === "play";
   return (
     <div className="absolute pointer-events-none" style={{ left: st.x, top: st.y, width: 0, height: 0, zIndex: 1 }}>
-      <div className="sai-st-hold" style={isPlay ? undefined : { transform: "translate(-50%,-50%)" }}>
+      <div className="sai-st-hold" style={isPlay ? undefined : { transform: st.key === "water" ? "translate(-50%,-50%) scale(2)" : "translate(-50%,-50%)" }}>
         {st.key === "water" && <WaterStation />}
         {st.key === "food" && <FoodStation />}
         {isPlay && <PlayStation />}
       </div>
-      <div className="sai-station-label" style={{ background: "rgba(6,18,12,.82)", border: `1px solid ${st.color}aa`, color: "#f2fff2", boxShadow: `0 0 14px ${st.color}55` }}>
+      <div className="sai-station-label" style={{ background: "rgba(6,18,12,.82)", border: `1px solid ${st.color}aa`, color: "#f2fff2", boxShadow: `0 0 14px ${st.color}55`, ...(st.key === "water" ? { top: 190 } : null) }}>
         {st.key === "water" ? "💧" : st.key === "food" ? "🍎" : "🎈"} {st.label}
       </div>
     </div>
@@ -1655,7 +1655,8 @@ function stepWorld(world, cfg, dt) {
     if (a.state === "flee" && now >= a.fleeEnd) { a.state = "cooldown"; a.targetId = null; }
 
     if (a.state === "cooldown") {
-      a.vx *= 0.98; a.vy *= 0.98;
+      a.vx *= 0.94; a.vy *= 0.94;
+      if (Math.hypot(a.vx, a.vy) < 6) { a.vx = 0; a.vy = 0; }
       if (Math.random() < 0.02 && now >= a.noEventUntil) a.state = "wander";
     }
 
@@ -1672,14 +1673,21 @@ function stepWorld(world, cfg, dt) {
         if (Math.random() < 0.004) { a.state = "idle"; a.vx = a.vy = 0; a.idleUntil = now + rand(900, 2200); }
       }
     } else {
-      // wandering
+      // wandering — keep a minimum cruise speed so walkers never creep
       if (Math.random() < 0.02) { a.vx += rand(-15, 15); a.vy += rand(-15, 15); }
+      if (a.state === 'wander') {
+        const wsp = Math.hypot(a.vx, a.vy);
+        if (wsp < 18) {
+          const ang = wsp > 0.5 ? Math.atan2(a.vy, a.vx) : Math.random() * Math.PI * 2;
+          a.vx = Math.cos(ang) * 22; a.vy = Math.sin(ang) * 22;
+        }
+      }
     }
   }
 
   // Station interactions — only agents past noEvent cooldown are eligible
   for (const st of stations) {
-    const nearby = agents.filter(a => dist(a, st) < cfg.interactionRadius && !a.dragging && a.state!=='friendly' && a.state!=='fight' && a.state!=='separate' && (performance.now() >= a.noEventUntil));
+    const nearby = agents.filter(a => dist(a, st) < (st.r || cfg.interactionRadius) && !a.dragging && a.state!=='friendly' && a.state!=='fight' && a.state!=='separate' && (performance.now() >= a.noEventUntil));
 
     // satisfy needs
     for (const a of nearby) {
@@ -1710,8 +1718,8 @@ function stepWorld(world, cfg, dt) {
       if (performance.now() < a.noEventUntil || performance.now() < b.noEventUntil) continue;
       if (!isFreeState(a) || !isFreeState(b)) continue;
       // both must be outside all stations
-      const ina = stations.some(st => dist(a, st) < cfg.interactionRadius);
-      const inb = stations.some(st => dist(b, st) < cfg.interactionRadius);
+      const ina = stations.some(st => dist(a, st) < (st.r || cfg.interactionRadius));
+      const inb = stations.some(st => dist(b, st) < (st.r || cfg.interactionRadius));
       if (ina || inb) continue;
       if (dist(a,b) > cfg.interactionRadius * 0.9) continue; // need proximity
       if (perSec(0.40, dt)) {
@@ -1805,9 +1813,19 @@ function renderWorld(world, iconsRef) {
     // drive the sprite: facing, walk cycle, and interaction jitter
     const sprite = el.querySelector('.sai-sprite');
     if (sprite) {
-      const speed = Math.hypot(a.vx, a.vy);
-      const moving = speed > 12 && a.state !== 'friendly' && a.state !== 'fight' && a.state !== 'idle';
-      sprite.dataset.walking = moving ? '1' : '';
+      // drive the walk cycle from ACTUAL on-screen displacement, not velocity
+      // state — slow drifts froze the legs mid-slide, and a paused world kept
+      // them marching. Hysteresis avoids flicker at the threshold.
+      const nowMs = performance.now();
+      let dispV = 0;
+      if (a._pt != null) {
+        const dts = (nowMs - a._pt) / 1000;
+        if (dts > 0.001) dispV = Math.hypot(a.x - a._px, a.y - a._py) / dts;
+      }
+      a._px = a.x; a._py = a.y; a._pt = nowMs;
+      const wasWalking = sprite.dataset.walking === '1';
+      const walking = a.state !== 'friendly' && a.state !== 'fight' && (wasWalking ? dispV > 5 : dispV > 10);
+      sprite.dataset.walking = walking ? '1' : '';
       let dir = Number(sprite.dataset.dir || '1');
       if (a.vx < -8) dir = -1; else if (a.vx > 8) dir = 1;
       sprite.dataset.dir = String(dir);
