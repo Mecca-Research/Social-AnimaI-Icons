@@ -2,16 +2,23 @@ import React, { useEffect, useRef, useState } from "react";
 import { Critter, SPECIES } from "./Critters.jsx";
 
 /**
- * Social Animal Icons v0.6 — Separation & Wander Cooldown
+ * Social Animal Icons v0.11 — Lakeside world
  * ------------------------------------------------------------------
- * New behavior per request:
- *  • After ANY interaction (friendly OR fight), the pair separates with
- *    a clear push apart, then MUST wander for a cooldown window before
- *    being eligible for new station-triggered events.
- *  • While cooling down, they will not select stations nor be considered
- *    for station-based interactions (wild interactions also blocked).
- *  • Keeps v0.5's 8s locked, vibrating engagements; ally-assist + flee,
- *    edge warp, large map, tuned speeds/needs.
+ *  • The pond grew into a proper lake (~6x the water) with an organic
+ *    shoreline, sitting upper-right with its south-west shore reaching
+ *    toward map center and a band of land kept along the NE corner.
+ *  • Land animals treat the shoreline as a wall and walk around it.
+ *    Swimmers take dips: beaver / frog / turtle ~40% of the time,
+ *    bear ~10%. In the water they bob, legs tucked, inside a ripple
+ *    ring — and only interact with other animals in the water.
+ *    Water engagements splash instead of kicking up dust.
+ *  • Encounters only trigger at true nose-range. When a fight breaks
+ *    out, bystanders clear away from it — but a nearby friend of a
+ *    fighter runs in and breaks the fight up (opponent flees).
+ *  • Map edges wrap smoothly: walk off one side, amble in from another.
+ *    New animals also walk in from an edge instead of popping in.
+ *  • Stations, needs and meters are gone — the forest is scenery, the
+ *    lake is the only special zone, socializing is the whole game.
  */
 
 // ---------------- Utilities ----------------
@@ -26,7 +33,6 @@ const perSec = (rate, dt) => Math.random() < 1 - Math.exp(-rate * dt); // Poisso
 const DEFAULTS = {
   numAgents: 8,
   speed: 80,                 // px/s nominal (UI rescaled)
-  interactionRadius: 110,    // stations radius
 };
 const MAX_AGENTS = Object.keys(SPECIES).length; // one of each species, no repeats
 
@@ -35,36 +41,105 @@ const FLEE_MS = 2200;        // forced flee time
 const SEP_MS = 1400;         // post-engagement separation push window
 const NOEVENT_MIN_MS = 4200; // min time to forbid new events after an interaction
 const NOEVENT_MAX_MS = 7000; // max time to forbid new events after an interaction
-
-// Intent mix (from v0.3/0.4)
-const STATION_INTENT_SHARE = 0.33;        // ~33% station‑seeking vs 67% wander
 const INTENT_MIN_S = 10, INTENT_MAX_S = 18;
 
-// Stations (need providers)
-const STATIONS = [
-  { key: "food",  label: "Food",  color: "#f59e0b", r: 110 },
-  { key: "water", label: "Water", color: "#38bdf8", r: 220 }, // pond is 2x — bigger zone
-  { key: "play",  label: "Play",  color: "#a78bfa", r: 110 },
-];
+// encounters trigger only at true nose-range
+const pairRange = (a, b) => Math.max(70, (a.r + b.r) * 1.6);
+const AVOID_RADIUS = 190;    // bystanders this close to a fight clear out
+const RESCUE_RADIUS = 620;   // a friend this close sprints in to break a fight up
+const RESCUE_REACH = 95;     // ...and succeeds once this close to their friend
+const EDGE_OFF = 70;         // fully off-screen distance before wrapping
+
+// swim-time share per species (probability of picking a "swim" intent)
+const SWIM_P = { beaver: 0.4, frog: 0.4, turtle: 0.4, bear: 0.1 };
+const canSwim = (species) => SWIM_P[species] != null;
+
+// ---------------- Lake geometry ----------------
+// ONE shared shape for drawing and physics: an ellipse whose radius is
+// modulated by sine harmonics (bays + headlands). Expressed as fractions
+// of the stage so it scales with the window. Upper-right placement, SW
+// shore reaching toward map center, land left along the NE corner.
+const LAKE = {
+  cx: 0.71, cy: 0.28, rx: 0.22, ry: 0.22,
+  harmonics: [[2, 0.09, 1.7], [3, 0.06, 0.6], [5, 0.045, 2.9]],
+};
+function lakeWobble(t) {
+  let m = 1;
+  for (const [k, a, p] of LAKE.harmonics) m += a * Math.sin(k * t + p);
+  return m;
+}
+// normalized shore distance: <1 in the water, ≈1 on the shoreline, >1 on land
+function lakeRho(bounds, x, y) {
+  const dx = (x - LAKE.cx * bounds.w) / (LAKE.rx * bounds.w);
+  const dy = (y - LAKE.cy * bounds.h) / (LAKE.ry * bounds.h);
+  return Math.hypot(dx, dy) / lakeWobble(Math.atan2(dy, dx));
+}
+const inWater = (bounds, x, y) => lakeRho(bounds, x, y) < 0.97;
+// a point at angle t / normalized radius rho of the lake
+function lakePoint(bounds, t, rho) {
+  const m = lakeWobble(t) * rho;
+  return {
+    x: LAKE.cx * bounds.w + Math.cos(t) * LAKE.rx * bounds.w * m,
+    y: LAKE.cy * bounds.h + Math.sin(t) * LAKE.ry * bounds.h * m,
+  };
+}
+// land animals slide along the shoreline instead of entering the water
+function keepAshore(a, bounds) {
+  const r = lakeRho(bounds, a.x, a.y);
+  if (r >= 1.05) return;
+  const cx = LAKE.cx * bounds.w, cy = LAKE.cy * bounds.h;
+  let nx = a.x - cx, ny = a.y - cy;
+  const d = Math.hypot(nx, ny) || 1; nx /= d; ny /= d;
+  const s = 1.05 / Math.max(r, 0.05);
+  a.x = cx + (a.x - cx) * s; a.y = cy + (a.y - cy) * s;
+  const vin = a.vx * nx + a.vy * ny;
+  if (vin < 0) { a.vx -= vin * nx; a.vy -= vin * ny; } // slide, don't sink
+}
+const landSafe = (bounds, x, y, species) => canSwim(species) || lakeRho(bounds, x, y) > 1.12;
+function interiorPoint(bounds, species) {
+  for (let i = 0; i < 24; i++) {
+    const x = rand(120, bounds.w - 120), y = rand(140, bounds.h - 140);
+    if (landSafe(bounds, x, y, species)) return { x, y };
+  }
+  return { x: bounds.w * 0.25, y: bounds.h * 0.75 }; // SW is always land
+}
+// smooth arrival: start just past a screen edge, walking toward the interior
+function enterFromEdge(a, bounds, sp) {
+  for (let i = 0; i < 24; i++) {
+    const edge = (Math.random() * 4) | 0; // 0 top, 1 right, 2 bottom, 3 left
+    const t = rand(0.1, 0.9);
+    let x, y;
+    if (edge === 0) { x = t * bounds.w; y = -EDGE_OFF * 0.85; }
+    else if (edge === 1) { x = bounds.w + EDGE_OFF * 0.85; y = t * bounds.h; }
+    else if (edge === 2) { x = t * bounds.w; y = bounds.h + EDGE_OFF * 0.85; }
+    else { x = -EDGE_OFF * 0.85; y = t * bounds.h; }
+    // a land animal must not step out of the frame straight into the lake
+    const probe = { x: clamp(x, 60, bounds.w - 60), y: clamp(y, 80, bounds.h - 80) };
+    if (!landSafe(bounds, probe.x, probe.y, a.species)) continue;
+    const target = interiorPoint(bounds, a.species);
+    const dx = target.x - x, dy = target.y - y; const d = Math.hypot(dx, dy) || 1;
+    a.x = x; a.y = y; a.vx = (dx / d) * sp; a.vy = (dy / d) * sp;
+    a.state = "wander"; a.targetId = null;
+    return;
+  }
+}
 
 // ---------------- Agent Factory ----------------
 function makeAgent(bounds, species) {
   const r = rand(18, 24) * 1.1; // +10% sprite size
   const speed0 = DEFAULTS.speed;
+  const p = interiorPoint(bounds, species);
   return {
     id: idgen(),
     species,
     emoji: SPECIES[species].badge,
-    x: rand(100, bounds.w - 100),
-    y: rand(140, bounds.h - 140),
+    x: p.x,
+    y: p.y,
     vx: rand(-speed0 * 0.3, speed0 * 0.3),
     vy: rand(-speed0 * 0.3, speed0 * 0.3),
     r,
-    state: "wander", // idle | wander | friendly | fight | going_station | cooldown | drag | flee | separate
+    state: "wander", // idle | wander | friendly | fight | rescue | cooldown | drag | flee | separate
     targetId: null,
-    targetStation: null, // key
-    // needs (0..100)
-    needs: { food: rand(60, 95), water: rand(60, 95), play: rand(60, 95) },
     // relations: last-only tag { last: 'friend'|'rival'|null }
     relations: new Map(), // otherId -> { last }
     idleUntil: 0,
@@ -76,9 +151,11 @@ function makeAgent(bounds, species) {
     // post-interaction management
     separateEnd: 0,
     noEventUntil: 0,
-    // intent
-    intent: Math.random() < STATION_INTENT_SHARE ? "station" : "wander",
+    // intent: wander | swim (swimmers only)
+    intent: "wander",
     intentUntil: performance.now() + rand(INTENT_MIN_S*1000, INTENT_MAX_S*1000),
+    swimTarget: null,
+    rescueFriendId: null,
   };
 }
 
@@ -109,15 +186,15 @@ export default function SocialAnimalsRPG() {
   const stageRef = useRef(null);
   const iconsRef = useRef(new Map()); // id -> HTMLElement
   const [cfg, setCfg] = useState(DEFAULTS);
+  const cfgRef = useRef(cfg); cfgRef.current = cfg; // the RAF loop reads the live value
 
   // UI snapshot
-  const [snapshot, setSnapshot] = useState({ agents: [], stations: [], selectedId: null });
+  const [snapshot, setSnapshot] = useState({ agents: [], bounds: { w: 0, h: 0 }, selectedId: null });
 
   // runtime
   const worldRef = useRef({
     bounds: { w: 1600, h: 1000 }, // large
     agents: [],
-    stations: [],
     running: true,
     last: performance.now(),
   });
@@ -128,18 +205,14 @@ export default function SocialAnimalsRPG() {
     const fit = () => {
       const r = stage.getBoundingClientRect();
       worldRef.current.bounds = { w: r.width, h: r.height };
-      const { w, h } = worldRef.current.bounds;
-      worldRef.current.stations = [
-        { ...STATIONS[0], x: w * 0.22, y: h * 0.32 },
-        { ...STATIONS[1], x: w * 0.78, y: h * 0.34 },
-        { ...STATIONS[2], x: w * 0.50, y: h * 0.74 },
-      ];
     };
     fit();
     const ro = new ResizeObserver(fit); ro.observe(stage);
 
     // seed agents
     worldRef.current.agents = seedAgents(worldRef.current.bounds, DEFAULTS.numAgents);
+    // dev hook: lets tests & the console poke the live world
+    if (typeof window !== "undefined") window.__saiWorld = worldRef.current;
 
     // main loop
     worldRef.current.last = performance.now();
@@ -150,7 +223,7 @@ export default function SocialAnimalsRPG() {
       let dt = (now - worldRef.current.last) / 1000; // seconds
       worldRef.current.last = now;
       dt = Math.min(0.05, Math.max(0, dt));
-      if (worldRef.current.running) stepWorld(worldRef.current, cfg, dt);
+      if (worldRef.current.running) stepWorld(worldRef.current, cfgRef.current, dt);
       renderWorld(worldRef.current, iconsRef);
       requestAnimationFrame(tick);
     };
@@ -160,7 +233,7 @@ export default function SocialAnimalsRPG() {
     const ui = setInterval(() => {
       setSnapshot((s) => ({
         agents: worldRef.current.agents.map(minify),
-        stations: worldRef.current.stations,
+        bounds: { ...worldRef.current.bounds },
         selectedId: s.selectedId && worldRef.current.agents.find(a=>a.id===s.selectedId) ? s.selectedId : (worldRef.current.agents[0]?.id || null)
       }));
     }, 300);
@@ -168,8 +241,12 @@ export default function SocialAnimalsRPG() {
     return () => { stop = true; clearInterval(ui); ro.disconnect(); };
   }, []);
 
-  // controls
-  const addAgent = () => { const w = worldRef.current; if (w.agents.length >= MAX_AGENTS) return; const s = pickSpecies(w.agents); if (s) w.agents.push(makeAgent(w.bounds, s)); };
+  // controls — added animals amble in from a map edge instead of popping in
+  const addAgent = () => {
+    const w = worldRef.current; if (w.agents.length >= MAX_AGENTS) return;
+    const s = pickSpecies(w.agents);
+    if (s) { const a = makeAgent(w.bounds, s); enterFromEdge(a, w.bounds, DEFAULTS.speed); w.agents.push(a); }
+  };
   const removeAgent = () => { worldRef.current.agents.pop(); };
   const resetWorld = () => {
     const { bounds } = worldRef.current; worldRef.current.agents = seedAgents(bounds, DEFAULTS.numAgents);
@@ -180,8 +257,8 @@ export default function SocialAnimalsRPG() {
   const selected = snapshot.agents.find(a => a.id === snapshot.selectedId) || snapshot.agents[0];
 
   return (
-    <div className="w-full h-full bg-[#0b1f16] text-neutral-100 grid grid-rows-[44px_1fr_76px] p-2 gap-2">
-      {/* Top Controls Bar */}
+    <div className="w-full h-full bg-[#0b1f16] text-neutral-100 grid grid-rows-[44px_1fr] p-2 gap-2">
+      {/* Top Controls Bar — selected animal + relationships live in the middle */}
       <div className="rounded-xl border border-emerald-900/60 bg-emerald-950/50 backdrop-blur-sm px-3 flex items-center gap-3 text-sm shadow-lg shadow-black/30">
         <span className="hidden sm:inline text-sm font-semibold text-emerald-200/90 mr-1">🌲 Social Animals</span>
         <button onClick={() => (worldRef.current.running = !worldRef.current.running)} className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-xs">
@@ -194,41 +271,29 @@ export default function SocialAnimalsRPG() {
         <button onClick={addAgent} disabled={worldRef.current.agents.length>=MAX_AGENTS} className="px-2 py-1 rounded bg-indigo-600 disabled:opacity-50 hover:bg-indigo-500 text-xs">+ Icon</button>
         <button onClick={removeAgent} className="px-2 py-1 rounded bg-rose-700 hover:bg-rose-600 text-xs">− Icon</button>
         <button onClick={resetWorld} className="px-2 py-1 rounded bg-neutral-700 hover:bg-neutral-600 text-xs">Reset World</button>
-        <div className="ml-auto opacity-70 text-xs">Animals: {snapshot.agents.length} / {MAX_AGENTS}</div>
+        <div className="flex-1 min-w-0 flex items-center justify-center gap-2 text-xs">
+          {selected && (
+            <>
+              <span className="text-base leading-none">{selected.emoji}</span>
+              <span className="font-semibold text-emerald-100">{SPECIES[selected.species]?.name || selected.species}</span>
+              <span className="opacity-50">•</span>
+              <RelStats worldRef={worldRef} id={selected.id} />
+            </>
+          )}
+        </div>
+        <div className="opacity-70 text-xs">Animals: {snapshot.agents.length} / {MAX_AGENTS}</div>
       </div>
 
-      {/* Stage — top-down forest floor */}
+      {/* Stage — top-down forest floor with the lake upper-right */}
       <div ref={stageRef} className="relative rounded-2xl border border-emerald-900/60 overflow-hidden min-h-0 shadow-xl shadow-black/40" style={{ background: "linear-gradient(165deg,#1e4a37 0%,#173a2b 46%,#0f2a1f 100%)" }}>
         <ForestScene />
 
-        {/* Stations */}
-        {snapshot.stations.map((st) => (
-          <Station key={st.key} st={st} />
-        ))}
+        {snapshot.bounds.w > 0 && <Lake bounds={snapshot.bounds} />}
 
         {/* Agents */}
         {snapshot.agents.map((a) => (
           <IconNode key={a.id} a={a} iconsRef={iconsRef} worldRef={worldRef} onSelect={()=>selectId(a.id)} />
         ))}
-      </div>
-
-      {/* Bottom Inspector Bar */}
-      <div className="rounded-xl border border-emerald-900/60 bg-emerald-950/50 backdrop-blur-sm px-3 py-2 grid grid-cols-12 items-center text-xs gap-2 shadow-lg shadow-black/30">
-        {selected ? (
-          <>
-            <div className="col-span-3 flex items-center gap-2">
-              <span className="text-lg">{selected.emoji}</span>
-              <span className="opacity-70">{selected.id}</span>
-              <span className="opacity-70">• state: {selected.state}</span>
-            </div>
-            <NeedsBar label="Food"  value={selected.needs.food}  color="#f59e0b" />
-            <NeedsBar label="Water" value={selected.needs.water} color="#38bdf8" />
-            <NeedsBar label="Play"  value={selected.needs.play}  color="#a78bfa" />
-            <div className="col-span-3">
-              <RelStats worldRef={worldRef} id={selected.id} />
-            </div>
-          </>
-        ) : <div className="opacity-70">Select an icon…</div>}
       </div>
     </div>
   );
@@ -386,6 +451,8 @@ function ForestScene() {
     const fernSpots = [
       [90, 640, 1.15], [1120, 610, 1.2], [40, 470, 0.8], [1170, 500, 0.85],
       [250, 720, 1.0], [960, 730, 1.05], [700, 690, 0.9],
+      // upper clearings (left of the lake and along the top)
+      [140, 150, 0.9], [420, 120, 0.8], [80, 310, 1.0], [300, 235, 0.7], [545, 320, 0.8],
     ];
     for (let i = 0; i < fernSpots.length; i++) {
       const [x, y, s] = fernSpots[i];
@@ -399,9 +466,17 @@ function ForestScene() {
         rot: rand(-6, 6), delay: rand(0, 5).toFixed(2), dur: (4 + rand(0, 2.5)).toFixed(2),
       });
     }
+    // extra tufts for the once-empty upper clearings (kept left of the lake)
+    for (let i = 0; i < 6; i++) {
+      grass.push({
+        x: rand(40, 560), y: rand(110, 380), s: rand(0.6, 1.05),
+        rot: rand(-6, 6), delay: rand(0, 5).toFixed(2), dur: (4 + rand(0, 2.5)).toFixed(2),
+      });
+    }
 
     const clovers = [];
     for (let i = 0; i < 7; i++) clovers.push({ x: rand(120, 1080), y: rand(430, 760), s: rand(0.7, 1.3), rot: rand(0, 360) });
+    for (let i = 0; i < 4; i++) clovers.push({ x: rand(80, 560), y: rand(100, 380), s: rand(0.6, 1.1), rot: rand(0, 360) });
 
     const flowers = [
       { x: 200, y: 560, s: 1, p: "#ff9ecb", p2: "#ffd166" },
@@ -409,10 +484,14 @@ function ForestScene() {
       { x: 880, y: 560, s: 1.05, p: "#ffd166", p2: "#ff9ecb" },
       { x: 1040, y: 700, s: 0.85, p: "#e0527a", p2: "#ffd166" },
       { x: 360, y: 480, s: 0.8, p: "#ff9ecb", p2: "#b98cff" },
+      { x: 150, y: 220, s: 0.8, p: "#ffd166", p2: "#e0527a" },
+      { x: 380, y: 320, s: 0.7, p: "#ff9ecb", p2: "#b98cff" },
+      { x: 520, y: 150, s: 0.75, p: "#b98cff", p2: "#ffd166" },
     ];
 
     const pebbles = [];
     for (let i = 0; i < 6; i++) pebbles.push({ x: rand(120, 1080), y: rand(450, 760), rx: rand(7, 16), ry: rand(4, 9) });
+    for (let i = 0; i < 3; i++) pebbles.push({ x: rand(60, 540), y: rand(140, 360), rx: rand(6, 13), ry: rand(4, 8) });
 
     const leaves = [];
     const leafCols = ["#79c98a", "#4e9c5f", "#ffd27a", "#b9ecab", "#e0527a"];
@@ -621,6 +700,19 @@ function ForestScene() {
         <g transform="translate(120 690) scale(0.9)"><SaiBgMushroom /></g>
         <g transform="translate(280 700) scale(0.7)"><SaiBgMushroom cap="url(#sai-bg-capGrad)" /></g>
 
+        {/* upper clearing: a second smaller mossy log + mushrooms */}
+        <g transform="translate(330 195) rotate(7) scale(0.62)" filter="url(#sai-bg-soft)">
+          <rect x="-150" y="-26" width="300" height="52" rx="26" fill="url(#sai-bg-logGrad)" />
+          <g filter="url(#sai-bg-rough)" opacity="0.5">
+            <rect x="-150" y="-28" width="300" height="18" rx="9" fill="#4e9c5f" />
+          </g>
+          <ellipse cx="150" cy="0" rx="15" ry="26" fill="#6b4a2a" />
+          <ellipse cx="150" cy="0" rx="10" ry="18" fill="#402c19" opacity="0.7" />
+          <path d="M-140 -6 Q 0 -2 140 -8" stroke="#2a1c10" strokeWidth="2" fill="none" opacity="0.5" />
+        </g>
+        <g transform="translate(90 150) scale(0.8)"><SaiBgMushroom /></g>
+        <g transform="translate(490 300) scale(0.65)"><SaiBgMushroom cap="url(#sai-bg-capGrad)" /></g>
+
         {/* pebbles */}
         {data.pebbles.map((p, i) => (
           <g key={"peb" + i} transform={`translate(${p.x} ${p.y})`} filter="url(#sai-bg-soft)">
@@ -716,815 +808,212 @@ function ForestScene() {
   );
 }
 
-// --------------- Water station (generated) ---------------
-// ===== PREFIX sai-water- : WATER STATION (pond) =====
-// Drawn centered on origin, ~170px wide. Parent centers + adds label.
-function WaterStation() {
-  // one stable-ish id suffix per mount so multiple ponds don't share gradient/filter ids
-  const uid = React.useMemo(
-    () => "w" + Math.floor(rand(0, 1e9)).toString(36),
-    []
-  );
-  const id = (s) => `saiwater-${uid}-${s}`;
-
-  // pre-computed decorative bits
-  const reeds = React.useMemo(() => {
-    const arr = [];
-    const spots = [
-      [-64, -6, -14], [-58, 10, -8], [58, -10, 12], [66, 6, 16],
-      [-30, -40, -4], [34, -38, 6], [-8, 40, 2], [20, 42, -6],
+// --------------- Lake (organic shoreline, upper-right) ---------------
+// Drawn from the SAME wobble-ellipse the physics uses (lakeRho), so the
+// visible shoreline and the collision boundary always agree. Reuses the
+// sai-water- animation classes (caustics, sheen, ripples, pads, reeds…).
+function Lake({ bounds }) {
+  const { w, h } = bounds;
+  const geo = React.useMemo(() => {
+    const cx = LAKE.cx * w, cy = LAKE.cy * h, rx = LAKE.rx * w, ry = LAKE.ry * h;
+    const ring = (scale) => {
+      const pts = [];
+      const N = 72;
+      for (let i = 0; i < N; i++) {
+        const t = (i / N) * Math.PI * 2;
+        const m = lakeWobble(t) * scale;
+        pts.push(`${(cx + Math.cos(t) * rx * m).toFixed(1)} ${(cy + Math.sin(t) * ry * m).toFixed(1)}`);
+      }
+      return `M ${pts.join(" L ")} Z`;
+    };
+    const at = (t, rho) => lakePoint(bounds, t, rho);
+    // shore décor anchored to real shoreline angles (south + west + north)
+    const reeds = [1.75, 2.15, 2.55, 2.95, 3.4, 4.0, 4.6, 0.6, 1.1, 1.45].map((t, i) => ({
+      ...at(t, 1.02),
+      rot: (i % 2 ? 9 : -11),
+      len: 34 + (i % 3) * 10,
+      cattail: i % 3 === 0,
+      delay: (i * 0.37).toFixed(2),
+      dur: (3.6 + (i % 4) * 0.45).toFixed(2),
+    }));
+    const stones = [at(2.3, 0.9), at(1.95, 0.8), at(2.7, 0.86)];
+    const pads = [
+      { ...at(2.9, 0.55), rp: 16 }, { ...at(1.9, 0.6), rp: 13 },
+      { ...at(0.85, 0.5), rp: 15 }, { ...at(3.7, 0.42), rp: 12 },
     ];
-    spots.forEach((s, i) => {
-      arr.push({
-        x: s[0], y: s[1], rot: s[2],
-        h: rand(30, 46), cattail: i % 3 === 0,
-        delay: (i * 0.37).toFixed(2), dur: rand(3.6, 5.2).toFixed(2),
-      });
-    });
-    return arr;
-  }, []);
+    const sparkles = [at(2.5, 0.5), at(1.2, 0.4), at(0.2, 0.55), at(3.3, 0.3), at(4.4, 0.45)];
+    const ripples = [at(2.7, 0.35), at(0.6, 0.42)];
+    return { cx, cy, rx, ry, water: ring(1), bankOuter: ring(1.08), bankInner: ring(1.03), deep: ring(0.5), reeds, stones, pads, sparkles, ripples };
+  }, [w, h]);
 
+  if (!w || !h) return null;
+  const g = geo;
   return (
-    <div className="sai-water-root" style={{ width: 170, height: 170 }}>
-      <svg
-        className="sai-water-svg"
-        viewBox="-85 -85 170 170"
-        width="170"
-        height="170"
-        aria-hidden="true"
-      >
-        <defs>
-          {/* ---- water body radial: bright teal rim -> deep center ---- */}
-          <radialGradient id={id("body")} cx="42%" cy="36%" r="72%">
-            <stop offset="0%" stopColor="#7fe9ef" />
-            <stop offset="28%" stopColor="#22c9d6" />
-            <stop offset="62%" stopColor="#0e7d90" />
-            <stop offset="100%" stopColor="#073f4d" />
-          </radialGradient>
-          {/* rim highlight ring */}
-          <radialGradient id={id("rim")} cx="50%" cy="50%" r="50%">
-            <stop offset="82%" stopColor="#b9f6ef" stopOpacity="0" />
-            <stop offset="93%" stopColor="#b9f6ef" stopOpacity="0.55" />
-            <stop offset="100%" stopColor="#eafffb" stopOpacity="0.9" />
-          </radialGradient>
-          {/* damp earth bank */}
-          <radialGradient id={id("bank")} cx="50%" cy="46%" r="58%">
-            <stop offset="0%" stopColor="#6b4a2a" />
-            <stop offset="60%" stopColor="#402c19" />
-            <stop offset="100%" stopColor="#2a1c10" />
-          </radialGradient>
-          {/* golden-hour sheen sweeping the surface */}
-          <linearGradient id={id("sheen")} x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="#ffe9ad" stopOpacity="0" />
-            <stop offset="45%" stopColor="#ffe9ad" stopOpacity="0.42" />
-            <stop offset="55%" stopColor="#fff6d8" stopOpacity="0.55" />
-            <stop offset="100%" stopColor="#ffd27a" stopOpacity="0" />
-          </linearGradient>
-          <radialGradient id={id("pad")} cx="38%" cy="34%" r="70%">
-            <stop offset="0%" stopColor="#79c98a" />
-            <stop offset="55%" stopColor="#4e9c5f" />
-            <stop offset="100%" stopColor="#24543a" />
-          </radialGradient>
-          <radialGradient id={id("stone")} cx="40%" cy="34%" r="72%">
-            <stop offset="0%" stopColor="#9aa4a0" />
-            <stop offset="55%" stopColor="#5f6a66" />
-            <stop offset="100%" stopColor="#333b38" />
-          </radialGradient>
-          <radialGradient id={id("flower")} cx="50%" cy="50%" r="55%">
-            <stop offset="0%" stopColor="#fff2b0" />
-            <stop offset="35%" stopColor="#ffd166" />
-            <stop offset="60%" stopColor="#ff9ecb" />
-            <stop offset="100%" stopColor="#e0527a" />
-          </radialGradient>
-          <linearGradient id={id("mist")} x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#eafffb" stopOpacity="0.55" />
-            <stop offset="100%" stopColor="#eafffb" stopOpacity="0" />
-          </linearGradient>
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true"
+      style={{ position: "absolute", inset: 0, zIndex: 1, pointerEvents: "none", overflow: "visible" }}>
+      <defs>
+        <radialGradient id="sailake-body" cx="42%" cy="36%" r="72%">
+          <stop offset="0%" stopColor="#7fe9ef" />
+          <stop offset="28%" stopColor="#22c9d6" />
+          <stop offset="62%" stopColor="#0e7d90" />
+          <stop offset="100%" stopColor="#073f4d" />
+        </radialGradient>
+        <radialGradient id="sailake-bank" cx="50%" cy="46%" r="58%">
+          <stop offset="0%" stopColor="#6b4a2a" />
+          <stop offset="60%" stopColor="#402c19" />
+          <stop offset="100%" stopColor="#2a1c10" />
+        </radialGradient>
+        <linearGradient id="sailake-sheen" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#ffe9ad" stopOpacity="0" />
+          <stop offset="45%" stopColor="#ffe9ad" stopOpacity="0.4" />
+          <stop offset="55%" stopColor="#fff6d8" stopOpacity="0.5" />
+          <stop offset="100%" stopColor="#ffd27a" stopOpacity="0" />
+        </linearGradient>
+        <radialGradient id="sailake-pad" cx="38%" cy="34%" r="70%">
+          <stop offset="0%" stopColor="#79c98a" />
+          <stop offset="55%" stopColor="#4e9c5f" />
+          <stop offset="100%" stopColor="#24543a" />
+        </radialGradient>
+        <radialGradient id="sailake-stone" cx="40%" cy="34%" r="72%">
+          <stop offset="0%" stopColor="#9aa4a0" />
+          <stop offset="55%" stopColor="#5f6a66" />
+          <stop offset="100%" stopColor="#333b38" />
+        </radialGradient>
+        <linearGradient id="sailake-mist" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#eafffb" stopOpacity="0.5" />
+          <stop offset="100%" stopColor="#eafffb" stopOpacity="0" />
+        </linearGradient>
+        <filter id="sailake-caustic" x="-20%" y="-20%" width="140%" height="140%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.008 0.014" numOctaves="2" seed="7" result="n">
+            <animate attributeName="baseFrequency" dur="14s" values="0.008 0.014;0.011 0.01;0.008 0.014" repeatCount="indefinite" />
+          </feTurbulence>
+          <feDisplacementMap in="SourceGraphic" in2="n" scale="10" xChannelSelector="R" yChannelSelector="G" />
+        </filter>
+        <filter id="sailake-soft" x="-40%" y="-40%" width="180%" height="180%">
+          <feGaussianBlur stdDeviation="5" />
+        </filter>
+        <filter id="sailake-bankblur" x="-30%" y="-30%" width="160%" height="160%">
+          <feDropShadow dx="0" dy="4" stdDeviation="6" floodColor="#0a1a12" floodOpacity="0.5" />
+        </filter>
+        <clipPath id="sailake-clip"><path d={g.water} /></clipPath>
+      </defs>
 
-          {/* organic water displacement (caustics) */}
-          <filter id={id("caustic")} x="-20%" y="-20%" width="140%" height="140%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.018 0.03"
-              numOctaves="2" seed="7" result="n">
-              <animate attributeName="baseFrequency"
-                dur="14s" values="0.018 0.03;0.024 0.022;0.018 0.03"
-                repeatCount="indefinite" />
-            </feTurbulence>
-            <feDisplacementMap in="SourceGraphic" in2="n"
-              scale="7" xChannelSelector="R" yChannelSelector="G" />
-          </filter>
-          {/* fine surface grain */}
-          <filter id={id("grain")} x="-10%" y="-10%" width="120%" height="120%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.9"
-              numOctaves="2" seed="4" result="g" />
-            <feColorMatrix in="g" type="matrix"
-              values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.5 0" result="ga" />
-            <feComposite in="ga" in2="SourceGraphic" operator="in" result="gm" />
-            <feBlend in="SourceGraphic" in2="gm" mode="soft-light" />
-          </filter>
-          <filter id={id("soft")} x="-40%" y="-40%" width="180%" height="180%">
-            <feGaussianBlur stdDeviation="2.4" />
-          </filter>
-          <filter id={id("bankblur")} x="-30%" y="-30%" width="160%" height="160%">
-            <feDropShadow dx="0" dy="3" stdDeviation="4"
-              floodColor="#0a1a12" floodOpacity="0.5" />
-          </filter>
+      {/* damp earthen bank */}
+      <g filter="url(#sailake-bankblur)">
+        <path d={g.bankOuter} fill="url(#sailake-bank)" />
+        <path d={g.bankInner} fill="#20140b" opacity="0.55" />
+      </g>
 
-          {/* clip so caustics/sheen stay inside pond */}
-          <clipPath id={id("clip")}>
-            <ellipse cx="0" cy="4" rx="66" ry="52" />
-          </clipPath>
-        </defs>
-
-        {/* ---- damp earthen bank ---- */}
-        <g filter={`url(#${id("bankblur")})`}>
-          <ellipse cx="0" cy="8" rx="80" ry="64" fill={`url(#${id("bank")})`} />
-          <ellipse cx="0" cy="6" rx="72" ry="57" fill="#20140b" opacity="0.6" />
-        </g>
-
-        {/* ---- WATER BODY ---- */}
-        <g clipPath={`url(#${id("clip")})`}>
-          <ellipse cx="0" cy="4" rx="66" ry="52" fill={`url(#${id("body")})`}
-            filter={`url(#${id("grain")})`} />
-
-          {/* animated caustic light webs */}
-          <g filter={`url(#${id("caustic")})`} opacity="0.55"
-            className="sai-water-caustic">
-            <g stroke="#d8fbff" strokeWidth="1.4" fill="none" opacity="0.7">
-              <path d="M-52,-8 q18,-10 36,0 t34,2" />
-              <path d="M-48,14 q20,10 40,-2 t30,4" />
-              <path d="M-40,30 q16,-8 34,2 t28,-4" />
-              <path d="M-44,-24 q22,8 44,-2 t22,6" />
-            </g>
-          </g>
-
-          {/* deep-center shadow for depth */}
-          <ellipse cx="6" cy="12" rx="34" ry="24" fill="#052a35" opacity="0.45"
-            filter={`url(#${id("soft")})`} />
-
-          {/* sweeping golden sheen */}
-          <rect x="-70" y="-56" width="140" height="120"
-            fill={`url(#${id("sheen")})`} className="sai-water-sheen" />
-
-          {/* concentric ripples */}
-          <g className="sai-water-ripples" fill="none"
-            stroke="#eafffb" strokeWidth="1">
-            <ellipse className="sai-water-ripple r1" cx="-14" cy="-6" rx="6" ry="4" />
-            <ellipse className="sai-water-ripple r2" cx="-14" cy="-6" rx="6" ry="4" />
-            <ellipse className="sai-water-ripple r3" cx="20" cy="18" rx="5" ry="3.4" />
-            <ellipse className="sai-water-ripple r4" cx="20" cy="18" rx="5" ry="3.4" />
-          </g>
-
-          {/* twinkling surface sparkles */}
-          <g fill="#ffffff" className="sai-water-sparkles">
-            <circle className="sai-water-spk s1" cx="-24" cy="-16" r="1.4" />
-            <circle className="sai-water-spk s2" cx="12" cy="-22" r="1.1" />
-            <circle className="sai-water-spk s3" cx="30" cy="-4" r="1.5" />
-            <circle className="sai-water-spk s4" cx="-6" cy="24" r="1.2" />
-            <circle className="sai-water-spk s5" cx="-38" cy="6" r="1" />
+      {/* water body */}
+      <path d={g.water} fill="url(#sailake-body)" />
+      <g clipPath="url(#sailake-clip)">
+        {/* caustic light webs */}
+        <g filter="url(#sailake-caustic)" opacity="0.5" className="sai-water-caustic">
+          <g stroke="#d8fbff" strokeWidth="1.7" fill="none" opacity="0.7">
+            <path d={`M ${g.cx - g.rx * 0.8} ${g.cy - g.ry * 0.2} q ${g.rx * 0.28} -18 ${g.rx * 0.55} 0 t ${g.rx * 0.5} 4`} />
+            <path d={`M ${g.cx - g.rx * 0.7} ${g.cy + g.ry * 0.25} q ${g.rx * 0.3} 16 ${g.rx * 0.6} -3 t ${g.rx * 0.45} 6`} />
+            <path d={`M ${g.cx - g.rx * 0.55} ${g.cy + g.ry * 0.55} q ${g.rx * 0.24} -14 ${g.rx * 0.5} 3 t ${g.rx * 0.4} -6`} />
+            <path d={`M ${g.cx - g.rx * 0.65} ${g.cy - g.ry * 0.5} q ${g.rx * 0.33} 14 ${g.rx * 0.66} -3 t ${g.rx * 0.33} 9`} />
           </g>
         </g>
-
-        {/* rim highlight ring (over water, under plants) */}
-        <ellipse cx="0" cy="4" rx="66" ry="52" fill={`url(#${id("rim")})`} />
-        <ellipse cx="0" cy="4" rx="66" ry="52" fill="none"
-          stroke="#0a3d47" strokeOpacity="0.5" strokeWidth="2.5" />
-
-        {/* ---- stepping stones ---- */}
-        <g className="sai-water-stones">
-          <g transform="translate(-30 26)">
-            <ellipse cx="1.5" cy="3" rx="12" ry="7" fill="#05262f" opacity="0.5" />
-            <ellipse cx="0" cy="0" rx="12" ry="7.5" fill={`url(#${id("stone")})`} />
-            <ellipse cx="-3" cy="-2" rx="5" ry="2.6" fill="#c7cfcb" opacity="0.45" />
-          </g>
-          <g transform="translate(24 34)">
-            <ellipse cx="1.5" cy="3" rx="9.5" ry="6" fill="#05262f" opacity="0.5" />
-            <ellipse cx="0" cy="0" rx="9.5" ry="6" fill={`url(#${id("stone")})`} />
-            <ellipse cx="-2.5" cy="-1.5" rx="4" ry="2" fill="#c7cfcb" opacity="0.4" />
-          </g>
+        {/* deep-center shadow */}
+        <path d={g.deep} fill="#052a35" opacity="0.42" filter="url(#sailake-soft)" />
+        {/* sweeping golden sheen */}
+        <rect x={g.cx - g.rx * 1.35} y={g.cy - g.ry * 1.35} width={g.rx * 2.7} height={g.ry * 2.7}
+          fill="url(#sailake-sheen)" className="sai-water-sheen" />
+        {/* concentric ripples */}
+        <g fill="none" stroke="#eafffb" strokeWidth="1.2">
+          <ellipse className="sai-water-ripple r1" cx={g.ripples[0].x} cy={g.ripples[0].y} rx="9" ry="6" />
+          <ellipse className="sai-water-ripple r2" cx={g.ripples[0].x} cy={g.ripples[0].y} rx="9" ry="6" />
+          <ellipse className="sai-water-ripple r3" cx={g.ripples[1].x} cy={g.ripples[1].y} rx="8" ry="5.4" />
+          <ellipse className="sai-water-ripple r4" cx={g.ripples[1].x} cy={g.ripples[1].y} rx="8" ry="5.4" />
         </g>
-
-        {/* ---- lily pads ---- */}
-        <g className="sai-water-pad pad-a" style={{ transformOrigin: "-30px 0px" }}>
-          <g transform="translate(-30 -2)">
-            <ellipse cx="1" cy="3" rx="16" ry="10" fill="#06231a" opacity="0.4" />
-            <path d="M2,-11 A16,11 0 1 1 -2,-11 L-1,-1 Z"
-              fill={`url(#${id("pad")})`} transform="rotate(18)" />
-            <path d="M-13,-2 Q0,-1 13,-3" stroke="#2a5a3c"
-              strokeWidth="0.8" fill="none" opacity="0.6" transform="rotate(18)" />
-          </g>
-        </g>
-        <g className="sai-water-pad pad-b" style={{ transformOrigin: "34px 12px" }}>
-          <g transform="translate(34 12)">
-            <ellipse cx="1" cy="3" rx="13" ry="8" fill="#06231a" opacity="0.4" />
-            <path d="M2,-9 A13,8.5 0 1 1 -2,-9 L-1,-1 Z"
-              fill={`url(#${id("pad")})`} transform="rotate(-24)" />
-          </g>
-        </g>
-        {/* pad with flower */}
-        <g className="sai-water-pad pad-c" style={{ transformOrigin: "6px 30px" }}>
-          <g transform="translate(6 30)">
-            <ellipse cx="1" cy="3" rx="15" ry="9" fill="#06231a" opacity="0.4" />
-            <path d="M2,-10 A15,9.5 0 1 1 -2,-10 L-1,-1 Z"
-              fill={`url(#${id("pad")})`} transform="rotate(8)" />
-            {/* waterlily flower */}
-            <g className="sai-water-bloom" style={{ transformOrigin: "-2px -3px" }}>
-              <g transform="translate(-2 -3)">
-                {[0, 60, 120, 180, 240, 300].map((a) => (
-                  <ellipse key={a} cx="0" cy="-4.4" rx="2.2" ry="5"
-                    fill="#ffd6e8" transform={`rotate(${a})`} opacity="0.95" />
-                ))}
-                {[30, 90, 150, 210, 270, 330].map((a) => (
-                  <ellipse key={a} cx="0" cy="-3.2" rx="1.8" ry="4"
-                    fill="#ff9ecb" transform={`rotate(${a})`} />
-                ))}
-                <circle cx="0" cy="0" r="2.4" fill={`url(#${id("flower")})`} />
-              </g>
-            </g>
-          </g>
-        </g>
-
-        {/* ---- reeds / cattails / grass around rim ---- */}
-        <g className="sai-water-reeds">
-          {reeds.map((r, i) => (
-            <g key={i} transform={`translate(${r.x} ${r.y})`}
-              className="sai-water-reed"
-              style={{
-                transformOrigin: "0px 0px",
-                animationDelay: `${r.delay}s`,
-                animationDuration: `${r.dur}s`,
-              }}>
-              <g transform={`rotate(${r.rot})`}>
-                <path d={`M0,4 Q${r.rot > 0 ? 4 : -4},${-r.h / 2} 1,${-r.h}`}
-                  stroke="#2f6b45" strokeWidth="2.4" fill="none"
-                  strokeLinecap="round" />
-                <path d={`M0,4 Q${r.rot > 0 ? 4 : -4},${-r.h / 2} 1,${-r.h}`}
-                  stroke="#79c98a" strokeWidth="0.9" fill="none"
-                  strokeLinecap="round" opacity="0.7" />
-                {r.cattail && (
-                  <>
-                    <rect x="-1.6" y={-r.h - 9} width="3.4" height="10" rx="1.7"
-                      fill="#6b4a2a" />
-                    <rect x="-1.6" y={-r.h - 9} width="1.4" height="10" rx="0.7"
-                      fill="#8a6236" />
-                  </>
-                )}
-                {!r.cattail && (
-                  <path d={`M1,${-r.h} l4,-6 M1,${-r.h} l-3,-5`}
-                    stroke="#4e9c5f" strokeWidth="1.6" strokeLinecap="round" />
-                )}
-              </g>
-            </g>
+        {/* sparkles */}
+        <g fill="#ffffff">
+          {g.sparkles.map((p, i) => (
+            <circle key={i} className={`sai-water-spk s${i + 1}`} cx={p.x} cy={p.y} r={1.3 + (i % 3) * 0.35} />
           ))}
         </g>
+        {/* drifting mist */}
+        <ellipse className="sai-water-mist m1" cx={g.cx - g.rx * 0.2} cy={g.cy + g.ry * 0.2} rx={g.rx * 0.55} ry={g.ry * 0.22} fill="url(#sailake-mist)" filter="url(#sailake-soft)" />
+        <ellipse className="sai-water-mist m2" cx={g.cx + g.rx * 0.3} cy={g.cy - g.ry * 0.1} rx={g.rx * 0.45} ry={g.ry * 0.18} fill="url(#sailake-mist)" filter="url(#sailake-soft)" />
+      </g>
+      {/* rim */}
+      <path d={g.water} fill="none" stroke="#0a3d47" strokeOpacity="0.5" strokeWidth="3" />
 
-        {/* ---- skimming dragonfly ---- */}
+      {/* stepping stones */}
+      <g className="sai-water-stones">
+        {g.stones.map((p, i) => (
+          <g key={i} transform={`translate(${p.x} ${p.y})`}>
+            <ellipse cx="1.5" cy="3" rx={13 - i * 2} ry={8 - i} fill="#05262f" opacity="0.5" />
+            <ellipse rx={13 - i * 2} ry={8 - i} fill="url(#sailake-stone)" />
+            <ellipse cx="-3" cy="-2" rx={5 - i} ry="2.6" fill="#c7cfcb" opacity="0.45" />
+          </g>
+        ))}
+      </g>
+
+      {/* lily pads (one blooming) */}
+      {g.pads.map((p, i) => (
+        <g key={i} className={`sai-water-pad pad-${"abca"[i]}`} style={{ transformOrigin: `${p.x}px ${p.y}px` }}>
+          <g transform={`translate(${p.x} ${p.y})`}>
+            <ellipse cx="1" cy="3" rx={p.rp} ry={p.rp * 0.62} fill="#06231a" opacity="0.4" />
+            <path d={`M 2 ${-p.rp * 0.66} A ${p.rp} ${p.rp * 0.66} 0 1 1 -2 ${-p.rp * 0.66} L -1 -1 Z`} fill="url(#sailake-pad)" transform={`rotate(${[18, -24, 8, -10][i]})`} />
+            {i === 2 && (
+              <g className="sai-water-bloom" style={{ transformOrigin: "-2px -3px" }}>
+                <g transform="translate(-2 -3)">
+                  {[0, 60, 120, 180, 240, 300].map((a) => (
+                    <ellipse key={a} cx="0" cy="-4.4" rx="2.2" ry="5" fill="#ffd6e8" transform={`rotate(${a})`} opacity="0.95" />
+                  ))}
+                  {[30, 90, 150, 210, 270, 330].map((a) => (
+                    <ellipse key={a} cx="0" cy="-3.2" rx="1.8" ry="4" fill="#ff9ecb" transform={`rotate(${a})`} />
+                  ))}
+                  <circle cx="0" cy="0" r="2.4" fill="#ffd166" />
+                </g>
+              </g>
+            )}
+          </g>
+        </g>
+      ))}
+
+      {/* reeds & cattails around the rim */}
+      <g className="sai-water-reeds">
+        {g.reeds.map((r, i) => (
+          <g key={i} transform={`translate(${r.x} ${r.y})`} className="sai-water-reed"
+            style={{ transformOrigin: "0px 0px", animationDelay: `${r.delay}s`, animationDuration: `${r.dur}s` }}>
+            <g transform={`rotate(${r.rot})`}>
+              <path d={`M0,4 Q${r.rot > 0 ? 4 : -4},${-r.len / 2} 1,${-r.len}`} stroke="#2f6b45" strokeWidth="2.6" fill="none" strokeLinecap="round" />
+              <path d={`M0,4 Q${r.rot > 0 ? 4 : -4},${-r.len / 2} 1,${-r.len}`} stroke="#79c98a" strokeWidth="1" fill="none" strokeLinecap="round" opacity="0.7" />
+              {r.cattail ? (
+                <>
+                  <rect x="-1.6" y={-r.len - 10} width="3.6" height="11" rx="1.8" fill="#6b4a2a" />
+                  <rect x="-1.6" y={-r.len - 10} width="1.5" height="11" rx="0.75" fill="#8a6236" />
+                </>
+              ) : (
+                <path d={`M1,${-r.len} l4,-6 M1,${-r.len} l-3,-5`} stroke="#4e9c5f" strokeWidth="1.7" strokeLinecap="round" />
+              )}
+            </g>
+          </g>
+        ))}
+      </g>
+
+      {/* skimming dragonfly */}
+      <g transform={`translate(${g.cx - g.rx * 0.15} ${g.cy + g.ry * 0.1})`}>
         <g className="sai-water-dragonfly">
           <g className="sai-water-dfbob">
-            <g transform="scale(0.85)">
-              {/* wings */}
-              <g className="sai-water-wing wl">
-                <ellipse cx="-6" cy="-4" rx="9" ry="3.4"
-                  fill="#bfeef2" opacity="0.55" transform="rotate(-18)" />
-              </g>
-              <g className="sai-water-wing wr">
-                <ellipse cx="6" cy="-4" rx="9" ry="3.4"
-                  fill="#bfeef2" opacity="0.55" transform="rotate(18)" />
-              </g>
-              <g className="sai-water-wing wl2">
-                <ellipse cx="-5" cy="0" rx="7.5" ry="2.8"
-                  fill="#d8f7fb" opacity="0.5" transform="rotate(-8)" />
-              </g>
-              <g className="sai-water-wing wr2">
-                <ellipse cx="5" cy="0" rx="7.5" ry="2.8"
-                  fill="#d8f7fb" opacity="0.5" transform="rotate(8)" />
-              </g>
-              {/* body */}
-              <rect x="-1.1" y="-3" width="2.2" height="16" rx="1.1"
-                fill="#0e7d90" />
-              <rect x="-1.1" y="-3" width="2.2" height="16" rx="1.1"
-                fill="#22c9d6" opacity="0.5" />
+            <g transform="scale(0.95)">
+              <g className="sai-water-wing wl"><ellipse cx="-6" cy="-4" rx="9" ry="3.4" fill="#bfeef2" opacity="0.55" transform="rotate(-18)" /></g>
+              <g className="sai-water-wing wr"><ellipse cx="6" cy="-4" rx="9" ry="3.4" fill="#bfeef2" opacity="0.55" transform="rotate(18)" /></g>
+              <g className="sai-water-wing wl2"><ellipse cx="-5" cy="0" rx="7.5" ry="2.8" fill="#d8f7fb" opacity="0.5" transform="rotate(-8)" /></g>
+              <g className="sai-water-wing wr2"><ellipse cx="5" cy="0" rx="7.5" ry="2.8" fill="#d8f7fb" opacity="0.5" transform="rotate(8)" /></g>
+              <rect x="-1.1" y="-3" width="2.2" height="16" rx="1.1" fill="#0e7d90" />
+              <rect x="-1.1" y="-3" width="2.2" height="16" rx="1.1" fill="#22c9d6" opacity="0.5" />
               <circle cx="0" cy="-4" r="2.1" fill="#b98cff" />
               <circle cx="-0.7" cy="-4.6" r="0.7" fill="#fff" opacity="0.8" />
             </g>
           </g>
         </g>
-
-        {/* ---- faint mist drifting over surface ---- */}
-        <g clipPath={`url(#${id("clip")})`} className="sai-water-mistwrap">
-          <ellipse className="sai-water-mist m1" cx="-10" cy="10" rx="34" ry="12"
-            fill={`url(#${id("mist")})`} filter={`url(#${id("soft")})`} />
-          <ellipse className="sai-water-mist m2" cx="18" cy="0" rx="28" ry="9"
-            fill={`url(#${id("mist")})`} filter={`url(#${id("soft")})`} />
-        </g>
-      </svg>
-    </div>
-  );
-}
-
-// --------------- Food station (generated) ---------------
-function FoodStation() {
-  // clustered berries on the bush: [cx, cy, r, wobble?]
-  const berries = [
-    [58, 50, 5.4, false], [70, 46, 5.0, true], [64, 60, 5.8, false],
-    [78, 56, 4.6, false], [52, 62, 4.8, false], [72, 66, 5.2, true],
-    [86, 64, 4.4, false], [60, 40, 4.2, false],
-  ];
-  // spilled fruit near the basket: [cx, cy, r, fill, hi]
-  const spill = [
-    [40, 128, 6.2, "#e0527a", "#ff9ecb"],
-    [30, 134, 5.4, "#c23f66", "#e0527a"],
-    [50, 133, 5.0, "#7b3f9e", "#b98cff"],
-    [22, 128, 4.6, "#e0527a", "#ff9ecb"],
-  ];
-  // acorn / nut pile on the stump: [cx, cy, s]
-  const nuts = [
-    [116, 104, 1.0], [126, 106, 0.9], [121, 111, 1.05], [131, 110, 0.85], [111, 109, 0.8],
-  ];
-  return (
-    <div className="sai-food-root" style={{ width: 170, height: 170 }}>
-      <svg viewBox="0 0 170 170" width="170" height="170" className="sai-food-svg" aria-hidden="true">
-        <defs>
-          {/* organic edge noise for leaves / moss */}
-          <filter id="sai-food-rough" x="-25%" y="-25%" width="150%" height="150%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.9 0.55" numOctaves="2" seed="7" result="n" />
-            <feDisplacementMap in="SourceGraphic" in2="n" scale="2.4" xChannelSelector="R" yChannelSelector="G" />
-          </filter>
-          {/* soft grain for the whole scene */}
-          <filter id="sai-food-grain" x="0" y="0" width="100%" height="100%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="4" result="g" />
-            <feColorMatrix in="g" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .05 0" />
-          </filter>
-          <filter id="sai-food-soft" x="-40%" y="-40%" width="180%" height="180%">
-            <feGaussianBlur stdDeviation="2.4" />
-          </filter>
-          <filter id="sai-food-glow" x="-60%" y="-60%" width="220%" height="220%">
-            <feGaussianBlur stdDeviation="4.5" />
-          </filter>
-          {/* warm sunlight pool */}
-          <radialGradient id="sai-food-pool" cx="50%" cy="46%" r="60%">
-            <stop offset="0%" stopColor="#ffe9ad" stopOpacity="0.95" />
-            <stop offset="42%" stopColor="#ffd27a" stopOpacity="0.55" />
-            <stop offset="74%" stopColor="#b5822e" stopOpacity="0.18" />
-            <stop offset="100%" stopColor="#402c19" stopOpacity="0" />
-          </radialGradient>
-          <radialGradient id="sai-food-ground" cx="50%" cy="38%" r="70%">
-            <stop offset="0%" stopColor="#6b4a2a" />
-            <stop offset="55%" stopColor="#402c19" />
-            <stop offset="100%" stopColor="#2a1c10" />
-          </radialGradient>
-          {/* leaf gradients */}
-          <linearGradient id="sai-food-leafA" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#b9ecab" />
-            <stop offset="34%" stopColor="#79c98a" />
-            <stop offset="72%" stopColor="#4e9c5f" />
-            <stop offset="100%" stopColor="#24543a" />
-          </linearGradient>
-          <linearGradient id="sai-food-leafB" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#79c98a" />
-            <stop offset="50%" stopColor="#2f6b45" />
-            <stop offset="100%" stopColor="#12321f" />
-          </linearGradient>
-          <radialGradient id="sai-food-berry" cx="36%" cy="30%" r="72%">
-            <stop offset="0%" stopColor="#ff9ecb" />
-            <stop offset="26%" stopColor="#e0527a" />
-            <stop offset="78%" stopColor="#a5335a" />
-            <stop offset="100%" stopColor="#5e1730" />
-          </radialGradient>
-          {/* mushroom */}
-          <radialGradient id="sai-food-cap" cx="40%" cy="26%" r="78%">
-            <stop offset="0%" stopColor="#ff9a76" />
-            <stop offset="40%" stopColor="#e0527a" />
-            <stop offset="100%" stopColor="#8a2340" />
-          </radialGradient>
-          <linearGradient id="sai-food-stem" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#ffe9ad" />
-            <stop offset="100%" stopColor="#c9a875" />
-          </linearGradient>
-          {/* stump + moss */}
-          <radialGradient id="sai-food-stumptop" cx="42%" cy="34%" r="70%">
-            <stop offset="0%" stopColor="#8a6236" />
-            <stop offset="55%" stopColor="#6b4a2a" />
-            <stop offset="100%" stopColor="#402c19" />
-          </radialGradient>
-          <linearGradient id="sai-food-stumpside" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#6b4a2a" />
-            <stop offset="100%" stopColor="#2a1c10" />
-          </linearGradient>
-          <linearGradient id="sai-food-moss" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#79c98a" />
-            <stop offset="100%" stopColor="#2f6b45" />
-          </linearGradient>
-          {/* basket weave */}
-          <linearGradient id="sai-food-basket" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#a9743c" />
-            <stop offset="55%" stopColor="#6b4a2a" />
-            <stop offset="100%" stopColor="#402c19" />
-          </linearGradient>
-          <radialGradient id="sai-food-acorn" cx="40%" cy="30%" r="75%">
-            <stop offset="0%" stopColor="#c9954f" />
-            <stop offset="100%" stopColor="#6b4a2a" />
-          </radialGradient>
-          <clipPath id="sai-food-basketclip">
-            <path d="M32 116 q23 -11 46 0 l-5 22 q-18 8 -36 0 Z" />
-          </clipPath>
-        </defs>
-
-        {/* ---- ground shadow + earth ---- */}
-        <ellipse cx="85" cy="126" rx="80" ry="36" fill="url(#sai-food-ground)" opacity="0.9" />
-        <ellipse cx="85" cy="132" rx="72" ry="24" fill="#000" opacity="0.28" filter="url(#sai-food-soft)" />
-
-        {/* ---- warm sunlight pool (pulses) ---- */}
-        <g className="sai-food-pool">
-          <ellipse cx="85" cy="112" rx="76" ry="40" fill="url(#sai-food-pool)" filter="url(#sai-food-glow)" />
-        </g>
-
-        {/* ================= BERRY BUSH ================= */}
-        <g className="sai-food-bush" filter="url(#sai-food-rough)">
-          {/* back / dark leaves */}
-          <g className="sai-food-leaves sai-food-leaves-a">
-            <ellipse cx="50" cy="66" rx="26" ry="20" fill="url(#sai-food-leafB)" transform="rotate(-18 50 66)" />
-            <ellipse cx="92" cy="62" rx="24" ry="19" fill="url(#sai-food-leafB)" transform="rotate(16 92 62)" />
-            <ellipse cx="70" cy="78" rx="30" ry="18" fill="url(#sai-food-leafB)" />
-          </g>
-          {/* front / bright leaves */}
-          <g className="sai-food-leaves sai-food-leaves-b">
-            <path d="M40 60 q-16 -20 4 -30 q14 12 6 30 q-4 6 -10 0 Z" fill="url(#sai-food-leafA)" transform="rotate(-8 44 45)" />
-            <path d="M70 46 q-8 -26 8 -30 q16 10 6 30 q-8 8 -14 0 Z" fill="url(#sai-food-leafA)" />
-            <path d="M98 56 q10 -22 -6 -30 q-16 12 -4 32 q6 6 10 -2 Z" fill="url(#sai-food-leafA)" transform="rotate(6 92 46)" />
-            <path d="M56 74 q-22 -8 -22 8 q16 10 26 -2 q0 -4 -4 -6 Z" fill="url(#sai-food-leafA)" opacity="0.95" />
-            {/* leaf veins */}
-            <path d="M48 42 l-4 22 M76 34 l0 24 M92 40 l4 22" stroke="#24543a" strokeWidth="0.8" strokeLinecap="round" opacity="0.5" fill="none" />
-          </g>
-        </g>
-
-        {/* clustered berries */}
-        <g className="sai-food-berries">
-          {berries.map(([cx, cy, r, wob], i) => (
-            <g key={"b" + i} className={wob ? "sai-food-berry-wob" : ""} style={wob ? { transformOrigin: `${cx}px ${cy - r}px` } : undefined}>
-              <circle cx={cx} cy={cy} r={r} fill="url(#sai-food-berry)" />
-              <circle cx={cx - r * 0.34} cy={cy - r * 0.36} r={r * 0.3} fill="#ffd7e8" opacity="0.9" />
-              <circle cx={cx} cy={cy - r} r="0.9" fill="#5e1730" />
-            </g>
-          ))}
-        </g>
-
-        {/* ================= MOSSY STUMP + NUT PILE ================= */}
-        <g className="sai-food-stump">
-          <path d="M104 108 h34 v14 q-17 8 -34 0 Z" fill="url(#sai-food-stumpside)" />
-          <ellipse cx="121" cy="108" rx="17" ry="8" fill="url(#sai-food-stumptop)" />
-          {/* rings */}
-          <ellipse cx="121" cy="108" rx="11" ry="5" fill="none" stroke="#402c19" strokeWidth="0.7" opacity="0.6" />
-          <ellipse cx="121" cy="108" rx="5.5" ry="2.6" fill="none" stroke="#402c19" strokeWidth="0.7" opacity="0.6" />
-          {/* moss cap */}
-          <path d="M105 110 q6 -6 16 -5 q10 -1 15 4 q-4 5 -15 5 q-11 1 -16 -4 Z" fill="url(#sai-food-moss)" filter="url(#sai-food-rough)" opacity="0.9" />
-          {/* bark side moss dots */}
-          <circle cx="110" cy="118" r="2" fill="#4e9c5f" opacity="0.7" />
-          <circle cx="132" cy="117" r="1.6" fill="#4e9c5f" opacity="0.7" />
-        </g>
-        {/* acorns / nuts */}
-        <g className="sai-food-nuts">
-          {nuts.map(([cx, cy, s], i) => (
-            <g key={"n" + i} transform={`translate(${cx} ${cy}) scale(${s})`}>
-              <ellipse cx="0" cy="1" rx="3.4" ry="4" fill="url(#sai-food-acorn)" />
-              <path d="M-3.6 -1.4 q3.6 -3.2 7.2 0 q-1 2 -3.6 2 q-2.6 0 -3.6 -2 Z" fill="#402c19" />
-              <rect x="-0.5" y="-4.4" width="1" height="2.4" rx="0.5" fill="#2a1c10" />
-              <ellipse cx="-1" cy="-0.4" rx="0.9" ry="1.3" fill="#e9c894" opacity="0.7" />
-            </g>
-          ))}
-        </g>
-
-        {/* ================= MUSHROOM CLUSTER ================= */}
-        <g className="sai-food-mush">
-          {/* small back mushroom */}
-          <g className="sai-food-mush-sway" style={{ transformOrigin: "150px 128px" }}>
-            <path d="M147 128 h6 l-1 8 h-4 Z" fill="url(#sai-food-stem)" />
-            <path d="M141 128 q9 -13 18 0 q-9 5 -18 0 Z" fill="url(#sai-food-cap)" />
-            <circle cx="148" cy="124" r="1.2" fill="#ffe9ad" opacity="0.85" />
-            <circle cx="153" cy="126" r="0.9" fill="#ffe9ad" opacity="0.8" />
-          </g>
-          {/* main mushroom */}
-          <g className="sai-food-mush-sway" style={{ transformOrigin: "20px 132px", animationDelay: "-1.4s" }}>
-            <ellipse cx="20" cy="140" rx="9" ry="3" fill="#000" opacity="0.22" filter="url(#sai-food-soft)" />
-            <path d="M15 128 h10 q1 8 -1 12 q-4 2 -8 0 q-2 -4 -1 -12 Z" fill="url(#sai-food-stem)" />
-            <path d="M6 129 q14 -19 28 0 q-14 8 -28 0 Z" fill="url(#sai-food-cap)" />
-            <path d="M6 129 q14 -19 28 0" fill="none" stroke="#ffb38f" strokeWidth="0.8" opacity="0.6" />
-            <circle cx="14" cy="123" r="1.8" fill="#ffe9ad" />
-            <circle cx="22" cy="121" r="1.5" fill="#ffe9ad" />
-            <circle cx="27" cy="126" r="1.2" fill="#ffe9ad" opacity="0.9" />
-            <circle cx="10" cy="127" r="1" fill="#ffe9ad" opacity="0.85" />
-          </g>
-        </g>
-
-        {/* ================= WOVEN BASKET + SPILLED FRUIT ================= */}
-        <g className="sai-food-basket">
-          <ellipse cx="55" cy="140" rx="26" ry="7" fill="#000" opacity="0.25" filter="url(#sai-food-soft)" />
-          {/* fruit inside (behind rim) */}
-          <g clipPath="url(#sai-food-basketclip)">
-            <rect x="30" y="108" width="50" height="24" fill="url(#sai-food-berry)" />
-            <circle cx="46" cy="116" r="6" fill="#e0527a" />
-            <circle cx="60" cy="114" r="6.5" fill="#c23f66" />
-            <circle cx="52" cy="118" r="4" fill="#ff9ecb" opacity="0.8" />
-          </g>
-          {/* basket body */}
-          <path d="M32 116 q23 -11 46 0 l-5 22 q-18 8 -36 0 Z" fill="url(#sai-food-basket)" />
-          {/* weave: verticals + horizontals */}
-          <g stroke="#2a1c10" strokeWidth="0.8" opacity="0.55" fill="none">
-            <path d="M42 116 l-4 22 M52 114 l-2 24 M62 114 l2 24 M72 116 l4 22" />
-            <path d="M33 122 q22 6 44 0 M33 130 q22 6 44 0" />
-          </g>
-          {/* rim */}
-          <path d="M31 116 q24 -12 48 0 q-24 8 -48 0 Z" fill="#a9743c" />
-          <path d="M31 116 q24 -12 48 0" fill="none" stroke="#ffe9ad" strokeWidth="0.7" opacity="0.5" />
-          {/* handle */}
-          <path d="M40 114 q15 -22 30 0" fill="none" stroke="#6b4a2a" strokeWidth="3" strokeLinecap="round" />
-          <path d="M40 114 q15 -22 30 0" fill="none" stroke="#a9743c" strokeWidth="1.1" strokeLinecap="round" opacity="0.7" />
-        </g>
-        {/* spilled fruit */}
-        <g className="sai-food-spill">
-          {spill.map(([cx, cy, r, fill, hi], i) => (
-            <g key={"s" + i}>
-              <ellipse cx={cx} cy={cy + r * 0.7} rx={r} ry={r * 0.3} fill="#000" opacity="0.2" />
-              <circle cx={cx} cy={cy} r={r} fill={fill} />
-              <circle cx={cx - r * 0.3} cy={cy - r * 0.32} r={r * 0.32} fill={hi} opacity="0.85" />
-            </g>
-          ))}
-        </g>
-
-        {/* ================= BEE (flies a gentle loop) ================= */}
-        <g className="sai-food-bee">
-          <g className="sai-food-bee-body">
-            <ellipse cx="0" cy="0" rx="4.2" ry="3" fill="#402c19" />
-            <path d="M-4 0 h8 M-2.4 -2.4 v4.8 M0.6 -2.7 v5.4" stroke="#ffd166" strokeWidth="1.4" strokeLinecap="round" />
-            <g className="sai-food-bee-wing">
-              <ellipse cx="-1" cy="-3.4" rx="3.2" ry="1.9" fill="#ffe9ad" opacity="0.72" />
-              <ellipse cx="2" cy="-3.4" rx="2.6" ry="1.6" fill="#ffe9ad" opacity="0.72" />
-            </g>
-          </g>
-        </g>
-
-        {/* rim-light sweep across the pool */}
-        <ellipse cx="70" cy="96" rx="40" ry="14" fill="#ffe9ad" opacity="0.1" filter="url(#sai-food-glow)" className="sai-food-rim" />
-
-        {/* fine grain overlay */}
-        <rect x="0" y="0" width="170" height="170" filter="url(#sai-food-grain)" opacity="0.5" style={{ mixBlendMode: "overlay" }} />
-      </svg>
-    </div>
-  );
-}
-
-// --------------- Play station (generated) ---------------
-function PlayStation() {
-  // Blossoms scattered around the clearing (SVG-drawn, no emoji)
-  const blossoms = [
-    { x: 30, y: 96, s: 1.0, c: "#ff9ecb", cc: "#e0527a", d: 0 },
-    { x: 132, y: 84, s: 0.85, c: "#b98cff", cc: "#8a5cf0", d: 0.7 },
-    { x: 118, y: 124, s: 1.05, c: "#ffd166", cc: "#f2a93b", d: 1.4 },
-    { x: 46, y: 130, s: 0.8, c: "#ff9ecb", cc: "#e0527a", d: 2.1 },
-    { x: 86, y: 138, s: 0.7, c: "#b98cff", cc: "#8a5cf0", d: 1.0 },
-  ];
-  const grasses = [
-    { x: 22, y: 118, h: 20, c: "#4e9c5f", d: 0 }, { x: 40, y: 124, h: 26, c: "#79c98a", d: 0.4 },
-    { x: 128, y: 116, h: 22, c: "#4e9c5f", d: 0.9 }, { x: 146, y: 126, h: 18, c: "#2f6b45", d: 0.2 },
-    { x: 70, y: 132, h: 24, c: "#79c98a", d: 1.3 }, { x: 100, y: 130, h: 20, c: "#4e9c5f", d: 0.6 },
-  ];
-  const sparks = [
-    { x: 26, y: 40, d: 0, s: 1 }, { x: 140, y: 52, d: 0.9, s: 0.8 },
-    { x: 84, y: 24, d: 1.6, s: 1.1 }, { x: 118, y: 34, d: 2.2, s: 0.7 },
-    { x: 44, y: 66, d: 1.2, s: 0.9 }, { x: 150, y: 96, d: 0.5, s: 0.8 },
-  ];
-  const buntingCols = ["#ff9ecb", "#b98cff", "#ffd166", "#79c98a", "#e0527a"];
-
-  function Blossom({ c, cc, d }) {
-    return (
-      <svg viewBox="-14 -14 28 28" width="28" height="28" style={{ overflow: "visible" }}>
-        <g className="sai-play-bloom" style={{ animationDelay: `${d}s` }}>
-          {[0, 72, 144, 216, 288].map((a) => (
-            <ellipse key={a} cx="0" cy="-7" rx="4.2" ry="7" transform={`rotate(${a})`}
-              fill={`url(#saiplay-petal-${cc.slice(1)})`} stroke={cc} strokeWidth="0.5" strokeOpacity="0.4" />
-          ))}
-          <circle r="3.4" fill="url(#saiplay-core)" />
-        </g>
-        <defs>
-          <radialGradient id={`saiplay-petal-${cc.slice(1)}`} cx="50%" cy="30%" r="80%">
-            <stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
-            <stop offset="45%" stopColor={c} />
-            <stop offset="100%" stopColor={cc} />
-          </radialGradient>
-          <radialGradient id="saiplay-core" cx="40%" cy="35%" r="75%">
-            <stop offset="0%" stopColor="#fff3c4" />
-            <stop offset="60%" stopColor="#ffd166" />
-            <stop offset="100%" stopColor="#f2a93b" />
-          </radialGradient>
-        </defs>
-      </svg>
-    );
-  }
-
-  function Butterfly({ cls, w1, w2, delay }) {
-    return (
-      <div className={cls}>
-        <svg viewBox="-12 -10 24 20" width="24" height="20" style={{ overflow: "visible", filter: "drop-shadow(0 2px 2px rgba(20,6,30,.35))" }}>
-          <g className="sai-play-fly" style={{ animationDelay: `${delay}s` }}>
-            <line x1="0" y1="-5" x2="0" y2="6" stroke="#2a1c10" strokeWidth="1.4" strokeLinecap="round" />
-            <g className="sai-play-wingL" style={{ animationDelay: `${delay}s` }}>
-              <path d="M0,-2 C-11,-11 -12,2 -2,3 C-6,-1 -3,-3 0,-2 Z" fill={w1} stroke={w2} strokeWidth="0.5" />
-            </g>
-            <g className="sai-play-wingR" style={{ animationDelay: `${delay}s` }}>
-              <path d="M0,-2 C11,-11 12,2 2,3 C6,-1 3,-3 0,-2 Z" fill={w1} stroke={w2} strokeWidth="0.5" />
-            </g>
-            <circle cx="0" cy="-5" r="1.3" fill="#2a1c10" />
-          </g>
-        </svg>
-      </div>
-    );
-  }
-
-  return (
-    <div className="sai-play-root" style={{ width: 170, height: 170 }}>
-      {/* ===== GROUND: textured sunlit clearing ===== */}
-      <svg className="sai-play-ground" viewBox="0 0 170 170" width="170" height="170">
-        <defs>
-          <radialGradient id="saiplay-clearing" cx="50%" cy="46%" r="58%">
-            <stop offset="0%" stopColor="#79c98a" />
-            <stop offset="38%" stopColor="#4e9c5f" />
-            <stop offset="70%" stopColor="#2f6b45" />
-            <stop offset="100%" stopColor="#12321f" />
-          </radialGradient>
-          <radialGradient id="saiplay-glow" cx="50%" cy="40%" r="55%">
-            <stop offset="0%" stopColor="#b98cff" stopOpacity="0.42" />
-            <stop offset="42%" stopColor="#ff9ecb" stopOpacity="0.16" />
-            <stop offset="72%" stopColor="#ffd27a" stopOpacity="0" />
-          </radialGradient>
-          <radialGradient id="saiplay-sun" cx="42%" cy="30%" r="45%">
-            <stop offset="0%" stopColor="#ffe9ad" stopOpacity="0.7" />
-            <stop offset="100%" stopColor="#ffe9ad" stopOpacity="0" />
-          </radialGradient>
-          <radialGradient id="saiplay-vig" cx="50%" cy="50%" r="52%">
-            <stop offset="60%" stopColor="#0c2418" stopOpacity="0" />
-            <stop offset="100%" stopColor="#0c2418" stopOpacity="0.85" />
-          </radialGradient>
-          <filter id="saiplay-noise" x="-10%" y="-10%" width="120%" height="120%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="7" result="n" />
-            <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.5 0" result="na" />
-            <feComposite in="na" in2="SourceGraphic" operator="in" result="ng" />
-            <feBlend in="SourceGraphic" in2="ng" mode="soft-light" />
-          </filter>
-          <filter id="saiplay-organic" x="-20%" y="-20%" width="140%" height="140%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.04 0.06" numOctaves="2" seed="11" result="t" />
-            <feDisplacementMap in="SourceGraphic" in2="t" scale="7" />
-          </filter>
-        </defs>
-        {/* soft clearing disc with organic edge + grain */}
-        <g filter="url(#saiplay-organic)">
-          <ellipse cx="85" cy="90" rx="76" ry="66" fill="url(#saiplay-clearing)" filter="url(#saiplay-noise)" />
-        </g>
-        {/* dappled foliage speckle */}
-        {[[40,66,7,"#2f6b45"],[126,60,9,"#24543a"],[54,120,8,"#2f6b45"],[120,122,7,"#24543a"],[85,150,10,"#12321f"]].map((p,i)=>(
-          <ellipse key={i} cx={p[0]} cy={p[1]} rx={p[2]} ry={p[2]*0.7} fill={p[3]} opacity="0.5" />
-        ))}
-        {/* magical play glow */}
-        <ellipse className="sai-play-glow" cx="85" cy="82" rx="70" ry="60" fill="url(#saiplay-glow)" />
-        {/* raking sun shaft */}
-        <ellipse cx="66" cy="54" rx="52" ry="40" fill="url(#saiplay-sun)" />
-        {/* vignette */}
-        <ellipse cx="85" cy="88" rx="82" ry="78" fill="url(#saiplay-vig)" />
-      </svg>
-
-      {/* ===== GRASS BLADES ===== */}
-      {grasses.map((g, i) => (
-        <svg key={"g" + i} className="sai-play-grass" width="14" height={g.h + 4}
-          viewBox={`-7 ${-g.h} 14 ${g.h + 4}`}
-          style={{ left: g.x, top: g.y - g.h, animationDelay: `${g.d}s`, transformOrigin: "bottom center" }}>
-          <path d={`M0,4 C-4,${-g.h * 0.4} -3,${-g.h * 0.8} -1,${-g.h} C-2,${-g.h * 0.7} 0,${-g.h * 0.3} 0,4 Z`} fill={g.c} opacity="0.9" />
-        </svg>
-      ))}
-
-      {/* ===== BLOSSOMS ===== */}
-      {blossoms.map((b, i) => (
-        <div key={"b" + i} className="sai-play-blossom" style={{ left: b.x, top: b.y, transform: `translate(-50%,-50%) scale(${b.s})` }}>
-          <Blossom c={b.c} cc={b.cc} d={b.d} />
-        </div>
-      ))}
-
-      {/* ===== BUNTING / RIBBON on top ===== */}
-      <svg className="sai-play-bunting" viewBox="0 0 170 60" width="170" height="60">
-        <path id="saiplay-cord" d="M14,20 Q85,44 156,20" fill="none" stroke="#402c19" strokeWidth="1.6" strokeOpacity="0.7" />
-        {buntingCols.concat([...buntingCols].reverse().slice(1)).map((col, i, arr) => {
-          const t = (i + 0.5) / arr.length;
-          const x = 14 + (156 - 14) * t;
-          const y = 20 + Math.sin(Math.PI * t) * 22 - 0;
-          return (
-            <g key={i} className="sai-play-flag" style={{ transformOrigin: `${x}px ${y}px`, animationDelay: `${i * 0.18}s` }}>
-              <path d={`M${x - 6},${y} L${x + 6},${y} L${x},${y + 12} Z`} fill={col} stroke="#00000022" strokeWidth="0.5" />
-              <path d={`M${x - 6},${y} L${x},${y + 12} L${x - 6},${y + 3} Z`} fill="#000" opacity="0.12" />
-            </g>
-          );
-        })}
-      </svg>
-
-      {/* ===== KITE bobbing up high ===== */}
-      <div className="sai-play-kite" style={{ left: 128, top: 8 }}>
-        <svg viewBox="-16 -16 42 60" width="42" height="60" style={{ overflow: "visible", filter: "drop-shadow(0 3px 3px rgba(20,6,30,.3))" }}>
-          <path d="M0,-14 L11,0 L0,14 L-11,0 Z" fill="url(#saiplay-kiteg)" stroke="#8a5cf0" strokeWidth="0.8" />
-          <path d="M0,-14 L0,14 M-11,0 L11,0" stroke="#ffffff" strokeWidth="0.7" strokeOpacity="0.55" />
-          <path className="sai-play-kitetail" d="M0,14 q4,8 -2,14 q-5,6 2,14" fill="none" stroke="#ff9ecb" strokeWidth="1.6" strokeLinecap="round" />
-          {[[0,20,"#ffd166"],[-1,30,"#79c98a"],[1,40,"#e0527a"]].map((b,i)=>(
-            <circle key={i} className="sai-play-kitebow" cx={b[0]} cy={b[1]} r="2.4" fill={b[2]} style={{ animationDelay: `${i*0.2}s` }} />
-          ))}
-          <defs>
-            <linearGradient id="saiplay-kiteg" x1="0" y1="-14" x2="0" y2="14" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stopColor="#d9c2ff" />
-              <stop offset="50%" stopColor="#b98cff" />
-              <stop offset="100%" stopColor="#8a5cf0" />
-            </linearGradient>
-          </defs>
-        </svg>
-      </div>
-
-      {/* ===== PINWHEEL ===== */}
-      <div className="sai-play-pinwheel" style={{ left: 34, top: 66 }}>
-        <svg viewBox="-22 -22 44 66" width="44" height="66" style={{ overflow: "visible" }}>
-          {/* stick */}
-          <line x1="0" y1="0" x2="0" y2="42" stroke="url(#saiplay-stick)" strokeWidth="2.4" strokeLinecap="round" />
-          <g className="sai-play-spin" style={{ filter: "drop-shadow(0 2px 2px rgba(20,6,30,.3))" }}>
-            {[0, 90, 180, 270].map((a, i) => (
-              <path key={a} d="M0,0 L14,-6 Q18,0 14,6 Z" transform={`rotate(${a})`}
-                fill={i % 2 ? "url(#saiplay-pw-b)" : "url(#saiplay-pw-a)"} stroke="#ffffff" strokeWidth="0.5" strokeOpacity="0.5" />
-            ))}
-            <circle r="3" fill="#fff3c4" stroke="#f2a93b" strokeWidth="1" />
-          </g>
-          <defs>
-            <linearGradient id="saiplay-pw-a" x1="0" y1="-6" x2="16" y2="6" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stopColor="#ffd166" /><stop offset="100%" stopColor="#ff9ecb" />
-            </linearGradient>
-            <linearGradient id="saiplay-pw-b" x1="0" y1="-6" x2="16" y2="6" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stopColor="#b98cff" /><stop offset="100%" stopColor="#22c9d6" />
-            </linearGradient>
-            <linearGradient id="saiplay-stick" x1="0" y1="0" x2="0" y2="42" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stopColor="#6b4a2a" /><stop offset="100%" stopColor="#2a1c10" />
-            </linearGradient>
-          </defs>
-        </svg>
-      </div>
-
-      {/* ===== BOUNCING BALL + shadow ===== */}
-      <div className="sai-play-ballwrap" style={{ left: 85, top: 92 }}>
-        <div className="sai-play-ballshadow" />
-        <div className="sai-play-ball">
-          <svg viewBox="-16 -16 32 32" width="32" height="32">
-            <circle r="15" fill="url(#saiplay-ballg)" />
-            {/* colored panels */}
-            <path d="M0,-15 A15,15 0 0,1 13,-7 L0,0 Z" fill="#e0527a" opacity="0.85" />
-            <path d="M13,-7 A15,15 0 0,1 9,13 L0,0 Z" fill="#ffd166" opacity="0.85" />
-            <path d="M9,13 A15,15 0 0,1 -13,7 L0,0 Z" fill="#22c9d6" opacity="0.8" />
-            <path d="M-13,7 A15,15 0 0,1 0,-15 L0,0 Z" fill="#b98cff" opacity="0.85" />
-            <circle r="15" fill="url(#saiplay-ballsheen)" />
-            <circle r="15" fill="none" stroke="#00000022" strokeWidth="1" />
-            <ellipse cx="-5" cy="-6" rx="5" ry="3.4" fill="#ffffff" opacity="0.7" />
-            <defs>
-              <radialGradient id="saiplay-ballg" cx="38%" cy="32%" r="75%">
-                <stop offset="0%" stopColor="#ffffff" /><stop offset="100%" stopColor="#f0f4ff" />
-              </radialGradient>
-              <radialGradient id="saiplay-ballsheen" cx="40%" cy="30%" r="80%">
-                <stop offset="0%" stopColor="#ffffff" stopOpacity="0.55" />
-                <stop offset="45%" stopColor="#ffffff" stopOpacity="0" />
-                <stop offset="100%" stopColor="#1a0f28" stopOpacity="0.28" />
-              </radialGradient>
-            </defs>
-          </svg>
-        </div>
-      </div>
-
-      {/* ===== BUTTERFLIES ===== */}
-      <Butterfly cls="sai-play-bf1" w1="#ff9ecb" w2="#e0527a" delay={0} />
-      <Butterfly cls="sai-play-bf2" w1="#b98cff" w2="#8a5cf0" delay={0.4} />
-
-      {/* ===== SPARKLES ===== */}
-      {sparks.map((s, i) => (
-        <svg key={"sp" + i} className="sai-play-spark" width="12" height="12" viewBox="-6 -6 12 12"
-          style={{ left: s.x, top: s.y, animationDelay: `${s.d}s`, transform: `scale(${s.s})` }}>
-          <path d="M0,-6 Q0.8,-0.8 6,0 Q0.8,0.8 0,6 Q-0.8,0.8 -6,0 Q-0.8,-0.8 0,-6 Z" fill="#fff3c4" />
-          <circle r="1.2" fill="#ffffff" />
-        </svg>
-      ))}
-    </div>
-  );
-}
-
-// --------------- Station wrapper ---------------
-function Station({ st }) {
-  const isPlay = st.key === "play";
-  return (
-    <div className="absolute pointer-events-none" style={{ left: st.x, top: st.y, width: 0, height: 0, zIndex: 1 }}>
-      <div className="sai-st-hold" style={isPlay ? undefined : { transform: st.key === "water" ? "translate(-50%,-50%) scale(2)" : "translate(-50%,-50%)" }}>
-        {st.key === "water" && <WaterStation />}
-        {st.key === "food" && <FoodStation />}
-        {isPlay && <PlayStation />}
-      </div>
-      <div className="sai-station-label" style={{ background: "rgba(6,18,12,.82)", border: `1px solid ${st.color}aa`, color: "#f2fff2", boxShadow: `0 0 14px ${st.color}55`, ...(st.key === "water" ? { top: 190 } : null) }}>
-        {st.key === "water" ? "💧" : st.key === "food" ? "🍎" : "🎈"} {st.label}
-      </div>
-    </div>
+      </g>
+    </svg>
   );
 }
 
@@ -1557,8 +1046,7 @@ function IconNode({ a, iconsRef, worldRef, onSelect }) {
   const emote =
     a.state === "fight" ? "💢" :
     a.state === "friendly" ? "💚" :
-    a.state === "flee" ? "💨" :
-    a.state === "idle" ? "💤" : null;
+    a.state === "flee" ? "💨" : null;
   const box = a.r * 3.1;
 
   return (
@@ -1571,55 +1059,75 @@ function IconNode({ a, iconsRef, worldRef, onSelect }) {
   );
 }
 
-// --------------- Bottom UI bits ---------------
-function NeedsBar({ label, value, color }) {
-  return (
-    <div className="col-span-2 flex items-center gap-2">
-      <span className="opacity-70 w-12">{label}</span>
-      <div className="h-2 rounded bg-neutral-800 w-full overflow-hidden">
-        <div className="h-full" style={{ width: `${clamp(value,0,100)}%`, background: color }} />
-      </div>
-      <span className="w-10 text-right">{Math.round(value)}</span>
-    </div>
-  );
-}
-
+// --------------- Top-bar relationship readout ---------------
 function RelStats({ worldRef, id }) {
   const A = getAgent(worldRef.current, id); if (!A) return null;
   let friends = 0, enemies = 0;
   for (const [, rel] of A.relations) { if (rel.last === 'friend') friends++; if (rel.last === 'rival') enemies++; }
   return (
-    <div className="grid grid-cols-2 gap-2">
-      <div>Friends: <b>{friends}</b></div>
-      <div>Enemies: <b>{enemies}</b></div>
-    </div>
+    <span className="whitespace-nowrap">
+      <span className="text-emerald-300">Friends: <b>{friends}</b></span>
+      <span className="opacity-50 mx-1">·</span>
+      <span className="text-rose-300">Enemies: <b>{enemies}</b></span>
+    </span>
   );
 }
 
 // ---------------- Simulation ----------------
 function stepWorld(world, cfg, dt) {
-  const { agents, stations, bounds } = world;
+  const { agents, bounds } = world;
   const now = performance.now();
 
-  // needs: slow drain
-  for (const a of agents) {
-    a.needs.food = clamp(a.needs.food - dt * 0.7, 0, 100);
-    a.needs.water = clamp(a.needs.water - dt * 0.8, 0, 100);
-    a.needs.play  = clamp(a.needs.play  - dt * 0.6, 0, 100);
-  }
-
-  // refresh intents periodically; but force wander during noEvent cooldown
+  // intents: wander vs the occasional swim (species-dependent share)
   for (const a of agents) {
     if (a.dragging) continue;
-    if (now < a.noEventUntil) { a.intent = 'wander'; }
-    if (now >= a.intentUntil && a.state !== "fight" && a.state !== "friendly") {
-      a.intent = Math.random() < STATION_INTENT_SHARE ? "station" : "wander";
-      if (now < a.noEventUntil) a.intent = 'wander';
-      a.intentUntil = now + rand(INTENT_MIN_S*1000, INTENT_MAX_S*1000);
+    if (now >= a.intentUntil && a.state !== "fight" && a.state !== "friendly" && a.state !== "rescue") {
+      a.intent = Math.random() < (SWIM_P[a.species] || 0) ? "swim" : "wander";
+      a.swimTarget = null;
+      a.intentUntil = now + rand(INTENT_MIN_S * 1000, INTENT_MAX_S * 1000);
     }
   }
 
-  // Decide goals and state transitions
+  // ongoing fights: bystanders clear out, a close friend runs in to break it up
+  const fights = [];
+  for (const a of agents) {
+    if (a.state === "fight" && a.targetId && a.id < a.targetId) {
+      const b = agents.find((x) => x.id === a.targetId);
+      if (b && b.state === "fight") fights.push([a, b]);
+    }
+  }
+  for (const [fa, fb] of fights) {
+    const mx = (fa.x + fb.x) / 2, my = (fa.y + fb.y) / 2;
+    const wet = inWater(bounds, mx, my);
+    const hasRescuer = agents.some((c) => c.state === "rescue" && (c.rescueFriendId === fa.id || c.rescueFriendId === fb.id));
+    if (!hasRescuer) {
+      // nearest free friend of either fighter, in the same medium
+      let best = null, bestD = RESCUE_RADIUS, bestFriend = null;
+      for (const c of agents) {
+        if (c === fa || c === fb || c.dragging || !isFreeState(c)) continue;
+        if (inWater(bounds, c.x, c.y) !== wet) continue;
+        const friendOfA = getRel(c, fa.id, false)?.last === "friend";
+        const friendOfB = getRel(c, fb.id, false)?.last === "friend";
+        if (!friendOfA && !friendOfB) continue;
+        const d = Math.hypot(c.x - mx, c.y - my);
+        if (d < bestD) { best = c; bestD = d; bestFriend = friendOfA ? fa.id : fb.id; }
+      }
+      if (best) { best.state = "rescue"; best.rescueFriendId = bestFriend; }
+    }
+    // everyone else nearby avoids the confrontation
+    for (const c of agents) {
+      if (c === fa || c === fb || c.dragging || c.state === "rescue" || !isFreeState(c)) continue;
+      const d = Math.hypot(c.x - mx, c.y - my);
+      if (d < AVOID_RADIUS && d > 0.001) {
+        const ux = (c.x - mx) / d, uy = (c.y - my) / d;
+        const k = Math.min(1, dt * 4);
+        c.vx += (ux * cfg.speed - c.vx) * k;
+        c.vy += (uy * cfg.speed - c.vy) * k;
+      }
+    }
+  }
+
+  // state machine + navigation
   for (const a of agents) {
     if (a.dragging) continue;
 
@@ -1630,28 +1138,48 @@ function stepWorld(world, cfg, dt) {
       a.x += (a.lockX - a.x) * pull; a.y += (a.lockY - a.y) * pull;
       a.vx = 0; a.vy = 0;
       if (now >= a.engageEnd) {
-        // separate the pair clearly, then wander with event cooldown
         if (a.targetId) {
-          const b = agents.find(x=>x.id===a.targetId);
-          if (b && (b.state === 'friendly' || b.state === 'fight')) {
-            separatePair(world, a, b, world, /*force*/ false);
+          const b = agents.find((x) => x.id === a.targetId);
+          if (b && (b.state === "friendly" || b.state === "fight")) {
+            separatePair(world, a, b, world, false);
           } else {
             // partner missing; self-separate
-            a.state = 'separate';
+            a.state = "separate";
             a.separateEnd = now + SEP_MS;
             const ang = Math.random() * Math.PI * 2;
-            const sp = cfg.speed * 1.1; a.vx = Math.cos(ang)*sp; a.vy = Math.sin(ang)*sp;
+            const sp = cfg.speed * 1.1; a.vx = Math.cos(ang) * sp; a.vy = Math.sin(ang) * sp;
             a.noEventUntil = now + rand(NOEVENT_MIN_MS, NOEVENT_MAX_MS);
-            a.intent = 'wander'; a.intentUntil = now + rand(4000, 8000);
+            a.intent = "wander"; a.intentUntil = now + rand(4000, 8000);
             a.targetId = null;
           }
         }
       }
-      continue; // skip integration
+      continue; // skip the rest while locked
     }
 
-    if (a.state === 'separate') {
-      if (now >= a.separateEnd) { a.state = 'cooldown'; }
+    // rescue: run to the fighting friend, break the fight up on arrival
+    if (a.state === "rescue") {
+      const friend = a.rescueFriendId ? agents.find((x) => x.id === a.rescueFriendId) : null;
+      if (!friend || friend.state !== "fight" || !friend.targetId) {
+        a.state = "cooldown"; a.rescueFriendId = null;
+      } else {
+        const dx = friend.x - a.x, dy = friend.y - a.y; const d = Math.hypot(dx, dy) || 1;
+        const sp = cfg.speed * 1.5; // sprint — must arrive before the fight ends
+        a.vx = (dx / d) * sp; a.vy = (dy / d) * sp;
+        if (d < RESCUE_REACH) {
+          const opp = agents.find((x) => x.id === friend.targetId);
+          if (opp) forceFlee(opp, cfg);          // the opponent breaks off and flees
+          friend.state = "cooldown"; friend.targetId = null;
+          friend.noEventUntil = now + rand(NOEVENT_MIN_MS, NOEVENT_MAX_MS);
+          a.state = "cooldown"; a.rescueFriendId = null;
+          a.noEventUntil = now + rand(NOEVENT_MIN_MS, NOEVENT_MAX_MS);
+          a.vx *= 0.3; a.vy *= 0.3;
+        }
+      }
+    }
+
+    if (a.state === "separate") {
+      if (now >= a.separateEnd) { a.state = "cooldown"; }
       // drift with current vx,vy until separateEnd
     }
 
@@ -1665,20 +1193,27 @@ function stepWorld(world, cfg, dt) {
 
     if (a.state === "idle" && now >= a.idleUntil) a.state = "wander";
 
-    // navigation: only allow station targeting if noEvent cooldown passed
-    if (a.intent === "station" && now >= a.noEventUntil) {
-      const lowKey = ["food","water","play"].sort((k1, k2) => a.needs[k1]-a.needs[k2])[0];
-      const st = stations.find(s=>s.key===lowKey);
-      if (st) {
-        a.targetStation = lowKey; if (a.state !== 'idle' && a.state !== 'separate') a.state = "going_station";
-        const dx = st.x - a.x, dy = st.y - a.y; const d = Math.hypot(dx, dy) || 1;
-        const sp = cfg.speed * 0.9; a.vx = (dx/d)*sp; a.vy = (dy/d)*sp;
-        if (Math.random() < 0.004) { a.state = "idle"; a.vx = a.vy = 0; a.idleUntil = now + rand(900, 2200); }
-      }
-    } else {
-      // wandering — keep a minimum cruise speed so walkers never creep
-      if (Math.random() < 0.02) { a.vx += rand(-15, 15); a.vy += rand(-15, 15); }
-      if (a.state === 'wander') {
+    // navigation
+    if (a.state === "wander") {
+      if (a.intent === "swim" && canSwim(a.species)) {
+        // paddle between random spots inside the lake
+        const wet = inWater(bounds, a.x, a.y);
+        if (!a.swimTarget || Math.hypot(a.swimTarget.x - a.x, a.swimTarget.y - a.y) < 30) {
+          a.swimTarget = lakePoint(bounds, rand(0, Math.PI * 2), Math.sqrt(Math.random()) * 0.72);
+        }
+        const dx = a.swimTarget.x - a.x, dy = a.swimTarget.y - a.y; const d = Math.hypot(dx, dy) || 1;
+        const sp = cfg.speed * (wet ? 0.55 : 0.9);
+        a.vx = (dx / d) * sp; a.vy = (dy / d) * sp;
+      } else if (canSwim(a.species) && inWater(bounds, a.x, a.y)) {
+        // dip is over — paddle straight out to the nearest shore
+        const cx = LAKE.cx * bounds.w, cy = LAKE.cy * bounds.h;
+        const ux = a.x - cx, uy = a.y - cy; const d = Math.hypot(ux, uy) || 1;
+        const sp = cfg.speed * 0.6;
+        a.vx = (ux / d) * sp; a.vy = (uy / d) * sp;
+      } else {
+        // plain wandering: minimum cruise + the odd pause to sniff around
+        if (Math.random() < 0.02) { a.vx += rand(-15, 15); a.vy += rand(-15, 15); }
+        if (Math.random() < 0.0008) { a.state = "idle"; a.vx = a.vy = 0; a.idleUntil = now + rand(900, 2200); }
         const wsp = Math.hypot(a.vx, a.vy);
         if (wsp < 18) {
           const ang = wsp > 0.5 ? Math.atan2(a.vy, a.vx) : Math.random() * Math.PI * 2;
@@ -1688,79 +1223,64 @@ function stepWorld(world, cfg, dt) {
     }
   }
 
-  // Station interactions — only agents past noEvent cooldown are eligible
-  for (const st of stations) {
-    const nearby = agents.filter(a => dist(a, st) < (st.r || cfg.interactionRadius) && !a.dragging && a.state!=='friendly' && a.state!=='fight' && a.state!=='separate' && (performance.now() >= a.noEventUntil));
-
-    // satisfy needs
-    for (const a of nearby) {
-      a.needs[st.key] = clamp(a.needs[st.key] + 12 * dt, 0, 100);
-      if (a.needs[st.key] > 85 && a.state !== "flee") {
-        a.intent = "wander"; if (a.state !== 'cooldown') a.state = "wander";
-      }
-    }
-
-    // pair interactions (rates from v0.4/v0.5)
-    for (let i = 0; i < nearby.length; i++) {
-      for (let j = i + 1; j < nearby.length; j++) {
-        const a = nearby[i], b = nearby[j];
-        if (perSec(0.60, world.last - world.last + dt)) {
-          const biasFight = (st.key === 'food' || st.key === 'water') ? 0.60 : 0.30; // play 30% fight, else 60% fight
-          const doFight = Math.random() < biasFight;
-          if (doFight) startFight(a, b, agents, cfg, bounds); else startFriendly(a, b, bounds);
-        }
-      }
-    }
-  }
-
-  // Wild interactions (off stations) — also blocked during noEvent cooldown
+  // encounters: nose-range only, and only within the same medium
+  // (land ↔ land or water ↔ water — swimmers in the lake are off-limits
+  // to shore animals and vice versa)
   for (let i = 0; i < agents.length; i++) {
     for (let j = i + 1; j < agents.length; j++) {
       const a = agents[i], b = agents[j];
       if (a.dragging || b.dragging) continue;
-      if (performance.now() < a.noEventUntil || performance.now() < b.noEventUntil) continue;
+      if (now < a.noEventUntil || now < b.noEventUntil) continue;
       if (!isFreeState(a) || !isFreeState(b)) continue;
-      // both must be outside all stations
-      const ina = stations.some(st => dist(a, st) < (st.r || cfg.interactionRadius));
-      const inb = stations.some(st => dist(b, st) < (st.r || cfg.interactionRadius));
-      if (ina || inb) continue;
-      if (dist(a,b) > cfg.interactionRadius * 0.9) continue; // need proximity
+      if (dist(a, b) > pairRange(a, b)) continue;
+      if (inWater(bounds, a.x, a.y) !== inWater(bounds, b.x, b.y)) continue;
       if (perSec(0.40, dt)) {
-        if (Math.random() < 0.5) startFriendly(a, b, bounds); else startFight(a, b, agents, cfg, bounds);
+        if (Math.random() < 0.5) startFriendly(a, b, bounds); else startFight(a, b, bounds);
       }
     }
   }
 
-  // integrate motion + edge warp
+  // integrate motion, shoreline collision, smooth edge wrap
   for (const a of agents) {
     if (a.dragging) continue;
+    const sp = cfg.speed; const vlim = sp * 1.2;
+    a.vx = clamp(a.vx, -vlim, vlim); a.vy = clamp(a.vy, -vlim, vlim);
+    if (a.state !== "friendly" && a.state !== "fight") { a.x += a.vx * dt; a.y += a.vy * dt; }
 
-    const sp = cfg.speed; const vlim = sp * 1.1; a.vx = clamp(a.vx, -vlim, vlim); a.vy = clamp(a.vy, -vlim, vlim);
-    if (a.state !== 'friendly' && a.state !== 'fight') { a.x += a.vx * dt; a.y += a.vy * dt; }
+    // the shoreline is a wall for anyone who can't swim
+    if (!canSwim(a.species)) keepAshore(a, bounds);
 
-    const m = 6;
-    if (a.x < m || a.x > bounds.w - m || a.y < m || a.y > bounds.h - m) {
-      // edge warp, break engagements if any
-      if (a.state === "fight" || a.state === 'friendly') { a.state = "cooldown"; a.targetId = null; }
-      a.x = rand(100, bounds.w - 100); a.y = rand(140, bounds.h - 140);
-      const cx = bounds.w / 2, cy = bounds.h / 2; const dx = cx - a.x, dy = cy - a.y; const d = Math.hypot(dx,dy)||1; a.vx = (dx/d) * sp; a.vy = (dy/d) * sp;
+    // wander off one edge, amble back in from another — never pop mid-map
+    if (a.x < -EDGE_OFF || a.x > bounds.w + EDGE_OFF || a.y < -EDGE_OFF || a.y > bounds.h + EDGE_OFF) {
+      enterFromEdge(a, bounds, sp);
     }
   }
 }
 
 function isFreeState(a) {
-  return a.state === 'wander' || a.state === 'going_station' || a.state === 'idle' || a.state === 'cooldown';
+  return a.state === 'wander' || a.state === 'idle' || a.state === 'cooldown';
 }
 
 // Set the pair's lock points nose-to-nose at their midpoint: centers end up
 // ~1.12*(ra+rb) apart, so muzzles nearly touch and the render-side nuzzles /
-// lunges (a few px each) read as real physical contact.
+// lunges (a few px each) read as real physical contact. Unless both animals
+// are actually swimming, the meeting point is pushed back ashore so land
+// pairs never lock inside the lake.
 function lockTogether(a, b, bounds) {
   let dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
   if (d < 0.001) { dx = 1; dy = 0; d = 1; }
   const nx = dx / d, ny = dy / d;
-  const mx = clamp((a.x + b.x) / 2, 90, bounds.w - 90);
-  const my = clamp((a.y + b.y) / 2, 120, bounds.h - 110);
+  let mx = clamp((a.x + b.x) / 2, 90, bounds.w - 90);
+  let my = clamp((a.y + b.y) / 2, 120, bounds.h - 110);
+  const bothSwimming = inWater(bounds, a.x, a.y) && inWater(bounds, b.x, b.y);
+  if (!bothSwimming) {
+    const r = lakeRho(bounds, mx, my);
+    if (r < 1.08) {
+      const cx = LAKE.cx * bounds.w, cy = LAKE.cy * bounds.h;
+      const s = 1.08 / Math.max(r, 0.05);
+      mx = cx + (mx - cx) * s; my = cy + (my - cy) * s;
+    }
+  }
   const half = (a.r + b.r) * 0.56;
   a.lockX = mx - nx * half; a.lockY = my - ny * half;
   b.lockX = mx + nx * half; b.lockY = my + ny * half;
@@ -1775,16 +1295,9 @@ function startFriendly(a, b, bounds) {
   const ra = getRel(a, b.id); const rb = getRel(b, a.id); ra.last = 'friend'; rb.last = 'friend';
 }
 
-function startFight(a, b, agents, cfg, bounds) {
-  // Ally-assist BEFORE lock: ally with last=friend near A or B forces opponent to flee
-  const ally = agents.find(c => c!==a && c!==b && !c.dragging && (dist(c,a) < cfg.interactionRadius*1.1 || dist(c,b) < cfg.interactionRadius*1.1) && ((getRel(c,a.id,false)?.last==='friend') || (getRel(c,b.id,false)?.last==='friend')));
-  if (ally) {
-    const sideA = getRel(ally, a.id, false)?.last === 'friend';
-    if (sideA) { forceFlee(b, cfg); } else { forceFlee(a, cfg); }
-    ally.state = 'cooldown'; ally.targetId = null;
-    return;
-  }
-
+// Fights start unimpeded; a nearby friend breaks them up MID-fight (see the
+// rescue logic in stepWorld) — far more visible than vetoing the fight.
+function startFight(a, b, bounds) {
   const now = performance.now();
   a.state = b.state = "fight"; a.targetId = b.id; b.targetId = a.id;
   a.engageEnd = b.engageEnd = now + ENGAGE_MS;
@@ -1845,6 +1358,8 @@ function renderWorld(world, iconsRef) {
       const wasWalking = sprite.dataset.walking === '1';
       const walking = a.state !== 'friendly' && a.state !== 'fight' && (wasWalking ? dispV > 5 : dispV > 10);
       sprite.dataset.walking = walking ? '1' : '';
+      // in the lake: legs tuck, ripple ring shows, dust becomes splash (CSS)
+      sprite.dataset.swimming = canSwim(a.species) && inWater(world.bounds, a.x, a.y) ? '1' : '';
       let dir = Number(sprite.dataset.dir || '1');
       if (a.vx < -8) dir = -1; else if (a.vx > 8) dir = 1;
       let jx = 0, jy = 0;
@@ -1887,4 +1402,4 @@ function renderWorld(world, iconsRef) {
 }
 
 function getAgent(world, id) { return world.agents.find(a => a.id === id); }
-function minify(a) { return { id: a.id, species: a.species, emoji: a.emoji, x: a.x, y: a.y, r: a.r, state: a.state, needs: a.needs, relationsSize: a.relations.size }; }
+function minify(a) { return { id: a.id, species: a.species, emoji: a.emoji, x: a.x, y: a.y, r: a.r, state: a.state, relationsSize: a.relations.size }; }

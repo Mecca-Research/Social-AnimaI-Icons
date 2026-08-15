@@ -2,11 +2,11 @@
 
 **▶️ [Live demo](https://mecca-research.github.io/Social-AnimaI-Icons/)** — runs entirely in your browser, no install required.
 
-![Social Animal Icons — 14 distinct hand‑drawn forest animals (fox, wolf, bear, cougar, deer, beaver, turkey, skunk, grey squirrel, turtle, hedgehog, raccoon, frog, owl) roaming a lush, textured top‑down forest lit by volumetric god‑rays, with a lily‑pad pond, a berry‑bush larder, and a flowery play meadow.](media/screenshot.png)
+![Social Animal Icons — 14 distinct hand‑drawn forest animals (fox, wolf, bear, cougar, deer, beaver, turkey, skunk, grey squirrel, turtle, hedgehog, raccoon, frog, owl) roaming a lush, textured top‑down forest lit by volumetric god‑rays, around a big organic lake where a turtle swims inside a ripple ring.](media/screenshot.png)
 
-An interactive, emergent “living desktop” made of animal icons that socialize, argue, help each other, and roam a large map with stations for Food, Water, and Play. Every icon runs a tiny state machine (wander, idle, go-to-station, friendly, fight, flee, separate, cooldown, drag) and forms relationships via last-touch memory (friend or rival).
+An interactive, emergent “living desktop” made of animal icons that socialize, argue, help each other, and roam a large forest map around a lake. Every icon runs a tiny state machine (wander, idle, swim, friendly, fight, rescue, flee, separate, cooldown, drag) and forms relationships via last-touch memory (friend or rival).
 
-Current release: v0.10 — **Native forest cast + contact encounters.** The forest world is now populated only by animals that belong there: the exotic and domestic species (tiger and panda → future jungle world, koala → down under, penguin → arctic, cat and rabbit → house pets, pig → farm) moved to a sprite vault (`app/src/CrittersVault.jsx`, preview at [`/?gallery=1&vault=1`](https://mecca-research.github.io/Social-AnimaI-Icons/?gallery=1&vault=1)) with their rigs intact, ready for their home worlds. Seven natives join in the same hand-drawn style, each with its own movement: a rangy amber-eyed **wolf** (purposeful lope), a tawny **cougar** with a dark-tipped tail (smooth prowl), a **beaver** whose flat paddle tail drags as it waddles, a strutting **turkey** on a real bird rig (fan tail flicks, wings flap, head pecks), a **skunk** trotting with its huge white-blazed plume held high, a bounding **grey squirrel** under an oversized frosted tail, and a **turtle** that plods slowly while its neck pushes forward with each step. Encounters got physical too: pairs now rush together and lock nose-to-nose facing each other — friendly meetings are affectionate (synchronized nuzzling, lean-ins, tail wags, ear perks) and fights are proper scraps (alternating lunges, front-paw swipes, rearing, tail lashing). Built on v0.9/v0.9.1: bespoke silhouettes and rigs, integrated legs, per-species stride and tempo, movement-keyed walk cycles, and the double-size pond.
+Current release: v0.11 — **The lakeside world.** The pond grew into a proper **lake** (~6× the water) with an organic, bays‑and‑headlands shoreline, placed upper‑right with its south‑west shore reaching toward the middle of the map and a band of land kept along the top‑right corner. The same wobble‑ellipse drives both the artwork and the physics, so the drawn shoreline IS the collision boundary: land animals walk around the perimeter and never get wet, while the **beaver, frog and turtle spend ~40% of their time swimming** (the bear ~10%) — legs tucked, bobbing inside a ripple ring, splashing instead of kicking dust when they fight or make friends out on the water (and while in the lake they only interact with other swimmers). Social behavior deepened too: encounters now only trigger at true nose‑range, **bystanders clear away from fights**, and a **friend of a fighter sprints in to break the fight up** (the opponent flees). Map edges wrap smoothly — walk off one side, amble in from another; new animals enter the same way instead of popping in. The Food/Play stations, needs and meters are gone (the forest is scenery — more of it now in the upper clearings), the bottom bar is retired, and the selected animal with its Friends/Enemies count lives in the middle of the top bar.
 
 ![All 14 species in idle, walking, fight and friendly states](media/sprites.png)
 
@@ -18,39 +18,33 @@ One of each — new animals spawn only as species not already in the world; the 
 
 Richly textured forest 🌲 — a layered, painterly forest floor with volumetric god‑rays, depth, a fallen log, ferns, clover, flowers, mushrooms, pebbles, drifting leaves, fireflies, and fluttering butterflies.
 
-Detailed animated stations — Water is a big reed‑fringed lily‑pad pond (doubled in size, with a doubled interaction zone to build richer waterside behavior on), Food a berry‑bush larder with a picnic basket and foraged nuts, Play a meadow with bunting, a bouncing ball, a spinning pinwheel and a kite.
+The lake 🏞️ — a big reed‑fringed body of water with an organic shoreline (bays, headlands, lily pads, stepping stones, cattails, caustic light, drifting mist and a skimming dragonfly). One shared shape drives the art and the physics, so animals interact with exactly the shoreline you see.
+
+Swimming — beaver, frog and turtle take dips ~40% of the time, the bear ~10%: legs tuck under the waterline, the sprite bobs inside a glowing ripple ring, and in‑water fights/friendships splash. Swimmers in the lake only interact with other swimmers; everyone else walks the perimeter.
 
 A soft energy glow + floating emote signals each interaction (💢 fight · 💚 friendly · 💨 flee).
 
-Large, responsive map with edge warp (touching the boundary warps icon to a random in-bounds spot and heads toward center).
-
-Stations: Food · Water · Play (softly refill needs when nearby).
+Large, responsive map with smooth edge wrap — walk off one side, amble back in from another; added animals also enter from an edge instead of appearing mid‑map.
 
 Social logic
 
-At stations: ~60%/sec attempt to interact per nearby pair.
+Encounters happen only at true nose‑range (~70–85 px), anywhere on the map: ~40%/sec attempt per close pair, 50/50 friendly vs fight.
 
-Play: 70% friendly / 30% fight
+Interaction lock: friendly or fight pulls the pair together nose‑to‑nose, facing each other, for 8 seconds of contact — synchronized nuzzling, lean‑ins and tail wags when friendly; alternating lunges, paw swipes and rearing when fighting (splashes for both when it happens in the lake).
 
-Food/Water: 40% friendly / 60% fight
+Avoid confrontation: bystanders near an active fight steer away from it until it ends.
 
-In the wild (off stations): ~40%/sec attempt; 50/50 friendly vs fight.
-
-Interaction lock: friendly or fight pulls the pair together nose‑to‑nose, facing each other, for 8 seconds of contact — synchronized nuzzling, lean‑ins and tail wags when friendly; alternating lunges, paw swipes and rearing when fighting.
+Break it up: a third animal whose last touch with one fighter was friendly sprints to the fight and breaks it up — the opponent flees, everyone involved cools down.
 
 Separation & cooldown: after locking, icons visibly peel apart (~1.4 s), then wander and cannot re-trigger events for ~4.2–7 s.
 
-Ally assist: a nearby third icon whose last-touch with one fighter was friend will cause the opponent to flee briefly; allies cool down.
+Last-touch relationships: each pair keeps only the last interaction tag (friend|rival); the top bar counts friends/enemies from that.
 
-Last-touch relationships: each pair keeps only the last interaction tag (friend|rival); Inspector counts friends/enemies from that.
-
-Controls: Pause/Run, Speed slider (decently slow → brisk), Add/Remove Icon (start 8 unique species, cap 14 — one of each), Reset World.
+Controls: Pause/Run, Speed slider (decently slow → brisk), Add/Remove Icon (start 8 unique species, cap 14 — one of each), Reset World. The selected animal (double‑click one) shows mid‑top‑bar with its Friends/Enemies tally.
 
 🧠 Behavior Model (quick reference)
 
-Needs drain: slow; icons usually wander instead of camping at stations.
-
-Intent mix: ≈ 67% wandering / 33% station-seeking (periodically re-rolled; intent forced to wander during cooldown).
+Intent mix: mostly wandering; swimmers periodically re-roll a “swim” intent (beaver/frog/turtle 40%, bear 10%) and paddle between spots inside the lake before coming ashore.
 
 Drag to intervene: grabbing an icon breaks an ongoing friendly/fight and triggers separation+cooldown.
 

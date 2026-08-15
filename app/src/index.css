@@ -30,9 +30,6 @@ body {
 .sai-label { position: absolute; left: 50%; bottom: -15px; transform: translateX(-50%); z-index: 2;
   font-size: 10px; line-height: 14px; padding: 0 6px; border-radius: 9999px; color: #d9f4e2;
   background: rgba(6,18,12,.6); border: 1px solid rgba(120,200,150,.18); white-space: nowrap; }
-.sai-st-hold { position: absolute; left: 0; top: 0; }
-.sai-station-label { position: absolute; left: 0; top: 96px; transform: translateX(-50%); white-space: nowrap;
-  padding: 2px 10px; border-radius: 9999px; font-size: 11px; font-weight: 600; letter-spacing: .2px; }
 
 @keyframes sai-shadow-breathe { 0%,100% { transform: translateX(-50%) scale(1); opacity: .72; } 50% { transform: translateX(-50%) scale(.85); opacity: .5; } }
 @keyframes sai-emote { 0% { transform: translate(-50%, 4px) scale(.6); opacity: 0; } 30% { opacity: 1; } 100% { transform: translate(-50%, -18px) scale(1); opacity: 0; } }
@@ -581,380 +578,6 @@ body {
 }
 
 
-/* ==================== food station ==================== */
-/* ===================================================================
-   FoodStation — cozy forest foraging spot
-   Self-contained CSS for every .sai-food-* class in food.jsx.
-   Motion = transform / opacity only (GPU friendly), contained in the
-   170x170 box, staggered 2–7s for an organic, hand-animated feel.
-   All looping motion is disabled under prefers-reduced-motion.
-   =================================================================== */
-
-/* ---- stage --------------------------------------------------------- */
-
-.sai-food-root {
-  position: relative;
-  width: 170px;
-  height: 170px;
-  /* let the bee & glow breathe a hair past the edge without clipping */
-  overflow: visible;
-  line-height: 0;
-  /* promote to its own layer so the many small animations stay cheap */
-  transform: translateZ(0);
-}
-
-.sai-food-svg {
-  display: block;
-  overflow: visible;
-}
-
-/* ---- warm sunlight pool (soft, slow pulse) ------------------------- */
-
-.sai-food-pool {
-  transform-box: view-box;
-  transform-origin: 85px 112px;
-  animation: sai-food-pool-pulse 6.8s ease-in-out infinite;
-  will-change: transform, opacity;
-}
-
-@keyframes sai-food-pool-pulse {
-  0%, 100% { transform: scale(1);    opacity: 0.82; }
-  50%      { transform: scale(1.05); opacity: 1;    }
-}
-
-/* ---- berry bush (gentle overall rustle) ---------------------------- */
-
-.sai-food-bush {
-  transform-box: view-box;
-  transform-origin: 66px 88px;           /* pivot at the base of the bush */
-  animation: sai-food-rustle 6.5s ease-in-out infinite;
-  will-change: transform;
-}
-
-@keyframes sai-food-rustle {
-  0%, 100% { transform: rotate(0deg)    skewX(0deg);   }
-  20%      { transform: rotate(-1deg)   skewX(1.3deg); }
-  45%      { transform: rotate(0.7deg)  skewX(-0.9deg);}
-  70%      { transform: rotate(-0.4deg) skewX(0.6deg); }
-}
-
-/* leaf layers — parallax sway on top of the bush rustle.
-   fill-box => pivot resolves against each layer's own bbox, correct
-   even though the parent bush is itself being transformed. */
-.sai-food-leaves {
-  transform-box: fill-box;
-  will-change: transform;
-}
-
-.sai-food-leaves-a {                       /* back / dark leaves: slow, wide */
-  transform-origin: 50% 100%;
-  animation: sai-food-leaf-a 5.3s ease-in-out infinite;
-  animation-delay: -1s;
-}
-
-.sai-food-leaves-b {                       /* front / bright leaves: quicker */
-  transform-origin: 50% 100%;
-  animation: sai-food-leaf-b 4.6s ease-in-out infinite;
-  animation-delay: -2.2s;
-}
-
-@keyframes sai-food-leaf-a {
-  0%, 100% { transform: rotate(0deg);    }
-  33%      { transform: rotate(1.6deg);  }
-  66%      { transform: rotate(-1.2deg); }
-}
-
-@keyframes sai-food-leaf-b {
-  0%, 100% { transform: rotate(0deg)    skewX(0deg);    }
-  30%      { transform: rotate(-1.8deg) skewX(-1.2deg); }
-  60%      { transform: rotate(1.4deg)  skewX(1deg);    }
-}
-
-/* ---- berries (two of them wobble, occasionally) -------------------- */
-
-.sai-food-berries {                        /* structural container */
-  transform-box: view-box;
-}
-
-/* each wobble berry sets its own transform-origin inline (top of berry,
-   so it swings like fruit on a stem); view-box makes those px scene-space. */
-.sai-food-berry-wob {
-  transform-box: view-box;
-  animation: sai-food-berry-wob 4.8s ease-in-out infinite;
-  will-change: transform;
-}
-
-/* stagger the two wobble berries (2nd and 6th children of the group) */
-.sai-food-berries > g:nth-child(2) { animation-delay: -1.7s; }
-.sai-food-berries > g:nth-child(6) { animation-delay: -3.3s; }
-
-@keyframes sai-food-berry-wob {
-  0%, 55%, 100% { transform: rotate(0deg);    }  /* mostly still ...        */
-  63%           { transform: rotate(8deg);    }  /* ... then a little swing */
-  72%           { transform: rotate(-6deg);   }
-  81%           { transform: rotate(3.5deg);  }
-  90%           { transform: rotate(-1.5deg); }
-}
-
-/* ---- mossy stump + nut pile (grounded, static props) --------------- */
-
-.sai-food-stump {
-  transform-box: view-box;                 /* deliberately still — anchors the scene */
-}
-
-.sai-food-nuts {
-  transform-box: view-box;                 /* deliberately still */
-}
-
-/* ---- mushroom cluster (each cap sways) ----------------------------- */
-
-.sai-food-mush {                           /* structural container */
-  transform-box: view-box;
-}
-
-/* transform-origin + a staggering animation-delay are supplied inline
-   per mushroom; view-box makes those px values scene-space. */
-.sai-food-mush-sway {
-  transform-box: view-box;
-  animation: sai-food-mush-sway 4.2s ease-in-out infinite;
-  will-change: transform;
-}
-
-@keyframes sai-food-mush-sway {
-  0%, 100% { transform: rotate(-2.4deg); }
-  50%      { transform: rotate(2.4deg);  }
-}
-
-/* ---- woven basket + spilled fruit (grounded, static) --------------- */
-
-.sai-food-basket {
-  transform-box: view-box;                 /* heavy prop, stays put */
-}
-
-.sai-food-spill {
-  transform-box: view-box;                 /* fruit at rest on the ground */
-}
-
-/* ---- bee (loops a flight path with fast fluttering wings) ---------- */
-
-/* The bee is authored at (0,0); its whole position comes from this path.
-   fill-box keeps the banking rotation around the bee's own centre. */
-.sai-food-bee {
-  transform-box: fill-box;
-  transform-origin: 50% 50%;
-  animation: sai-food-bee-fly 8.5s ease-in-out infinite;
-  will-change: transform;
-}
-
-@keyframes sai-food-bee-fly {
-  0%   { transform: translate(118px, 46px)  rotate(10deg);  }
-  14%  { transform: translate(86px, 30px)   rotate(-4deg);  }
-  28%  { transform: translate(48px, 42px)   rotate(-16deg); }
-  42%  { transform: translate(34px, 72px)   rotate(4deg);   }
-  56%  { transform: translate(54px, 104px)  rotate(12deg);  }
-  70%  { transform: translate(104px, 114px) rotate(-2deg);  }
-  84%  { transform: translate(140px, 76px)  rotate(-14deg); }
-  100% { transform: translate(118px, 46px)  rotate(10deg);  }
-}
-
-/* a light vertical bob layered on top of the flight path */
-.sai-food-bee-body {
-  animation: sai-food-bee-bob 1.1s ease-in-out infinite;
-  will-change: transform;
-}
-
-@keyframes sai-food-bee-bob {
-  0%, 100% { transform: translateY(0);      }
-  50%      { transform: translateY(-1.8px); }
-}
-
-/* fast wing flutter — hinge at the wings' lower edge (near the body) */
-.sai-food-bee-wing {
-  transform-box: fill-box;
-  transform-origin: 50% 100%;
-  animation: sai-food-wing-flutter 0.16s ease-in-out infinite;
-  will-change: transform;
-}
-
-@keyframes sai-food-wing-flutter {
-  0%, 100% { transform: scaleY(1)    rotate(0deg);   }
-  50%      { transform: scaleY(0.42) rotate(-10deg); }
-}
-
-/* ---- rim-light glint / occasional sparkle across the pool ---------- */
-
-.sai-food-rim {
-  transform-box: view-box;
-  transform-origin: 70px 96px;
-  animation: sai-food-glint 5.6s ease-in-out infinite;
-  animation-delay: -1.2s;
-  will-change: transform, opacity;
-}
-
-@keyframes sai-food-glint {
-  0%, 100% { transform: translateX(-7px) scaleX(0.9); opacity: 0.05; }
-  40%      {                                           opacity: 0.18; }
-  50%      { transform: translateX(7px)  scaleX(1.1); opacity: 0.22; }
-  60%      {                                           opacity: 0.14; }
-}
-
-/* ===================================================================
-   Respect reduced-motion: stop every loop. The bee is authored at
-   (0,0), so park it at a resting spot near the blooms instead of
-   leaving it stuck in the corner.
-   =================================================================== */
-
-@media (prefers-reduced-motion: reduce) {
-  .sai-food-pool,
-  .sai-food-bush,
-  .sai-food-leaves-a,
-  .sai-food-leaves-b,
-  .sai-food-berry-wob,
-  .sai-food-mush-sway,
-  .sai-food-bee,
-  .sai-food-bee-body,
-  .sai-food-bee-wing,
-  .sai-food-rim {
-    animation: none;
-  }
-
-  .sai-food-bee {
-    transform: translate(116px, 48px) rotate(-3deg);
-  }
-}
-
-
-/* ==================== play station ==================== */
-.sai-play-root {
-  position: relative;
-  transform: translate(-50%, -50%);
-  filter: drop-shadow(0 10px 16px rgba(8, 20, 12, 0.45));
-}
-.sai-play-root > svg,
-.sai-play-root > div { position: absolute; }
-
-.sai-play-ground { left: 0; top: 0; }
-
-/* ambient glow breathing */
-.sai-play-glow { transform-box: fill-box; transform-origin: center; animation: sai-play-glowpulse 4.6s ease-in-out infinite; }
-@keyframes sai-play-glowpulse {
-  0%, 100% { opacity: 0.75; transform: scale(0.97); }
-  50% { opacity: 1; transform: scale(1.05); }
-}
-
-/* grass sway */
-.sai-play-grass { animation: sai-play-sway 3.4s ease-in-out infinite; will-change: transform; }
-@keyframes sai-play-sway {
-  0%, 100% { transform: rotate(-4deg); }
-  50% { transform: rotate(5deg); }
-}
-
-/* blossoms */
-.sai-play-blossom { will-change: transform; }
-.sai-play-bloom { transform-box: fill-box; transform-origin: center; animation: sai-play-bloomsway 3.8s ease-in-out infinite; }
-@keyframes sai-play-bloomsway {
-  0%, 100% { transform: rotate(-6deg) scale(0.97); }
-  50% { transform: rotate(6deg) scale(1.04); }
-}
-
-/* bunting */
-.sai-play-bunting { left: 0; top: -6px; }
-.sai-play-flag { animation: sai-play-flagwave 2.4s ease-in-out infinite; will-change: transform; }
-@keyframes sai-play-flagwave {
-  0%, 100% { transform: rotate(-7deg); }
-  50% { transform: rotate(7deg); }
-}
-
-/* kite */
-.sai-play-kite { animation: sai-play-kitebob 4.2s ease-in-out infinite; will-change: transform; }
-@keyframes sai-play-kitebob {
-  0%, 100% { transform: translate(0, 0) rotate(-6deg); }
-  50% { transform: translate(-6px, 8px) rotate(7deg); }
-}
-.sai-play-kitetail { animation: sai-play-tailwiggle 1.6s ease-in-out infinite; transform-box: fill-box; transform-origin: top center; }
-@keyframes sai-play-tailwiggle {
-  0%, 100% { transform: rotate(-8deg); }
-  50% { transform: rotate(8deg); }
-}
-.sai-play-kitebow { animation: sai-play-bowpulse 1.6s ease-in-out infinite; }
-@keyframes sai-play-bowpulse { 0%,100% { opacity: 0.85; } 50% { opacity: 1; } }
-
-/* pinwheel */
-.sai-play-spin { transform-box: fill-box; transform-origin: center; animation: sai-play-spin 1.9s linear infinite; }
-@keyframes sai-play-spin { to { transform: rotate(360deg); } }
-
-/* ball bounce with squash & stretch */
-.sai-play-ballwrap { width: 0; height: 0; }
-.sai-play-ball {
-  position: absolute; left: -16px; top: -16px; width: 32px; height: 32px;
-  transform-origin: bottom center;
-  animation: sai-play-bounce 1.5s cubic-bezier(0.3, 0, 0.2, 1) infinite;
-  will-change: transform;
-}
-@keyframes sai-play-bounce {
-  0%   { transform: translateY(-46px) scaleY(1.08) scaleX(0.94); }
-  45%  { transform: translateY(0) scaleY(1) scaleX(1); }
-  55%  { transform: translateY(0) scaleY(0.72) scaleX(1.24); }
-  65%  { transform: translateY(-10px) scaleY(1.06) scaleX(0.96); }
-  100% { transform: translateY(-46px) scaleY(1.08) scaleX(0.94); }
-}
-.sai-play-ballshadow {
-  position: absolute; left: -13px; top: 12px; width: 26px; height: 8px; border-radius: 50%;
-  background: radial-gradient(ellipse, rgba(10, 24, 14, 0.5), rgba(10, 24, 14, 0));
-  animation: sai-play-ballsh 1.5s cubic-bezier(0.3, 0, 0.2, 1) infinite;
-  will-change: transform, opacity;
-}
-@keyframes sai-play-ballsh {
-  0%   { transform: scale(0.5); opacity: 0.35; }
-  45%  { transform: scale(1); opacity: 0.8; }
-  55%  { transform: scale(1.15); opacity: 0.85; }
-  100% { transform: scale(0.5); opacity: 0.35; }
-}
-
-/* butterflies */
-.sai-play-bf1, .sai-play-bf2 { left: 0; top: 0; will-change: transform; }
-.sai-play-bf1 { animation: sai-play-path1 9s ease-in-out infinite; }
-.sai-play-bf2 { animation: sai-play-path2 11s ease-in-out infinite; }
-@keyframes sai-play-path1 {
-  0%   { transform: translate(30px, 60px) rotate(-6deg); }
-  25%  { transform: translate(70px, 30px) rotate(8deg); }
-  50%  { transform: translate(120px, 54px) rotate(-4deg); }
-  75%  { transform: translate(80px, 90px) rotate(10deg); }
-  100% { transform: translate(30px, 60px) rotate(-6deg); }
-}
-@keyframes sai-play-path2 {
-  0%   { transform: translate(130px, 100px) rotate(6deg); }
-  30%  { transform: translate(96px, 70px) rotate(-8deg); }
-  55%  { transform: translate(50px, 96px) rotate(6deg); }
-  80%  { transform: translate(100px, 120px) rotate(-6deg); }
-  100% { transform: translate(130px, 100px) rotate(6deg); }
-}
-.sai-play-fly { transform-box: fill-box; transform-origin: center; animation: sai-play-flybob 1.1s ease-in-out infinite; }
-@keyframes sai-play-flybob { 0%,100% { transform: translateY(-1px); } 50% { transform: translateY(2px); } }
-.sai-play-wingL, .sai-play-wingR { transform-box: fill-box; }
-.sai-play-wingL { transform-origin: right center; animation: sai-play-flapL 0.28s ease-in-out infinite; }
-.sai-play-wingR { transform-origin: left center; animation: sai-play-flapR 0.28s ease-in-out infinite; }
-@keyframes sai-play-flapL { 0%,100% { transform: scaleX(1); } 50% { transform: scaleX(0.35); } }
-@keyframes sai-play-flapR { 0%,100% { transform: scaleX(1); } 50% { transform: scaleX(0.35); } }
-
-/* sparkles */
-.sai-play-spark { will-change: transform, opacity; animation: sai-play-twinkle 2.6s ease-in-out infinite; filter: drop-shadow(0 0 3px rgba(255, 243, 196, 0.8)); }
-@keyframes sai-play-twinkle {
-  0%, 100% { opacity: 0; transform: scale(0.3) rotate(0deg); }
-  50% { opacity: 1; transform: scale(1) rotate(45deg); }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sai-play-glow, .sai-play-grass, .sai-play-bloom, .sai-play-flag,
-  .sai-play-kite, .sai-play-kitetail, .sai-play-kitebow, .sai-play-spin,
-  .sai-play-ball, .sai-play-ballshadow, .sai-play-bf1, .sai-play-bf2,
-  .sai-play-fly, .sai-play-wingL, .sai-play-wingR, .sai-play-spark {
-    animation: none !important;
-  }
-  .sai-play-spark { opacity: 0.85; }
-}
-
-
 /* ==================== v0.9 species rigs ==================== */
 /* per-species gait: stride angle + tempo */
 .sai-crit--bear{ --sai-swing:15deg; --sai-gait:.64s; }
@@ -1111,4 +734,47 @@ body {
   .sai-sprite[data-state="friendly"] .sai-crit-tail,
   .sai-sprite[data-state="friendly"] .sai-crit-ear,
   .sai-sprite[data-state="friendly"] .sai-crit-wing{ animation:none; }
+}
+
+
+/* ==================== v0.11 swimming & splash ==================== */
+/* Sprites get data-swimming="1" while a water-capable animal is inside the
+   lake boundary. Placed LAST in the file so ties against walk/fight rules
+   resolve in favor of the water look. */
+
+/* floating ripple ring where the ground shadow used to be */
+.sai-sprite[data-swimming="1"]::before{ content:""; position:absolute; left:50%; top:66%; width:112%; height:40%;
+  transform:translate(-50%,-50%); border-radius:50%; pointer-events:none; z-index:-1;
+  background:radial-gradient(ellipse, rgba(190,235,255,.30) 0%, rgba(190,235,255,.12) 45%, rgba(190,235,255,0) 72%);
+  border:2px solid rgba(225,248,255,.5);
+  animation:sai-swim-ring 2.6s ease-in-out infinite; }
+@keyframes sai-swim-ring{ 0%,100%{opacity:.6; transform:translate(-50%,-50%) scale(1);} 50%{opacity:.95; transform:translate(-50%,-50%) scale(1.07);} }
+
+/* legs tuck under the water line; the ground shadow gives way to the ripple */
+.sai-sprite[data-swimming="1"] .sai-crit-leg{ opacity:0; }
+.sai-sprite[data-swimming="1"] .sai-crit-shadow{ opacity:0; animation:none; }
+
+/* the whole sprite sits lower and bobs with the water */
+.sai-sprite[data-swimming="1"] .sai-crit-root{ animation:sai-crit-swimbob 2.4s ease-in-out infinite; }
+@keyframes sai-crit-swimbob{ 0%,100%{transform:translateY(7px) rotate(-1.2deg);} 50%{transform:translateY(10px) rotate(1.4deg);} }
+
+/* paddling, not marching: calm body while moving through water */
+.sai-sprite[data-swimming="1"] .sai-crit-body{ animation:sai-crit-paddlebody 2.4s ease-in-out infinite; }
+@keyframes sai-crit-paddlebody{ 0%,100%{transform:translateY(0) scaleY(1);} 50%{transform:translateY(-1.5px) scaleY(1.01);} }
+
+/* in-water engagements: dust becomes SPLASH (recolored + taller arc) */
+.sai-sprite[data-swimming="1"] .sai-crit-dust circle{ fill:#cdeefb; }
+.sai-sprite[data-swimming="1"][data-state="fight"] .sai-crit-dust{ opacity:1; animation:sai-crit-splash .5s ease-out infinite; }
+.sai-sprite[data-swimming="1"][data-state="friendly"] .sai-crit-dust{ opacity:1; animation:sai-crit-splash .95s ease-out infinite; }
+@keyframes sai-crit-splash{ 0%{opacity:.95; transform:translateY(3px) scale(.5);} 60%{opacity:.7;} 100%{opacity:0; transform:translateY(-16px) scale(1.7);} }
+
+/* fighting in water: no rearing on hidden legs — churn the body instead */
+.sai-sprite[data-swimming="1"][data-state="fight"] .sai-crit-body{ animation:sai-crit-churn .4s ease-in-out infinite; }
+@keyframes sai-crit-churn{ 0%,100%{transform:rotate(-2deg) translateY(0);} 50%{transform:rotate(2.5deg) translateY(-2px);} }
+
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-swimming="1"]::before,
+  .sai-sprite[data-swimming="1"] .sai-crit-root,
+  .sai-sprite[data-swimming="1"] .sai-crit-body,
+  .sai-sprite[data-swimming="1"] .sai-crit-dust{ animation:none; }
 }
