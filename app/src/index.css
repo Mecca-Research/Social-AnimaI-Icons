@@ -978,3 +978,15 @@ body {
 @media (prefers-reduced-motion: reduce){
   .sai-sprite[data-state="glide"] .sai-crit-root{ animation:none; }
 }
+
+/* ==================== v0.20 canada goose ==================== */
+/* deliberate waddle: slow gait, head-bob strut on the long neck */
+.sai-crit--goose{ --sai-swing:12deg; --sai-gait:.55s; }
+.sai-sprite[data-walking="1"] .sai-crit--goose .sai-crit-root{ animation:sai-goose-waddle var(--sai-gait,.55s) ease-in-out infinite; }
+.sai-sprite[data-walking="1"] .sai-crit--goose .sai-crit-head{ animation:sai-goose-neckbob var(--sai-gait,.55s) ease-in-out infinite; }
+@keyframes sai-goose-waddle{ 0%,100%{transform:rotate(1.6deg);} 50%{transform:rotate(4deg);} }
+@keyframes sai-goose-neckbob{ 0%,100%{transform:translate(0,0) rotate(0);} 50%{transform:translate(2.6px,1.6px) rotate(3deg);} }
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-walking="1"] .sai-crit--goose .sai-crit-root,
+  .sai-sprite[data-walking="1"] .sai-crit--goose .sai-crit-head{ animation:none; }
+}
