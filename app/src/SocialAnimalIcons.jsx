@@ -164,7 +164,7 @@ const { fences: NEIGHBORHOOD_FENCES, yards: NEIGHBORHOOD_YARDS } = (() => {
     const sy = topRow ? yb - ty : yy;                                            // street side, driveway gap
     segs.push({ x: yx, y: sy, w: (gcx - gw / 2) - yx, h: ty });
     segs.push({ x: gcx + gw / 2, y: sy, w: (yx + yw) - (gcx + gw / 2), h: ty });
-    // the yard interior + its driveway-gap exit, for the dog's 40s time limit
+    // the yard interior + its driveway-gap exit, for the dog's 80s time limit
     yards.push({ x: yx, y: yy, w: yw, h: yh, gx: gcx, topRow });
   }
   return { fences: segs, yards };
@@ -246,9 +246,20 @@ function inAnyFence(bounds, fences, x, y, m = 6) {
 // notice a dog that's been stuck nosing the same fence.
 function keepOutOfFences(a, bounds, fences) {
   const m = 5;
+  const px = a._ix ?? a.x, py = a._iy ?? a.y;
   for (const f of fences) {
     const l = f.x * bounds.w - m, r2 = (f.x + f.w) * bounds.w + m;
     const t = f.y * bounds.h - m, b2 = (f.y + f.h) * bounds.h + m;
+    // swept check: one fast step (a sprint frame) must never jump the
+    // whole thin rail — if the step crossed it, clamp at the near side
+    if (a.y > t && a.y < b2) {
+      if (px <= l && a.x >= r2) { a.x = l; if (a.vx > 0) a.vx = 0; a._fenceAway = { x: -1, y: 0 }; a._fenceHit = performance.now(); continue; }
+      if (px >= r2 && a.x <= l) { a.x = r2; if (a.vx < 0) a.vx = 0; a._fenceAway = { x: 1, y: 0 }; a._fenceHit = performance.now(); continue; }
+    }
+    if (a.x > l && a.x < r2) {
+      if (py <= t && a.y >= b2) { a.y = t; if (a.vy > 0) a.vy = 0; a._fenceAway = { x: 0, y: -1 }; a._fenceHit = performance.now(); continue; }
+      if (py >= b2 && a.y <= t) { a.y = b2; if (a.vy < 0) a.vy = 0; a._fenceAway = { x: 0, y: 1 }; a._fenceHit = performance.now(); continue; }
+    }
     if (a.x <= l || a.x >= r2 || a.y <= t || a.y >= b2) continue;
     const dl = a.x - l, dr = r2 - a.x, dt2 = a.y - t, db = b2 - a.y;
     const min = Math.min(dl, dr, dt2, db);
@@ -267,7 +278,7 @@ const EAVE_Z = 26;      // flight height on approach — the hop covers the rest
 const PERCH_P = 0.4;    // birds seek the rooftops 40% of the time
 const PATROL_P = 0.4;   // ...and so does the cat
 const ROOF_STATES = new Set(["roofwalk", "patrol", "crouch", "dash"]);
-const AIR_STATES = new Set(["takeoff", "flyup", "roofhop", "flydown"]);
+const AIR_STATES = new Set(["takeoff", "flyup", "roofhop", "flydown", "glide"]);
 
 function roofRect(bounds, hs, m = 18) {
   return { l: hs.x * bounds.w + m, r: (hs.x + hs.w) * bounds.w - m, t: hs.y * bounds.h + m, b: (hs.y + hs.h) * bounds.h - m };
@@ -343,7 +354,7 @@ const WORLDS = {
   neighborhood: {
     key: "neighborhood", label: "🏘️ Neighborhood", roster: PET_SPECIES,
     hasWater: false, houses: NEIGHBORHOOD_HOUSES, fences: NEIGHBORHOOD_FENCES,
-    yards: NEIGHBORHOOD_YARDS, // dog gets 40s in a yard, then walks out
+    yards: NEIGHBORHOOD_YARDS, // dog gets 80s in a yard, then walks out
     pool: NEIGHBORHOOD_POOL, swim: POOL_SWIM_P,
     perching: true, // birds perch on roofs; the cat patrols them
     fallback: { x: .45, y: .48 }, // the street is always open
@@ -1844,11 +1855,13 @@ function stepWorld(world, cfg, dt) {
   for (const a of agents) {
     if (a.dragging) continue;
     const busy = a.state === "fight" || a.state === "friendly" || a.state === "rescue" ||
-      a.state === "sniff" || a.state === "leaveyard" || a.state === "seekroof" ||
+      a.state === "sniff" || a.state === "walkoff" || a.state === "leaveyard" || a.state === "seekroof" ||
       AIR_STATES.has(a.state) || ROOF_STATES.has(a.state);
     if (now >= a.intentUntil && !busy) {
       const swimP = (def.hasWater || def.pool) ? def.swim?.[a.species] || 0 : 0;
-      const perchP = def.perching && FLYERS.has(a.species) ? PERCH_P : 0;
+      const perchP = !def.perching ? 0
+        : FLYERS.has(a.species) ? PERCH_P
+        : a.species === "sugarglider" ? 0.35 : 0; // the glider climbs up too
       const patrolP = def.perching && a.species === "cat" ? PATROL_P : 0;
       const roll = Math.random();
       a.intent = roll < swimP ? "swim"
@@ -2025,8 +2038,25 @@ function stepWorld(world, cfg, dt) {
           }
         }
         if ((a.state === "roofwalk" || a.state === "patrol") && now >= a.stateUntil) {
-          a.state = "flydown";
-          a.airTarget = a.species === "cat" ? besideRoof(world, hs, a.species) : nearbyGround(world, a);
+          if (a.species === "sugarglider") {
+            // the glider LAUNCHES: a long flat sail to a clear spot a good
+            // distance out — or clean off the map, where the edge wrap
+            // brings him back in at a random entry point
+            let t2 = null;
+            for (let i = 0; i < 12 && !t2; i++) {
+              const ang = rand(0, Math.PI * 2), r = rand(260, 420);
+              const x = a.x + Math.cos(ang) * r, y = a.y + Math.sin(ang) * r;
+              const off = x < 30 || x > bounds.w - 30 || y < 50 || y > bounds.h - 50;
+              if (off || spawnSafe(world, x, y, a.species)) t2 = { x, y };
+            }
+            const ang2 = rand(0, Math.PI * 2);
+            a.airTarget = t2 || { x: a.x + Math.cos(ang2) * 340, y: a.y + Math.sin(ang2) * 340 };
+            a.state = "glide";
+            a._glideFrom = { d: Math.hypot(a.airTarget.x - a.x, a.airTarget.y - a.y) };
+          } else {
+            a.state = "flydown";
+            a.airTarget = a.species === "cat" ? besideRoof(world, hs, a.species) : nearbyGround(world, a);
+          }
           a.intent = "wander"; a.intentUntil = now + rand(INTENT_MIN_S * 1000, INTENT_MAX_S * 1000);
         }
       }
@@ -2072,6 +2102,23 @@ function stepWorld(world, cfg, dt) {
           a.z = 0; a.roofI = -1; a.airTarget = null;
           a.state = "cooldown"; a.noEventUntil = Math.max(a.noEventUntil, now + 1200);
           if (a.species === "cat") a._seekCd = now + 6000; // breather before the next bird hunt
+        }
+      }
+    } else if (a.state === "glide") {
+      // the sugar glider's sail: steady speed, altitude bleeding off in
+      // proportion to the distance still to cover — a flat descent line
+      const t = a.airTarget;
+      if (!t) { a.state = "wander"; a.z = 0; }
+      else {
+        const dx = t.x - a.x, dy = t.y - a.y, d = Math.hypot(dx, dy) || 1;
+        const sp = cfg.speed * 1.15;
+        a.vx = (dx / d) * sp; a.vy = (dy / d) * sp;
+        const D = Math.max(a._glideFrom ? a._glideFrom.d : 320, 1);
+        const zT = Math.min(ROOF_Z, (d / D) * ROOF_Z);
+        a.z += (zT - a.z) * Math.min(1, dt * 5);
+        if (d < 20) {
+          a.z = 0; a.roofI = -1; a.airTarget = null; a._glideFrom = null;
+          a.state = "cooldown"; a.noEventUntil = Math.max(a.noEventUntil, now + 1200);
         }
       }
     }
@@ -2152,9 +2199,25 @@ function stepWorld(world, cfg, dt) {
     if (a.state === "sniff") {
       a.vx = 0; a.vy = 0;
       if (now >= a.stateUntil) {
+        // sniff done → a HARD walk-away: straight line off the fence,
+        // immune to wander jitter, before returning to random behavior
         const aw = a._fenceAway || { x: 0, y: 1 };
-        a.state = "wander"; a._faceDir = 0;
-        a.vx = aw.x * cfg.speed * 0.9; a.vy = aw.y * cfg.speed * 0.9;
+        a.state = "walkoff"; a.stateUntil = now + 1500; a._faceDir = 0;
+        a._walkoffDir = { x: aw.x, y: aw.y };
+        a._fenceHit = 0; a._fenceStuckSince = 0;
+      }
+    } else if (a.state === "walkoff") {
+      // caught a second rail mid-walk-away (a fence corner)? fold its
+      // outward normal in, so the exit becomes the corner's diagonal
+      if (a._fenceHit && now - a._fenceHit < 200 && a._fenceAway) {
+        const bx = a._walkoffDir.x + a._fenceAway.x, by = a._walkoffDir.y + a._fenceAway.y;
+        const bd = Math.hypot(bx, by) || 1;
+        a._walkoffDir = { x: bx / bd, y: by / bd };
+      }
+      a.vx = a._walkoffDir.x * cfg.speed * 0.9; a.vy = a._walkoffDir.y * cfg.speed * 0.9;
+      const nearEdge = a.x < 40 || a.x > bounds.w - 40 || a.y < 60 || a.y > bounds.h - 60;
+      if (now >= a.stateUntil || nearEdge) {
+        a.state = "wander"; a._walkoffDir = null;
         a._fenceHit = 0; a._fenceStuckSince = 0;
         a.noEventUntil = Math.max(a.noEventUntil, now + 1500);
       }
@@ -2173,7 +2236,7 @@ function stepWorld(world, cfg, dt) {
       }
     }
 
-    // yard time limit: the dog may explore a fenced yard for up to 40s.
+    // yard time limit: the dog may explore a fenced yard for up to 80s.
     // When time's up it walks out through the driveway gap, then keeps
     // going to the middle of the road before resuming its wander. The
     // route is a waypoint chain (around the house via a side corridor if
@@ -2202,7 +2265,7 @@ function stepWorld(world, cfg, dt) {
         }
       } else if (a.z < 3 && yardAt(bounds, def.yards, a.x, a.y)) {
         if (!a._yardSince) a._yardSince = now;
-        else if (now - a._yardSince > 40000 && isFreeState(a)) {
+        else if (now - a._yardSince > 80000 && isFreeState(a)) {
           const yd = yardAt(bounds, def.yards, a.x, a.y);
           a.state = "leaveyard"; a._fenceStuckSince = 0;
           a._leaveYd = yd; a._leaveProg = null;
@@ -2255,14 +2318,14 @@ function stepWorld(world, cfg, dt) {
         const sp = cfg.speed * 0.6;
         a.vx = (ux / d) * sp; a.vy = (uy / d) * sp;
       } else {
-        // the dog runs around: random short sprints ~15% of its wander time
+        // the dog runs around: an occasional short sprint (~7% of wander time)
         if (a.species === "labrador" && a.z === 0) {
           if (now < (a._sprintUntil || 0)) {
             const spd = Math.hypot(a.vx, a.vy) || 1, k = cfg.speed * 1.9;
             a.vx = (a.vx / spd) * k; a.vy = (a.vy / spd) * k;
           } else {
-            if (a._sprintUntil) { // sprint just ended — ease off, rest a while
-              a._sprintUntil = 0; a._sprintCd = now + rand(5200, 8400);
+            if (a._sprintUntil) { // sprint just ended — ease off, rest a good while
+              a._sprintUntil = 0; a._sprintCd = now + rand(12000, 17600);
               a.vx *= 0.4; a.vy *= 0.4;
             } else if (now >= (a._sprintCd || 0)) {
               const base = Math.hypot(a.vx, a.vy) > 0.5 ? Math.atan2(a.vy, a.vx) : rand(0, Math.PI * 2);
@@ -2311,6 +2374,7 @@ function stepWorld(world, cfg, dt) {
       : now < (a._sprintUntil || 0) ? 2.0 : 1.2;
     const vlim = sp * vmul;
     a.vx = clamp(a.vx, -vlim, vlim); a.vy = clamp(a.vy, -vlim, vlim);
+    a._ix = a.x; a._iy = a.y; // pre-step position (for swept fence checks)
     if (a.state !== "friendly" && a.state !== "fight") { a.x += a.vx * dt; a.y += a.vy * dt; }
 
     const onRoof = a.roofI >= 0 && ROOF_STATES.has(a.state);

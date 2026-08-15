@@ -963,3 +963,18 @@ body {
   .sainb-glow,
   .sai-pool-glint{ animation:none; }
 }
+
+/* ==================== v0.18 sugar glider glide-down ==================== */
+/* membrane spread wide and flat, legs tucked away, a slow rocking sail —
+   overrides the generic air-lean and any walk-cycle motion */
+.sai-sprite[data-state="glide"] .sai-crit-root{ animation:sai-glide-rock 1.8s ease-in-out infinite; }
+.sai-sprite[data-state="glide"] .sai-crit-body{ animation:sai-glide-spread .45s ease-out forwards; }
+.sai-sprite[data-state="glide"] .sai-crit-head{ animation:none; transform:translate(1.4px,1px) rotate(4deg); }
+.sai-sprite[data-state="glide"] .sai-crit-leg{ opacity:0; }
+.sai-sprite[data-state="glide"] .sai-crit-tail{ animation:none; transform:rotate(16deg); }
+@keyframes sai-glide-spread{ 0%{transform:scaleX(1) scaleY(1);} 100%{transform:scaleX(1.24) scaleY(.76);} }
+@keyframes sai-glide-rock{ 0%,100%{transform:rotate(4deg) translateY(0);} 50%{transform:rotate(-5deg) translateY(2.4px);} }
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-state="glide"] .sai-crit-root,
+  .sai-sprite[data-state="glide"] .sai-crit-body{ animation:none; }
+}
