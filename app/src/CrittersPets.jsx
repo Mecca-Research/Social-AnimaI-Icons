@@ -35,21 +35,25 @@ function LabradorDraw({ uid }) {
         <BellyShade cx={57} cy={92} rx={20} />
       </g>
       <g className="sai-crit-head">
-        {/* big soft drop ears, clearly visible against the head */}
+        <circle cx="84" cy="45" r="20" fill={`url(#${uid}f)`} />
+        {/* lab ears: attached at the crown, FOLDED flat over the sides of
+            the head — rounded triangular flaps with a fold crease on top */}
         <g className="sai-crit-ear sai-crit-ear-l">
-          <path d="M 69 28 C 61 34 59 47 64 58 C 73 55 77 43 74 31 Z" fill={earC} />
-          <path d="M 67 35 C 63 40 62 49 65 54 C 70 51 73 43 71 36 Z" fill="#9c7440" opacity=".55" />
+          <path d="M 77 26.5 C 68 26 61 32 59 41 C 58 49 61 56 66 59 C 71 56 74 49 75 41 C 75.6 35.6 76.4 30.5 77 26.5 Z" fill={earC} />
+          <path d="M 77 26.5 C 71 27 65.5 30.5 62.5 36 C 67 33 72 31.4 76 31.2 Z" fill="#eccb92" opacity=".9" />
+          <path d="M 62 41 C 61.4 47.5 63.4 53.5 66.6 56.5" stroke="#9c7440" strokeWidth="1.4" fill="none" strokeLinecap="round" opacity=".55" />
         </g>
         <g className="sai-crit-ear sai-crit-ear-r">
-          <path d="M 103 24 C 112 29 115 44 109 56 C 99 54 94 42 96 29 Z" fill={earC} />
-          <path d="M 106 31 C 110 36 111 46 108 52 C 102 49 99 41 100 33 Z" fill="#9c7440" opacity=".55" />
+          <path d="M 91 25 C 100 24.5 107 30.5 109 39.5 C 110 47.5 107 54.5 102 57.5 C 97 54.5 94 47.5 93 39.5 C 92.4 34.1 91.6 29 91 25 Z" fill={earC} />
+          <path d="M 91 25 C 97 25.5 102.5 29 105.5 34.5 C 101 31.5 96 29.9 92 29.7 Z" fill="#eccb92" opacity=".9" />
+          <path d="M 106 39.5 C 106.6 46 104.6 52 101.4 55" stroke="#9c7440" strokeWidth="1.4" fill="none" strokeLinecap="round" opacity=".55" />
         </g>
-        <circle cx="84" cy="45" r="20" fill={`url(#${uid}f)`} />
-        <path d="M 68 58 Q 84 67 100 56 L 100 61 Q 84 72 68 63 Z" fill={collar} />
-        <circle cx="86" cy="67" r="2.8" fill="#f2c14e" stroke="#b8862e" strokeWidth=".6" />
-        <ellipse cx="94" cy="52.5" rx="10.5" ry="8" fill={cream} />
-        <path d="M 94 47.4 q 4.6 0 4.6 3.4 q 0 3 -4.6 3 q -4.6 0 -4.6 -3 q 0 -3.4 4.6 -3.4 Z" fill={noseC} />
-        <FaceKit lid={F[1]} e1={[77, 42]} e2={[93, 40]} er={3.2} iris={ink} mouth={[95, 59]} />
+        {/* collar sits BELOW the muzzle — a hair of separation */}
+        <path d="M 70 62 Q 84 71 98 60 L 98 65 Q 84 76 70 67 Z" fill={collar} />
+        <circle cx="85" cy="70" r="2.8" fill="#f2c14e" stroke="#b8862e" strokeWidth=".6" />
+        <ellipse cx="94" cy="51" rx="10" ry="7.4" fill={cream} />
+        <path d="M 94 46.4 q 4.6 0 4.6 3.4 q 0 3 -4.6 3 q -4.6 0 -4.6 -3 q 0 -3.4 4.6 -3.4 Z" fill={noseC} />
+        <FaceKit lid={F[1]} e1={[77, 42]} e2={[93, 40]} er={3.2} iris={ink} mouth={[95, 57]} />
       </g>
     </g>
   );
@@ -91,44 +95,46 @@ function FerretDraw({ uid }) {
 // ---------------- GUINEA PIG — soft loaf, clipped patches, petal ears ----------------
 function GuineaPigDraw({ uid }) {
   const F = ["#f7ead2", "#ecd6b2", "#c9a878"], caramel = "#d89a5a", choc = "#7a5230", ink = "#2a1808", noseC = "#e09aa4";
-  const loaf = "M 22 82 C 21 66 34 55 56 54 C 78 53 98 60 103 74 C 106 84 101 94 89 97 C 70 101 34 100 25 92 C 22 89 22 86 22 82 Z";
+  const loaf = "M 24 82 C 23 68 34 58 54 56 C 70 54.5 84 58 92 66 C 97 72 97 82 92 89 C 84 98 44 100 30 93 C 25 90 24 86 24 82 Z";
   return (
     <g transform="translate(60 106) scale(.92) translate(-60 -106)">
       <defs>
         <Fur id={`${uid}f`} c={F} />
         <clipPath id={`${uid}gp`}><path d={loaf} /></clipPath>
       </defs>
-      <Quad near={F[1]} far={F[2]} paw="#fff6e8" top={89} len={13} w={6.5} fx={74} bx={40} />
+      <Quad near={F[1]} far={F[2]} paw="#fff6e8" top={89} len={13} w={6.5} fx={72} bx={40} />
       <g className="sai-crit-body">
         <path d={loaf} fill={`url(#${uid}f)`} />
         <g clipPath={`url(#${uid}gp)`}>
-          {/* soft integrated patches, not paste-ons */}
-          <ellipse cx="33" cy="74" rx="21" ry="26" fill={caramel} opacity=".9" />
-          <ellipse cx="30" cy="82" rx="16" ry="18" fill="#b97f42" opacity=".3" />
-          <ellipse cx="98" cy="64" rx="16" ry="17" fill={choc} opacity=".9" />
-          <path d="M 46 62 q 5 -4 10 -2 M 52 74 q 5 -3 10 -1 M 44 84 q 5 -3 10 -1 M 64 60 q 5 -3 9 -1 M 60 72 q 5 -3 9 -1" stroke="#b99a6e" strokeWidth="1.4" fill="none" strokeLinecap="round" opacity=".55" />
-          <path d="M 24 96 Q 60 104 100 94 L 100 100 L 24 100 Z" fill="#fff6e8" opacity=".5" />
+          <ellipse cx="34" cy="74" rx="20" ry="25" fill={caramel} opacity=".9" />
+          <ellipse cx="31" cy="83" rx="15" ry="17" fill="#b97f42" opacity=".3" />
+          <path d="M 48 64 q 5 -4 10 -2 M 54 76 q 5 -3 10 -1 M 46 86 q 5 -3 10 -1 M 66 62 q 5 -3 9 -1" stroke="#b99a6e" strokeWidth="1.4" fill="none" strokeLinecap="round" opacity=".55" />
         </g>
-        <BellyShade cx={60} cy={100} rx={26} />
+        <BellyShade cx={58} cy={99} rx={24} />
       </g>
       <g className="sai-crit-head">
+        {/* a REAL chocolate head on the front of the loaf — the ears, eyes,
+            muzzle and whiskers all ride this one group, so the face moves
+            as a unit with the head bob */}
         <g className="sai-crit-ear sai-crit-ear-l">
-          <path d="M 73 54 C 68 47 70 40 77 39 C 80.5 44 79.5 51 76 55 Z" fill={choc} />
-          <path d="M 74.6 51 C 72.4 46.6 73.6 42.6 77 41.8 C 78.6 45.2 77.8 48.8 75.8 52 Z" fill="#a8765a" opacity=".7" />
+          <path d="M 72 50 C 67 43 69 36 76 35 C 79.5 40 78.5 47 75 51 Z" fill={choc} />
+          <path d="M 73.6 47 C 71.4 42.6 72.6 38.6 76 37.8 C 77.6 41.2 76.8 44.8 74.8 48 Z" fill="#a8765a" opacity=".7" />
         </g>
         <g className="sai-crit-ear sai-crit-ear-r">
-          <path d="M 91 51 C 89 43 93 37 100 38 C 101.6 44 98.6 50 94 54 Z" fill={choc} />
-          <path d="M 92.8 49 C 92 44.6 93.8 41 97 40.8 C 97.8 44.4 96.4 47.8 94.2 50.6 Z" fill="#a8765a" opacity=".7" />
+          <path d="M 93 48 C 91 40 95 34 102 35 C 103.6 41 100.6 47 96 51 Z" fill={choc} />
+          <path d="M 94.8 46 C 94 41.6 95.8 38 99 37.8 C 99.8 41.4 98.4 44.8 96.2 47.6 Z" fill="#a8765a" opacity=".7" />
         </g>
-        <ellipse cx="97" cy="73" rx="8" ry="6.6" fill="#fff6e8" />
-        <path d="M 101.5 67.5 l 3.8 2.6 -3.4 2.8 -3.6 -2.6 Z" fill={noseC} />
-        <path d="M 102 73.5 q 1.2 2.6 3.4 3 M 102 73.5 q -1.8 2.6 -4 3" stroke={ink} strokeWidth="1.5" fill="none" strokeLinecap="round" />
-        <path d="M 105 70 l 10 -2 M 105 73 l 10 1.4" stroke="#dcc9a8" strokeWidth="1" strokeLinecap="round" />
+        <circle cx="86" cy="66" r="17.5" fill={choc} />
+        <path d="M 72 60 C 77 53 95 52 100 59 C 93 56.5 79 57 72 60 Z" fill="#93683f" opacity=".8" />
+        <ellipse cx="96" cy="72" rx="8" ry="6.6" fill="#fff6e8" />
+        <path d="M 100.5 66.5 l 3.8 2.6 -3.4 2.8 -3.6 -2.6 Z" fill={noseC} />
+        <path d="M 101 72.5 q 1.2 2.6 3.4 3 M 101 72.5 q -1.8 2.6 -4 3" stroke={ink} strokeWidth="1.5" fill="none" strokeLinecap="round" />
+        <path d="M 104 69 l 10 -2 M 104 72 l 10 1.4" stroke="#dcc9a8" strokeWidth="1" strokeLinecap="round" />
         <g className="sai-crit-eyes-normal">
-          <circle cx="81" cy="65" r="3.6" fill="#fff" /><circle cx="81.9" cy="65" r="2.2" fill={ink} /><circle cx="82.6" cy="64.2" r=".8" fill="#fff" />
-          <circle cx="95" cy="63" r="3.4" fill="#fff" /><circle cx="95.9" cy="63" r="2.1" fill={ink} /><circle cx="96.5" cy="62.2" r=".75" fill="#fff" />
+          <circle cx="80" cy="63" r="3.6" fill="#fff" /><circle cx="80.9" cy="63" r="2.2" fill={ink} /><circle cx="81.6" cy="62.2" r=".8" fill="#fff" />
+          <circle cx="94" cy="61.5" r="3.4" fill="#fff" /><circle cx="94.9" cy="61.5" r="2.1" fill={ink} /><circle cx="95.5" cy="60.7" r=".75" fill="#fff" />
         </g>
-        <FaceKit lid={F[1]} e1={[81, 65]} e2={[95, 63]} er={3.5} drawEyes={false} mouths={false} blushCol="#f4a2b0" />
+        <FaceKit lid={choc} e1={[80, 63]} e2={[94, 61.5]} er={3.5} drawEyes={false} mouths={false} blushCol="#f4a2b0" />
       </g>
     </g>
   );

@@ -91,6 +91,7 @@ function CatDraw({ uid }) {
         <ellipse cx="92" cy="55" rx="8.5" ry="6.4" fill={belly} />
         <path d="M 92 51 l 3.4 2.4 -3.4 2.6 -3.4 -2.6 Z" fill={nose} />
         <path d="M 99 53 l 13 -3 M 100 56 l 13 0.6 M 99 58.6 l 12 3.4" stroke="#e6e9ec" strokeWidth="1.2" strokeLinecap="round" opacity=".9" />
+        <path d="M 85 53 l -13 -3 M 84 56 l -13 0.6 M 85 58.6 l -12 3.4" stroke="#e6e9ec" strokeWidth="1.2" strokeLinecap="round" opacity=".9" />
         <g className="sai-crit-eyes-normal">
           <circle cx="78" cy="43" r="3.2" fill={ink} /><circle cx="78.4" cy="43.2" r="1.7" fill={iris} /><circle cx="78.6" cy="43.4" r=".8" fill={ink} /><circle cx="79" cy="42" r=".8" fill="#fff" opacity=".95" />
           <circle cx="93" cy="42" r="3.2" fill={ink} /><circle cx="93.4" cy="42.2" r="1.7" fill={iris} /><circle cx="93.6" cy="42.4" r=".8" fill={ink} /><circle cx="94" cy="41" r=".8" fill="#fff" opacity=".95" />
