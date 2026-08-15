@@ -338,25 +338,27 @@ body {
    organic wobble; this adds a soft luminance pulse on top). */
 .sai-water-caustic {
   will-change: transform, opacity;
-  animation: sai-water-caustic 11s ease-in-out infinite;
+  animation: sai-water-caustic 22s ease-in-out infinite;
 }
+/* the light cycle is anchored at the DARK end: only a quarter of the old
+   swing above it, and twice as slow — the lake stays deep blue */
 @keyframes sai-water-caustic {
   0%,
   100% { opacity: 0.40; transform: translate(0, 0) scale(1); }
-  50%  { opacity: 0.72; transform: translate(3px, -2px) scale(1.03); }
+  50%  { opacity: 0.48; transform: translate(3px, -2px) scale(1.03); }
 }
 
-/* golden-hour sheen sweeps diagonally across the pond, brightest mid-sweep. */
+/* the sheen sweep, dimmed to a quarter of its old brightness + half speed */
 .sai-water-sheen {
   transform-box: fill-box;
   transform-origin: center;
   will-change: transform, opacity;
-  animation: sai-water-sheen 9s ease-in-out infinite;
+  animation: sai-water-sheen 18s ease-in-out infinite;
 }
 @keyframes sai-water-sheen {
   0%   { opacity: 0;    transform: translate(-30px, -22px); }
-  40%  { opacity: 0.85; }
-  60%  { opacity: 0.85; }
+  40%  { opacity: 0.21; }
+  60%  { opacity: 0.21; }
   100% { opacity: 0;    transform: translate(30px, 22px); }
 }
 
