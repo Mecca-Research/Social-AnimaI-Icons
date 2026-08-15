@@ -112,8 +112,8 @@ const STREET = { y: .42, h: .125, walk: .026 }; // asphalt band + sidewalk strip
 // white picket fences around each yard, with a gap at the driveway.
 // Thin rects in stage fractions — the scene draws pickets along these
 // exact rects, and only the labrador treats them as walls.
-const NEIGHBORHOOD_FENCES = (() => {
-  const segs = [];
+const { fences: NEIGHBORHOOD_FENCES, yards: NEIGHBORHOOD_YARDS } = (() => {
+  const segs = [], yards = [];
   const tx = .004, ty = .007;
   for (const hs of NEIGHBORHOOD_HOUSES) {
     const topRow = hs.y < .5;
@@ -130,9 +130,20 @@ const NEIGHBORHOOD_FENCES = (() => {
     const sy = topRow ? yb - ty : yy;                                            // street side, driveway gap
     segs.push({ x: yx, y: sy, w: (gcx - gw / 2) - yx, h: ty });
     segs.push({ x: gcx + gw / 2, y: sy, w: (yx + yw) - (gcx + gw / 2), h: ty });
+    // the yard interior + its driveway-gap exit, for the dog's 40s time limit
+    yards.push({ x: yx, y: yy, w: yw, h: yh, gx: gcx, topRow });
   }
-  return segs;
+  return { fences: segs, yards };
 })();
+
+// which fenced yard (if any) contains this point
+function yardAt(bounds, yards, x, y) {
+  for (const yd of yards) {
+    if (x > yd.x * bounds.w && x < (yd.x + yd.w) * bounds.w &&
+        y > yd.y * bounds.h && y < (yd.y + yd.h) * bounds.h) return yd;
+  }
+  return null;
+}
 
 function inAnyFence(bounds, fences, x, y, m = 6) {
   for (const f of fences) {
@@ -243,6 +254,7 @@ const WORLDS = {
   neighborhood: {
     key: "neighborhood", label: "🏘️ Neighborhood", roster: PET_SPECIES,
     hasWater: false, houses: NEIGHBORHOOD_HOUSES, fences: NEIGHBORHOOD_FENCES,
+    yards: NEIGHBORHOOD_YARDS, // dog gets 40s in a yard, then walks out
     perching: true, // birds perch on roofs; the cat patrols them
     fallback: { x: .45, y: .48 }, // the street is always open
     bg: "linear-gradient(165deg,#84b96a 0%,#6da457 46%,#568c44 100%)",
@@ -1084,7 +1096,7 @@ function NeighborhoodScene({ bounds }) {
 
   // items live INSIDE the fence lines (yards); mailboxes stand at driveways
   const items = [
-    { x: .055, y: .16, C: Can }, { x: .305, y: .335, C: Gnome }, { x: .30, y: .135, C: Ball },
+    { x: .055, y: .16, C: Can }, { x: .27, y: .34, C: Gnome }, { x: .268, y: .165, C: Ball },
     { x: .705, y: .125, C: Bowl }, { x: .487, y: .31, C: Yarn }, { x: .725, y: .30, C: Frisbee },
     { x: .265, y: .62, C: Bone }, { x: .40, y: .607, C: Skateboard },
     { x: .725, y: .62, C: Pot }, { x: .935, y: .86, C: Hose },
@@ -1646,7 +1658,7 @@ function stepWorld(world, cfg, dt) {
   for (const a of agents) {
     if (a.dragging) continue;
     const busy = a.state === "fight" || a.state === "friendly" || a.state === "rescue" ||
-      a.state === "sniff" || AIR_STATES.has(a.state) || ROOF_STATES.has(a.state);
+      a.state === "sniff" || a.state === "leaveyard" || AIR_STATES.has(a.state) || ROOF_STATES.has(a.state);
     if (now >= a.intentUntil && !busy) {
       const swimP = def.hasWater ? SWIM_P[a.species] || 0 : 0;
       const perchP = def.perching && FLYERS.has(a.species) ? PERCH_P : 0;
@@ -1875,6 +1887,41 @@ function stepWorld(world, cfg, dt) {
       } else if (a._fenceStuckSince && (!a._fenceHit || now - a._fenceHit > 900)) {
         a._fenceStuckSince = 0;
       }
+    }
+
+    // yard time limit: the dog may explore a fenced yard for up to 40s.
+    // When time's up it walks out through the driveway gap, then keeps
+    // going to the middle of the road before resuming its wander.
+    if (a.species === "labrador" && def.yards) {
+      if (a.state === "leaveyard") {
+        if (!a._leaveTarget) { a.state = "wander"; a._yardSince = 0; }
+        else {
+          const dx = a._leaveTarget.x - a.x, dy = a._leaveTarget.y - a.y;
+          const d = Math.hypot(dx, dy);
+          if (d < 22) {
+            if (a._leavePhase === 1) {
+              a._leavePhase = 2; // cleared the gap — now out to the road
+              a._leaveTarget = { x: a._leaveTarget.x, y: (STREET.y + STREET.h / 2) * bounds.h };
+            } else {
+              a.state = "wander"; a._leaveTarget = null; a._yardSince = 0;
+              a.noEventUntil = Math.max(a.noEventUntil, now + 1200);
+            }
+          } else {
+            const lsp = cfg.speed * 0.95;
+            a.vx = (dx / d) * lsp; a.vy = (dy / d) * lsp;
+          }
+        }
+      } else if (a.z < 3 && yardAt(bounds, def.yards, a.x, a.y)) {
+        if (!a._yardSince) a._yardSince = now;
+        else if (now - a._yardSince > 40000 && isFreeState(a)) {
+          const yd = yardAt(bounds, def.yards, a.x, a.y);
+          a.state = "leaveyard"; a._leavePhase = 1; a._fenceStuckSince = 0;
+          a._leaveTarget = {
+            x: yd.gx * bounds.w,
+            y: yd.topRow ? (yd.y + yd.h) * bounds.h + 26 : yd.y * bounds.h - 26,
+          };
+        }
+      } else if (a._yardSince) a._yardSince = 0;
     }
 
     if (a.state === "separate") {

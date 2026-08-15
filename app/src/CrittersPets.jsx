@@ -48,9 +48,11 @@ function LabradorDraw({ uid }) {
           <path d="M 91 25 C 97 25.5 102.5 29 105.5 34.5 C 101 31.5 96 29.9 92 29.7 Z" fill="#eccb92" opacity=".9" />
           <path d="M 106 39.5 C 106.6 46 104.6 52 101.4 55" stroke="#9c7440" strokeWidth="1.4" fill="none" strokeLinecap="round" opacity=".55" />
         </g>
-        {/* collar sits BELOW the muzzle — a hair of separation */}
-        <path d="M 70 62 Q 84 71 98 60 L 98 65 Q 84 76 70 67 Z" fill={collar} />
-        <circle cx="85" cy="70" r="2.8" fill="#f2c14e" stroke="#b8862e" strokeWidth=".6" />
+        {/* collar wraps the neck at the neck's angle (back end high, front end
+            low) and stays clear of the mouth with a hair of separation */}
+        <path d="M 66 55 Q 82 68 97 63 L 97.5 68.5 Q 81 74 64.5 60.5 Z" fill={collar} />
+        <path d="M 66.8 56.2 Q 82 68.6 96.4 64" stroke="#b23a3a" strokeWidth="1" fill="none" opacity=".55" />
+        <circle cx="83" cy="73" r="2.8" fill="#f2c14e" stroke="#b8862e" strokeWidth=".6" />
         <ellipse cx="94" cy="51" rx="10" ry="7.4" fill={cream} />
         <path d="M 94 46.4 q 4.6 0 4.6 3.4 q 0 3 -4.6 3 q -4.6 0 -4.6 -3 q 0 -3.4 4.6 -3.4 Z" fill={noseC} />
         <FaceKit lid={F[1]} e1={[77, 42]} e2={[93, 40]} er={3.2} iris={ink} mouth={[95, 57]} />
@@ -130,6 +132,7 @@ function GuineaPigDraw({ uid }) {
         <path d="M 100.5 66.5 l 3.8 2.6 -3.4 2.8 -3.6 -2.6 Z" fill={noseC} />
         <path d="M 101 72.5 q 1.2 2.6 3.4 3 M 101 72.5 q -1.8 2.6 -4 3" stroke={ink} strokeWidth="1.5" fill="none" strokeLinecap="round" />
         <path d="M 104 69 l 10 -2 M 104 72 l 10 1.4" stroke="#dcc9a8" strokeWidth="1" strokeLinecap="round" />
+        <path d="M 89 69 l -10 -2 M 89 72 l -10 1.4" stroke="#dcc9a8" strokeWidth="1" strokeLinecap="round" />
         <g className="sai-crit-eyes-normal">
           <circle cx="80" cy="63" r="3.6" fill="#fff" /><circle cx="80.9" cy="63" r="2.2" fill={ink} /><circle cx="81.6" cy="62.2" r=".8" fill="#fff" />
           <circle cx="94" cy="61.5" r="3.4" fill="#fff" /><circle cx="94.9" cy="61.5" r="2.1" fill={ink} /><circle cx="95.5" cy="60.7" r=".75" fill="#fff" />
@@ -152,15 +155,18 @@ function MouseDraw({ uid }) {
       <Quad near={F[1]} far={F[2]} paw={inner} top={84} len={18} w={6} fx={70} bx={46} />
       <g className="sai-crit-body">
         <ellipse cx="58" cy="82" rx="25" ry="18" fill={`url(#${uid}f)`} />
+        <ellipse cx="72" cy="67" rx="10" ry="9" fill={F[1]} />
         <Under cx={60} cy={82} rx={22} ry={18} color={belly} k={.54} />
         <BellyShade cx={58} cy={98} rx={18} />
       </g>
       <g className="sai-crit-head">
-        <g className="sai-crit-ear sai-crit-ear-l"><circle cx="73" cy="34" r="10.5" fill={F[1]} /><circle cx="73" cy="35" r="6.6" fill={inner} /></g>
-        <g className="sai-crit-ear sai-crit-ear-r"><circle cx="95" cy="32" r="10.5" fill={F[0]} /><circle cx="94.4" cy="33" r="6.6" fill={inner} /></g>
+        {/* solid outlined ears — no washing out against light grass */}
+        <g className="sai-crit-ear sai-crit-ear-l"><circle cx="73" cy="34" r="10.5" fill="#8d95a2" stroke="#5f6570" strokeWidth="1.2" /><circle cx="73" cy="35" r="6.6" fill={inner} /></g>
+        <g className="sai-crit-ear sai-crit-ear-r"><circle cx="95" cy="32" r="10.5" fill={F[0]} stroke="#7b828e" strokeWidth="1.1" /><circle cx="94.4" cy="33" r="6.6" fill={inner} /></g>
         <path d="M 68 46 C 74 40 88 40 96 46 C 104 51 108 58 106 62 C 96 66 78 66 70 60 C 66 56 65 50 68 46 Z" fill={`url(#${uid}f)`} />
         <circle cx="106" cy="60" r="2.6" fill={noseC} />
         <path d="M 100 56 l 12 -4 M 101 59 l 12 0 M 100 62 l 11 3" stroke="#d8dce2" strokeWidth="1.1" strokeLinecap="round" />
+        <path d="M 96 56 l -12 -3.4 M 95 59 l -12 .6 M 96 62 l -11 3.4" stroke="#d8dce2" strokeWidth="1.1" strokeLinecap="round" />
         <FaceKit lid={F[1]} e1={[80, 52]} e2={[93, 51]} er={3} iris={ink} mouths={false} />
       </g>
     </g>
@@ -295,10 +301,11 @@ function ParrotDraw({ uid }) {
         <path d="M 90 32 C 99 31 105 36 105 43 C 105 48.5 101 52.5 96.5 52 C 97.5 46 95.5 39 90 36.5 Z" fill={beakTop} />
         <path d="M 92 45 C 95 47.5 96.5 50.5 96 54 C 92 53.5 89 51 88 47.5 Z" fill={beakBot} />
         <g className="sai-crit-eyes-normal">
-          <circle cx="71" cy="35" r="3.1" fill="#fff" /><circle cx="71.6" cy="35.2" r="1.8" fill={ink} />
-          <circle cx="86" cy="36" r="3.1" fill="#fdf6ea" /><circle cx="86.6" cy="36.2" r="1.8" fill={ink} />
+          {/* dark rings separate the eyes from the white face patch + beak */}
+          <circle cx="71" cy="35" r="3.7" fill={ink} /><circle cx="71" cy="35" r="2.7" fill="#fff" /><circle cx="71.6" cy="35.2" r="1.7" fill={ink} />
+          <circle cx="85" cy="36.5" r="3.7" fill={ink} /><circle cx="85" cy="36.5" r="2.7" fill="#fdf6ea" /><circle cx="85.6" cy="36.7" r="1.7" fill={ink} />
         </g>
-        <FaceKit lid={R[1]} e1={[71, 35]} e2={[86, 36]} er={3.1} drawEyes={false} mouths={false} browCol={ink} blushCol="#ffb3a0" />
+        <FaceKit lid={R[1]} e1={[71, 35]} e2={[85, 36.5]} er={3.5} drawEyes={false} mouths={false} browCol={ink} blushCol="#ffb3a0" />
       </g>
     </g>
   );
@@ -396,8 +403,9 @@ function SugarGliderDraw({ uid }) {
       </g>
       <Quad near={F[1]} far={F[2]} paw={cream} top={85} len={17} w={6} fx={68} bx={46} />
       <g className="sai-crit-body">
-        {/* slimmer, lower body */}
+        {/* slimmer, lower body + a proper shoulder rising to meet the head */}
         <ellipse cx="58" cy="85" rx="21" ry="12.5" fill={`url(#${uid}f)`} />
+        <ellipse cx="71" cy="74" rx="12" ry="11" fill={`url(#${uid}f)`} />
         {/* glide membrane fold along the flank */}
         <path d="M 42 88 C 48 82 66 80 72 86 C 65 90 49 91 42 88 Z" fill={F[0]} opacity=".65" />
         <path d="M 42 88 C 49 83 66 81 72 86" stroke={F[2]} strokeWidth="1.3" fill="none" opacity=".6" />
@@ -407,21 +415,21 @@ function SugarGliderDraw({ uid }) {
       <g className="sai-crit-head">
         {/* matched small petal ears */}
         <g className="sai-crit-ear sai-crit-ear-l">
-          <path d="M 71 38 C 68 31 70 25 76 24 C 78.6 29.5 77.6 35 74 39 Z" fill={F[1]} />
-          <path d="M 73 35.5 C 71.6 31.5 72.6 28 76 27.2 C 77.2 30.5 76.4 33.6 74.4 36.4 Z" fill="#c9a8b4" opacity=".8" />
+          <path d="M 71 42 C 68 35 70 29 76 28 C 78.6 33.5 77.6 39 74 43 Z" fill={F[1]} />
+          <path d="M 73 39.5 C 71.6 35.5 72.6 32 76 31.2 C 77.2 34.5 76.4 37.6 74.4 40.4 Z" fill="#c9a8b4" opacity=".8" />
         </g>
         <g className="sai-crit-ear sai-crit-ear-r">
-          <path d="M 92 36 C 90 29 92.6 23 98.5 22.6 C 100.4 28 98.6 33.6 95 37.4 Z" fill={F[0]} />
-          <path d="M 93.6 34 C 92.8 30 94.2 26.6 97.4 26.2 C 98.2 29.6 97 32.8 95 35.4 Z" fill="#c9a8b4" opacity=".8" />
+          <path d="M 92 40 C 90 33 92.6 27 98.5 26.6 C 100.4 32 98.6 37.6 95 41.4 Z" fill={F[0]} />
+          <path d="M 93.6 38 C 92.8 34 94.2 30.6 97.4 30.2 C 98.2 33.6 97 36.8 95 39.4 Z" fill="#c9a8b4" opacity=".8" />
         </g>
-        <circle cx="83" cy="50" r="15.5" fill={`url(#${uid}f)`} />
-        <path d="M 80.5 36 C 82 42 83 48 83 53 L 86.6 53 C 86.6 47 86 40 85.2 36 Z" fill={stripe} opacity=".85" />
+        <circle cx="83" cy="54" r="15.5" fill={`url(#${uid}f)`} />
+        <path d="M 80.5 40 C 82 46 83 52 83 57 L 86.6 57 C 86.6 51 86 44 85.2 40 Z" fill={stripe} opacity=".85" />
         <g className="sai-crit-eyes-normal">
-          <circle cx="77" cy="49" r="5" fill={ink} /><circle cx="78.3" cy="47.7" r="1.7" fill="#fff" opacity=".9" />
-          <circle cx="91" cy="48" r="5.2" fill={ink} /><circle cx="92.3" cy="46.7" r="1.8" fill="#fff" opacity=".9" />
+          <circle cx="77" cy="53" r="5" fill={ink} /><circle cx="78.3" cy="51.7" r="1.7" fill="#fff" opacity=".9" />
+          <circle cx="91" cy="52" r="5.2" fill={ink} /><circle cx="92.3" cy="50.7" r="1.8" fill="#fff" opacity=".9" />
         </g>
-        <path d="M 84 58 l 2.6 1.9 -2.6 2 -2.6 -2 Z" fill="#d98a9c" />
-        <FaceKit lid={F[1]} e1={[77, 49]} e2={[91, 48]} er={5} drawEyes={false} mouths={false} browCol={ink} />
+        <path d="M 84 62 l 2.6 1.9 -2.6 2 -2.6 -2 Z" fill="#d98a9c" />
+        <FaceKit lid={F[1]} e1={[77, 53]} e2={[91, 52]} er={5} drawEyes={false} mouths={false} browCol={ink} />
       </g>
     </g>
   );
@@ -487,6 +495,8 @@ function AxolotlDraw({ uid }) {
       <Quad near={P[1]} far={P[2]} paw={belly} top={86} len={16} w={6} fx={70} bx={46} />
       <g className="sai-crit-body">
         <ellipse cx="58" cy="84" rx="26" ry="15.5" fill={`url(#${uid}f)`} />
+        {/* neck fill so the head reads attached to the body */}
+        <ellipse cx="76" cy="72" rx="11" ry="9" fill={P[1]} />
         <Under cx={60} cy={85} rx={22} ry={14} color={belly} k={.52} />
         <BellyShade cx={58} cy={98} rx={18} />
       </g>
