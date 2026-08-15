@@ -278,6 +278,64 @@ function PenguinDraw({ uid }) {
   );
 }
 
+// ---------------- TURKEY — bird rig: fan tail, folded wing, snood & wattle ----------------
+function TurkeyDraw({ uid }) {
+  const F = ["#a06a38", "#7d4e24", "#553114"], belly = "#c99a62", shank = "#e8973a", shankF = "#b06e1e", red = "#d8434e", beak = "#f2b53c", ink = "#241408";
+  const hubX = 44, hubY = 70;
+  const fan = [];
+  for (let i = 0; i < 7; i++) {
+    const deg = 195 - i * 20; // fan sweeps from low-left up to high-right behind the body
+    const a = (deg * Math.PI) / 180;
+    const dx = Math.cos(a), dy = -Math.sin(a);
+    const rot = 90 - deg;
+    const mx = hubX + dx * 24, my = hubY + dy * 24;
+    const bx = hubX + dx * 36, by = hubY + dy * 36;
+    const tx = hubX + dx * 41.5, ty = hubY + dy * 41.5;
+    fan.push(
+      <g key={i}>
+        <ellipse cx={mx} cy={my} rx="7.4" ry="20" fill={i % 2 ? "#8a5a30" : "#6e4423"} transform={`rotate(${rot} ${mx} ${my})`} />
+        <ellipse cx={bx} cy={by} rx="6.6" ry="3.8" fill="#e8c88a" opacity=".9" transform={`rotate(${rot} ${bx} ${by})`} />
+        <ellipse cx={tx} cy={ty} rx="5.6" ry="3.4" fill="#c96a3a" opacity=".95" transform={`rotate(${rot} ${tx} ${ty})`} />
+      </g>
+    );
+  }
+  return (
+    <g>
+      <defs><Fur id={`${uid}f`} c={F} /></defs>
+      <g className="sai-crit-tail">{fan}</g>
+      <g className="sai-crit-leg sai-crit-leg-fl">
+        <rect x="51" y="90" width="5.5" height="12" rx="2.7" fill={shankF} />
+        <path d="M 50 101.4 l -3.2 2.8 M 53.7 101.8 l 0 3 M 57.5 101.4 l 3.2 2.8" stroke={shankF} strokeWidth="2" strokeLinecap="round" fill="none" />
+      </g>
+      <g className="sai-crit-leg sai-crit-leg-fr">
+        <rect x="66" y="90" width="5.5" height="12" rx="2.7" fill={shank} />
+        <path d="M 65 101.4 l -3.2 2.8 M 68.7 101.8 l 0 3 M 72.5 101.4 l 3.2 2.8" stroke={shank} strokeWidth="2" strokeLinecap="round" fill="none" />
+      </g>
+      <g className="sai-crit-body">
+        <ellipse cx="60" cy="72" rx="25" ry="25.5" fill={`url(#${uid}f)`} />
+        <BackShade cx={56} cy={70} rx={23} ry={23} color="#3a2410" op={.25} />
+        <Under cx={62} cy={74} rx={22} ry={23} color={belly} k={.55} opacity={.85} />
+        <path d="M 52 82 q 5 4.4 10 0 M 62 82 q 5 4.4 10 0 M 47 74 q 5 4.4 10 0 M 57 74 q 5 4.4 10 0 M 67 74 q 5 4.4 10 0" stroke={F[2]} strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".6" />
+        <BellyShade cx={60} cy={97} rx={16} />
+      </g>
+      <g className="sai-crit-wing">
+        <ellipse cx="44" cy="70" rx="9" ry="17" fill={F[2]} transform="rotate(14 44 56)" />
+        <path d="M 41 62 q -2.6 8 -0.6 16 M 47 62 q -2.6 8 -0.4 17" stroke={F[1]} strokeWidth="1.6" fill="none" opacity=".7" />
+      </g>
+      <g className="sai-crit-head">
+        <path d="M 64 60 C 66 48 72 40 80 36 L 90 44 C 82 48 76 56 74 64 Z" fill={F[1]} />
+        <circle cx="84" cy="35" r="11.5" fill={`url(#${uid}f)`} />
+        <path d="M 94 32 L 103.5 35.5 L 94 39.5 Q 92 35.5 94 32 Z" fill={beak} />
+        <path d="M 94 35.8 L 103.5 35.5 L 94 39.5 Q 92.8 37.4 94 35.8 Z" fill="#d98a24" />
+        <path d="M 91.5 28.5 C 95 28 97.5 30.5 97 34.5 C 96 31.8 94 30.2 91 30.6 Z" fill={red} />
+        <circle cx="96.8" cy="34.8" r="2" fill={red} />
+        <path d="M 89 41 C 93 43 94.5 48 91.5 51.5 C 87.5 50.5 85.5 45.5 87.5 41.5 Z" fill={red} />
+        <FaceKit lid={F[1]} e1={[79, 32]} e2={[88, 31]} er={2.6} iris={ink} mouths={false} blushCol="#f2a08c" />
+      </g>
+    </g>
+  );
+}
+
 // ================================================================
 
 export const RESERVED_SPECIES = {
@@ -288,4 +346,5 @@ export const RESERVED_SPECIES = {
   cat:     { key: "cat",     name: "Cat",     badge: "🐱", world: "house-pets", draw: CatDraw },
   rabbit:  { key: "rabbit",  name: "Rabbit",  badge: "🐰", world: "house-pets", draw: RabbitDraw },
   pig:     { key: "pig",     name: "Pig",     badge: "🐷", world: "farm",       draw: PigDraw },
+  turkey:  { key: "turkey",  name: "Turkey",  badge: "🦃", world: "farm",       draw: TurkeyDraw },
 };

@@ -54,7 +54,7 @@ const EDGE_OFF = 70;         // fully off-screen distance before wrapping
 // swim-time share per species (probability of picking a "swim" intent).
 // Each world carries its own swimmer map: lake swimmers in the forest,
 // pool swimmers (dog, axolotl, python) in the neighborhood.
-const SWIM_P = { beaver: 0.4, frog: 0.4, turtle: 0.4, bear: 0.1 };
+const SWIM_P = { beaver: 0.4, frog: 0.4, turtle: 0.4, goose: 0.35, bear: 0.1 };
 const POOL_SWIM_P = { labrador: 0.22, axolotl: 0.4, python: 0.3 };
 const canSwimIn = (def, species) => (def.swim?.[species] || 0) > 0;
 
@@ -1861,7 +1861,7 @@ function stepWorld(world, cfg, dt) {
       const swimP = (def.hasWater || def.pool) ? def.swim?.[a.species] || 0 : 0;
       const perchP = !def.perching ? 0
         : FLYERS.has(a.species) ? PERCH_P
-        : a.species === "sugarglider" ? 0.35 : 0; // the glider climbs up too
+        : a.species === "sugarglider" ? 0.035 : 0; // the glider climbs up — rarely (a treat for long sessions)
       const patrolP = def.perching && a.species === "cat" ? PATROL_P : 0;
       const roll = Math.random();
       a.intent = roll < swimP ? "swim"

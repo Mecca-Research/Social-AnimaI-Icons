@@ -68,43 +68,57 @@ function FoxDraw({ uid }) {
   );
 }
 
-// ---------------- WOLF — rangy silver-gray, straight brush tail, amber eyes ----------------
+// ---------------- WOLF — big rangy frame: shoulder hump + dark saddle, shaggy
+// ruff, straight low bushy tail, long boxy muzzle, tall ears, amber eyes ----------------
 function WolfDraw({ uid }) {
-  const F = ["#c6ccd4", "#939ca8", "#626c78"], chest = "#eceff2", sock = "#535d68", sockF = "#3d454f", earIn = "#3a3f4a", ink = "#20242c", iris = "#d9a441";
+  const F = ["#c6ccd4", "#939ca8", "#626c78"], chest = "#eceff2", saddle = "#48515c", sock = "#535d68", sockF = "#3d454f", earIn = "#3a3f4a", ink = "#20242c", iris = "#d9a441";
   return (
-    <g transform="translate(60 106) scale(1.08) translate(-60 -106)">
+    <g transform="translate(60 106) scale(1.18) translate(-60 -106)">
       <defs><Fur id={`${uid}f`} c={F} /></defs>
+      {/* straight, low-carried bushy tail with fur notches, dark on top */}
       <g className="sai-crit-tail">
-        <path d="M 46 82 C 30 89 13 85 9 68 C 7 57 14 49 22 52 C 20 62 26 71 36 75 C 40 77 44 79 48 80 Z" fill={`url(#${uid}f)`} />
-        <path d="M 9 68 C 8 60 12 53 19 52 C 17 58 18 65 23 70 C 17 71 12 71 9 68 Z" fill={F[2]} />
+        <path d="M 36 68 C 27 70 18 76 12 85 C 16 86 20 85 24 83 C 22 87 21 91 23 95 C 29 93 34 89 37 84 C 40 79 41 73 41 68 Z" fill={`url(#${uid}f)`} />
+        <path d="M 36 68 C 30 70 23 74 17 80 C 24 76 31 73 38 72 Z" fill={saddle} opacity=".85" />
+        <path d="M 23 95 C 26 91 30 87 34 84" stroke={F[2]} strokeWidth="1.4" fill="none" strokeLinecap="round" opacity=".7" />
       </g>
-      <Quad near={sock} far={sockF} top={69} len={34} w={9} fx={70} bx={43} />
+      {/* longer legs — a rangier stance than the fox */}
+      <Quad near={sock} far={sockF} top={64} len={39} w={9.5} fx={72} bx={40} />
       <g className="sai-crit-body">
-        <ellipse cx="57" cy="74" rx="28" ry="19.5" fill={`url(#${uid}f)`} />
-        <BackShade cx={57} cy={74} rx={28} ry={19.5} color="#3f4854" op={.25} />
-        <Under cx={58} cy={74} rx={25} ry={19.5} color={chest} k={.56} opacity={.92} />
-        <path d="M 72 59 C 77 65 78 75 74 83 C 70 79 68 69 69 61 Z" fill={chest} opacity=".9" />
-        <BellyShade cx={57} cy={92} rx={20} />
+        {/* deep chest + raised withers, sloping to the rear */}
+        <path d="M 30 76 C 29 62 40 51 58 50 C 74 50 84 58 87 68 C 89 76 87 84 81 89 C 71 96 51 96 40 90 C 32 86 30 81 30 76 Z" fill={`url(#${uid}f)`} />
+        {/* dark saddle cape over the shoulders and back */}
+        <path d="M 31 70 C 38 56 58 50 76 56 C 79 58 82 61 84 65 C 72 60 52 62 40 72 C 36 74 33 73 31 70 Z" fill={saddle} opacity=".6" />
+        <BackShade cx={58} cy={74} rx={28} ry={21} color="#3f4854" op={.2} />
+        <Under cx={58} cy={76} rx={26} ry={20} color={chest} k={.54} opacity={.92} />
+        <BellyShade cx={57} cy={93} rx={21} />
       </g>
       <g className="sai-crit-head">
+        {/* tall, upright ears set close on top */}
         <g className="sai-crit-ear sai-crit-ear-l">
-          <path d="M 68 36 L 71 13 L 84 29 Z" fill={F[1]} />
-          <path d="M 71 31 L 73 20 L 80 27 Z" fill={earIn} />
+          <path d="M 68 34 L 70 7 L 84 26 Z" fill={F[1]} />
+          <path d="M 71 28 L 72 15 L 80 24 Z" fill={earIn} />
         </g>
         <g className="sai-crit-ear sai-crit-ear-r">
-          <path d="M 86 29 L 94 8 L 100 31 Z" fill={F[1]} />
-          <path d="M 89 25 L 94 14 L 97 27 Z" fill={earIn} />
+          <path d="M 86 26 L 92 3 L 102 27 Z" fill={F[1]} />
+          <path d="M 89 22 L 92 10 L 97 24 Z" fill={earIn} />
         </g>
-        <circle cx="85" cy="45" r="20" fill={`url(#${uid}f)`} />
-        <path d="M 67 51 l -5.5 3 4.5 2.2 Z M 68 56.5 l -5 3 4.6 1.6 Z" fill={F[1]} />
-        <path d="M 89 47 C 99 45 107 49 110 55 C 105 59 96 60 89 56 Z" fill={chest} />
-        <path d="M 89 47 C 96 45.4 103 47 107 50.5 L 90 52 Z" fill={F[1]} opacity=".5" />
-        <ellipse cx="109" cy="53.6" rx="3.6" ry="3" fill={ink} />
+        {/* shaggy ruff behind the head, spiking back toward the chest */}
+        <path d="M 66 34 L 73 42 L 63 46 L 72 52 L 62 58 L 72 62 L 64 70 L 74 71 C 83 74 90 68 92 60 L 90 40 Z" fill={F[1]} />
+        <path d="M 68 40 L 74 46 L 66 50 L 74 55 L 67 61 L 75 64 L 70 70 L 78 70 C 85 71 89 66 90 60 L 89 44 Z" fill={chest} />
+        <circle cx="86" cy="43" r="19.5" fill={`url(#${uid}f)`} />
+        {/* dark crown/mask + brow patches over the amber eyes */}
+        <path d="M 71 30 C 79 24 93 24 100 31 C 93 34 78 34 71 30 Z" fill={saddle} opacity=".55" />
+        <path d="M 73 37 q 5 -2.6 9 -.6 l -1 3 q -4 -1.6 -8 -.4 Z M 89 35 q 5 -2.6 9 -.6 l -1 3 q -4 -1.6 -8 -.4 Z" fill={F[2]} opacity=".8" />
+        {/* long boxy muzzle: defined bridge, big nose, jaw line */}
+        <path d="M 89 44 C 100 41 110 44 115 51 C 110 58 99 60 89 56 Z" fill={chest} />
+        <path d="M 89 44 C 97 42 105 43.5 111 47.5 L 90 49.5 Z" fill={F[1]} opacity=".55" />
+        <path d="M 92 57 C 97 59.5 103 59.5 108 57" stroke={F[2]} strokeWidth="1.3" fill="none" strokeLinecap="round" opacity=".6" />
+        <ellipse cx="113.5" cy="50.5" rx="4.2" ry="3.5" fill={ink} />
         <g className="sai-crit-eyes-normal">
-          <circle cx="78" cy="42" r="3.4" fill={ink} /><circle cx="78.4" cy="42.2" r="1.8" fill={iris} /><circle cx="78.7" cy="42.4" r=".85" fill={ink} /><circle cx="79.1" cy="41" r=".85" fill="#fff" opacity=".95" />
-          <circle cx="94" cy="40" r="3.4" fill={ink} /><circle cx="94.4" cy="40.2" r="1.8" fill={iris} /><circle cx="94.7" cy="40.4" r=".85" fill={ink} /><circle cx="95.1" cy="39" r=".85" fill="#fff" opacity=".95" />
+          <circle cx="79" cy="41" r="3.4" fill={ink} /><circle cx="79.4" cy="41.2" r="1.8" fill={iris} /><circle cx="79.7" cy="41.4" r=".85" fill={ink} /><circle cx="80.1" cy="40" r=".85" fill="#fff" opacity=".95" />
+          <circle cx="95" cy="39" r="3.4" fill={ink} /><circle cx="95.4" cy="39.2" r="1.8" fill={iris} /><circle cx="95.7" cy="39.4" r=".85" fill={ink} /><circle cx="96.1" cy="38" r=".85" fill="#fff" opacity=".95" />
         </g>
-        <FaceKit lid={F[1]} e1={[78, 42]} e2={[94, 40]} er={3.4} drawEyes={false} mouth={[95, 60]} />
+        <FaceKit lid={F[1]} e1={[79, 41]} e2={[95, 39]} er={3.4} drawEyes={false} mouth={[97, 58]} />
       </g>
     </g>
   );
@@ -240,59 +254,54 @@ function BeaverDraw({ uid }) {
   );
 }
 
-// ---------------- TURKEY — bird rig: fan tail, folded wing, snood & wattle ----------------
-function TurkeyDraw({ uid }) {
-  const F = ["#a06a38", "#7d4e24", "#553114"], belly = "#c99a62", shank = "#e8973a", shankF = "#b06e1e", red = "#d8434e", beak = "#f2b53c", ink = "#241408";
-  const hubX = 44, hubY = 70;
-  const fan = [];
-  for (let i = 0; i < 7; i++) {
-    const deg = 195 - i * 20; // fan sweeps from low-left up to high-right behind the body
-    const a = (deg * Math.PI) / 180;
-    const dx = Math.cos(a), dy = -Math.sin(a);
-    const rot = 90 - deg;
-    const mx = hubX + dx * 24, my = hubY + dy * 24;
-    const bx = hubX + dx * 36, by = hubY + dy * 36;
-    const tx = hubX + dx * 41.5, ty = hubY + dy * 41.5;
-    fan.push(
-      <g key={i}>
-        <ellipse cx={mx} cy={my} rx="7.4" ry="20" fill={i % 2 ? "#8a5a30" : "#6e4423"} transform={`rotate(${rot} ${mx} ${my})`} />
-        <ellipse cx={bx} cy={by} rx="6.6" ry="3.8" fill="#e8c88a" opacity=".9" transform={`rotate(${rot} ${bx} ${by})`} />
-        <ellipse cx={tx} cy={ty} rx="5.6" ry="3.4" fill="#c96a3a" opacity=".95" transform={`rotate(${rot} ${tx} ${ty})`} />
-      </g>
-    );
-  }
+// ---------------- CANADA GOOSE — black neck & chinstrap, barred taupe body, white stern ----------------
+function GooseDraw({ uid }) {
+  const F = ["#a5967f", "#8a7a64", "#6e5f4c"], breast = "#cfc4ae", white = "#f4f2ec", dark = "#1b1d20", shank = "#22262a", ink = "#141518";
   return (
-    <g>
+    <g transform="translate(60 106) scale(1.05) translate(-60 -106)">
       <defs><Fur id={`${uid}f`} c={F} /></defs>
-      <g className="sai-crit-tail">{fan}</g>
+      {/* black tail feathers over the white stern */}
+      <g className="sai-crit-tail">
+        <path d="M 38 68 C 30 62 22 58 14 57 C 16 62 20 66 25 69 C 21 70 17 72 15 75 C 22 77 30 77 36 74 Z" fill={dark} />
+        <path d="M 30 74 C 24 78 20 83 18 88 C 26 88 33 85 38 80 Z" fill={white} />
+      </g>
       <g className="sai-crit-leg sai-crit-leg-fl">
-        <rect x="51" y="90" width="5.5" height="12" rx="2.7" fill={shankF} />
-        <path d="M 50 101.4 l -3.2 2.8 M 53.7 101.8 l 0 3 M 57.5 101.4 l 3.2 2.8" stroke={shankF} strokeWidth="2" strokeLinecap="round" fill="none" />
+        <rect x="50" y="90" width="5" height="12" rx="2.5" fill={shank} />
+        <path d="M 48 101.6 l -3 2.6 M 52.5 101.8 l 0 3 M 56.5 101.6 l 3 2.6" stroke={shank} strokeWidth="2.2" strokeLinecap="round" fill="none" />
       </g>
       <g className="sai-crit-leg sai-crit-leg-fr">
-        <rect x="66" y="90" width="5.5" height="12" rx="2.7" fill={shank} />
-        <path d="M 65 101.4 l -3.2 2.8 M 68.7 101.8 l 0 3 M 72.5 101.4 l 3.2 2.8" stroke={shank} strokeWidth="2" strokeLinecap="round" fill="none" />
+        <rect x="64" y="90" width="5" height="12" rx="2.5" fill={shank} />
+        <path d="M 62 101.6 l -3 2.6 M 66.5 101.8 l 0 3 M 70.5 101.6 l 3 2.6" stroke={shank} strokeWidth="2.2" strokeLinecap="round" fill="none" />
       </g>
       <g className="sai-crit-body">
-        <ellipse cx="60" cy="72" rx="25" ry="25.5" fill={`url(#${uid}f)`} />
-        <BackShade cx={56} cy={70} rx={23} ry={23} color="#3a2410" op={.25} />
-        <Under cx={62} cy={74} rx={22} ry={23} color={belly} k={.55} opacity={.85} />
-        <path d="M 52 82 q 5 4.4 10 0 M 62 82 q 5 4.4 10 0 M 47 74 q 5 4.4 10 0 M 57 74 q 5 4.4 10 0 M 67 74 q 5 4.4 10 0" stroke={F[2]} strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".6" />
-        <BellyShade cx={60} cy={97} rx={16} />
+        {/* plump barred body, breast rising toward the neck */}
+        <ellipse cx="55" cy="76" rx="28" ry="18.5" fill={`url(#${uid}f)`} />
+        <BackShade cx={55} cy={75} rx={27} ry={18} color="#4a3f30" op={.25} />
+        <path d="M 45 70 q 5 4.2 10 0 M 55 70 q 5 4.2 10 0 M 40 78 q 5 4.2 10 0 M 50 78 q 5 4.2 10 0 M 60 78 q 5 4.2 10 0 M 45 86 q 5 4.2 10 0 M 55 86 q 5 4.2 10 0" stroke={F[2]} strokeWidth="1.5" fill="none" strokeLinecap="round" opacity=".55" />
+        <Under cx={60} cy={78} rx={24} ry={17} color={breast} k={.5} opacity={.9} />
+        {/* white stern wrapping the rear underside */}
+        <path d="M 33 80 C 32 86 35 91 41 93 C 45 90 46 84 44 78 C 40 76 35 77 33 80 Z" fill={white} opacity=".95" />
+        <BellyShade cx={56} cy={93} rx={19} />
       </g>
       <g className="sai-crit-wing">
-        <ellipse cx="44" cy="70" rx="9" ry="17" fill={F[2]} transform="rotate(14 44 56)" />
-        <path d="M 41 62 q -2.6 8 -0.6 16 M 47 62 q -2.6 8 -0.4 17" stroke={F[1]} strokeWidth="1.6" fill="none" opacity=".7" />
+        <ellipse cx="47" cy="74" rx="10" ry="16" fill={F[1]} transform="rotate(16 47 74)" />
+        <path d="M 43 64 q -3 9 -1 19 M 50 64 q -3 9 -.6 20" stroke={F[2]} strokeWidth="1.5" fill="none" opacity=".7" />
+        <path d="M 40 82 C 34 86 29 88 24 88 C 28 91 34 92 40 90 Z" fill="#57503f" />
       </g>
       <g className="sai-crit-head">
-        <path d="M 64 60 C 66 48 72 40 80 36 L 90 44 C 82 48 76 56 74 64 Z" fill={F[1]} />
-        <circle cx="84" cy="35" r="11.5" fill={`url(#${uid}f)`} />
-        <path d="M 94 32 L 103.5 35.5 L 94 39.5 Q 92 35.5 94 32 Z" fill={beak} />
-        <path d="M 94 35.8 L 103.5 35.5 L 94 39.5 Q 92.8 37.4 94 35.8 Z" fill="#d98a24" />
-        <path d="M 91.5 28.5 C 95 28 97.5 30.5 97 34.5 C 96 31.8 94 30.2 91 30.6 Z" fill={red} />
-        <circle cx="96.8" cy="34.8" r="2" fill={red} />
-        <path d="M 89 41 C 93 43 94.5 48 91.5 51.5 C 87.5 50.5 85.5 45.5 87.5 41.5 Z" fill={red} />
-        <FaceKit lid={F[1]} e1={[79, 32]} e2={[88, 31]} er={2.6} iris={ink} mouths={false} blushCol="#f2a08c" />
+        {/* long black neck sweeping up out of the breast */}
+        <path d="M 70 72 C 72 58 76 44 83 33 L 94 38 C 87 48 83 60 81 74 C 77 76 72 75 70 72 Z" fill={dark} />
+        <circle cx="89" cy="29" r="9.5" fill={dark} />
+        {/* white chinstrap wrapping cheek and throat */}
+        <path d="M 84 33 C 84.5 37.5 88 40 92.5 39 C 95 35.5 94.6 31 92 28.5 C 88.5 28 85.5 29.6 84 33 Z" fill={white} />
+        {/* black bill, nostril line */}
+        <path d="M 97 25.5 L 107.5 28.5 L 97 32.5 Q 95 29 97 25.5 Z" fill={shank} />
+        <path d="M 99 27.6 l 4 .9" stroke="#3c4046" strokeWidth="1" strokeLinecap="round" />
+        <g className="sai-crit-eyes-normal">
+          <circle cx="86" cy="26" r="2.4" fill="#fff" opacity=".9" /><circle cx="86.4" cy="26.2" r="1.6" fill={ink} />
+          <circle cx="93" cy="25" r="2.4" fill="#fff" opacity=".9" /><circle cx="93.4" cy="25.2" r="1.6" fill={ink} />
+        </g>
+        <FaceKit lid={dark} e1={[86, 26]} e2={[93, 25]} er={2.4} drawEyes={false} mouths={false} blushCol="#c9857a" />
       </g>
     </g>
   );
@@ -578,7 +587,7 @@ export const SPECIES = {
   cougar:   { key: "cougar",   name: "Cougar",        badge: "🐆", draw: CougarDraw },
   deer:     { key: "deer",     name: "Deer",          badge: "🦌", draw: DeerDraw },
   beaver:   { key: "beaver",   name: "Beaver",        badge: "🦫", draw: BeaverDraw },
-  turkey:   { key: "turkey",   name: "Turkey",        badge: "🦃", draw: TurkeyDraw },
+  goose:    { key: "goose",    name: "Canada Goose",  badge: "🪿", draw: GooseDraw },
   skunk:    { key: "skunk",    name: "Skunk",         badge: "🦨", draw: SkunkDraw },
   squirrel: { key: "squirrel", name: "Grey Squirrel", badge: "🐿️", draw: SquirrelDraw },
   turtle:   { key: "turtle",   name: "Turtle",        badge: "🐢", draw: TurtleDraw },
