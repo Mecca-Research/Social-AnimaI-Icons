@@ -1010,3 +1010,105 @@ body {
   .sai-sprite[data-walking="1"] .sai-crit--owl .sai-crit-head,
   .sai-sprite[data-walking="1"] .sai-crit--penguin .sai-crit-head{ animation:none; }
 }
+
+
+/* ==================== v0.10 native forest cast ==================== */
+/* per-species gait for the newcomers: stride angle + tempo */
+.sai-crit--wolf{ --sai-swing:17deg; --sai-gait:.52s; }     /* purposeful lope */
+.sai-crit--cougar{ --sai-swing:18deg; --sai-gait:.5s; }    /* smooth prowl */
+.sai-crit--beaver{ --sai-swing:16deg; --sai-gait:.52s; }   /* low waddle */
+.sai-crit--skunk{ --sai-swing:20deg; --sai-gait:.46s; }    /* tail-high trot */
+.sai-crit--squirrel{ --sai-swing:28deg; --sai-gait:.32s; } /* scurrying bound */
+.sai-crit--turkey{ --sai-swing:14deg; --sai-gait:.4s; }    /* strut */
+.sai-crit--turtle{ --sai-swing:9deg; --sai-gait:.85s; }    /* slow plod */
+
+/* turkey strut: pecking head bob + tail-fan flick (replaces generic wag) */
+.sai-sprite[data-walking="1"] .sai-crit--turkey .sai-crit-head{ animation:sai-crit-strut var(--sai-gait,.4s) ease-in-out infinite; }
+@keyframes sai-crit-strut{ 0%,100%{transform:translate(0,0) rotate(2deg);} 50%{transform:translate(2.4px,-1.6px) rotate(-2.6deg);} }
+.sai-sprite[data-walking="1"] .sai-crit--turkey .sai-crit-tail{ animation:sai-crit-fanflick var(--sai-gait,.4s) ease-in-out infinite; }
+@keyframes sai-crit-fanflick{ 0%,100%{transform:rotate(-3deg);} 50%{transform:rotate(4deg);} }
+
+/* squirrel: bounding gait — the body springs with each stride */
+.sai-sprite[data-walking="1"] .sai-crit--squirrel .sai-crit-body{ animation:sai-crit-bound var(--sai-gait,.32s) ease-in-out infinite; }
+@keyframes sai-crit-bound{ 0%,100%{transform:translateY(0) scaleY(.98);} 40%{transform:translateY(-4.5px) scaleY(1.05);} 70%{transform:translateY(-1px) scaleY(1);} }
+
+/* beaver: rocking waddle + the flat paddle drags, it doesn't wag */
+.sai-sprite[data-walking="1"] .sai-crit--beaver .sai-crit-body{ animation:sai-crit-beaverwaddle var(--sai-gait,.52s) ease-in-out infinite; }
+@keyframes sai-crit-beaverwaddle{ 0%,100%{transform:rotate(-1.8deg) translateY(0);} 50%{transform:rotate(1.8deg) translateY(-1.4px);} }
+.sai-sprite[data-walking="1"] .sai-crit--beaver .sai-crit-tail{ animation:sai-crit-paddledrag var(--sai-gait,.52s) ease-in-out infinite; }
+@keyframes sai-crit-paddledrag{ 0%,100%{transform:rotate(-4deg);} 50%{transform:rotate(5deg);} }
+
+/* turtle: neck stretches forward with each slow step; steadier lean */
+.sai-sprite[data-walking="1"] .sai-crit--turtle .sai-crit-head{ animation:sai-crit-turtlepush var(--sai-gait,.85s) ease-in-out infinite; }
+@keyframes sai-crit-turtlepush{ 0%,100%{transform:translate(0,0) rotate(0);} 50%{transform:translate(2.8px,-1px) rotate(1.4deg);} }
+.sai-sprite[data-walking="1"] .sai-crit-root.sai-crit--turtle{ animation:sai-crit-turtlelean var(--sai-gait,.85s) ease-in-out infinite; }
+@keyframes sai-crit-turtlelean{ 0%,100%{transform:rotate(.8deg);} 50%{transform:rotate(1.6deg);} }
+
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-walking="1"] .sai-crit--turkey .sai-crit-head,
+  .sai-sprite[data-walking="1"] .sai-crit--turkey .sai-crit-tail,
+  .sai-sprite[data-walking="1"] .sai-crit--squirrel .sai-crit-body,
+  .sai-sprite[data-walking="1"] .sai-crit--beaver .sai-crit-body,
+  .sai-sprite[data-walking="1"] .sai-crit--beaver .sai-crit-tail,
+  .sai-sprite[data-walking="1"] .sai-crit--turtle .sai-crit-head,
+  .sai-sprite[data-walking="1"] .sai-crit-root.sai-crit--turtle{ animation:none; }
+}
+
+
+/* ==================== v0.10 contact encounters ==================== */
+/* Pairs now lock nose-to-nose (sim pulls them together and faces them at
+   each other), so the state animations can sell actual physical contact.
+   Sprites mirror via scaleX on the wrapper, so "toward the partner" is
+   always the sprite's facing (right) side — symmetric for both. */
+
+/* FIGHT — a real scrap: rear up, swipe front paws, snap the head */
+.sai-sprite[data-state="fight"] .sai-crit-body{ animation:sai-crit-fightbody .36s ease-in-out infinite; }
+@keyframes sai-crit-fightbody{ 0%,100%{transform:rotate(-1deg) translateY(0);} 50%{transform:rotate(-5deg) translateY(-2px);} }
+/* front paws swipe at the opponent, alternating */
+.sai-sprite[data-state="fight"] .sai-crit-leg-fr{ animation:sai-crit-swipe .36s ease-in-out infinite; }
+.sai-sprite[data-state="fight"] .sai-crit-leg-fl{ animation:sai-crit-swipe .36s ease-in-out infinite .18s; }
+@keyframes sai-crit-swipe{ 0%,100%{transform:rotate(14deg);} 45%{transform:rotate(-34deg);} 60%{transform:rotate(-26deg);} }
+/* back legs brace wide for balance */
+.sai-sprite[data-state="fight"] .sai-crit-leg-br{ animation:sai-crit-brace .36s ease-in-out infinite; }
+.sai-sprite[data-state="fight"] .sai-crit-leg-bl{ animation:sai-crit-brace .36s ease-in-out infinite .18s; }
+@keyframes sai-crit-brace{ 0%,100%{transform:rotate(10deg);} 50%{transform:rotate(16deg);} }
+/* tail lashes fast */
+.sai-sprite[data-state="fight"] .sai-crit-tail{ animation:sai-crit-taillash .3s ease-in-out infinite; }
+@keyframes sai-crit-taillash{ 0%,100%{transform:rotate(-14deg);} 50%{transform:rotate(12deg);} }
+/* wings (birds) flare out while scrapping */
+.sai-sprite[data-state="fight"] .sai-crit-wing{ animation:sai-crit-wingflare .3s ease-in-out infinite; }
+@keyframes sai-crit-wingflare{ 0%,100%{transform:rotate(-8deg);} 50%{transform:rotate(-26deg);} }
+
+/* FRIENDLY — affectionate: lean in, nuzzle-dip the head, wag the tail */
+.sai-sprite[data-state="friendly"] .sai-crit-root{ animation:sai-crit-leanin 1.24s ease-in-out infinite; }
+@keyframes sai-crit-leanin{ 0%,100%{transform:rotate(0deg);} 50%{transform:rotate(4deg);} }
+/* happy head overridden: a nuzzling dip TOWARD the partner (facing side) */
+.sai-sprite[data-state="friendly"] .sai-crit-head{ animation:sai-crit-nuzzle 1.24s ease-in-out infinite; }
+@keyframes sai-crit-nuzzle{
+  0%,100%{transform:translate(0,0) rotate(-2deg);}
+  35%{transform:translate(2.6px,-2px) rotate(5deg);}
+  55%{transform:translate(3px,.5px) rotate(7deg);}
+  75%{transform:translate(1px,-1px) rotate(1deg);}
+}
+/* delighted tail wag + perked ears */
+.sai-sprite[data-state="friendly"] .sai-crit-tail{ animation:sai-crit-tailwag .62s ease-in-out infinite; }
+.sai-sprite[data-state="friendly"] .sai-crit-ear{ animation:sai-crit-earperk 1.24s ease-in-out infinite; }
+@keyframes sai-crit-earperk{ 0%,100%{transform:rotate(0);} 40%{transform:rotate(-7deg);} 60%{transform:rotate(-5deg);} }
+/* wings (birds) give a happy little flutter */
+.sai-sprite[data-state="friendly"] .sai-crit-wing{ animation:sai-crit-wingflutter .62s ease-in-out infinite; }
+@keyframes sai-crit-wingflutter{ 0%,100%{transform:rotate(0);} 50%{transform:rotate(-12deg);} }
+
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-state="fight"] .sai-crit-body,
+  .sai-sprite[data-state="fight"] .sai-crit-leg-fr,
+  .sai-sprite[data-state="fight"] .sai-crit-leg-fl,
+  .sai-sprite[data-state="fight"] .sai-crit-leg-br,
+  .sai-sprite[data-state="fight"] .sai-crit-leg-bl,
+  .sai-sprite[data-state="fight"] .sai-crit-tail,
+  .sai-sprite[data-state="fight"] .sai-crit-wing,
+  .sai-sprite[data-state="friendly"] .sai-crit-root,
+  .sai-sprite[data-state="friendly"] .sai-crit-head,
+  .sai-sprite[data-state="friendly"] .sai-crit-tail,
+  .sai-sprite[data-state="friendly"] .sai-crit-ear,
+  .sai-sprite[data-state="friendly"] .sai-crit-wing{ animation:none; }
+}

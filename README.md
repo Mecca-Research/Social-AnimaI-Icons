@@ -2,19 +2,19 @@
 
 **▶️ [Live demo](https://mecca-research.github.io/Social-AnimaI-Icons/)** — runs entirely in your browser, no install required.
 
-![Social Animal Icons — 14 distinct hand‑drawn animal characters (fox, raccoon, tiger, panda, deer, bear, rabbit, pig, frog, hedgehog, penguin, owl…) roaming a lush, textured top‑down forest lit by volumetric god‑rays, with a lily‑pad pond, a berry‑bush larder, and a flowery play meadow.](media/screenshot.png)
+![Social Animal Icons — 14 distinct hand‑drawn forest animals (fox, wolf, bear, cougar, deer, beaver, turkey, skunk, grey squirrel, turtle, hedgehog, raccoon, frog, owl) roaming a lush, textured top‑down forest lit by volumetric god‑rays, with a lily‑pad pond, a berry‑bush larder, and a flowery play meadow.](media/screenshot.png)
 
 An interactive, emergent “living desktop” made of animal icons that socialize, argue, help each other, and roam a large map with stations for Food, Water, and Play. Every icon runs a tiny state machine (wander, idle, go-to-station, friendly, fight, flee, separate, cooldown, drag) and forms relationships via last-touch memory (friend or rival).
 
-Current release: v0.9.1 — **Anatomy & animation polish.** Walk cycles now key off real on-screen movement (no more animals sliding with frozen legs — and they stop marching when paused), every body got a bespoke underbelly and back shading instead of the old uniform oval, the bear/panda/raccoon/owl/penguin/frog/hedgehog/deer received targeted anatomy fixes, birds walk like birds (penguin toddle, owl hop, feet that move with the legs), and the pond is now **twice the size** with a matching double-radius water zone — the forest's social hub. Built on v0.9: **every species is its own character.** Each of the 14 animals now has a bespoke silhouette and rig: legs are part of the body (hips tucked under the torso, far legs shaded for depth), birds get real bird bodies (a waddling tuxedo penguin, a disc‑faced owl with folded wings and talons), the frog gets a squat hop rig, and every species walks with its own stride and tempo (bears lumber, hedgehogs scurry). Spawning never repeats a species — the world starts with 8 unique animals and caps at 14, one of each.
+Current release: v0.10 — **Native forest cast + contact encounters.** The forest world is now populated only by animals that belong there: the exotic and domestic species (tiger and panda → future jungle world, koala → down under, penguin → arctic, cat and rabbit → house pets, pig → farm) moved to a sprite vault (`app/src/CrittersVault.jsx`, preview at [`/?gallery=1&vault=1`](https://mecca-research.github.io/Social-AnimaI-Icons/?gallery=1&vault=1)) with their rigs intact, ready for their home worlds. Seven natives join in the same hand-drawn style, each with its own movement: a rangy amber-eyed **wolf** (purposeful lope), a tawny **cougar** with a dark-tipped tail (smooth prowl), a **beaver** whose flat paddle tail drags as it waddles, a strutting **turkey** on a real bird rig (fan tail flicks, wings flap, head pecks), a **skunk** trotting with its huge white-blazed plume held high, a bounding **grey squirrel** under an oversized frosted tail, and a **turtle** that plods slowly while its neck pushes forward with each step. Encounters got physical too: pairs now rush together and lock nose-to-nose facing each other — friendly meetings are affectionate (synchronized nuzzling, lean-ins, tail wags, ear perks) and fights are proper scraps (alternating lunges, front-paw swipes, rearing, tail lashing). Built on v0.9/v0.9.1: bespoke silhouettes and rigs, integrated legs, per-species stride and tempo, movement-keyed walk cycles, and the double-size pond.
 
 ![All 14 species in idle, walking, fight and friendly states](media/sprites.png)
 
 ✨ Features
 
-Bespoke animal sprites — 14 hand‑drawn SVG characters, each with a unique silhouette and signature (fox's cream‑tipped brush tail, panda's eye patches and saddle, raccoon's bandit mask and ringed tail, deer's antlers and fawn spots, hedgehog's spike crown, koala's fluffy ears, tiger's bold stripes and cheek ruff, pig's snout and curly tail…). Rigged walk cycles with per‑species stride and tempo, idle breathing, double‑blinks, ear twitches, tail sway, and fight/friendly/flee faces. They face the way they move and cast a grounded shadow.
+Bespoke animal sprites — 14 hand‑drawn SVG forest natives, each with a unique silhouette and signature (fox's cream‑tipped brush tail, wolf's silver ruff and amber eyes, cougar's dark‑tipped rope tail, beaver's crosshatched paddle tail and buck teeth, turkey's banded fan and red snood, skunk's white blaze and raised plume, grey squirrel's giant frosted tail, turtle's scute‑tiled shell, deer's antlers and fawn spots, hedgehog's spike crown, raccoon's bandit mask…). Rigged walk cycles with per‑species stride and tempo, idle breathing, double‑blinks, ear twitches, tail sway, and fight/friendly/flee faces. They face the way they move and cast a grounded shadow.
 
-One of each — new animals spawn only as species not already in the world; the population caps at 14 (one per species). Try the sprite viewer at [`/?gallery=1`](https://mecca-research.github.io/Social-AnimaI-Icons/?gallery=1).
+One of each — new animals spawn only as species not already in the world; the population caps at 14 (one per species). Try the sprite viewer at [`/?gallery=1`](https://mecca-research.github.io/Social-AnimaI-Icons/?gallery=1) — add [`&vault=1`](https://mecca-research.github.io/Social-AnimaI-Icons/?gallery=1&vault=1) to also see the reserved species kept for future worlds (jungle, down under, arctic, house pets, farm).
 
 Richly textured forest 🌲 — a layered, painterly forest floor with volumetric god‑rays, depth, a fallen log, ferns, clover, flowers, mushrooms, pebbles, drifting leaves, fireflies, and fluttering butterflies.
 
@@ -36,7 +36,7 @@ Food/Water: 40% friendly / 60% fight
 
 In the wild (off stations): ~40%/sec attempt; 50/50 friendly vs fight.
 
-Interaction lock: friendly or fight locks both icons in place for 8 seconds with vibration (bigger shake for fights).
+Interaction lock: friendly or fight pulls the pair together nose‑to‑nose, facing each other, for 8 seconds of contact — synchronized nuzzling, lean‑ins and tail wags when friendly; alternating lunges, paw swipes and rearing when fighting.
 
 Separation & cooldown: after locking, icons visibly peel apart (~1.4 s), then wander and cannot re-trigger events for ~4.2–7 s.
 
