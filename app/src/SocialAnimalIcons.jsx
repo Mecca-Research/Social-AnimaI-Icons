@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Critter, SPECIES } from "./Critters.jsx";
+import { Critter, SPECIES, ALL_SPECIES } from "./Critters.jsx";
+import { PET_SPECIES } from "./CrittersPets.jsx";
 
 /**
  * Social Animal Icons v0.11 — Lakeside world
@@ -95,17 +96,78 @@ function keepAshore(a, bounds) {
   const vin = a.vx * nx + a.vy * ny;
   if (vin < 0) { a.vx -= vin * nx; a.vy -= vin * ny; } // slide, don't sink
 }
-const landSafe = (bounds, x, y, species) => canSwim(species) || lakeRho(bounds, x, y) > 1.12;
-function interiorPoint(bounds, species) {
-  for (let i = 0; i < 24; i++) {
-    const x = rand(120, bounds.w - 120), y = rand(140, bounds.h - 140);
-    if (landSafe(bounds, x, y, species)) return { x, y };
+// ---------------- Neighborhood geometry ----------------
+// House roofs are hard obstacles: rectangles in stage fractions, used by
+// BOTH the scene drawing and the physics so animals never cross a roof.
+const NEIGHBORHOOD_HOUSES = [
+  { x: .05, y: .07,  w: .17, h: .22, roof: "#c96a4a", ridge: "#8a3f2a" },
+  { x: .40, y: .055, w: .18, h: .23, roof: "#7b8794", ridge: "#4e5866" },
+  { x: .75, y: .075, w: .17, h: .22, roof: "#8a6a4a", ridge: "#5a422a" },
+  { x: .09, y: .66,  w: .18, h: .23, roof: "#4a8a8a", ridge: "#2e5c5c" },
+  { x: .45, y: .68,  w: .17, h: .22, roof: "#a85252", ridge: "#703434" },
+  { x: .79, y: .655, w: .17, h: .23, roof: "#6a7a6a", ridge: "#465446" },
+];
+const STREET = { y: .42, h: .125, walk: .026 }; // asphalt band + sidewalk strips
+
+function inAnyHouse(bounds, houses, x, y, m = 16) {
+  for (const hs of houses) {
+    if (x > hs.x * bounds.w - m && x < (hs.x + hs.w) * bounds.w + m &&
+        y > hs.y * bounds.h - m && y < (hs.y + hs.h) * bounds.h + m) return true;
   }
-  return { x: bounds.w * 0.25, y: bounds.h * 0.75 }; // SW is always land
+  return false;
+}
+// slide along roof edges: push out along the smallest penetration axis and
+// cancel only the inward velocity component
+function keepOutOfHouses(a, bounds, houses) {
+  const m = 14;
+  for (const hs of houses) {
+    const l = hs.x * bounds.w - m, r2 = (hs.x + hs.w) * bounds.w + m;
+    const t = hs.y * bounds.h - m, b2 = (hs.y + hs.h) * bounds.h + m;
+    if (a.x <= l || a.x >= r2 || a.y <= t || a.y >= b2) continue;
+    const dl = a.x - l, dr = r2 - a.x, dt2 = a.y - t, db = b2 - a.y;
+    const min = Math.min(dl, dr, dt2, db);
+    if (min === dl) { a.x = l; if (a.vx > 0) a.vx = 0; }
+    else if (min === dr) { a.x = r2; if (a.vx < 0) a.vx = 0; }
+    else if (min === dt2) { a.y = t; if (a.vy > 0) a.vy = 0; }
+    else { a.y = b2; if (a.vy < 0) a.vy = 0; }
+  }
+}
+
+// ---------------- Worlds ----------------
+const WORLDS = {
+  forest: {
+    key: "forest", label: "🌲 Forest", roster: SPECIES,
+    hasWater: true, houses: [],
+    fallback: { x: .25, y: .75 }, // SW is always land
+    bg: "linear-gradient(165deg,#1e4a37 0%,#173a2b 46%,#0f2a1f 100%)",
+  },
+  neighborhood: {
+    key: "neighborhood", label: "🏘️ Neighborhood", roster: PET_SPECIES,
+    hasWater: false, houses: NEIGHBORHOOD_HOUSES,
+    fallback: { x: .33, y: .48 }, // the street is always open
+    bg: "linear-gradient(165deg,#84b96a 0%,#6da457 46%,#568c44 100%)",
+  },
+};
+
+// a point every species of this world may stand on
+function spawnSafe(world, x, y, species) {
+  const { bounds, def } = world;
+  if (inAnyHouse(bounds, def.houses, x, y, 22)) return false;
+  if (def.hasWater && !canSwim(species) && lakeRho(bounds, x, y) < 1.12) return false;
+  return true;
+}
+function interiorPoint(world, species) {
+  const { bounds, def } = world;
+  for (let i = 0; i < 30; i++) {
+    const x = rand(120, bounds.w - 120), y = rand(140, bounds.h - 140);
+    if (spawnSafe(world, x, y, species)) return { x, y };
+  }
+  return { x: def.fallback.x * bounds.w, y: def.fallback.y * bounds.h };
 }
 // smooth arrival: start just past a screen edge, walking toward the interior
-function enterFromEdge(a, bounds, sp) {
-  for (let i = 0; i < 24; i++) {
+function enterFromEdge(a, world, sp) {
+  const { bounds } = world;
+  for (let i = 0; i < 30; i++) {
     const edge = (Math.random() * 4) | 0; // 0 top, 1 right, 2 bottom, 3 left
     const t = rand(0.1, 0.9);
     let x, y;
@@ -113,10 +175,10 @@ function enterFromEdge(a, bounds, sp) {
     else if (edge === 1) { x = bounds.w + EDGE_OFF * 0.85; y = t * bounds.h; }
     else if (edge === 2) { x = t * bounds.w; y = bounds.h + EDGE_OFF * 0.85; }
     else { x = -EDGE_OFF * 0.85; y = t * bounds.h; }
-    // a land animal must not step out of the frame straight into the lake
+    // the walk-in must not lead straight into water or onto a roof
     const probe = { x: clamp(x, 60, bounds.w - 60), y: clamp(y, 80, bounds.h - 80) };
-    if (!landSafe(bounds, probe.x, probe.y, a.species)) continue;
-    const target = interiorPoint(bounds, a.species);
+    if (!spawnSafe(world, probe.x, probe.y, a.species)) continue;
+    const target = interiorPoint(world, a.species);
     const dx = target.x - x, dy = target.y - y; const d = Math.hypot(dx, dy) || 1;
     a.x = x; a.y = y; a.vx = (dx / d) * sp; a.vy = (dy / d) * sp;
     a.state = "wander"; a.targetId = null;
@@ -125,14 +187,14 @@ function enterFromEdge(a, bounds, sp) {
 }
 
 // ---------------- Agent Factory ----------------
-function makeAgent(bounds, species) {
+function makeAgent(world, species) {
   const r = rand(18, 24) * 1.1; // +10% sprite size
   const speed0 = DEFAULTS.speed;
-  const p = interiorPoint(bounds, species);
+  const p = interiorPoint(world, species);
   return {
     id: idgen(),
     species,
-    emoji: SPECIES[species].badge,
+    emoji: ALL_SPECIES[species].badge,
     x: p.x,
     y: p.y,
     vx: rand(-speed0 * 0.3, speed0 * 0.3),
@@ -160,17 +222,17 @@ function makeAgent(bounds, species) {
 }
 
 // spawn control: never repeat a species that's already in the world
-function pickSpecies(existing) {
+function pickSpecies(existing, roster) {
   const used = new Set(existing.map((a) => a.species));
-  const free = Object.keys(SPECIES).filter((k) => !used.has(k));
+  const free = Object.keys(roster).filter((k) => !used.has(k));
   return free.length ? choice(free) : null;
 }
-function seedAgents(bounds, n) {
+function seedAgents(world, n) {
   const arr = [];
   for (let i = 0; i < n; i++) {
-    const s = pickSpecies(arr);
+    const s = pickSpecies(arr, world.def.roster);
     if (!s) break;
-    arr.push(makeAgent(bounds, s));
+    arr.push(makeAgent(world, s));
   }
   return arr;
 }
@@ -187,6 +249,7 @@ export default function SocialAnimalsRPG() {
   const iconsRef = useRef(new Map()); // id -> HTMLElement
   const [cfg, setCfg] = useState(DEFAULTS);
   const cfgRef = useRef(cfg); cfgRef.current = cfg; // the RAF loop reads the live value
+  const [worldKey, setWorldKey] = useState("forest");
 
   // UI snapshot
   const [snapshot, setSnapshot] = useState({ agents: [], bounds: { w: 0, h: 0 }, selectedId: null });
@@ -194,6 +257,7 @@ export default function SocialAnimalsRPG() {
   // runtime
   const worldRef = useRef({
     bounds: { w: 1600, h: 1000 }, // large
+    def: WORLDS.forest,
     agents: [],
     running: true,
     last: performance.now(),
@@ -210,7 +274,7 @@ export default function SocialAnimalsRPG() {
     const ro = new ResizeObserver(fit); ro.observe(stage);
 
     // seed agents
-    worldRef.current.agents = seedAgents(worldRef.current.bounds, DEFAULTS.numAgents);
+    worldRef.current.agents = seedAgents(worldRef.current, DEFAULTS.numAgents);
     // dev hook: lets tests & the console poke the live world
     if (typeof window !== "undefined") window.__saiWorld = worldRef.current;
 
@@ -242,14 +306,21 @@ export default function SocialAnimalsRPG() {
   }, []);
 
   // controls — added animals amble in from a map edge instead of popping in
+  const maxAgents = Object.keys(WORLDS[worldKey].roster).length;
   const addAgent = () => {
-    const w = worldRef.current; if (w.agents.length >= MAX_AGENTS) return;
-    const s = pickSpecies(w.agents);
-    if (s) { const a = makeAgent(w.bounds, s); enterFromEdge(a, w.bounds, DEFAULTS.speed); w.agents.push(a); }
+    const w = worldRef.current; if (w.agents.length >= Object.keys(w.def.roster).length) return;
+    const s = pickSpecies(w.agents, w.def.roster);
+    if (s) { const a = makeAgent(w, s); enterFromEdge(a, w, DEFAULTS.speed); w.agents.push(a); }
   };
   const removeAgent = () => { worldRef.current.agents.pop(); };
-  const resetWorld = () => {
-    const { bounds } = worldRef.current; worldRef.current.agents = seedAgents(bounds, DEFAULTS.numAgents);
+  const resetWorld = () => { const w = worldRef.current; w.agents = seedAgents(w, DEFAULTS.numAgents); };
+  const switchWorld = (key) => {
+    if (!WORLDS[key]) return;
+    setWorldKey(key);
+    const w = worldRef.current;
+    w.def = WORLDS[key];
+    w.agents = seedAgents(w, DEFAULTS.numAgents);
+    setSnapshot((s) => ({ ...s, selectedId: null }));
   };
 
   const selectId = (id) => setSnapshot((s) => ({ ...s, selectedId: id }));
@@ -258,9 +329,15 @@ export default function SocialAnimalsRPG() {
 
   return (
     <div className="w-full h-full bg-[#0b1f16] text-neutral-100 grid grid-rows-[44px_1fr] p-2 gap-2">
-      {/* Top Controls Bar — selected animal + relationships live in the middle */}
+      {/* Top Controls Bar — world picker left, selected animal in the middle */}
       <div className="rounded-xl border border-emerald-900/60 bg-emerald-950/50 backdrop-blur-sm px-3 flex items-center gap-3 text-sm shadow-lg shadow-black/30">
-        <span className="hidden sm:inline text-sm font-semibold text-emerald-200/90 mr-1">🌲 Social Animals</span>
+        <span className="hidden sm:inline text-sm font-semibold text-emerald-200/90 mr-1">Social Animals</span>
+        <select value={worldKey} onChange={(e) => switchWorld(e.target.value)}
+          className="bg-emerald-900/70 border border-emerald-700/60 rounded-md px-1.5 py-1 text-xs text-emerald-100 cursor-pointer">
+          {Object.values(WORLDS).map((wd) => (
+            <option key={wd.key} value={wd.key}>{wd.label}</option>
+          ))}
+        </select>
         <button onClick={() => (worldRef.current.running = !worldRef.current.running)} className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-xs">
           {worldRef.current.running ? "Pause" : "Run"}
         </button>
@@ -268,27 +345,27 @@ export default function SocialAnimalsRPG() {
           {/* decently slow → brisk */}
           <input type="range" min={60} max={120} step={1} value={cfg.speed} onChange={(e)=>setCfg(v=>({...v, speed: parseFloat(e.target.value)}))} />
         </label>
-        <button onClick={addAgent} disabled={worldRef.current.agents.length>=MAX_AGENTS} className="px-2 py-1 rounded bg-indigo-600 disabled:opacity-50 hover:bg-indigo-500 text-xs">+ Icon</button>
+        <button onClick={addAgent} disabled={snapshot.agents.length>=maxAgents} className="px-2 py-1 rounded bg-indigo-600 disabled:opacity-50 hover:bg-indigo-500 text-xs">+ Icon</button>
         <button onClick={removeAgent} className="px-2 py-1 rounded bg-rose-700 hover:bg-rose-600 text-xs">− Icon</button>
         <button onClick={resetWorld} className="px-2 py-1 rounded bg-neutral-700 hover:bg-neutral-600 text-xs">Reset World</button>
         <div className="flex-1 min-w-0 flex items-center justify-center gap-2 text-xs">
           {selected && (
             <>
               <span className="text-base leading-none">{selected.emoji}</span>
-              <span className="font-semibold text-emerald-100">{SPECIES[selected.species]?.name || selected.species}</span>
+              <span className="font-semibold text-emerald-100">{ALL_SPECIES[selected.species]?.name || selected.species}</span>
               <span className="opacity-50">•</span>
               <RelStats worldRef={worldRef} id={selected.id} />
             </>
           )}
         </div>
-        <div className="opacity-70 text-xs">Animals: {snapshot.agents.length} / {MAX_AGENTS}</div>
+        <div className="opacity-70 text-xs">Animals: {snapshot.agents.length} / {maxAgents}</div>
       </div>
 
-      {/* Stage — top-down forest floor with the lake upper-right */}
-      <div ref={stageRef} className="relative rounded-2xl border border-emerald-900/60 overflow-hidden min-h-0 shadow-xl shadow-black/40" style={{ background: "linear-gradient(165deg,#1e4a37 0%,#173a2b 46%,#0f2a1f 100%)" }}>
-        <ForestScene />
-
-        {snapshot.bounds.w > 0 && <Lake bounds={snapshot.bounds} />}
+      {/* Stage — the active world */}
+      <div ref={stageRef} className="relative rounded-2xl border border-emerald-900/60 overflow-hidden min-h-0 shadow-xl shadow-black/40" style={{ background: WORLDS[worldKey].bg }}>
+        {worldKey === "forest" && <ForestScene />}
+        {worldKey === "forest" && snapshot.bounds.w > 0 && <Lake bounds={snapshot.bounds} />}
+        {worldKey === "neighborhood" && snapshot.bounds.w > 0 && <NeighborhoodScene bounds={snapshot.bounds} />}
 
         {/* Agents */}
         {snapshot.agents.map((a) => (
@@ -808,6 +885,176 @@ function ForestScene() {
   );
 }
 
+// --------------- Neighborhood scene (top-down roofs) ---------------
+// Drawn from NEIGHBORHOOD_HOUSES + STREET — the same config the physics
+// uses — so the roofs animals can't cross are exactly the roofs you see.
+function NeighborhoodScene({ bounds }) {
+  const { w, h } = bounds;
+  const geo = React.useMemo(() => {
+    const houses = NEIGHBORHOOD_HOUSES.map((hs) => ({
+      ...hs, px: hs.x * w, py: hs.y * h, pw: hs.w * w, ph: hs.h * h,
+      topRow: hs.y < 0.5,
+    }));
+    const streetY = STREET.y * h, streetH = STREET.h * h, walkH = STREET.walk * h;
+    const joints = [];
+    for (let x = 40; x < w; x += 78) joints.push(x);
+    const dashes = [];
+    for (let x = 20; x < w; x += 64) dashes.push(x);
+    return { houses, streetY, streetH, walkH, joints, dashes };
+  }, [w, h]);
+  if (!w || !h) return null;
+  const g = geo;
+
+  const Ball = () => (<g><circle r="7" fill="#cbe84a" /><path d="M -6 -3 q 6 3 12 0 M -6 3 q 6 -3 12 0" stroke="#fff" strokeWidth="1.4" fill="none" /></g>);
+  const Bowl = () => (<g><ellipse cy="2" rx="11" ry="4" fill="#8a2f2a" /><ellipse rx="11" ry="4.5" fill="#d84848" /><ellipse rx="7" ry="2.6" fill="#8a2f2a" /><ellipse cx="-2" cy="-.6" rx="3" ry="1" fill="#e88a7a" opacity=".7" /></g>);
+  const Bone = () => (<g fill="#f4efe2" stroke="#cfc4a8" strokeWidth=".6"><rect x="-7" y="-2" width="14" height="4" rx="2" /><circle cx="-7" cy="-2.4" r="2.6" /><circle cx="-7" cy="2.4" r="2.6" /><circle cx="7" cy="-2.4" r="2.6" /><circle cx="7" cy="2.4" r="2.6" /></g>);
+  const Yarn = () => (<g><circle r="7" fill="#5a8ad8" /><path d="M -6 -2 q 6 -4 12 0 M -6.5 1.5 q 6 -4 13 0 M -5 4.5 q 5 -3.4 10.5 0" stroke="#8ab0f0" strokeWidth="1.3" fill="none" /><path d="M 5 5 q 6 2 9 6" stroke="#5a8ad8" strokeWidth="1.6" fill="none" /></g>);
+  const Frisbee = () => (<g><ellipse rx="10" ry="6.4" fill="#f2913e" /><ellipse rx="6.4" ry="3.8" fill="#ffb26a" /><ellipse cx="-1.4" cy="-1" rx="3" ry="1.4" fill="#ffd0a0" opacity=".8" /></g>);
+  const Gnome = () => (<g><ellipse cy="8" rx="5" ry="1.8" fill="#00000033" /><path d="M -4.4 7 C -5 2 -4 -2 0 -3 C 4 -2 5 2 4.4 7 Z" fill="#3a6ad8" /><circle cy="-4.4" r="3.2" fill="#f2c9a0" /><path d="M -3 -3.4 C -2 0 2 0 3 -3.4 L 0 2 Z" fill="#f4f0e8" /><path d="M -3.4 -6 L 0 -14 L 3.4 -6 Z" fill="#d84848" /></g>);
+  const Can = () => (<g><path d="M -6 -4 h 9 v 9 h -9 Z" fill="#5c9c58" /><rect x="-6" y="-4" width="9" height="2.4" fill="#417a3e" /><path d="M 3 -2 q 5 0 6 4" stroke="#417a3e" strokeWidth="2" fill="none" /><path d="M -6 0 q -5 -1 -6 -5 l 1.6 -1 q 2 3.4 4.4 4 Z" fill="#5c9c58" /></g>);
+  const Skateboard = () => (<g><rect x="-11" y="-3" width="22" height="5" rx="2.5" fill="#8a4fd0" /><circle cx="-6" cy="3.6" r="2.2" fill="#f2c14e" /><circle cx="6" cy="3.6" r="2.2" fill="#f2c14e" /></g>);
+  const Pot = () => (<g><circle cy="-6" r="3" fill="#e0527a" /><circle cx="-3" cy="-4.6" r="2" fill="#f2913e" /><circle cx="3" cy="-4.6" r="2" fill="#b98cff" /><path d="M -5.5 -2 h 11 l -1.6 8 h -7.8 Z" fill="#c96a4a" /><rect x="-6.4" y="-3.6" width="12.8" height="2.6" rx="1" fill="#a84f34" /></g>);
+  const Hose = () => (<g stroke="#3e8a48" fill="none"><circle r="8" strokeWidth="3" /><circle r="4.6" strokeWidth="2.6" /><path d="M 7 3 q 8 3 12 1" strokeWidth="2.4" /><rect x="18" y="2.4" width="4" height="3" fill="#f2c14e" stroke="none" /></g>);
+  const Mailbox = () => (<g><rect x="-1" y="-2" width="2.4" height="12" fill="#6e4a2a" /><path d="M -7 -8 h 11 a 4 4 0 0 1 0 8 h -11 Z" fill="#3a4048" /><path d="M -7 -8 a 4 4 0 0 0 0 8 h 2 v -8 Z" fill="#4e5866" /><rect x="4" y="-13" width="1.6" height="5" fill="#d84848" /><path d="M 4 -13 h 4.6 v 2.2 h -4.6 Z" fill="#d84848" /></g>);
+
+  const items = [
+    { x: .30, y: .20, C: Ball }, { x: .635, y: .155, C: Bowl }, { x: .255, y: .77, C: Bone },
+    { x: .685, y: .815, C: Yarn }, { x: .345, y: .61, C: Frisbee }, { x: .715, y: .335, C: Gnome },
+    { x: .16, y: .36, C: Can }, { x: .53, y: .585, C: Skateboard }, { x: .04, y: .60, C: Pot },
+    { x: .865, y: .35, C: Hose }, { x: .245, y: .402, C: Mailbox }, { x: .885, y: .585, C: Mailbox },
+  ];
+  const trees = [
+    { x: .31, y: .13, s: 1.1 }, { x: .655, y: .115, s: .95 }, { x: .36, y: .80, s: 1.05 },
+    { x: .70, y: .845, s: .9 }, { x: .035, y: .90, s: .85 }, { x: .975, y: .13, s: .9 },
+  ];
+  const beds = [
+    { x: .13, y: .335 }, { x: .49, y: .325 }, { x: .83, y: .34 },
+    { x: .18, y: .625 }, { x: .535, y: .645 }, { x: .875, y: .62 },
+  ];
+
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true"
+      style={{ position: "absolute", inset: 0, zIndex: 1, pointerEvents: "none" }}>
+      <defs>
+        <linearGradient id="sainb-asphalt" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#565b64" /><stop offset=".5" stopColor="#484d56" /><stop offset="1" stopColor="#3c4149" />
+        </linearGradient>
+        <radialGradient id="sainb-canopy" cx="40%" cy="35%" r="75%">
+          <stop offset="0" stopColor="#79c98a" /><stop offset=".55" stopColor="#4e9c5f" /><stop offset="1" stopColor="#2f6b45" />
+        </radialGradient>
+        <radialGradient id="sainb-vig" cx="50%" cy="46%" r="75%">
+          <stop offset=".6" stopColor="#000" stopOpacity="0" /><stop offset="1" stopColor="#12321a" stopOpacity=".5" />
+        </radialGradient>
+        <filter id="sainb-soft" x="-40%" y="-40%" width="180%" height="180%">
+          <feDropShadow dx="0" dy="3" stdDeviation="2.6" floodColor="#1e3a14" floodOpacity=".5" />
+        </filter>
+      </defs>
+
+      {/* mow stripes on the lawn */}
+      {Array.from({ length: 8 }, (_, i) => (
+        <rect key={i} x="0" y={(i * 0.125) * h} width={w} height={0.0625 * h} fill="#ffffff" opacity=".035" />
+      ))}
+
+      {/* street + sidewalks */}
+      <rect x="0" y={g.streetY - g.walkH} width={w} height={g.walkH} fill="#b8b4a8" />
+      <rect x="0" y={g.streetY + g.streetH} width={w} height={g.walkH} fill="#b8b4a8" />
+      {g.joints.map((x, i) => (
+        <g key={i} stroke="#98947f" strokeWidth="1.4">
+          <line x1={x} y1={g.streetY - g.walkH} x2={x} y2={g.streetY} />
+          <line x1={x + 30} y1={g.streetY + g.streetH} x2={x + 30} y2={g.streetY + g.streetH + g.walkH} />
+        </g>
+      ))}
+      <rect x="0" y={g.streetY} width={w} height={g.streetH} fill="url(#sainb-asphalt)" />
+      <rect x="0" y={g.streetY} width={w} height="3" fill="#2c3038" />
+      <rect x="0" y={g.streetY + g.streetH - 3} width={w} height="3" fill="#2c3038" />
+      {g.dashes.map((x, i) => (
+        <rect key={i} x={x} y={g.streetY + g.streetH / 2 - 2} width="30" height="4" rx="2" fill="#e8c95a" opacity=".85" />
+      ))}
+      <ellipse cx={w * .58} cy={g.streetY + g.streetH * .68} rx="13" ry="9" fill="#3a3f47" stroke="#2c3038" strokeWidth="2" />
+
+      {/* driveways: house → sidewalk */}
+      {g.houses.map((hs, i) => {
+        const dx = hs.px + hs.pw / 2 - 0.028 * w;
+        const dw = 0.056 * w;
+        const y1 = hs.topRow ? hs.py + hs.ph : g.streetY + g.streetH + g.walkH;
+        const y2 = hs.topRow ? g.streetY - g.walkH : hs.py;
+        return (
+          <g key={i}>
+            <rect x={dx} y={y1} width={dw} height={y2 - y1} fill="#c2beb2" />
+            <line x1={dx + dw / 2} y1={y1} x2={dx + dw / 2} y2={y2} stroke="#a8a496" strokeWidth="1.4" />
+          </g>
+        );
+      })}
+
+      {/* flower beds */}
+      {beds.map((b, i) => (
+        <g key={i} transform={`translate(${b.x * w} ${b.y * h})`}>
+          <ellipse rx="26" ry="8" fill="#5a4430" opacity=".8" />
+          {[-16, -6, 4, 14].map((fx, j) => (
+            <circle key={j} cx={fx} cy={j % 2 ? -2 : 2} r="3" fill={["#e0527a", "#ffd166", "#b98cff", "#ff9ecb"][(i + j) % 4]} />
+          ))}
+        </g>
+      ))}
+
+      {/* houses: shadow, roof, hip lines, ridge, chimney */}
+      {g.houses.map((hs, i) => {
+        const rx = hs.px, ry = hs.py, rw = hs.pw, rh = hs.ph;
+        const ridgeY = ry + rh / 2;
+        const inset = Math.min(rw, rh) * 0.32;
+        return (
+          <g key={i}>
+            <rect x={rx + 7} y={ry + 9} width={rw} height={rh} rx="8" fill="#1e3a14" opacity=".35" />
+            <rect x={rx} y={ry} width={rw} height={rh} rx="8" fill={hs.roof} />
+            <path d={`M ${rx} ${ry} L ${rx + inset} ${ridgeY} L ${rx} ${ry + rh} M ${rx + rw} ${ry} L ${rx + rw - inset} ${ridgeY} L ${rx + rw} ${ry + rh}`}
+              stroke={hs.ridge} strokeWidth="2.4" fill="none" opacity=".8" />
+            <path d={`M ${rx} ${ry} L ${rx + inset} ${ridgeY} L ${rx + rw - inset} ${ridgeY} L ${rx + rw} ${ry} Z`} fill="#ffffff" opacity=".10" />
+            <path d={`M ${rx} ${ry + rh} L ${rx + inset} ${ridgeY} L ${rx + rw - inset} ${ridgeY} L ${rx + rw} ${ry + rh} Z`} fill="#000000" opacity=".14" />
+            <line x1={rx + inset} y1={ridgeY} x2={rx + rw - inset} y2={ridgeY} stroke={hs.ridge} strokeWidth="3.4" strokeLinecap="round" />
+            {[0.25, 0.5, 0.75].map((t, j) => (
+              <line key={j} x1={rx + 6} y1={ry + rh * t} x2={rx + rw - 6} y2={ry + rh * t} stroke="#000" strokeWidth="1" opacity=".08" />
+            ))}
+            <rect x={rx + rw * .68} y={ry + rh * .18} width={rw * .085} height={rh * .12} rx="2" fill="#8a6a52" stroke={hs.ridge} strokeWidth="1" />
+            {i % 2 === 0 && (
+              <rect x={rx + rw * .16} y={ry + rh * .62} width={rw * .12} height={rh * .14} rx="2" fill="#b9c8cf" stroke="#7b8794" strokeWidth="1.2" opacity=".9" />
+            )}
+          </g>
+        );
+      })}
+
+      {/* bushes hugging the street-facing side of each house */}
+      {g.houses.map((hs, i) => {
+        const by = hs.topRow ? hs.py + hs.ph + 10 : hs.py - 10;
+        return (
+          <g key={i} filter="url(#sainb-soft)">
+            {[0.16, 0.5, 0.84].map((t, j) => (
+              <g key={j} transform={`translate(${hs.px + hs.pw * t} ${by})`}>
+                <circle r="9" fill="#4e9c5f" /><circle cx="-6" cy="2" r="6.4" fill="#3f8450" /><circle cx="6" cy="2" r="6.4" fill="#57a868" />
+              </g>
+            ))}
+          </g>
+        );
+      })}
+
+      {/* yard trees (canopy top-down) */}
+      {trees.map((t, i) => (
+        <g key={i} transform={`translate(${t.x * w} ${t.y * h}) scale(${t.s})`} filter="url(#sainb-soft)">
+          <circle r="34" fill="url(#sainb-canopy)" />
+          <circle cx="-12" cy="-10" r="15" fill="#79c98a" opacity=".55" />
+          <circle cx="12" cy="8" r="13" fill="#2f6b45" opacity=".6" />
+          <circle r="4" fill="#24543a" />
+        </g>
+      ))}
+
+      {/* scattered human & pet things */}
+      {items.map(({ x, y, C }, i) => (
+        <g key={i} transform={`translate(${x * w} ${y * h})`} filter="url(#sainb-soft)"><C /></g>
+      ))}
+
+      <rect x="0" y="0" width={w} height={h} fill="url(#sainb-vig)" />
+    </svg>
+  );
+}
+
 // --------------- Lake (organic shoreline, upper-right) ---------------
 // Drawn from the SAME wobble-ellipse the physics uses (lakeRho), so the
 // visible shoreline and the collision boundary always agree. Reuses the
@@ -1075,14 +1322,15 @@ function RelStats({ worldRef, id }) {
 
 // ---------------- Simulation ----------------
 function stepWorld(world, cfg, dt) {
-  const { agents, bounds } = world;
+  const { agents, bounds, def } = world;
   const now = performance.now();
+  const isWet = (x, y) => def.hasWater && inWater(bounds, x, y);
 
-  // intents: wander vs the occasional swim (species-dependent share)
+  // intents: wander vs the occasional swim (species-dependent, water worlds only)
   for (const a of agents) {
     if (a.dragging) continue;
     if (now >= a.intentUntil && a.state !== "fight" && a.state !== "friendly" && a.state !== "rescue") {
-      a.intent = Math.random() < (SWIM_P[a.species] || 0) ? "swim" : "wander";
+      a.intent = Math.random() < (def.hasWater ? SWIM_P[a.species] || 0 : 0) ? "swim" : "wander";
       a.swimTarget = null;
       a.intentUntil = now + rand(INTENT_MIN_S * 1000, INTENT_MAX_S * 1000);
     }
@@ -1098,14 +1346,14 @@ function stepWorld(world, cfg, dt) {
   }
   for (const [fa, fb] of fights) {
     const mx = (fa.x + fb.x) / 2, my = (fa.y + fb.y) / 2;
-    const wet = inWater(bounds, mx, my);
+    const fightWet = isWet(mx, my);
     const hasRescuer = agents.some((c) => c.state === "rescue" && (c.rescueFriendId === fa.id || c.rescueFriendId === fb.id));
     if (!hasRescuer) {
       // nearest free friend of either fighter, in the same medium
       let best = null, bestD = RESCUE_RADIUS, bestFriend = null;
       for (const c of agents) {
         if (c === fa || c === fb || c.dragging || !isFreeState(c)) continue;
-        if (inWater(bounds, c.x, c.y) !== wet) continue;
+        if (isWet(c.x, c.y) !== fightWet) continue;
         const friendOfA = getRel(c, fa.id, false)?.last === "friend";
         const friendOfB = getRel(c, fb.id, false)?.last === "friend";
         if (!friendOfA && !friendOfB) continue;
@@ -1195,16 +1443,16 @@ function stepWorld(world, cfg, dt) {
 
     // navigation
     if (a.state === "wander") {
-      if (a.intent === "swim" && canSwim(a.species)) {
+      if (a.intent === "swim" && canSwim(a.species) && def.hasWater) {
         // paddle between random spots inside the lake
-        const wet = inWater(bounds, a.x, a.y);
+        const wet = isWet(a.x, a.y);
         if (!a.swimTarget || Math.hypot(a.swimTarget.x - a.x, a.swimTarget.y - a.y) < 30) {
           a.swimTarget = lakePoint(bounds, rand(0, Math.PI * 2), Math.sqrt(Math.random()) * 0.72);
         }
         const dx = a.swimTarget.x - a.x, dy = a.swimTarget.y - a.y; const d = Math.hypot(dx, dy) || 1;
         const sp = cfg.speed * (wet ? 0.55 : 0.9);
         a.vx = (dx / d) * sp; a.vy = (dy / d) * sp;
-      } else if (canSwim(a.species) && inWater(bounds, a.x, a.y)) {
+      } else if (canSwim(a.species) && isWet(a.x, a.y)) {
         // dip is over — paddle straight out to the nearest shore
         const cx = LAKE.cx * bounds.w, cy = LAKE.cy * bounds.h;
         const ux = a.x - cx, uy = a.y - cy; const d = Math.hypot(ux, uy) || 1;
@@ -1233,9 +1481,9 @@ function stepWorld(world, cfg, dt) {
       if (now < a.noEventUntil || now < b.noEventUntil) continue;
       if (!isFreeState(a) || !isFreeState(b)) continue;
       if (dist(a, b) > pairRange(a, b)) continue;
-      if (inWater(bounds, a.x, a.y) !== inWater(bounds, b.x, b.y)) continue;
+      if (isWet(a.x, a.y) !== isWet(b.x, b.y)) continue;
       if (perSec(0.40, dt)) {
-        if (Math.random() < 0.5) startFriendly(a, b, bounds); else startFight(a, b, bounds);
+        if (Math.random() < 0.5) startFriendly(a, b, world); else startFight(a, b, world);
       }
     }
   }
@@ -1247,12 +1495,13 @@ function stepWorld(world, cfg, dt) {
     a.vx = clamp(a.vx, -vlim, vlim); a.vy = clamp(a.vy, -vlim, vlim);
     if (a.state !== "friendly" && a.state !== "fight") { a.x += a.vx * dt; a.y += a.vy * dt; }
 
-    // the shoreline is a wall for anyone who can't swim
-    if (!canSwim(a.species)) keepAshore(a, bounds);
+    // the shoreline is a wall for anyone who can't swim; roofs for everyone
+    if (def.hasWater && !canSwim(a.species)) keepAshore(a, bounds);
+    keepOutOfHouses(a, bounds, def.houses);
 
     // wander off one edge, amble back in from another — never pop mid-map
     if (a.x < -EDGE_OFF || a.x > bounds.w + EDGE_OFF || a.y < -EDGE_OFF || a.y > bounds.h + EDGE_OFF) {
-      enterFromEdge(a, bounds, sp);
+      enterFromEdge(a, world, sp);
     }
   }
 }
@@ -1266,42 +1515,56 @@ function isFreeState(a) {
 // lunges (a few px each) read as real physical contact. Unless both animals
 // are actually swimming, the meeting point is pushed back ashore so land
 // pairs never lock inside the lake.
-function lockTogether(a, b, bounds) {
+function lockTogether(a, b, world) {
+  const { bounds, def } = world;
   let dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
   if (d < 0.001) { dx = 1; dy = 0; d = 1; }
   const nx = dx / d, ny = dy / d;
   let mx = clamp((a.x + b.x) / 2, 90, bounds.w - 90);
   let my = clamp((a.y + b.y) / 2, 120, bounds.h - 110);
-  const bothSwimming = inWater(bounds, a.x, a.y) && inWater(bounds, b.x, b.y);
-  if (!bothSwimming) {
-    const r = lakeRho(bounds, mx, my);
-    if (r < 1.08) {
-      const cx = LAKE.cx * bounds.w, cy = LAKE.cy * bounds.h;
-      const s = 1.08 / Math.max(r, 0.05);
-      mx = cx + (mx - cx) * s; my = cy + (my - cy) * s;
+  if (def.hasWater) {
+    const bothSwimming = inWater(bounds, a.x, a.y) && inWater(bounds, b.x, b.y);
+    if (!bothSwimming) {
+      const r = lakeRho(bounds, mx, my);
+      if (r < 1.08) {
+        const cx = LAKE.cx * bounds.w, cy = LAKE.cy * bounds.h;
+        const s = 1.08 / Math.max(r, 0.05);
+        mx = cx + (mx - cx) * s; my = cy + (my - cy) * s;
+      }
     }
+  }
+  // never meet on a roof: nudge the meeting point out along the closest edge
+  const m = 18;
+  for (const hs of def.houses) {
+    const l = hs.x * bounds.w - m, r2 = (hs.x + hs.w) * bounds.w + m;
+    const t = hs.y * bounds.h - m, b2 = (hs.y + hs.h) * bounds.h + m;
+    if (mx <= l || mx >= r2 || my <= t || my >= b2) continue;
+    const dl = mx - l, dr = r2 - mx, dt2 = my - t, db = b2 - my;
+    const min = Math.min(dl, dr, dt2, db);
+    if (min === dl) mx = l; else if (min === dr) mx = r2;
+    else if (min === dt2) my = t; else my = b2;
   }
   const half = (a.r + b.r) * 0.56;
   a.lockX = mx - nx * half; a.lockY = my - ny * half;
   b.lockX = mx + nx * half; b.lockY = my + ny * half;
 }
 
-function startFriendly(a, b, bounds) {
+function startFriendly(a, b, world) {
   const now = performance.now();
   a.state = b.state = "friendly"; a.targetId = b.id; b.targetId = a.id;
   a.engageEnd = b.engageEnd = now + ENGAGE_MS;
-  lockTogether(a, b, bounds);
+  lockTogether(a, b, world);
   a.vx = a.vy = 0; b.vx = b.vy = 0;
   const ra = getRel(a, b.id); const rb = getRel(b, a.id); ra.last = 'friend'; rb.last = 'friend';
 }
 
 // Fights start unimpeded; a nearby friend breaks them up MID-fight (see the
 // rescue logic in stepWorld) — far more visible than vetoing the fight.
-function startFight(a, b, bounds) {
+function startFight(a, b, world) {
   const now = performance.now();
   a.state = b.state = "fight"; a.targetId = b.id; b.targetId = a.id;
   a.engageEnd = b.engageEnd = now + ENGAGE_MS;
-  lockTogether(a, b, bounds);
+  lockTogether(a, b, world);
   a.vx = a.vy = 0; b.vx = b.vy = 0;
   const ra = getRel(a, b.id); const rb = getRel(b, a.id); ra.last = 'rival'; rb.last = 'rival';
 }
@@ -1359,7 +1622,7 @@ function renderWorld(world, iconsRef) {
       const walking = a.state !== 'friendly' && a.state !== 'fight' && (wasWalking ? dispV > 5 : dispV > 10);
       sprite.dataset.walking = walking ? '1' : '';
       // in the lake: legs tuck, ripple ring shows, dust becomes splash (CSS)
-      sprite.dataset.swimming = canSwim(a.species) && inWater(world.bounds, a.x, a.y) ? '1' : '';
+      sprite.dataset.swimming = world.def.hasWater && canSwim(a.species) && inWater(world.bounds, a.x, a.y) ? '1' : '';
       let dir = Number(sprite.dataset.dir || '1');
       if (a.vx < -8) dir = -1; else if (a.vx > 8) dir = 1;
       let jx = 0, jy = 0;
