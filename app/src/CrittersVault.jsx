@@ -35,6 +35,8 @@ function RabbitDraw({ uid }) {
         <ellipse cx="58" cy="78" rx="26" ry="17.5" fill={`url(#${uid}f)`} />
         <circle cx="45" cy="82" r="12.5" fill={F[1]} />
         <path d="M 40 89 q 3 -8 11 -8" stroke={F[2]} strokeWidth="1.4" fill="none" strokeLinecap="round" opacity=".45" />
+        {/* neck/chest fill so the head reads attached to the body */}
+        <ellipse cx="74" cy="68" rx="10" ry="9" fill={F[0]} />
         <Under cx={61} cy={78} rx={22} ry={17.5} color="#fffdf8" k={.52} />
         <BellyShade cx={58} cy={93} rx={19} />
       </g>
@@ -49,9 +51,11 @@ function RabbitDraw({ uid }) {
         </g>
         <circle cx="84" cy="49" r="18.5" fill={`url(#${uid}f)`} />
         <path d="M 93 51 l 4.4 -3 4.4 3 -4.4 3.4 Z" fill={nose} />
-        <path d="M 96 57 q 1.6 3 4 3.4 M 96 57 q -1.6 3 -4 3.4" stroke={ink} strokeWidth="1.7" fill="none" strokeLinecap="round" />
+        {/* smiling "w" mouth: each arc bulges DOWN then curls up at the end */}
+        <path d="M 96 57 q 1.8 3.8 5 2 M 96 57 q -1.8 3.8 -5 2" stroke={ink} strokeWidth="1.7" fill="none" strokeLinecap="round" />
         <rect x="94" y="59.5" width="3" height="4.6" rx="1.2" fill="#fff" stroke={F[2]} strokeWidth=".5" />
         <path d="M 100 52 l 12 -2.4 M 100 55 l 12 1.2" stroke="#d9c8b4" strokeWidth="1.1" strokeLinecap="round" />
+        <path d="M 90 52 l -12 -2.4 M 90 55 l -12 1.2" stroke="#d9c8b4" strokeWidth="1.1" strokeLinecap="round" />
         <FaceKit lid={F[1]} e1={[77, 46]} e2={[92, 44]} er={3.3} iris={ink} mouths={false} />
       </g>
     </g>
@@ -72,6 +76,8 @@ function CatDraw({ uid }) {
       <g className="sai-crit-body">
         <ellipse cx="57" cy="78" rx="23.5" ry="15.5" fill={`url(#${uid}f)`} />
         <path d="M 42 68 q 8 -5 16 -1 M 38 76 q 7 -4 13 -1 M 48 62 q 7 -3 13 0" stroke={F[2]} strokeWidth="2.4" fill="none" strokeLinecap="round" opacity=".5" />
+        {/* neck fill so the head reads attached to the body */}
+        <ellipse cx="73" cy="67" rx="10" ry="8.5" fill={F[1]} />
         <Under cx={58} cy={78} rx={21} ry={15.5} color={belly} k={.5} opacity={.95} />
         <path d="M 71 66 C 74 71 74 78 71 83 C 68 79 67 71 68 67 Z" fill={belly} opacity=".9" />
         <BellyShade cx={57} cy={92} rx={17} />

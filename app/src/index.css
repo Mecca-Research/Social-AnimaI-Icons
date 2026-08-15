@@ -914,3 +914,22 @@ body {
   .sai-sprite[data-state="sniff"] .sai-crit-tail,
   .sainb-cloud{ animation:none; }
 }
+
+/* ==================== v0.15 labrador folded ears ==================== */
+/* The lab's ears are flaps that hang from the CROWN, so the generic ear rig
+   (pivot at the flap's bottom tip) swept the attached corner off his head.
+   Pivot at the attachment corner instead and keep the motion subtle. */
+.sai-crit--labrador .sai-crit-ear{ transform-origin:96% 4%;
+  animation:sai-crit-labear 6.2s ease-in-out infinite var(--sai-crit-ph2,0s); }
+.sai-crit--labrador .sai-crit-ear-r{ transform-origin:4% 4%;
+  animation-delay:calc(var(--sai-crit-ph2,0s) - 0.5s); }
+.sai-sprite[data-walking="1"] .sai-crit--labrador .sai-crit-ear{
+  animation:sai-crit-labearwalk var(--sai-gait,.5s) ease-in-out infinite; }
+.sai-sprite[data-state="friendly"] .sai-crit--labrador .sai-crit-ear{
+  animation:sai-crit-labearperk 1.24s ease-in-out infinite; }
+@keyframes sai-crit-labear{ 0%,84%,100%{transform:rotate(0);} 88%{transform:rotate(-2.4deg);} 92%{transform:rotate(1.6deg);} 96%{transform:rotate(0);} }
+@keyframes sai-crit-labearwalk{ 0%,100%{transform:rotate(-1.4deg);} 50%{transform:rotate(2deg);} }
+@keyframes sai-crit-labearperk{ 0%,100%{transform:rotate(0);} 40%{transform:rotate(-2deg);} 60%{transform:rotate(-1.3deg);} }
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-state="friendly"] .sai-crit--labrador .sai-crit-ear{ animation:none; }
+}
