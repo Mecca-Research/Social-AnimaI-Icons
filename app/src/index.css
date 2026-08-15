@@ -819,3 +819,63 @@ body {
   .sai-sprite[data-walking="1"] .sai-crit--ferret .sai-crit-body,
   .sai-sprite[data-walking="1"] .sai-crit--axolotl .sai-crit-body{ animation:none; }
 }
+
+
+/* ==================== v0.13 rooftops & funnier walks ==================== */
+/* airborne (flying to/from a roof, fluttering over a fence) */
+.sai-sprite[data-air="1"] .sai-crit-wing{ animation:sai-crit-airflap .16s ease-in-out infinite; }
+@keyframes sai-crit-airflap{ 0%,100%{transform:rotate(6deg);} 50%{transform:rotate(-32deg);} }
+.sai-sprite[data-air="1"] .sai-crit-root{ animation:sai-crit-airlean .5s ease-in-out infinite; }
+@keyframes sai-crit-airlean{ 0%,100%{transform:rotate(-3deg) translateY(0);} 50%{transform:rotate(-5deg) translateY(-1.4px);} }
+.sai-sprite[data-air="1"] .sai-crit-shadow{ opacity:.14; animation:none; }
+/* birds tuck their legs in flight */
+.sai-sprite[data-air="1"] .sai-crit--parrot .sai-crit-leg,
+.sai-sprite[data-air="1"] .sai-crit--pigeon .sai-crit-leg,
+.sai-sprite[data-air="1"] .sai-crit--cockatiel .sai-crit-leg{ opacity:0; }
+
+/* the cat's rooftop hunt: low freeze, then a streaking dash */
+.sai-sprite[data-state="crouch"] .sai-crit-body{ animation:sai-crit-crouch .5s ease-out forwards; }
+@keyframes sai-crit-crouch{ 100%{transform:translateY(3px) scaleY(.8);} }
+.sai-sprite[data-state="crouch"] .sai-crit-head{ animation:sai-crit-crouchhead .5s ease-out forwards; }
+@keyframes sai-crit-crouchhead{ 100%{transform:translateY(3.6px) rotate(2.4deg);} }
+.sai-sprite[data-state="crouch"] .sai-crit-tail{ animation:sai-crit-taillash .45s ease-in-out infinite; }
+.sai-sprite[data-state="dash"] .sai-crit-root{ animation:sai-crit-fleelean .4s ease-in-out infinite; }
+.sai-sprite[data-state="dash"] .sai-crit-leg-fr,
+.sai-sprite[data-state="dash"] .sai-crit-leg-bl{ animation:sai-crit-swingA .22s linear infinite; }
+.sai-sprite[data-state="dash"] .sai-crit-leg-fl,
+.sai-sprite[data-state="dash"] .sai-crit-leg-br{ animation:sai-crit-swingB .22s linear infinite; }
+.sai-sprite[data-state="dash"] .sai-crit-streaks{ opacity:1; animation:sai-crit-streak .35s linear infinite; }
+
+/* pigeon 2.0: comedy strut — big head pecks + body waddle */
+.sai-sprite[data-walking="1"] .sai-crit--pigeon .sai-crit-head{ animation:sai-crit-pigeonpeck var(--sai-gait,.32s) ease-in-out infinite; }
+@keyframes sai-crit-pigeonpeck{ 0%,100%{transform:translate(0,0) rotate(3.5deg);} 50%{transform:translate(4.2px,-1px) rotate(-5deg);} }
+.sai-sprite[data-walking="1"] .sai-crit--pigeon .sai-crit-body{ animation:sai-crit-pigeonwaddle var(--sai-gait,.32s) ease-in-out infinite; }
+@keyframes sai-crit-pigeonwaddle{ 0%,100%{transform:rotate(-2.8deg) translateY(0);} 50%{transform:rotate(2.8deg) translateY(-1.6px);} }
+
+/* parrot 2.0: springy hop with a head bob */
+.sai-sprite[data-walking="1"] .sai-crit--parrot .sai-crit-body{ animation:sai-crit-parrothop var(--sai-gait,.34s) ease-in-out infinite; }
+@keyframes sai-crit-parrothop{ 0%,100%{transform:translateY(0) rotate(0);} 50%{transform:translateY(-3.6px) rotate(-2deg);} }
+.sai-sprite[data-walking="1"] .sai-crit--parrot .sai-crit-head{ animation:sai-crit-owlhophead var(--sai-gait,.34s) ease-in-out infinite; }
+
+/* python 2.0: stronger slither wave over the coils */
+.sai-sprite[data-walking="1"] .sai-crit--python .sai-crit-body{ animation:sai-crit-slither2 var(--sai-gait,.6s) ease-in-out infinite; }
+@keyframes sai-crit-slither2{ 0%,100%{transform:skewX(8deg) translateY(0) rotate(.6deg);} 50%{transform:skewX(-8deg) translateY(-1.4px) rotate(-.6deg);} }
+
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-air="1"] .sai-crit-wing,
+  .sai-sprite[data-air="1"] .sai-crit-root,
+  .sai-sprite[data-state="crouch"] .sai-crit-body,
+  .sai-sprite[data-state="crouch"] .sai-crit-head,
+  .sai-sprite[data-state="crouch"] .sai-crit-tail,
+  .sai-sprite[data-state="dash"] .sai-crit-root,
+  .sai-sprite[data-state="dash"] .sai-crit-leg-fr,
+  .sai-sprite[data-state="dash"] .sai-crit-leg-bl,
+  .sai-sprite[data-state="dash"] .sai-crit-leg-fl,
+  .sai-sprite[data-state="dash"] .sai-crit-leg-br,
+  .sai-sprite[data-state="dash"] .sai-crit-streaks,
+  .sai-sprite[data-walking="1"] .sai-crit--pigeon .sai-crit-head,
+  .sai-sprite[data-walking="1"] .sai-crit--pigeon .sai-crit-body,
+  .sai-sprite[data-walking="1"] .sai-crit--parrot .sai-crit-body,
+  .sai-sprite[data-walking="1"] .sai-crit--parrot .sai-crit-head,
+  .sai-sprite[data-walking="1"] .sai-crit--python .sai-crit-body{ animation:none; }
+}

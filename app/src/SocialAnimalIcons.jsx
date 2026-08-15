@@ -100,14 +100,86 @@ function keepAshore(a, bounds) {
 // House roofs are hard obstacles: rectangles in stage fractions, used by
 // BOTH the scene drawing and the physics so animals never cross a roof.
 const NEIGHBORHOOD_HOUSES = [
-  { x: .05, y: .07,  w: .17, h: .22, roof: "#c96a4a", ridge: "#8a3f2a" },
-  { x: .40, y: .055, w: .18, h: .23, roof: "#7b8794", ridge: "#4e5866" },
-  { x: .75, y: .075, w: .17, h: .22, roof: "#8a6a4a", ridge: "#5a422a" },
-  { x: .09, y: .66,  w: .18, h: .23, roof: "#4a8a8a", ridge: "#2e5c5c" },
-  { x: .45, y: .68,  w: .17, h: .22, roof: "#a85252", ridge: "#703434" },
-  { x: .79, y: .655, w: .17, h: .23, roof: "#6a7a6a", ridge: "#465446" },
+  { x: .07, y: .07,  w: .19, h: .23,  roof: "#c96a4a", ridge: "#8a3f2a" },
+  { x: .66, y: .065, w: .19, h: .235, roof: "#7b8794", ridge: "#4e5866" },
+  { x: .12, y: .66,  w: .19, h: .23,  roof: "#4a8a8a", ridge: "#2e5c5c" },
+  { x: .62, y: .67,  w: .19, h: .23,  roof: "#a85252", ridge: "#703434" },
 ];
 const STREET = { y: .42, h: .125, walk: .026 }; // asphalt band + sidewalk strips
+
+// white picket fences around each yard, with a gap at the driveway.
+// Thin rects in stage fractions — the scene draws pickets along these
+// exact rects, and only the labrador treats them as walls.
+const NEIGHBORHOOD_FENCES = (() => {
+  const segs = [];
+  const tx = .004, ty = .007;
+  for (const hs of NEIGHBORHOOD_HOUSES) {
+    const topRow = hs.y < .5;
+    const yx = hs.x - .05, yw = hs.w + .10;
+    const yy = topRow ? hs.y - .055 : STREET.y + STREET.h + STREET.walk + .012;
+    const yb = topRow ? STREET.y - STREET.walk - .012 : hs.y + hs.h + .055;
+    const yh = yb - yy;
+    const gcx = hs.x + hs.w / 2, gw = .08;
+    segs.push({ x: yx, y: yy, w: tx, h: yh });                                   // west rail
+    segs.push({ x: yx + yw - tx, y: yy, w: tx, h: yh });                         // east rail
+    segs.push({ x: yx, y: topRow ? yy : yb - ty, w: yw, h: ty });                // back rail
+    const sy = topRow ? yb - ty : yy;                                            // street side, driveway gap
+    segs.push({ x: yx, y: sy, w: (gcx - gw / 2) - yx, h: ty });
+    segs.push({ x: gcx + gw / 2, y: sy, w: (yx + yw) - (gcx + gw / 2), h: ty });
+  }
+  return segs;
+})();
+
+function inAnyFence(bounds, fences, x, y, m = 6) {
+  for (const f of fences) {
+    if (x > f.x * bounds.w - m && x < (f.x + f.w) * bounds.w + m &&
+        y > f.y * bounds.h - m && y < (f.y + f.h) * bounds.h + m) return true;
+  }
+  return false;
+}
+// the dog can't fit between the pickets: slide along the fence line
+function keepOutOfFences(a, bounds, fences) {
+  const m = 5;
+  for (const f of fences) {
+    const l = f.x * bounds.w - m, r2 = (f.x + f.w) * bounds.w + m;
+    const t = f.y * bounds.h - m, b2 = (f.y + f.h) * bounds.h + m;
+    if (a.x <= l || a.x >= r2 || a.y <= t || a.y >= b2) continue;
+    const dl = a.x - l, dr = r2 - a.x, dt2 = a.y - t, db = b2 - a.y;
+    const min = Math.min(dl, dr, dt2, db);
+    if (min === dl) { a.x = l; if (a.vx > 0) a.vx = 0; }
+    else if (min === dr) { a.x = r2; if (a.vx < 0) a.vx = 0; }
+    else if (min === dt2) { a.y = t; if (a.vy > 0) a.vy = 0; }
+    else { a.y = b2; if (a.vy < 0) a.vy = 0; }
+  }
+}
+
+// ---------------- Rooftop life ----------------
+const FLYERS = new Set(["parrot", "pigeon", "cockatiel"]); // fly up & perch
+const ROOF_Z = 46;      // visual elevation of a roof, px
+const PERCH_P = 0.35;   // birds' chance per intent roll to go perch
+const PATROL_P = 0.3;   // the cat's chance per intent roll to patrol a roof
+const ROOF_STATES = new Set(["roofwalk", "patrol", "crouch", "dash"]);
+const AIR_STATES = new Set(["flyup", "flydown"]);
+
+function roofRect(bounds, hs, m = 18) {
+  return { l: hs.x * bounds.w + m, r: (hs.x + hs.w) * bounds.w - m, t: hs.y * bounds.h + m, b: (hs.y + hs.h) * bounds.h - m };
+}
+function roofPoint(bounds, hs, m = 24) {
+  const rr = roofRect(bounds, hs, m);
+  return { x: rand(rr.l, rr.r), y: rand(rr.t, rr.b) };
+}
+// a safe landing spot on the ground near a house (for the cat's hop-off)
+function besideRoof(world, hs, species) {
+  const { bounds } = world;
+  const cx = (hs.x + hs.w / 2) * bounds.w, cy = (hs.y + hs.h / 2) * bounds.h;
+  for (let i = 0; i < 20; i++) {
+    const ang = rand(0, Math.PI * 2);
+    const x = cx + Math.cos(ang) * (hs.w * bounds.w * 0.5 + rand(50, 110));
+    const y = cy + Math.sin(ang) * (hs.h * bounds.h * 0.5 + rand(50, 110));
+    if (x > 40 && x < bounds.w - 40 && y > 60 && y < bounds.h - 60 && spawnSafe(world, x, y, species)) return { x, y };
+  }
+  return interiorPoint(world, species);
+}
 
 function inAnyHouse(bounds, houses, x, y, m = 16) {
   for (const hs of houses) {
@@ -143,8 +215,9 @@ const WORLDS = {
   },
   neighborhood: {
     key: "neighborhood", label: "🏘️ Neighborhood", roster: PET_SPECIES,
-    hasWater: false, houses: NEIGHBORHOOD_HOUSES,
-    fallback: { x: .33, y: .48 }, // the street is always open
+    hasWater: false, houses: NEIGHBORHOOD_HOUSES, fences: NEIGHBORHOOD_FENCES,
+    perching: true, // birds perch on roofs; the cat patrols them
+    fallback: { x: .45, y: .48 }, // the street is always open
     bg: "linear-gradient(165deg,#84b96a 0%,#6da457 46%,#568c44 100%)",
   },
 };
@@ -218,6 +291,12 @@ function makeAgent(world, species) {
     intentUntil: performance.now() + rand(INTENT_MIN_S*1000, INTENT_MAX_S*1000),
     swimTarget: null,
     rescueFriendId: null,
+    // rooftop life
+    z: 0,            // visual elevation (px)
+    roofI: -1,       // which roof, while up there
+    airTarget: null, // where a flight/hop is headed
+    chaseId: null,   // the bird the cat is stalking
+    stateUntil: 0,   // generic state timer (perch time, crouch, dash)
   };
 }
 
@@ -918,19 +997,20 @@ function NeighborhoodScene({ bounds }) {
   const Mailbox = () => (<g><rect x="-1" y="-2" width="2.4" height="12" fill="#6e4a2a" /><path d="M -7 -8 h 11 a 4 4 0 0 1 0 8 h -11 Z" fill="#3a4048" /><path d="M -7 -8 a 4 4 0 0 0 0 8 h 2 v -8 Z" fill="#4e5866" /><rect x="4" y="-13" width="1.6" height="5" fill="#d84848" /><path d="M 4 -13 h 4.6 v 2.2 h -4.6 Z" fill="#d84848" /></g>);
 
   const items = [
-    { x: .30, y: .20, C: Ball }, { x: .635, y: .155, C: Bowl }, { x: .255, y: .77, C: Bone },
-    { x: .685, y: .815, C: Yarn }, { x: .345, y: .61, C: Frisbee }, { x: .715, y: .335, C: Gnome },
-    { x: .16, y: .36, C: Can }, { x: .53, y: .585, C: Skateboard }, { x: .04, y: .60, C: Pot },
-    { x: .865, y: .35, C: Hose }, { x: .245, y: .402, C: Mailbox }, { x: .885, y: .585, C: Mailbox },
+    { x: .42, y: .16, C: Ball }, { x: .50, y: .30, C: Bowl }, { x: .44, y: .78, C: Bone },
+    { x: .935, y: .74, C: Yarn }, { x: .475, y: .625, C: Frisbee }, { x: .155, y: .315, C: Gnome },
+    { x: .715, y: .30, C: Can }, { x: .53, y: .485, C: Skateboard }, { x: .955, y: .34, C: Pot },
+    { x: .245, y: .755, C: Hose }, { x: .34, y: .405, C: Mailbox }, { x: .565, y: .59, C: Mailbox },
   ];
   const trees = [
-    { x: .31, y: .13, s: 1.1 }, { x: .655, y: .115, s: .95 }, { x: .36, y: .80, s: 1.05 },
-    { x: .70, y: .845, s: .9 }, { x: .035, y: .90, s: .85 }, { x: .975, y: .13, s: .9 },
+    { x: .455, y: .12, s: 1.1 }, { x: .545, y: .84, s: 1.0 }, { x: .955, y: .90, s: .9 },
+    { x: .035, y: .88, s: .85 }, { x: .975, y: .12, s: .9 }, { x: .025, y: .16, s: .8 },
   ];
   const beds = [
-    { x: .13, y: .335 }, { x: .49, y: .325 }, { x: .83, y: .34 },
-    { x: .18, y: .625 }, { x: .535, y: .645 }, { x: .875, y: .62 },
+    { x: .165, y: .345 }, { x: .755, y: .345 },
+    { x: .215, y: .625 }, { x: .715, y: .635 },
   ];
+  const fences = NEIGHBORHOOD_FENCES.map((f) => ({ x: f.x * w, y: f.y * h, fw: f.w * w, fh: f.h * h }));
 
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true"
@@ -1031,6 +1111,42 @@ function NeighborhoodScene({ bounds }) {
                 <circle r="9" fill="#4e9c5f" /><circle cx="-6" cy="2" r="6.4" fill="#3f8450" /><circle cx="6" cy="2" r="6.4" fill="#57a868" />
               </g>
             ))}
+          </g>
+        );
+      })}
+
+      {/* white picket fences (same rects the dog collides with) */}
+      {fences.map((f, i) => {
+        const horiz = f.fw > f.fh;
+        const picks = [];
+        if (horiz) {
+          for (let px = f.x + 5; px < f.x + f.fw - 3; px += 13) picks.push(px);
+        } else {
+          for (let py = f.y + 5; py < f.y + f.fh - 3; py += 13) picks.push(py);
+        }
+        const cy = f.y + f.fh / 2, cx = f.x + f.fw / 2;
+        return (
+          <g key={i}>
+            {horiz ? (
+              <>
+                <rect x={f.x} y={cy + 1} width={f.fw} height="2.4" fill="#d8d8d0" />
+                <rect x={f.x} y={cy - 4} width={f.fw} height="2.2" fill="#eeeee8" />
+                {picks.map((px, j) => (
+                  <path key={j} d={`M ${px - 2.4} ${cy + 6} L ${px - 2.4} ${cy - 6} L ${px} ${cy - 10} L ${px + 2.4} ${cy - 6} L ${px + 2.4} ${cy + 6} Z`}
+                    fill="#f6f6f0" stroke="#c2c2b8" strokeWidth=".7" />
+                ))}
+              </>
+            ) : (
+              <>
+                <rect x={cx - 1.2} y={f.y} width="2.4" height={f.fh} fill="#e4e4dc" />
+                {picks.map((py, j) => (
+                  <g key={j}>
+                    <rect x={cx - 4} y={py - 2.6} width="8" height="6.6" rx="1.4" fill="#f6f6f0" stroke="#c2c2b8" strokeWidth=".7" />
+                    <rect x={cx - 4} y={py + 2.4} width="8" height="1.6" fill="#cacac0" />
+                  </g>
+                ))}
+              </>
+            )}
           </g>
         );
       })}
@@ -1326,11 +1442,20 @@ function stepWorld(world, cfg, dt) {
   const now = performance.now();
   const isWet = (x, y) => def.hasWater && inWater(bounds, x, y);
 
-  // intents: wander vs the occasional swim (species-dependent, water worlds only)
+  // intents: wander, the occasional swim (water worlds), or a trip up a roof
   for (const a of agents) {
     if (a.dragging) continue;
-    if (now >= a.intentUntil && a.state !== "fight" && a.state !== "friendly" && a.state !== "rescue") {
-      a.intent = Math.random() < (def.hasWater ? SWIM_P[a.species] || 0 : 0) ? "swim" : "wander";
+    const busy = a.state === "fight" || a.state === "friendly" || a.state === "rescue" ||
+      AIR_STATES.has(a.state) || ROOF_STATES.has(a.state);
+    if (now >= a.intentUntil && !busy) {
+      const swimP = def.hasWater ? SWIM_P[a.species] || 0 : 0;
+      const perchP = def.perching && FLYERS.has(a.species) ? PERCH_P : 0;
+      const patrolP = def.perching && a.species === "cat" ? PATROL_P : 0;
+      const roll = Math.random();
+      a.intent = roll < swimP ? "swim"
+        : roll < swimP + perchP ? "perch"
+        : roll < swimP + patrolP ? "patrol"
+        : "wander";
       a.swimTarget = null;
       a.intentUntil = now + rand(INTENT_MIN_S * 1000, INTENT_MAX_S * 1000);
     }
@@ -1426,6 +1551,81 @@ function stepWorld(world, cfg, dt) {
       }
     }
 
+    // ---- rooftop life: birds fly up & perch, the cat hops up & patrols ----
+    if (a.state === "flyup") {
+      const t = a.airTarget;
+      if (!t || a.roofI < 0 || !def.houses[a.roofI]) { a.state = "wander"; }
+      else {
+        const dx = t.x - a.x, dy = t.y - a.y, d = Math.hypot(dx, dy) || 1;
+        const sp = cfg.speed * (a.species === "cat" ? 1.5 : 1.8);
+        a.vx = (dx / d) * sp; a.vy = (dy / d) * sp;
+        a.z += (ROOF_Z - a.z) * Math.min(1, dt * 5);
+        if (d < 20) {
+          a.x = t.x; a.y = t.y; a.vx = a.vy = 0; a.z = ROOF_Z;
+          if (a.species === "cat") { a.state = "patrol"; a.stateUntil = now + rand(5000, 9000); }
+          else { a.state = "roofwalk"; a.stateUntil = now + rand(6000, 14000); }
+          a.airTarget = roofPoint(bounds, def.houses[a.roofI]);
+        }
+      }
+    } else if (a.state === "roofwalk" || a.state === "patrol") {
+      a.z = ROOF_Z;
+      const hs = def.houses[a.roofI];
+      if (!hs) { a.state = "flydown"; a.airTarget = interiorPoint(world, a.species); }
+      else {
+        const t = a.airTarget || (a.airTarget = roofPoint(bounds, hs));
+        const dx = t.x - a.x, dy = t.y - a.y, d = Math.hypot(dx, dy) || 1;
+        if (d < 14) { a.airTarget = roofPoint(bounds, hs); a.vx *= .5; a.vy *= .5; }
+        else { const sp = cfg.speed * (a.state === "patrol" ? 0.45 : 0.5); a.vx = (dx / d) * sp; a.vy = (dy / d) * sp; }
+        if (a.state === "patrol") {
+          // a bird on my roof? freeze, then pounce
+          const prey = agents.find((c) => FLYERS.has(c.species) && c.roofI === a.roofI && c.state === "roofwalk");
+          if (prey) { a.state = "crouch"; a.chaseId = prey.id; a.stateUntil = now + 900; a.vx = a.vy = 0; }
+        }
+        if ((a.state === "roofwalk" || a.state === "patrol") && now >= a.stateUntil) {
+          a.state = "flydown";
+          a.airTarget = a.species === "cat" ? besideRoof(world, hs, a.species) : interiorPoint(world, a.species);
+          a.intent = "wander"; a.intentUntil = now + rand(INTENT_MIN_S * 1000, INTENT_MAX_S * 1000);
+        }
+      }
+    } else if (a.state === "crouch") {
+      a.vx = a.vy = 0; a.z = ROOF_Z;
+      if (now >= a.stateUntil) {
+        const prey = agents.find((c) => c.id === a.chaseId);
+        a.state = "dash"; a.stateUntil = now + 1600;
+        a.airTarget = prey ? { x: prey.x, y: prey.y } : roofPoint(bounds, def.houses[a.roofI]);
+        if (prey && prey.roofI === a.roofI && prey.state === "roofwalk") {
+          // the bird bails for the ground
+          prey.state = "flydown"; prey.roofI = -1;
+          prey.airTarget = interiorPoint(world, prey.species);
+          prey.intent = "wander"; prey.noEventUntil = Math.max(prey.noEventUntil, now + 3000);
+        }
+      }
+    } else if (a.state === "dash") {
+      a.z = ROOF_Z;
+      const t = a.airTarget || roofPoint(bounds, def.houses[a.roofI]);
+      const dx = t.x - a.x, dy = t.y - a.y, d = Math.hypot(dx, dy) || 1;
+      const sp = cfg.speed * 2.3;
+      a.vx = (dx / d) * sp; a.vy = (dy / d) * sp;
+      if (d < 26 || now >= a.stateUntil) {
+        a.state = "patrol"; a.stateUntil = now + rand(1400, 2400); a.chaseId = null;
+        a.airTarget = roofPoint(bounds, def.houses[a.roofI]);
+      }
+    } else if (a.state === "flydown") {
+      const t = a.airTarget;
+      if (!t) { a.state = "wander"; }
+      else {
+        const dx = t.x - a.x, dy = t.y - a.y, d = Math.hypot(dx, dy) || 1;
+        const sp = cfg.speed * (a.species === "cat" ? 1.5 : 1.7);
+        a.vx = (dx / d) * sp; a.vy = (dy / d) * sp;
+        const zT = Math.min(a.z, Math.max(0, (d - 30) * 0.35));
+        a.z += (zT - a.z) * Math.min(1, dt * 4);
+        if (d < 24) {
+          a.z = 0; a.roofI = -1; a.airTarget = null;
+          a.state = "cooldown"; a.noEventUntil = Math.max(a.noEventUntil, now + 1200);
+        }
+      }
+    }
+
     if (a.state === "separate") {
       if (now >= a.separateEnd) { a.state = "cooldown"; }
       // drift with current vx,vy until separateEnd
@@ -1443,6 +1643,13 @@ function stepWorld(world, cfg, dt) {
 
     // navigation
     if (a.state === "wander") {
+      // launch a roof trip when the intent calls for one
+      if ((a.intent === "perch" || a.intent === "patrol") && def.houses.length && a.z === 0) {
+        a.roofI = (Math.random() * def.houses.length) | 0;
+        a.airTarget = roofPoint(bounds, def.houses[a.roofI]);
+        a.state = "flyup"; a.intent = "wander";
+        continue;
+      }
       if (a.intent === "swim" && canSwim(a.species) && def.hasWater) {
         // paddle between random spots inside the lake
         const wet = isWet(a.x, a.y);
@@ -1480,6 +1687,7 @@ function stepWorld(world, cfg, dt) {
       if (a.dragging || b.dragging) continue;
       if (now < a.noEventUntil || now < b.noEventUntil) continue;
       if (!isFreeState(a) || !isFreeState(b)) continue;
+      if (a.z > 2 || b.z > 2) continue; // ground-level only
       if (dist(a, b) > pairRange(a, b)) continue;
       if (isWet(a.x, a.y) !== isWet(b.x, b.y)) continue;
       if (perSec(0.40, dt)) {
@@ -1488,19 +1696,40 @@ function stepWorld(world, cfg, dt) {
     }
   }
 
-  // integrate motion, shoreline collision, smooth edge wrap
+  // integrate motion, collisions (shoreline / roofs / fences), edge wrap
   for (const a of agents) {
     if (a.dragging) continue;
-    const sp = cfg.speed; const vlim = sp * 1.2;
+    const sp = cfg.speed;
+    const vmul = a.state === "dash" ? 2.4 : AIR_STATES.has(a.state) ? 1.9 : a.state === "rescue" ? 1.6 : 1.2;
+    const vlim = sp * vmul;
     a.vx = clamp(a.vx, -vlim, vlim); a.vy = clamp(a.vy, -vlim, vlim);
     if (a.state !== "friendly" && a.state !== "fight") { a.x += a.vx * dt; a.y += a.vy * dt; }
 
-    // the shoreline is a wall for anyone who can't swim; roofs for everyone
-    if (def.hasWater && !canSwim(a.species)) keepAshore(a, bounds);
-    keepOutOfHouses(a, bounds, def.houses);
+    const onRoof = a.roofI >= 0 && ROOF_STATES.has(a.state);
+    const inAir = AIR_STATES.has(a.state);
+
+    // whoever is up on a roof stays on that roof
+    if (onRoof && def.houses[a.roofI]) {
+      const rr = roofRect(bounds, def.houses[a.roofI]);
+      a.x = clamp(a.x, rr.l, rr.r); a.y = clamp(a.y, rr.t, rr.b);
+    }
+
+    // grounded rules only
+    if (!onRoof && !inAir) {
+      a.roofI = -1;
+      if (a.z > 0) { a.z *= Math.exp(-5 * dt); if (a.z < 0.5) a.z = 0; } // touch down
+      if (def.hasWater && !canSwim(a.species)) keepAshore(a, bounds);
+      if (a.z < 3) keepOutOfHouses(a, bounds, def.houses);
+      if (def.fences) {
+        if (a.species === "labrador") keepOutOfFences(a, bounds, def.fences); // too big for the pickets
+        else if (FLYERS.has(a.species) && inAnyFence(bounds, def.fences, a.x, a.y)) a.z = Math.max(a.z, 15); // flutter over
+        // everyone else slips between the pickets
+      }
+    }
 
     // wander off one edge, amble back in from another — never pop mid-map
     if (a.x < -EDGE_OFF || a.x > bounds.w + EDGE_OFF || a.y < -EDGE_OFF || a.y > bounds.h + EDGE_OFF) {
+      a.z = 0; a.roofI = -1;
       enterFromEdge(a, world, sp);
     }
   }
@@ -1623,6 +1852,8 @@ function renderWorld(world, iconsRef) {
       sprite.dataset.walking = walking ? '1' : '';
       // in the lake: legs tuck, ripple ring shows, dust becomes splash (CSS)
       sprite.dataset.swimming = world.def.hasWater && canSwim(a.species) && inWater(world.bounds, a.x, a.y) ? '1' : '';
+      // airborne (flying up/down or fluttering over a fence): flap + shrink shadow
+      sprite.dataset.air = a.z > 3 ? '1' : '';
       let dir = Number(sprite.dataset.dir || '1');
       if (a.vx < -8) dir = -1; else if (a.vx > 8) dir = 1;
       let jx = 0, jy = 0;
@@ -1659,7 +1890,7 @@ function renderWorld(world, iconsRef) {
         }
       }
       sprite.dataset.dir = String(dir);
-      sprite.style.transform = `translate(${jx}px, ${jy}px) scaleX(${dir})`;
+      sprite.style.transform = `translate(${jx}px, ${jy - (a.z || 0)}px) scaleX(${dir})`;
     }
   }
 }
