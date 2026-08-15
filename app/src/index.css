@@ -778,3 +778,44 @@ body {
   .sai-sprite[data-swimming="1"] .sai-crit-body,
   .sai-sprite[data-swimming="1"] .sai-crit-dust{ animation:none; }
 }
+
+
+/* ==================== v0.12 neighborhood pets ==================== */
+/* per-species gait for the pet roster (cat & rabbit already defined) */
+.sai-crit--labrador{ --sai-swing:20deg; --sai-gait:.48s; }   /* happy trot */
+.sai-crit--ferret{ --sai-swing:24deg; --sai-gait:.36s; }     /* slinky bound */
+.sai-crit--guineapig{ --sai-swing:18deg; --sai-gait:.34s; }  /* potato scurry */
+.sai-crit--mouse{ --sai-swing:26deg; --sai-gait:.26s; }      /* tiny scamper */
+.sai-crit--gecko{ --sai-swing:24deg; --sai-gait:.3s; }       /* splayed scuttle */
+.sai-crit--python{ --sai-swing:0deg; --sai-gait:.6s; }       /* no legs at all */
+.sai-crit--parrot{ --sai-swing:12deg; --sai-gait:.34s; }     /* bird hop */
+.sai-crit--tarantula{ --sai-swing:16deg; --sai-gait:.3s; }   /* 8-leg scuttle */
+.sai-crit--cockatiel{ --sai-swing:12deg; --sai-gait:.3s; }   /* light hop */
+.sai-crit--sugarglider{ --sai-swing:24deg; --sai-gait:.34s; }/* springy bound */
+.sai-crit--pigeon{ --sai-swing:12deg; --sai-gait:.32s; }     /* city strut */
+.sai-crit--axolotl{ --sai-swing:14deg; --sai-gait:.5s; }     /* soft waddle */
+
+/* python: slither — the body S-wave replaces any stride */
+.sai-sprite[data-walking="1"] .sai-crit--python .sai-crit-body{ animation:sai-crit-slither var(--sai-gait,.6s) ease-in-out infinite; }
+.sai-sprite[data-walking="1"] .sai-crit--python .sai-crit-tail{ animation:sai-crit-slithertail var(--sai-gait,.6s) ease-in-out infinite; }
+@keyframes sai-crit-slither{ 0%,100%{transform:skewX(6deg) translateY(0);} 50%{transform:skewX(-6deg) translateY(-1px);} }
+@keyframes sai-crit-slithertail{ 0%,100%{transform:rotate(-6deg);} 50%{transform:rotate(7deg);} }
+
+/* pigeon: pecking strut like the turkey's */
+.sai-sprite[data-walking="1"] .sai-crit--pigeon .sai-crit-head{ animation:sai-crit-strut var(--sai-gait,.32s) ease-in-out infinite; }
+
+/* sugar glider + ferret: bounding bodies like the squirrel */
+.sai-sprite[data-walking="1"] .sai-crit--sugarglider .sai-crit-body,
+.sai-sprite[data-walking="1"] .sai-crit--ferret .sai-crit-body{ animation:sai-crit-bound var(--sai-gait,.34s) ease-in-out infinite; }
+
+/* axolotl: gentle side-to-side waddle, big tail sway */
+.sai-sprite[data-walking="1"] .sai-crit--axolotl .sai-crit-body{ animation:sai-crit-beaverwaddle var(--sai-gait,.5s) ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-walking="1"] .sai-crit--python .sai-crit-body,
+  .sai-sprite[data-walking="1"] .sai-crit--python .sai-crit-tail,
+  .sai-sprite[data-walking="1"] .sai-crit--pigeon .sai-crit-head,
+  .sai-sprite[data-walking="1"] .sai-crit--sugarglider .sai-crit-body,
+  .sai-sprite[data-walking="1"] .sai-crit--ferret .sai-crit-body,
+  .sai-sprite[data-walking="1"] .sai-crit--axolotl .sai-crit-body{ animation:none; }
+}

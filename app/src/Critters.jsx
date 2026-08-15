@@ -1,6 +1,7 @@
 import React from "react";
 import { Leg, Quad, Under, BackShade, BellyShade, FaceKit, Fur } from "./CritterRig.jsx";
 import { RESERVED_SPECIES } from "./CrittersVault.jsx";
+import { PET_SPECIES } from "./CrittersPets.jsx";
 
 /**
  * Critters — bespoke, hand-drawn, rigged animal sprites (v0.10)
@@ -587,9 +588,11 @@ export const SPECIES = {
   owl:      { key: "owl",      name: "Owl",           badge: "🦉", draw: OwlDraw },
 };
 
+// every drawable species across all worlds + the vault (for lookups/gallery)
+export const ALL_SPECIES = { ...RESERVED_SPECIES, ...PET_SPECIES, ...SPECIES };
+
 export function Critter({ speciesKey, r }) {
-  // reserved (vault) species stay renderable for the gallery + future worlds
-  const S = SPECIES[speciesKey] || RESERVED_SPECIES[speciesKey] || SPECIES.fox;
+  const S = ALL_SPECIES[speciesKey] || SPECIES.fox;
   const uid = React.useMemo(() => "c" + Math.random().toString(36).slice(2, 9), []);
   const Draw = S.draw;
   const size = r * 2.7;
@@ -614,7 +617,8 @@ export function SpriteGallery() {
   const showVault = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("vault");
   const sections = [
     { title: "Forest natives", keys: Object.keys(SPECIES) },
-    ...(showVault ? [{ title: "Vault — reserved for future worlds", keys: Object.keys(RESERVED_SPECIES) }] : []),
+    { title: "Neighborhood pets", keys: Object.keys(PET_SPECIES) },
+    ...(showVault ? [{ title: "Vault — reserved for future worlds", keys: Object.keys(RESERVED_SPECIES).filter((k) => !PET_SPECIES[k]) }] : []),
   ];
   const modes = [
     { label: "idle", state: "wander", walking: "" },
@@ -626,7 +630,7 @@ export function SpriteGallery() {
     <div style={{ minHeight: "100vh", height: "100%", overflow: "auto", background: "linear-gradient(165deg,#1e4a37,#0f2a1f)", padding: "16px 20px 40px", fontFamily: "ui-sans-serif, system-ui" }}>
       {sections.map((sec) => (
         <div key={sec.title}>
-          {showVault && <h2 style={{ color: "#e8f4d8", margin: "20px 0 2px", fontSize: 17 }}>{sec.title}</h2>}
+          <h2 style={{ color: "#e8f4d8", margin: "20px 0 2px", fontSize: 17 }}>{sec.title}</h2>
           {modes.map((m) => (
             <div key={m.label}>
               <h3 style={{ color: "#bfe8c8", margin: "14px 0 6px", fontSize: 15 }}>{m.label}</h3>
