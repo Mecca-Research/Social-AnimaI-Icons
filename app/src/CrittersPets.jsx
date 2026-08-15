@@ -431,6 +431,28 @@ function SugarGliderDraw({ uid }) {
         <path d="M 84 62 l 2.6 1.9 -2.6 2 -2.6 -2 Z" fill="#d98a9c" />
         <FaceKit lid={F[1]} e1={[77, 53]} e2={[91, 52]} er={5} drawEyes={false} mouths={false} browCol={ink} />
       </g>
+      {/* top-down spread-eagle glide pose — the whole rig swaps to this
+          flat panned-out silhouette mid-glide (CSS toggles it) */}
+      <g className="sai-crit-glidepose">
+        <path d="M 34 58 C 22 60 14 68 14 80" stroke={F[1]} strokeWidth="8" fill="none" strokeLinecap="round" />
+        <path d="M 15 72 C 14 76 14 79 14.5 81" stroke={stripe} strokeWidth="8.5" fill="none" strokeLinecap="round" />
+        <path d="M 84 38 L 99 25 M 84 74 L 99 87 M 40 40 L 26 28 M 40 74 L 26 86" stroke={F[1]} strokeWidth="6.5" strokeLinecap="round" />
+        <circle cx="100" cy="24" r="3.2" fill="#e0b4c0" /><circle cx="100" cy="88" r="3.2" fill="#e0b4c0" />
+        <circle cx="25" cy="27" r="3" fill="#e0b4c0" /><circle cx="25" cy="87" r="3" fill="#e0b4c0" />
+        {/* membrane: rounded square, edges sagging gently between the limbs */}
+        <path d="M 97 27 C 78 36 52 37 28 30 C 36 46 36 66 28 84 C 52 77 78 78 97 85 C 89 68 89 45 97 27 Z"
+          fill={F[0]} stroke={cream} strokeWidth="3" strokeLinejoin="round" />
+        <path d="M 92 34 C 74 41 52 42 34 36 C 40 49 40 63 34 78 C 52 72 74 73 92 78 C 86 64 86 48 92 34 Z" fill={F[1]} opacity=".35" />
+        <path d="M 95 52 C 72 50 48 50 32 54 L 32 60 C 48 63 72 63 95 61 Z" fill={stripe} opacity=".7" />
+        {/* head leading the flight: side ears, both night eyes, nose at the tip */}
+        <circle cx="97" cy="56" r="11.5" fill={`url(#${uid}f)`} />
+        <path d="M 92 47 C 88 42 88 36 93 34 C 96 38 96 43 94 47 Z" fill={F[1]} />
+        <path d="M 92 65 C 88 70 88 76 93 78 C 96 74 96 69 94 65 Z" fill={F[0]} />
+        <path d="M 90 50 C 96 52 100 54 104 56 C 100 58 96 60 90 62 Z" fill={stripe} opacity=".65" />
+        <circle cx="96" cy="50" r="4.2" fill={ink} /><circle cx="97.2" cy="49" r="1.4" fill="#fff" opacity=".9" />
+        <circle cx="96" cy="62" r="4.2" fill={ink} /><circle cx="97.2" cy="63" r="1.4" fill="#fff" opacity=".9" />
+        <path d="M 106.5 54.5 l 3 1.5 -3 1.6 Z" fill="#d98a9c" />
+      </g>
     </g>
   );
 }
