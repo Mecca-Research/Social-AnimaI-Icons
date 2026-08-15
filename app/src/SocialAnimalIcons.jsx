@@ -51,9 +51,12 @@ const RESCUE_RADIUS = 620;   // a friend this close sprints in to break a fight 
 const RESCUE_REACH = 95;     // ...and succeeds once this close to their friend
 const EDGE_OFF = 70;         // fully off-screen distance before wrapping
 
-// swim-time share per species (probability of picking a "swim" intent)
+// swim-time share per species (probability of picking a "swim" intent).
+// Each world carries its own swimmer map: lake swimmers in the forest,
+// pool swimmers (dog, axolotl, python) in the neighborhood.
 const SWIM_P = { beaver: 0.4, frog: 0.4, turtle: 0.4, bear: 0.1 };
-const canSwim = (species) => SWIM_P[species] != null;
+const POOL_SWIM_P = { labrador: 0.22, axolotl: 0.4, python: 0.3 };
+const canSwimIn = (def, species) => (def.swim?.[species] || 0) > 0;
 
 // ---------------- Lake geometry ----------------
 // ONE shared shape for drawing and physics: an ellipse whose radius is
@@ -104,10 +107,39 @@ function keepAshore(a, bounds) {
 const NEIGHBORHOOD_HOUSES = [
   { x: .09, y: .09,  w: .152, h: .184, roof: "#c96a4a", ridge: "#8a3f2a", pat: "barrel" },
   { x: .52, y: .075, w: .152, h: .184, roof: "#7b8794", ridge: "#4e5866", pat: "slate" },
-  { x: .30, y: .69,  w: .152, h: .184, roof: "#4a7a5a", ridge: "#2e5240", pat: "metal" },
+  { x: .30, y: .69,  w: .152, h: .184, roof: "#4a7a5a", ridge: "#2e5240", pat: "metal", poolYard: true },
   { x: .76, y: .70,  w: .152, h: .184, roof: "#8a6a4a", ridge: "#5a422a", pat: "shake" },
 ];
 const STREET = { y: .42, h: .125, walk: .026 }; // asphalt band + sidewalk strips
+
+// the bottom-left house's yard runs 3× further west, with a swimming pool
+// (about half the house's size) centered in the extended area. Same
+// rect drives the artwork and the physics.
+const NEIGHBORHOOD_POOL = { x: .169, y: .7125, w: .076, h: .092 };
+function inPool(bounds, pool, x, y, m = 0) {
+  return x > pool.x * bounds.w - m && x < (pool.x + pool.w) * bounds.w + m &&
+         y > pool.y * bounds.h - m && y < (pool.y + pool.h) * bounds.h + m;
+}
+// non-swimmers slide around the pool edge exactly like they do at roofs
+function keepOutOfPool(a, bounds, pool) {
+  const m = 10;
+  const l = pool.x * bounds.w - m, r2 = (pool.x + pool.w) * bounds.w + m;
+  const t = pool.y * bounds.h - m, b2 = (pool.y + pool.h) * bounds.h + m;
+  if (a.x <= l || a.x >= r2 || a.y <= t || a.y >= b2) return;
+  const dl = a.x - l, dr = r2 - a.x, dt2 = a.y - t, db = b2 - a.y;
+  const min = Math.min(dl, dr, dt2, db);
+  if (min === dl) { a.x = l; if (a.vx > 0) a.vx = 0; }
+  else if (min === dr) { a.x = r2; if (a.vx < 0) a.vx = 0; }
+  else if (min === dt2) { a.y = t; if (a.vy > 0) a.vy = 0; }
+  else { a.y = b2; if (a.vy < 0) a.vy = 0; }
+}
+// a random paddling spot inside the pool
+function poolPoint(bounds, pool) {
+  return {
+    x: (pool.x + .012 + Math.random() * (pool.w - .024)) * bounds.w,
+    y: (pool.y + .014 + Math.random() * (pool.h - .028)) * bounds.h,
+  };
+}
 
 // white picket fences around each yard, with a gap at the driveway.
 // Thin rects in stage fractions — the scene draws pickets along these
@@ -117,7 +149,9 @@ const { fences: NEIGHBORHOOD_FENCES, yards: NEIGHBORHOOD_YARDS } = (() => {
   const tx = .004, ty = .007;
   for (const hs of NEIGHBORHOOD_HOUSES) {
     const topRow = hs.y < .5;
-    const yx = hs.x - .062, yw = hs.w + .124; // fences run ~10% longer
+    // pool yard: the west side runs 3× further out toward the screen edge
+    const wext = hs.poolYard ? .186 : .062;
+    const yx = hs.x - wext, yw = hs.w + wext + .062; // fences run ~10% longer
     // top yards keep their back fence tight to the house so there's
     // clear passage between it and the map edge (tall sprites fit)
     const yy = topRow ? hs.y - .035 : STREET.y + STREET.h + STREET.walk + .012;
@@ -143,6 +177,33 @@ function yardAt(bounds, yards, x, y) {
         y > yd.y * bounds.h && y < (yd.y + yd.h) * bounds.h) return yd;
   }
   return null;
+}
+// waypoints from (x,y) out of a yard: around the house via the nearest
+// side corridor when the straight shot is blocked, then through the
+// driveway gap, then on to the middle of the road
+function yardExitPath(bounds, yd, houses, x, y) {
+  const hs = houses.find((hh) => Math.abs((hh.x + hh.w / 2) - yd.gx) < 1e-6);
+  const path = [];
+  const gapOut = {
+    x: yd.gx * bounds.w,
+    y: yd.topRow ? (yd.y + yd.h) * bounds.h + 26 : yd.y * bounds.h - 26,
+  };
+  if (hs) {
+    const hl = hs.x * bounds.w, hr = (hs.x + hs.w) * bounds.w;
+    const ht = hs.y * bounds.h, hb = (hs.y + hs.h) * bounds.h;
+    const m = 36; // comfortably clear of the roof-slide margin
+    const frontY = yd.topRow ? hb + m : ht - m; // strip between house and street fence
+    const inFront = yd.topRow ? y > hb + 2 : y < ht - 2;
+    if (!inFront) {
+      const behind = yd.topRow ? y < ht - 2 : y > hb + 2;
+      const sideX = x < (hl + hr) / 2 ? hl - m : hr + m; // nearest side corridor
+      if (behind) path.push({ x: sideX, y });   // cross the back strip first
+      path.push({ x: sideX, y: frontY });        // then down/up the corridor
+    }
+  }
+  path.push(gapOut);
+  path.push({ x: gapOut.x, y: (STREET.y + STREET.h / 2) * bounds.h });
+  return path;
 }
 
 function inAnyFence(bounds, fences, x, y, m = 6) {
@@ -247,7 +308,7 @@ function keepOutOfHouses(a, bounds, houses) {
 const WORLDS = {
   forest: {
     key: "forest", label: "🌲 Forest", roster: SPECIES,
-    hasWater: true, houses: [],
+    hasWater: true, houses: [], swim: SWIM_P,
     fallback: { x: .25, y: .75 }, // SW is always land
     bg: "linear-gradient(165deg,#1e4a37 0%,#173a2b 46%,#0f2a1f 100%)",
   },
@@ -255,9 +316,14 @@ const WORLDS = {
     key: "neighborhood", label: "🏘️ Neighborhood", roster: PET_SPECIES,
     hasWater: false, houses: NEIGHBORHOOD_HOUSES, fences: NEIGHBORHOOD_FENCES,
     yards: NEIGHBORHOOD_YARDS, // dog gets 40s in a yard, then walks out
+    pool: NEIGHBORHOOD_POOL, swim: POOL_SWIM_P,
     perching: true, // birds perch on roofs; the cat patrols them
     fallback: { x: .45, y: .48 }, // the street is always open
-    bg: "linear-gradient(165deg,#84b96a 0%,#6da457 46%,#568c44 100%)",
+    // balanced patchwork of lawn tones — no single light-to-dark direction
+    bg: "radial-gradient(120% 90% at 20% 18%, #7fb668 0%, rgba(127,182,104,0) 55%)," +
+      "radial-gradient(110% 85% at 82% 26%, #74ad60 0%, rgba(116,173,96,0) 55%)," +
+      "radial-gradient(115% 90% at 28% 84%, #619c50 0%, rgba(97,156,80,0) 58%)," +
+      "radial-gradient(125% 95% at 80% 78%, #5c964b 0%, rgba(92,150,75,0) 60%), #6ba257",
   },
 };
 
@@ -265,7 +331,8 @@ const WORLDS = {
 function spawnSafe(world, x, y, species) {
   const { bounds, def } = world;
   if (inAnyHouse(bounds, def.houses, x, y, 22)) return false;
-  if (def.hasWater && !canSwim(species) && lakeRho(bounds, x, y) < 1.12) return false;
+  if (def.hasWater && !canSwimIn(def, species) && lakeRho(bounds, x, y) < 1.12) return false;
+  if (def.pool && !canSwimIn(def, species) && inPool(bounds, def.pool, x, y, 26)) return false;
   return true;
 }
 function interiorPoint(world, species) {
@@ -1025,6 +1092,8 @@ function NeighborhoodScene({ bounds }) {
       const tx = (i * 0.137 + 0.03) % 0.95 + 0.02;
       let ty = (i * 0.211 + 0.06) % 0.9 + 0.04;
       if (ty > STREET.y - 0.045 && ty < STREET.y + STREET.h + 0.055) ty = (ty + 0.24) % 0.9 + 0.05;
+      // keep grass out of the pool + its deck
+      if (tx > .15 && tx < .263 && ty > .69 && ty < .828) continue;
       tufts.push({ x: tx * w, y: ty * h, s: 0.7 + (i % 3) * 0.22, d: (i * 0.37) % 4 });
     }
     return { houses, streetY, streetH, walkH, joints, dashes, fences, tufts };
@@ -1104,7 +1173,7 @@ function NeighborhoodScene({ bounds }) {
   ];
   const trees = [
     { x: .415, y: .135, s: 1.15 }, { x: .875, y: .145, s: 1.0 }, { x: .955, y: .335, s: .8 },
-    { x: .06, y: .76, s: 1.05 }, { x: .635, y: .905, s: 1.1 }, { x: .155, y: .955, s: .85 },
+    { x: .06, y: .76, s: 1.05 }, { x: .635, y: .905, s: 1.1 }, { x: .075, y: .96, s: .85 },
   ];
   const wilds = [
     { x: .40, y: .30, tall: true }, { x: .625, y: .615, tall: false }, { x: .03, y: .60, tall: false },
@@ -1127,16 +1196,25 @@ function NeighborhoodScene({ bounds }) {
         <linearGradient id="sainb-asphalt" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#565b64" /><stop offset=".5" stopColor="#484d56" /><stop offset="1" stopColor="#3c4149" />
         </linearGradient>
-        {/* one sun, upper-left: warm wash + soft falloff to the SE */}
-        <radialGradient id="sainb-sun" cx="0.16" cy="0.06" r="1.1">
-          <stop offset="0" stopColor="#fff3c0" stopOpacity=".5" />
-          <stop offset=".38" stopColor="#ffe9a0" stopOpacity=".18" />
-          <stop offset=".75" stopColor="#ffe9a0" stopOpacity="0" />
+        {/* one sun, upper-left — a gentle wash now, not a hard bright-to-dark ramp */}
+        <radialGradient id="sainb-sun" cx="0.16" cy="0.06" r="1.3">
+          <stop offset="0" stopColor="#fff3c0" stopOpacity=".26" />
+          <stop offset=".4" stopColor="#ffe9a0" stopOpacity=".1" />
+          <stop offset=".8" stopColor="#ffe9a0" stopOpacity="0" />
         </radialGradient>
         <linearGradient id="sainb-shade" x1="0" y1="0" x2="1" y2="1">
-          <stop offset=".55" stopColor="#10240f" stopOpacity="0" />
-          <stop offset="1" stopColor="#10240f" stopOpacity=".34" />
+          <stop offset=".64" stopColor="#10240f" stopOpacity="0" />
+          <stop offset="1" stopColor="#10240f" stopOpacity=".16" />
         </linearGradient>
+        {/* pool water */}
+        <linearGradient id="sainb-poolw" x1="0" y1="0" x2="0.7" y2="1">
+          <stop offset="0" stopColor="#5cc8ea" /><stop offset=".55" stopColor="#3cabd6" /><stop offset="1" stopColor="#2b93c2" />
+        </linearGradient>
+        {/* soft warm patch that drifts with the clouds (sun break) */}
+        <radialGradient id="sainb-sunbreak" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stopColor="#fff2b8" stopOpacity=".5" />
+          <stop offset="1" stopColor="#fff2b8" stopOpacity="0" />
+        </radialGradient>
         <radialGradient id="sainb-vig" cx="50%" cy="46%" r="78%">
           <stop offset=".62" stopColor="#000" stopOpacity="0" /><stop offset="1" stopColor="#122a12" stopOpacity=".5" />
         </radialGradient>
@@ -1183,12 +1261,20 @@ function NeighborhoodScene({ bounds }) {
         </pattern>
       </defs>
 
-      {/* ---- lawn: soft mottled tone variation + grain (no stripes) ---- */}
-      <g filter="url(#sainb-mottle)" opacity=".5">
-        <ellipse cx={w * .3} cy={h * .22} rx={w * .28} ry={h * .2} fill="#79b264" />
-        <ellipse cx={w * .78} cy={h * .8} rx={w * .3} ry={h * .22} fill="#5f9a4e" />
-        <ellipse cx={w * .18} cy={h * .78} rx={w * .22} ry={h * .18} fill="#6aa658" />
-        <ellipse cx={w * .72} cy={h * .2} rx={w * .24} ry={h * .17} fill="#639f52" />
+      {/* ---- lawn: soft mottled tone variation + grain (no stripes) ----
+          light AND dark patches spread over the whole field so no single
+          light-to-dark direction reads across the scene */}
+      <g filter="url(#sainb-mottle)" opacity=".45">
+        <ellipse cx={w * .3} cy={h * .22} rx={w * .26} ry={h * .18} fill="#79b264" />
+        <ellipse cx={w * .78} cy={h * .8} rx={w * .26} ry={h * .2} fill="#639f52" />
+        <ellipse cx={w * .18} cy={h * .78} rx={w * .2} ry={h * .17} fill="#79b264" />
+        <ellipse cx={w * .72} cy={h * .2} rx={w * .22} ry={h * .16} fill="#6aa658" />
+        <ellipse cx={w * .05} cy={h * .3} rx={w * .16} ry={h * .15} fill="#5f9a4e" />
+        <ellipse cx={w * .5} cy={h * .86} rx={w * .2} ry={h * .14} fill="#6fab5c" />
+        <ellipse cx={w * .93} cy={h * .5} rx={w * .17} ry={h * .16} fill="#74b160" />
+        <ellipse cx={w * .42} cy={h * .1} rx={w * .18} ry={h * .12} fill="#5f9a4e" />
+        <ellipse cx={w * .12} cy={h * .06} rx={w * .15} ry={h * .1} fill="#6aa658" />
+        <ellipse cx={w * .6} cy={h * .68} rx={w * .18} ry={h * .13} fill="#79b264" />
       </g>
       <rect width={w} height={h} filter="url(#sainb-grain)" opacity=".55" style={{ mixBlendMode: "overlay" }} />
 
@@ -1222,6 +1308,48 @@ function NeighborhoodScene({ bounds }) {
           </g>
         );
       })}
+
+      {/* ---- swimming pool (same rect the physics uses) ---- */}
+      {(() => {
+        const P = NEIGHBORHOOD_POOL;
+        const px = P.x * w, py = P.y * h, pw = P.w * w, ph = P.h * h;
+        return (
+          <g>
+            {/* concrete deck + expansion joints, soft SE shadow */}
+            <rect x={px - 18} y={py - 15} width={pw + 36} height={ph + 33} rx="14"
+              fill="#d3cdbc" stroke="#b8b2a2" strokeWidth="1.5" filter="url(#sainb-soft)" />
+            <line x1={px - 18} y1={py + ph / 2} x2={px} y2={py + ph / 2} stroke="#c0baa9" strokeWidth="1.2" />
+            <line x1={px + pw} y1={py + ph / 2} x2={px + pw + 18} y2={py + ph / 2} stroke="#c0baa9" strokeWidth="1.2" />
+            <line x1={px + pw / 2} y1={py - 15} x2={px + pw / 2} y2={py} stroke="#c0baa9" strokeWidth="1.2" />
+            <line x1={px + pw / 2} y1={py + ph} x2={px + pw / 2} y2={py + ph + 18} stroke="#c0baa9" strokeWidth="1.2" />
+            {/* coping ring + the water itself */}
+            <rect x={px - 5} y={py - 5} width={pw + 10} height={ph + 10} rx="10" fill="#e9e3d2" stroke="#c7c1b0" strokeWidth="1" />
+            <rect x={px} y={py} width={pw} height={ph} rx="8" fill="url(#sainb-poolw)" />
+            <rect x={px + 1.5} y={py + 1.5} width={pw - 3} height={ph - 3} rx="7" fill="none" stroke="#1f7ba6" strokeWidth="2" opacity=".55" />
+            {/* lane of caustic ripples + drifting glints */}
+            <g className="sai-pool-glint">
+              <path d={`M ${px + pw * .12} ${py + ph * .3} q ${pw * .12} ${-ph * .1} ${pw * .24} 0 t ${pw * .24} 0`}
+                stroke="#bfeeff" strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".6" />
+              <path d={`M ${px + pw * .18} ${py + ph * .62} q ${pw * .11} ${-ph * .09} ${pw * .22} 0 t ${pw * .22} 0`}
+                stroke="#bfeeff" strokeWidth="1.4" fill="none" strokeLinecap="round" opacity=".45" />
+              <ellipse cx={px + pw * .3} cy={py + ph * .42} rx={pw * .1} ry={ph * .06} fill="#e8f9ff" opacity=".3" />
+              <ellipse cx={px + pw * .68} cy={py + ph * .74} rx={pw * .08} ry={ph * .05} fill="#e8f9ff" opacity=".24" />
+            </g>
+            {/* ladder (east edge) + a float ring left by somebody */}
+            <g stroke="#e8ecf0" strokeWidth="2.2" fill="none" strokeLinecap="round">
+              <path d={`M ${px + pw - 7} ${py - 6} v ${ph * .34}`} />
+              <path d={`M ${px + pw - 15} ${py - 6} v ${ph * .34}`} />
+              <line x1={px + pw - 15} y1={py + 4} x2={px + pw - 7} y2={py + 4} />
+              <line x1={px + pw - 15} y1={py + 13} x2={px + pw - 7} y2={py + 13} />
+            </g>
+            <g transform={`translate(${px + pw * .24} ${py + ph * .84})`}>
+              <circle r="8.5" fill="#f25c5c" /><circle r="4" fill="url(#sainb-poolw)" />
+              <path d="M -8.5 0 A 8.5 8.5 0 0 1 0 -8.5" stroke="#fff" strokeWidth="3.4" fill="none" />
+              <path d="M 8.5 0 A 8.5 8.5 0 0 1 0 8.5" stroke="#fff" strokeWidth="3.4" fill="none" />
+            </g>
+          </g>
+        );
+      })()}
 
       {/* lawn tufts (gentle sway) */}
       {g.tufts.map((t, i) => (
@@ -1371,13 +1499,29 @@ function NeighborhoodScene({ bounds }) {
         <g key={i} transform={`translate(${x * w} ${y * h})`} filter="url(#sainb-soft)"><C /></g>
       ))}
 
-      {/* ---- global light: warm sun (NW) + shade falloff (SE) + clouds ---- */}
+      {/* ---- global light: gentle sun wash + drifting cloud shade ----
+          the weather does the shading now: soft cloud shadows slide across
+          the block with a warm sun-break patch between them */}
       <rect width={w} height={h} fill="url(#sainb-sun)" style={{ mixBlendMode: "screen" }} />
       <rect width={w} height={h} fill="url(#sainb-shade)" />
-      <g opacity=".1" filter="url(#sainb-blur9)">
-        <ellipse className="sainb-cloud" cx={-w * .1} cy={h * .24} rx={w * .17} ry={h * .1} fill="#0c1c0c" />
-        <ellipse className="sainb-cloud c2" cx={-w * .16} cy={h * .68} rx={w * .2} ry={h * .12} fill="#0c1c0c" />
+      <g filter="url(#sainb-blur9)">
+        <g className="sainb-cloud" opacity=".13">
+          <ellipse cx={-w * .12} cy={h * .22} rx={w * .15} ry={h * .09} fill="#0c1c0c" />
+          <ellipse cx={-w * .03} cy={h * .17} rx={w * .1} ry={h * .07} fill="#0c1c0c" />
+          <ellipse cx={-w * .2} cy={h * .26} rx={w * .09} ry={h * .06} fill="#0c1c0c" />
+        </g>
+        <g className="sainb-cloud c2" opacity=".11">
+          <ellipse cx={-w * .18} cy={h * .66} rx={w * .17} ry={h * .1} fill="#0c1c0c" />
+          <ellipse cx={-w * .06} cy={h * .72} rx={w * .11} ry={h * .07} fill="#0c1c0c" />
+          <ellipse cx={-w * .3} cy={h * .62} rx={w * .1} ry={h * .06} fill="#0c1c0c" />
+        </g>
+        <g className="sainb-cloud c3" opacity=".1">
+          <ellipse cx={-w * .1} cy={h * .45} rx={w * .13} ry={h * .08} fill="#0c1c0c" />
+          <ellipse cx={-w * .22} cy={h * .4} rx={w * .08} ry={h * .055} fill="#0c1c0c" />
+        </g>
       </g>
+      <ellipse className="sainb-glow" cx={-w * .3} cy={h * .5} rx={w * .24} ry={h * .3}
+        fill="url(#sainb-sunbreak)" style={{ mixBlendMode: "soft-light" }} />
       <rect width={w} height={h} fill="url(#sainb-vig)" />
     </svg>
   );
@@ -1601,7 +1745,7 @@ function IconNode({ a, iconsRef, worldRef, onSelect }) {
   useEffect(() => {
     const el = ref.current; if (!el) return;
     let dragging = false; let pid = 0;
-    const down = (e) => { dragging = true; pid = e.pointerId; el.setPointerCapture(pid); const A = getAgent(worldRef.current, a.id); if (A) { A.dragging = true; A.state = "drag"; } };
+    const down = (e) => { dragging = true; pid = e.pointerId; el.setPointerCapture(pid); const A = getAgent(worldRef.current, a.id); if (A) { A.dragging = true; A.state = "drag"; A._faceDir = 0; } };
     const move = (e) => { if (!dragging) return; const A = getAgent(worldRef.current, a.id); if (!A) return; A.x += e.movementX; A.y += e.movementY; };
     const up = () => {
       if (!dragging) return; dragging = false; try { el.releasePointerCapture(pid); } catch {}
@@ -1609,7 +1753,20 @@ function IconNode({ a, iconsRef, worldRef, onSelect }) {
       if ((A.state === "fight" || A.state === "friendly") && A.targetId) {
         const B = getAgent(worldRef.current, A.targetId);
         if (B) separatePair({ agents: worldRef.current.agents, bounds: worldRef.current.bounds }, A, B, worldRef.current, /*force*/ true);
-      } else { A.state = "cooldown"; }
+      } else {
+        // a cat dropped onto a rooftop stays up there and starts a patrol —
+        // if a bird's up too, the stalk-and-chase sequence kicks in
+        const wld = worldRef.current;
+        const ri = A.species === "cat" && wld.def.houses ? wld.def.houses.findIndex((hs) =>
+          A.x > hs.x * wld.bounds.w + 6 && A.x < (hs.x + hs.w) * wld.bounds.w - 6 &&
+          A.y > hs.y * wld.bounds.h + 6 && A.y < (hs.y + hs.h) * wld.bounds.h - 6) : -1;
+        if (ri >= 0) {
+          A.roofI = ri; A.z = ROOF_Z; A.state = "patrol";
+          A.stateUntil = performance.now() + rand(6000, 10000);
+          A.airTarget = roofPoint(wld.bounds, wld.def.houses[ri]);
+          A.hopUntil = 0; A.hopPrepUntil = 0; A._hopSaved = null; A.chaseId = null;
+        } else { A.state = "cooldown"; }
+      }
     };
     el.addEventListener("pointerdown", down);
     el.addEventListener("pointermove", move);
@@ -1652,15 +1809,17 @@ function RelStats({ worldRef, id }) {
 function stepWorld(world, cfg, dt) {
   const { agents, bounds, def } = world;
   const now = performance.now();
-  const isWet = (x, y) => def.hasWater && inWater(bounds, x, y);
+  const isWet = (x, y) => def.hasWater ? inWater(bounds, x, y)
+    : def.pool ? inPool(bounds, def.pool, x, y) : false;
 
   // intents: wander, the occasional swim (water worlds), or a trip up a roof
   for (const a of agents) {
     if (a.dragging) continue;
     const busy = a.state === "fight" || a.state === "friendly" || a.state === "rescue" ||
-      a.state === "sniff" || a.state === "leaveyard" || AIR_STATES.has(a.state) || ROOF_STATES.has(a.state);
+      a.state === "sniff" || a.state === "leaveyard" || a.state === "seekroof" ||
+      AIR_STATES.has(a.state) || ROOF_STATES.has(a.state);
     if (now >= a.intentUntil && !busy) {
-      const swimP = def.hasWater ? SWIM_P[a.species] || 0 : 0;
+      const swimP = (def.hasWater || def.pool) ? def.swim?.[a.species] || 0 : 0;
       const perchP = def.perching && FLYERS.has(a.species) ? PERCH_P : 0;
       const patrolP = def.perching && a.species === "cat" ? PATROL_P : 0;
       const roll = Math.random();
@@ -1818,9 +1977,24 @@ function stepWorld(world, cfg, dt) {
         if (d < 14) { a.airTarget = roofPoint(bounds, hs); a.vx *= .5; a.vy *= .5; }
         else { const sp = cfg.speed * (a.state === "patrol" ? 0.45 : 0.5); a.vx = (dx / d) * sp; a.vy = (dy / d) * sp; }
         if (a.state === "patrol") {
-          // a bird on my roof? freeze, then pounce
+          // a bird on my roof? freeze, then pounce — but only with enough
+          // distance for a real chase. Dropped in right next to the bird,
+          // the cat takes a beat to get ready while the bird sidesteps
+          // away; the pounce comes once there's space between them.
           const prey = agents.find((c) => FLYERS.has(c.species) && c.roofI === a.roofI && c.state === "roofwalk");
-          if (prey) { a.state = "crouch"; a.chaseId = prey.id; a.stateUntil = now + 900; a.vx = a.vy = 0; }
+          if (prey) {
+            const pd = Math.hypot(prey.x - a.x, prey.y - a.y);
+            if (pd > 140) { a.state = "crouch"; a.chaseId = prey.id; a.stateUntil = now + 900; a.vx = a.vy = 0; }
+            else {
+              const ux = (prey.x - a.x) / (pd || 1), uy = (prey.y - a.y) / (pd || 1);
+              a.vx = -ux * cfg.speed * 0.25; a.vy = -uy * cfg.speed * 0.25; // back off a step
+              const rr2 = roofRect(bounds, hs, 26);
+              prey.airTarget = { // the bird keeps its distance too
+                x: clamp(prey.x + ux * 120, rr2.l, rr2.r),
+                y: clamp(prey.y + uy * 120, rr2.t, rr2.b),
+              };
+            }
+          }
         }
         if ((a.state === "roofwalk" || a.state === "patrol") && now >= a.stateUntil) {
           a.state = "flydown";
@@ -1834,15 +2008,21 @@ function stepWorld(world, cfg, dt) {
         const prey = agents.find((c) => c.id === a.chaseId);
         a.state = "dash"; a.stateUntil = now + 1600;
         a.airTarget = prey ? { x: prey.x, y: prey.y } : roofPoint(bounds, def.houses[a.roofI]);
-        if (prey && prey.roofI === a.roofI && prey.state === "roofwalk") {
-          // the bird bails for the ground — a short escape, not a cross-map flight
+        // the bird does NOT bolt yet — it reacts late, once the cat closes in
+      }
+    } else if (a.state === "dash") {
+      a.z = ROOF_Z;
+      // home in on the bird; it holds its nerve until the cat is nearly on
+      // it, then bails for the ground at the last second
+      const prey = a.chaseId ? agents.find((c) => c.id === a.chaseId) : null;
+      if (prey && prey.roofI === a.roofI && prey.state === "roofwalk") {
+        a.airTarget = { x: prey.x, y: prey.y };
+        if (Math.hypot(prey.x - a.x, prey.y - a.y) < 100) {
           prey.state = "flydown"; prey.roofI = -1;
           prey.airTarget = nearbyGround(world, prey);
           prey.intent = "wander"; prey.noEventUntil = Math.max(prey.noEventUntil, now + 3000);
         }
       }
-    } else if (a.state === "dash") {
-      a.z = ROOF_Z;
       const t = a.airTarget || roofPoint(bounds, def.houses[a.roofI]);
       const dx = t.x - a.x, dy = t.y - a.y, d = Math.hypot(dx, dy) || 1;
       const sp = cfg.speed * 2.3;
@@ -1863,6 +2043,57 @@ function stepWorld(world, cfg, dt) {
         if (d < 24) {
           a.z = 0; a.roofI = -1; a.airTarget = null;
           a.state = "cooldown"; a.noEventUntil = Math.max(a.noEventUntil, now + 1200);
+          if (a.species === "cat") a._seekCd = now + 6000; // breather before the next bird hunt
+        }
+      }
+    }
+
+    // ---- the cat actively hunts any bird that's up on a roof ----
+    if (a.species === "cat" && def.perching) {
+      const birdRoofs = () => new Set(agents
+        .filter((c) => FLYERS.has(c.species) && c.roofI >= 0 && c.state === "roofwalk")
+        .map((c) => c.roofI));
+      if (a.state === "seekroof") {
+        const up = birdRoofs();
+        if (!up.has(a.roofI)) {
+          if (up.size) {
+            // that bird left, but another roof has one — retarget the closest
+            let bi = -1, bd = Infinity;
+            for (const ri of up) {
+              const hs = def.houses[ri];
+              const d2 = Math.hypot((hs.x + hs.w / 2) * bounds.w - a.x, (hs.y + hs.h / 2) * bounds.h - a.y);
+              if (d2 < bd) { bd = d2; bi = ri; }
+            }
+            a.roofI = bi;
+          } else {
+            // the bird flew off by itself — call the hunt off
+            a.state = "wander"; a.roofI = -1;
+            a.intent = "wander"; a._seekCd = now + 4000;
+          }
+        }
+        if (a.state === "seekroof") {
+          const hs = def.houses[a.roofI];
+          const hl = hs.x * bounds.w, hr = (hs.x + hs.w) * bounds.w;
+          const ht = hs.y * bounds.h, hb = (hs.y + hs.h) * bounds.h;
+          const nx2 = clamp(a.x, hl, hr), ny2 = clamp(a.y, ht, hb); // nearest wall point
+          const d2 = Math.hypot(a.x - nx2, a.y - ny2);
+          if (d2 < 56 && a.z === 0 && now >= (a.hopUntil || 0)) {
+            a.state = "takeoff"; a.stateUntil = now + 480; a.vx = a.vy = 0; // climb up after it
+          } else if (now >= (a.hopPrepUntil || 0)) {
+            const dd = d2 || 1, sp2 = cfg.speed * 1.45; // urgent trot, streaks flying
+            a.vx = ((nx2 - a.x) / dd) * sp2; a.vy = ((ny2 - a.y) / dd) * sp2;
+          }
+        }
+      } else if (a.z === 0 && isFreeState(a) && now >= (a._seekCd || 0)) {
+        const up = birdRoofs();
+        if (up.size) {
+          let bi = -1, bd = Infinity;
+          for (const ri of up) {
+            const hs = def.houses[ri];
+            const d2 = Math.hypot((hs.x + hs.w / 2) * bounds.w - a.x, (hs.y + hs.h / 2) * bounds.h - a.y);
+            if (d2 < bd) { bd = d2; bi = ri; }
+          }
+          a.state = "seekroof"; a.roofI = bi; a.intent = "wander";
         }
       }
     }
@@ -1872,17 +2103,20 @@ function stepWorld(world, cfg, dt) {
       a.vx = 0; a.vy = 0;
       if (now >= a.stateUntil) {
         const aw = a._fenceAway || { x: 0, y: 1 };
-        a.state = "wander";
+        a.state = "wander"; a._faceDir = 0;
         a.vx = aw.x * cfg.speed * 0.9; a.vy = aw.y * cfg.speed * 0.9;
         a._fenceHit = 0; a._fenceStuckSince = 0;
         a.noEventUntil = Math.max(a.noEventUntil, now + 1500);
       }
     } else if (a.species === "labrador" && def.fences && isFreeState(a)) {
-      // nosing the same fence for 2s → stop and sniff it for 4s, then leave
+      // nosing the same fence for 4s → stop, turn to the fence and give it
+      // a good visible sniff for 4s, then trot away
       if (a._fenceHit && now - a._fenceHit < 350) {
         if (!a._fenceStuckSince) a._fenceStuckSince = now;
-        else if (now - a._fenceStuckSince > 2000) {
+        else if (now - a._fenceStuckSince > 4000) {
           a.state = "sniff"; a.stateUntil = now + 4000; a.vx = 0; a.vy = 0;
+          const aw = a._fenceAway || { x: 0, y: 1 };
+          a._faceDir = aw.x < 0 ? 1 : aw.x > 0 ? -1 : 0; // nose TOWARD the fence
         }
       } else if (a._fenceStuckSince && (!a._fenceHit || now - a._fenceHit > 900)) {
         a._fenceStuckSince = 0;
@@ -1891,35 +2125,38 @@ function stepWorld(world, cfg, dt) {
 
     // yard time limit: the dog may explore a fenced yard for up to 40s.
     // When time's up it walks out through the driveway gap, then keeps
-    // going to the middle of the road before resuming its wander.
+    // going to the middle of the road before resuming its wander. The
+    // route is a waypoint chain (around the house via a side corridor if
+    // needed) so the exit works from ANY spot in the yard — a dog behind
+    // the house no longer pins itself against the back wall.
     if (a.species === "labrador" && def.yards) {
       if (a.state === "leaveyard") {
-        if (!a._leaveTarget) { a.state = "wander"; a._yardSince = 0; }
-        else {
-          const dx = a._leaveTarget.x - a.x, dy = a._leaveTarget.y - a.y;
-          const d = Math.hypot(dx, dy);
-          if (d < 22) {
-            if (a._leavePhase === 1) {
-              a._leavePhase = 2; // cleared the gap — now out to the road
-              a._leaveTarget = { x: a._leaveTarget.x, y: (STREET.y + STREET.h / 2) * bounds.h };
-            } else {
-              a.state = "wander"; a._leaveTarget = null; a._yardSince = 0;
-              a.noEventUntil = Math.max(a.noEventUntil, now + 1200);
-            }
-          } else {
+        const t2 = a._leavePath && a._leavePath[0];
+        if (!t2) {
+          a.state = "wander"; a._leavePath = null; a._yardSince = 0;
+          a.noEventUntil = Math.max(a.noEventUntil, now + 1200);
+        } else {
+          const dx = t2.x - a.x, dy = t2.y - a.y, d = Math.hypot(dx, dy);
+          if (d < 22) { a._leavePath.shift(); }
+          else {
             const lsp = cfg.speed * 0.95;
             a.vx = (dx / d) * lsp; a.vy = (dy / d) * lsp;
+          }
+          // never stall: if geometry pinned the dog for ~0.7s, re-route
+          if (!a._leaveProg || now - a._leaveProg.t > 700) {
+            if (a._leaveProg && Math.hypot(a.x - a._leaveProg.x, a.y - a._leaveProg.y) < 6 && a._leaveYd) {
+              a._leavePath = yardExitPath(bounds, a._leaveYd, def.houses, a.x, a.y);
+            }
+            a._leaveProg = { x: a.x, y: a.y, t: now };
           }
         }
       } else if (a.z < 3 && yardAt(bounds, def.yards, a.x, a.y)) {
         if (!a._yardSince) a._yardSince = now;
         else if (now - a._yardSince > 40000 && isFreeState(a)) {
           const yd = yardAt(bounds, def.yards, a.x, a.y);
-          a.state = "leaveyard"; a._leavePhase = 1; a._fenceStuckSince = 0;
-          a._leaveTarget = {
-            x: yd.gx * bounds.w,
-            y: yd.topRow ? (yd.y + yd.h) * bounds.h + 26 : yd.y * bounds.h - 26,
-          };
+          a.state = "leaveyard"; a._fenceStuckSince = 0;
+          a._leaveYd = yd; a._leaveProg = null;
+          a._leavePath = yardExitPath(bounds, yd, def.houses, a.x, a.y);
         }
       } else if (a._yardSince) a._yardSince = 0;
     }
@@ -1949,22 +2186,42 @@ function stepWorld(world, cfg, dt) {
         a.vx = a.vy = 0; a.intent = "wander";
         continue;
       }
-      if (a.intent === "swim" && canSwim(a.species) && def.hasWater) {
-        // paddle between random spots inside the lake
+      if (a.intent === "swim" && canSwimIn(def, a.species) && (def.hasWater || def.pool)) {
+        // paddle between random spots inside the lake (or the pool)
         const wet = isWet(a.x, a.y);
         if (!a.swimTarget || Math.hypot(a.swimTarget.x - a.x, a.swimTarget.y - a.y) < 30) {
-          a.swimTarget = lakePoint(bounds, rand(0, Math.PI * 2), Math.sqrt(Math.random()) * 0.72);
+          a.swimTarget = def.hasWater
+            ? lakePoint(bounds, rand(0, Math.PI * 2), Math.sqrt(Math.random()) * 0.72)
+            : poolPoint(bounds, def.pool);
         }
         const dx = a.swimTarget.x - a.x, dy = a.swimTarget.y - a.y; const d = Math.hypot(dx, dy) || 1;
         const sp = cfg.speed * (wet ? 0.55 : 0.9);
         a.vx = (dx / d) * sp; a.vy = (dy / d) * sp;
-      } else if (canSwim(a.species) && isWet(a.x, a.y)) {
-        // dip is over — paddle straight out to the nearest shore
-        const cx = LAKE.cx * bounds.w, cy = LAKE.cy * bounds.h;
+      } else if (canSwimIn(def, a.species) && isWet(a.x, a.y)) {
+        // dip is over — paddle straight out to the nearest edge
+        const cx = (def.hasWater ? LAKE.cx : def.pool.x + def.pool.w / 2) * bounds.w;
+        const cy = (def.hasWater ? LAKE.cy : def.pool.y + def.pool.h / 2) * bounds.h;
         const ux = a.x - cx, uy = a.y - cy; const d = Math.hypot(ux, uy) || 1;
         const sp = cfg.speed * 0.6;
         a.vx = (ux / d) * sp; a.vy = (uy / d) * sp;
       } else {
+        // the dog runs around: random short sprints ~30% of its wander time
+        if (a.species === "labrador" && a.z === 0) {
+          if (now < (a._sprintUntil || 0)) {
+            const spd = Math.hypot(a.vx, a.vy) || 1, k = cfg.speed * 1.9;
+            a.vx = (a.vx / spd) * k; a.vy = (a.vy / spd) * k;
+          } else {
+            if (a._sprintUntil) { // sprint just ended — ease off, rest a bit
+              a._sprintUntil = 0; a._sprintCd = now + rand(1900, 3800);
+              a.vx *= 0.4; a.vy *= 0.4;
+            } else if (now >= (a._sprintCd || 0)) {
+              const base = Math.hypot(a.vx, a.vy) > 0.5 ? Math.atan2(a.vy, a.vx) : rand(0, Math.PI * 2);
+              const ang = base + rand(-0.8, 0.8); // dart off at a new angle
+              a._sprintUntil = now + rand(900, 1500);
+              a.vx = Math.cos(ang) * cfg.speed * 1.9; a.vy = Math.sin(ang) * cfg.speed * 1.9;
+            }
+          }
+        }
         // plain wandering: minimum cruise + the odd pause to sniff around
         if (Math.random() < 0.02) { a.vx += rand(-15, 15); a.vy += rand(-15, 15); }
         if (Math.random() < 0.0008) { a.state = "idle"; a.vx = a.vy = 0; a.idleUntil = now + rand(900, 2200); }
@@ -1999,7 +2256,9 @@ function stepWorld(world, cfg, dt) {
   for (const a of agents) {
     if (a.dragging) continue;
     const sp = cfg.speed;
-    const vmul = a.state === "dash" ? 2.4 : AIR_STATES.has(a.state) ? 1.9 : a.state === "rescue" ? 1.6 : 1.2;
+    const vmul = a.state === "dash" ? 2.4 : AIR_STATES.has(a.state) ? 1.9
+      : a.state === "rescue" || a.state === "seekroof" ? 1.6
+      : now < (a._sprintUntil || 0) ? 2.0 : 1.2;
     const vlim = sp * vmul;
     a.vx = clamp(a.vx, -vlim, vlim); a.vy = clamp(a.vy, -vlim, vlim);
     if (a.state !== "friendly" && a.state !== "fight") { a.x += a.vx * dt; a.y += a.vy * dt; }
@@ -2018,7 +2277,8 @@ function stepWorld(world, cfg, dt) {
       a.roofI = -1;
       const hopping = now < (a.hopUntil || 0);
       if (a.z > 0 && !hopping) { a.z *= Math.exp(-5 * dt); if (a.z < 0.5) a.z = 0; } // touch down
-      if (def.hasWater && !canSwim(a.species)) keepAshore(a, bounds);
+      if (def.hasWater && !canSwimIn(def, a.species)) keepAshore(a, bounds);
+      if (def.pool && !canSwimIn(def, a.species) && a.z < 3) keepOutOfPool(a, bounds, def.pool);
       if (a.z < 3) keepOutOfHouses(a, bounds, def.houses);
       if (def.fences) {
         if (a.species === "labrador") {
@@ -2028,14 +2288,19 @@ function stepWorld(world, cfg, dt) {
           if (!hopping && inAnyFence(bounds, def.fences, a.x, a.y, 10)) a.hopUntil = now + 420;
           if (now < (a.hopUntil || 0)) a.z = Math.max(a.z, 20);
         } else if (a.species === "cat") {
-          // deliberate cat: pause at the fence, then one clean jump over
+          // deliberate cat: pause at the fence, then one clean jump over —
+          // the jump itself is a smooth sine arc (rise, apex, land), like
+          // the birds' flutter reads, instead of a flat lift
           if (now < (a.hopPrepUntil || 0)) { a.vx = 0; a.vy = 0; }
           else if (a._hopSaved) {
             a.vx = a._hopSaved.x; a.vy = a._hopSaved.y; a._hopSaved = null;
-            a.hopUntil = now + 500;
+            a.hopUntil = now + 560; a._hopT0 = now; a._hopDur = 560;
           }
-          if (now < (a.hopUntil || 0)) a.z = Math.max(a.z, 22);
-          else if (isFreeState(a) && a.z === 0 && !a.hopPrepUntil) {
+          if (now < (a.hopUntil || 0)) {
+            const p = a._hopT0 ? clamp((now - a._hopT0) / (a._hopDur || 560), 0, 1) : 0.5;
+            a.z = 26 * Math.sin(Math.PI * p);
+          }
+          else if ((isFreeState(a) || a.state === "seekroof") && a.z === 0 && !a.hopPrepUntil) {
             const ax = a.x + a.vx * 0.22, ay = a.y + a.vy * 0.22; // ~0.2s ahead
             if (inAnyFence(bounds, def.fences, ax, ay, 8) && !inAnyFence(bounds, def.fences, a.x, a.y, 8)) {
               a.hopPrepUntil = now + 240; a._hopSaved = { x: a.vx, y: a.vy }; a.vx = 0; a.vy = 0;
@@ -2170,14 +2435,18 @@ function renderWorld(world, iconsRef) {
       const wasWalking = sprite.dataset.walking === '1';
       const walking = a.state !== 'friendly' && a.state !== 'fight' && (wasWalking ? dispV > 5 : dispV > 10);
       sprite.dataset.walking = walking ? '1' : '';
-      // in the lake: legs tuck, ripple ring shows, dust becomes splash (CSS)
-      sprite.dataset.swimming = world.def.hasWater && canSwim(a.species) && inWater(world.bounds, a.x, a.y) ? '1' : '';
+      // in the water (lake or pool): legs tuck, ripple ring, splash (CSS)
+      const defW = world.def;
+      const wetHere = defW.hasWater ? inWater(world.bounds, a.x, a.y)
+        : defW.pool ? inPool(world.bounds, defW.pool, a.x, a.y) : false;
+      sprite.dataset.swimming = wetHere && canSwimIn(defW, a.species) ? '1' : '';
       // airborne (flying up/down or fluttering over a fence): flap + shrink shadow
       sprite.dataset.air = a.z > 3 ? '1' : '';
       // the cat's pre-jump pause at a fence (little crouch via CSS)
       sprite.dataset.prep = nowMs < (a.hopPrepUntil || 0) ? '1' : '';
       let dir = Number(sprite.dataset.dir || '1');
       if (a.vx < -8) dir = -1; else if (a.vx > 8) dir = 1;
+      if (a._faceDir) dir = a._faceDir; // e.g. the dog turning to face a fence it sniffs
       let jx = 0, jy = 0;
       if (a.state === 'friendly' || a.state === 'fight') {
         // choreographed pair contact: face the partner, then move along the

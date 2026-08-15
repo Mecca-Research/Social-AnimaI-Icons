@@ -895,10 +895,18 @@ body {
 .sai-sprite[data-air="1"] .sai-crit--cat .sai-crit-body{ animation:sai-crit-leapstretch .5s ease-in-out infinite; }
 @keyframes sai-crit-leapstretch{ 0%,100%{transform:scaleX(1.06) scaleY(.94) translateY(0);} 50%{transform:scaleX(1.12) scaleY(.9) translateY(-1.2px);} }
 
-/* the dog's stop-and-sniff along the fence line */
-.sai-sprite[data-state="sniff"] .sai-crit-head{ animation:sai-crit-sniffhead .75s ease-in-out infinite; }
-@keyframes sai-crit-sniffhead{ 0%,100%{transform:translate(1.2px,2.4px) rotate(6deg);} 50%{transform:translate(2.6px,4.6px) rotate(10deg);} }
-.sai-sprite[data-state="sniff"] .sai-crit-tail{ animation:sai-crit-tailwag 1s ease-in-out infinite; }
+/* the dog's stop-and-sniff along the fence line: nose pushed clearly down
+   toward the fence with a quick double-bob rhythm, whole body pitched in */
+.sai-sprite[data-state="sniff"] .sai-crit-head{ animation:sai-crit-sniffhead .58s ease-in-out infinite; }
+@keyframes sai-crit-sniffhead{
+  0%,100%{transform:translate(2px,3.4px) rotate(9deg);}
+  30%{transform:translate(4.6px,7.6px) rotate(16deg);}
+  48%{transform:translate(3.6px,6px) rotate(13deg);}
+  66%{transform:translate(5px,8.2px) rotate(17deg);}
+}
+.sai-sprite[data-state="sniff"] .sai-crit-body{ animation:sai-crit-sniffbody 1.16s ease-in-out infinite; }
+@keyframes sai-crit-sniffbody{ 0%,100%{transform:rotate(1.6deg);} 50%{transform:rotate(3deg) translateY(.8px);} }
+.sai-sprite[data-state="sniff"] .sai-crit-tail{ animation:sai-crit-tailwag .8s ease-in-out infinite; }
 
 /* drifting cloud shade for the neighborhood (slow, subtle) */
 .sainb-cloud{ will-change: transform; animation: sainb-clouddrift 80s linear infinite; }
@@ -932,4 +940,26 @@ body {
 @keyframes sai-crit-labearperk{ 0%,100%{transform:rotate(0);} 40%{transform:rotate(-2deg);} 60%{transform:rotate(-1.3deg);} }
 @media (prefers-reduced-motion: reduce){
   .sai-sprite[data-state="friendly"] .sai-crit--labrador .sai-crit-ear{ animation:none; }
+}
+
+/* ==================== v0.16 pool, bird hunts & weather ==================== */
+/* white speed streaks while the cat races to a roof with a bird on it,
+   and while any animal sprints in to break up a friend's fight */
+.sai-sprite[data-state="seekroof"] .sai-crit-streaks,
+.sai-sprite[data-state="rescue"] .sai-crit-streaks{ opacity:1; animation:sai-crit-streak .38s linear infinite; }
+
+/* third cloud + a warm sun-break patch drifting between the shadows */
+.sainb-cloud.c3{ animation-duration:96s; animation-delay:-64s; }
+.sainb-glow{ will-change: transform; animation: sainb-clouddrift 118s linear infinite; animation-delay:-22s; }
+
+/* pool water glints breathe slowly */
+.sai-pool-glint{ animation:sai-pool-glint 3.6s ease-in-out infinite; }
+@keyframes sai-pool-glint{ 0%,100%{opacity:.55;} 50%{opacity:1;} }
+
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-state="seekroof"] .sai-crit-streaks,
+  .sai-sprite[data-state="rescue"] .sai-crit-streaks,
+  .sai-sprite[data-state="sniff"] .sai-crit-body,
+  .sainb-glow,
+  .sai-pool-glint{ animation:none; }
 }
