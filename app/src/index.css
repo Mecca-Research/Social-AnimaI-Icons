@@ -879,3 +879,38 @@ body {
   .sai-sprite[data-walking="1"] .sai-crit--parrot .sai-crit-head,
   .sai-sprite[data-walking="1"] .sai-crit--python .sai-crit-body{ animation:none; }
 }
+
+
+/* ==================== v0.14 hops, sniffs & scene light ==================== */
+/* takeoff anticipation + the cat's pre-jump pause: a quick loaded crouch */
+.sai-sprite[data-state="takeoff"] .sai-crit-body,
+.sai-sprite[data-prep="1"] .sai-crit-body{ animation:sai-crit-preleap .26s ease-in forwards; }
+@keyframes sai-crit-preleap{ 0%{transform:translateY(0) scaleY(1);} 60%{transform:translateY(2.6px) scaleY(.85);} 100%{transform:translateY(1.4px) scaleY(.9);} }
+
+/* the hop-up over a roof edge: springy landing bounce */
+.sai-sprite[data-state="roofhop"] .sai-crit-body{ animation:sai-crit-landbounce .3s ease-out; }
+@keyframes sai-crit-landbounce{ 0%{transform:translateY(2px) scaleY(.86);} 60%{transform:translateY(-1.6px) scaleY(1.05);} 100%{transform:translateY(0) scaleY(1);} }
+
+/* mid-air cat: a stretched, deliberate leap (no wings to flap) */
+.sai-sprite[data-air="1"] .sai-crit--cat .sai-crit-body{ animation:sai-crit-leapstretch .5s ease-in-out infinite; }
+@keyframes sai-crit-leapstretch{ 0%,100%{transform:scaleX(1.06) scaleY(.94) translateY(0);} 50%{transform:scaleX(1.12) scaleY(.9) translateY(-1.2px);} }
+
+/* the dog's stop-and-sniff along the fence line */
+.sai-sprite[data-state="sniff"] .sai-crit-head{ animation:sai-crit-sniffhead .75s ease-in-out infinite; }
+@keyframes sai-crit-sniffhead{ 0%,100%{transform:translate(1.2px,2.4px) rotate(6deg);} 50%{transform:translate(2.6px,4.6px) rotate(10deg);} }
+.sai-sprite[data-state="sniff"] .sai-crit-tail{ animation:sai-crit-tailwag 1s ease-in-out infinite; }
+
+/* drifting cloud shade for the neighborhood (slow, subtle) */
+.sainb-cloud{ will-change: transform; animation: sainb-clouddrift 80s linear infinite; }
+.sainb-cloud.c2{ animation-duration: 110s; animation-delay: -45s; }
+@keyframes sainb-clouddrift{ 0%{ transform: translateX(0); } 100%{ transform: translateX(2100px); } }
+
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-state="takeoff"] .sai-crit-body,
+  .sai-sprite[data-prep="1"] .sai-crit-body,
+  .sai-sprite[data-state="roofhop"] .sai-crit-body,
+  .sai-sprite[data-air="1"] .sai-crit--cat .sai-crit-body,
+  .sai-sprite[data-state="sniff"] .sai-crit-head,
+  .sai-sprite[data-state="sniff"] .sai-crit-tail,
+  .sainb-cloud{ animation:none; }
+}

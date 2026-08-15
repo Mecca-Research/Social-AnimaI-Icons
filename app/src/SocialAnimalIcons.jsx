@@ -99,11 +99,13 @@ function keepAshore(a, bounds) {
 // ---------------- Neighborhood geometry ----------------
 // House roofs are hard obstacles: rectangles in stage fractions, used by
 // BOTH the scene drawing and the physics so animals never cross a roof.
+// zig-zag placement: far-left top, center-right top, center-left bottom,
+// far-right bottom. Each roof gets its own tiling pattern + fixtures.
 const NEIGHBORHOOD_HOUSES = [
-  { x: .07, y: .07,  w: .19, h: .23,  roof: "#c96a4a", ridge: "#8a3f2a" },
-  { x: .66, y: .065, w: .19, h: .235, roof: "#7b8794", ridge: "#4e5866" },
-  { x: .12, y: .66,  w: .19, h: .23,  roof: "#4a8a8a", ridge: "#2e5c5c" },
-  { x: .62, y: .67,  w: .19, h: .23,  roof: "#a85252", ridge: "#703434" },
+  { x: .09, y: .09,  w: .152, h: .184, roof: "#c96a4a", ridge: "#8a3f2a", pat: "barrel" },
+  { x: .52, y: .075, w: .152, h: .184, roof: "#7b8794", ridge: "#4e5866", pat: "slate" },
+  { x: .30, y: .69,  w: .152, h: .184, roof: "#4a7a5a", ridge: "#2e5240", pat: "metal" },
+  { x: .76, y: .70,  w: .152, h: .184, roof: "#8a6a4a", ridge: "#5a422a", pat: "shake" },
 ];
 const STREET = { y: .42, h: .125, walk: .026 }; // asphalt band + sidewalk strips
 
@@ -115,9 +117,11 @@ const NEIGHBORHOOD_FENCES = (() => {
   const tx = .004, ty = .007;
   for (const hs of NEIGHBORHOOD_HOUSES) {
     const topRow = hs.y < .5;
-    const yx = hs.x - .05, yw = hs.w + .10;
-    const yy = topRow ? hs.y - .055 : STREET.y + STREET.h + STREET.walk + .012;
-    const yb = topRow ? STREET.y - STREET.walk - .012 : hs.y + hs.h + .055;
+    const yx = hs.x - .062, yw = hs.w + .124; // fences run ~10% longer
+    // top yards keep their back fence tight to the house so there's
+    // clear passage between it and the map edge (tall sprites fit)
+    const yy = topRow ? hs.y - .035 : STREET.y + STREET.h + STREET.walk + .012;
+    const yb = topRow ? STREET.y - STREET.walk - .012 : hs.y + hs.h + .06;
     const yh = yb - yy;
     const gcx = hs.x + hs.w / 2, gw = .08;
     segs.push({ x: yx, y: yy, w: tx, h: yh });                                   // west rail
@@ -137,7 +141,9 @@ function inAnyFence(bounds, fences, x, y, m = 6) {
   }
   return false;
 }
-// the dog can't fit between the pickets: slide along the fence line
+// the dog can't fit between the pickets: slide along the fence line.
+// Records the contact time + outward direction so the sniff behavior can
+// notice a dog that's been stuck nosing the same fence.
 function keepOutOfFences(a, bounds, fences) {
   const m = 5;
   for (const f of fences) {
@@ -146,20 +152,22 @@ function keepOutOfFences(a, bounds, fences) {
     if (a.x <= l || a.x >= r2 || a.y <= t || a.y >= b2) continue;
     const dl = a.x - l, dr = r2 - a.x, dt2 = a.y - t, db = b2 - a.y;
     const min = Math.min(dl, dr, dt2, db);
-    if (min === dl) { a.x = l; if (a.vx > 0) a.vx = 0; }
-    else if (min === dr) { a.x = r2; if (a.vx < 0) a.vx = 0; }
-    else if (min === dt2) { a.y = t; if (a.vy > 0) a.vy = 0; }
-    else { a.y = b2; if (a.vy < 0) a.vy = 0; }
+    if (min === dl) { a.x = l; if (a.vx > 0) a.vx = 0; a._fenceAway = { x: -1, y: 0 }; }
+    else if (min === dr) { a.x = r2; if (a.vx < 0) a.vx = 0; a._fenceAway = { x: 1, y: 0 }; }
+    else if (min === dt2) { a.y = t; if (a.vy > 0) a.vy = 0; a._fenceAway = { x: 0, y: -1 }; }
+    else { a.y = b2; if (a.vy < 0) a.vy = 0; a._fenceAway = { x: 0, y: 1 }; }
+    a._fenceHit = performance.now();
   }
 }
 
 // ---------------- Rooftop life ----------------
 const FLYERS = new Set(["parrot", "pigeon", "cockatiel"]); // fly up & perch
 const ROOF_Z = 46;      // visual elevation of a roof, px
-const PERCH_P = 0.35;   // birds' chance per intent roll to go perch
-const PATROL_P = 0.3;   // the cat's chance per intent roll to patrol a roof
+const EAVE_Z = 26;      // flight height on approach — the hop covers the rest
+const PERCH_P = 0.4;    // birds seek the rooftops 40% of the time
+const PATROL_P = 0.4;   // ...and so does the cat
 const ROOF_STATES = new Set(["roofwalk", "patrol", "crouch", "dash"]);
-const AIR_STATES = new Set(["flyup", "flydown"]);
+const AIR_STATES = new Set(["takeoff", "flyup", "roofhop", "flydown"]);
 
 function roofRect(bounds, hs, m = 18) {
   return { l: hs.x * bounds.w + m, r: (hs.x + hs.w) * bounds.w - m, t: hs.y * bounds.h + m, b: (hs.y + hs.h) * bounds.h - m };
@@ -180,6 +188,25 @@ function besideRoof(world, hs, species) {
   }
   return interiorPoint(world, species);
 }
+// a safe ground point NEAR the current spot — keeps bird flights short
+function nearbyGround(world, a, maxR = 320) {
+  const { bounds } = world;
+  for (let i = 0; i < 24; i++) {
+    const ang = rand(0, Math.PI * 2), r = rand(130, maxR);
+    const x = a.x + Math.cos(ang) * r, y = a.y + Math.sin(ang) * r;
+    if (x > 50 && x < bounds.w - 50 && y > 70 && y < bounds.h - 70 && spawnSafe(world, x, y, a.species)) return { x, y };
+  }
+  return interiorPoint(world, a.species);
+}
+// nearest house to a point (flights go to the CLOSE roof, not across the map)
+function nearestRoof(bounds, houses, x, y) {
+  let bi = 0, bd = Infinity;
+  houses.forEach((hs, i) => {
+    const d = Math.hypot((hs.x + hs.w / 2) * bounds.w - x, (hs.y + hs.h / 2) * bounds.h - y);
+    if (d < bd) { bd = d; bi = i; }
+  });
+  return bi;
+}
 
 function inAnyHouse(bounds, houses, x, y, m = 16) {
   for (const hs of houses) {
@@ -191,7 +218,7 @@ function inAnyHouse(bounds, houses, x, y, m = 16) {
 // slide along roof edges: push out along the smallest penetration axis and
 // cancel only the inward velocity component
 function keepOutOfHouses(a, bounds, houses) {
-  const m = 14;
+  const m = 22; // wide enough that sprites never visually clip the eaves
   for (const hs of houses) {
     const l = hs.x * bounds.w - m, r2 = (hs.x + hs.w) * bounds.w + m;
     const t = hs.y * bounds.h - m, b2 = (hs.y + hs.h) * bounds.h + m;
@@ -291,12 +318,14 @@ function makeAgent(world, species) {
     intentUntil: performance.now() + rand(INTENT_MIN_S*1000, INTENT_MAX_S*1000),
     swimTarget: null,
     rescueFriendId: null,
-    // rooftop life
+    // rooftop life & hops
     z: 0,            // visual elevation (px)
     roofI: -1,       // which roof, while up there
     airTarget: null, // where a flight/hop is headed
     chaseId: null,   // the bird the cat is stalking
-    stateUntil: 0,   // generic state timer (perch time, crouch, dash)
+    stateUntil: 0,   // generic state timer (perch time, crouch, dash, sniff)
+    hopUntil: 0,     // airborne until (fence hops)
+    hopPrepUntil: 0, // the cat's pre-jump pause
   };
 }
 
@@ -965,8 +994,8 @@ function ForestScene() {
 }
 
 // --------------- Neighborhood scene (top-down roofs) ---------------
-// Drawn from NEIGHBORHOOD_HOUSES + STREET — the same config the physics
-// uses — so the roofs animals can't cross are exactly the roofs you see.
+// Drawn from NEIGHBORHOOD_HOUSES + NEIGHBORHOOD_FENCES + STREET — the same
+// config the physics uses. One sun (upper-left): every shadow falls SE.
 function NeighborhoodScene({ bounds }) {
   const { w, h } = bounds;
   const geo = React.useMemo(() => {
@@ -975,15 +1004,23 @@ function NeighborhoodScene({ bounds }) {
       topRow: hs.y < 0.5,
     }));
     const streetY = STREET.y * h, streetH = STREET.h * h, walkH = STREET.walk * h;
-    const joints = [];
-    for (let x = 40; x < w; x += 78) joints.push(x);
-    const dashes = [];
-    for (let x = 20; x < w; x += 64) dashes.push(x);
-    return { houses, streetY, streetH, walkH, joints, dashes };
+    const joints = []; for (let x = 40; x < w; x += 78) joints.push(x);
+    const dashes = []; for (let x = 20; x < w; x += 64) dashes.push(x);
+    const fences = NEIGHBORHOOD_FENCES.map((f) => ({ x: f.x * w, y: f.y * h, fw: f.w * w, fh: f.h * h }));
+    // lawn tufts scattered off the street band (deterministic spread)
+    const tufts = [];
+    for (let i = 0; i < 22; i++) {
+      const tx = (i * 0.137 + 0.03) % 0.95 + 0.02;
+      let ty = (i * 0.211 + 0.06) % 0.9 + 0.04;
+      if (ty > STREET.y - 0.045 && ty < STREET.y + STREET.h + 0.055) ty = (ty + 0.24) % 0.9 + 0.05;
+      tufts.push({ x: tx * w, y: ty * h, s: 0.7 + (i % 3) * 0.22, d: (i * 0.37) % 4 });
+    }
+    return { houses, streetY, streetH, walkH, joints, dashes, fences, tufts };
   }, [w, h]);
   if (!w || !h) return null;
   const g = geo;
 
+  // ---- small props (all shadows fall SE via the shared soft filter) ----
   const Ball = () => (<g><circle r="7" fill="#cbe84a" /><path d="M -6 -3 q 6 3 12 0 M -6 3 q 6 -3 12 0" stroke="#fff" strokeWidth="1.4" fill="none" /></g>);
   const Bowl = () => (<g><ellipse cy="2" rx="11" ry="4" fill="#8a2f2a" /><ellipse rx="11" ry="4.5" fill="#d84848" /><ellipse rx="7" ry="2.6" fill="#8a2f2a" /><ellipse cx="-2" cy="-.6" rx="3" ry="1" fill="#e88a7a" opacity=".7" /></g>);
   const Bone = () => (<g fill="#f4efe2" stroke="#cfc4a8" strokeWidth=".6"><rect x="-7" y="-2" width="14" height="4" rx="2" /><circle cx="-7" cy="-2.4" r="2.6" /><circle cx="-7" cy="2.4" r="2.6" /><circle cx="7" cy="-2.4" r="2.6" /><circle cx="7" cy="2.4" r="2.6" /></g>);
@@ -996,21 +1033,80 @@ function NeighborhoodScene({ bounds }) {
   const Hose = () => (<g stroke="#3e8a48" fill="none"><circle r="8" strokeWidth="3" /><circle r="4.6" strokeWidth="2.6" /><path d="M 7 3 q 8 3 12 1" strokeWidth="2.4" /><rect x="18" y="2.4" width="4" height="3" fill="#f2c14e" stroke="none" /></g>);
   const Mailbox = () => (<g><rect x="-1" y="-2" width="2.4" height="12" fill="#6e4a2a" /><path d="M -7 -8 h 11 a 4 4 0 0 1 0 8 h -11 Z" fill="#3a4048" /><path d="M -7 -8 a 4 4 0 0 0 0 8 h 2 v -8 Z" fill="#4e5866" /><rect x="4" y="-13" width="1.6" height="5" fill="#d84848" /><path d="M 4 -13 h 4.6 v 2.2 h -4.6 Z" fill="#d84848" /></g>);
 
+  // ---- plants: ¾-view sprites, one light source (upper-left) ----
+  const Tree = ({ s = 1 }) => (
+    <g transform={`scale(${s})`}>
+      <ellipse cx="10" cy="4" rx="30" ry="9" fill="#17301a" opacity=".3" />
+      <path d="M -3 4 C -3 -6 -1 -16 0 -24 C 1 -16 3 -6 3 4 Z" fill="#6b4a2a" />
+      <path d="M -1 -4 q -6 -4 -9 -10 M 1 -8 q 6 -3 9 -9" stroke="#6b4a2a" strokeWidth="2.2" fill="none" strokeLinecap="round" />
+      <circle cx="-11" cy="-26" r="13" fill="#3f7a44" />
+      <circle cx="11" cy="-27" r="14" fill="#498a4e" />
+      <circle cx="0" cy="-37" r="15" fill="#57a05c" />
+      <circle cx="-6" cy="-41" r="9" fill="#79c072" opacity=".85" />
+      <circle cx="9" cy="-20" r="10" fill="#356b3a" opacity=".8" />
+      <circle cx="-14" cy="-20" r="9" fill="#356b3a" opacity=".7" />
+    </g>
+  );
+  const Hedge = ({ s = 1 }) => (
+    <g transform={`scale(${s})`}>
+      <ellipse cx="4" cy="6.5" rx="17" ry="4.5" fill="#17301a" opacity=".3" />
+      <path d="M -15 6 C -17 -4 -10 -11 0 -11 C 10 -11 17 -4 15 6 Z" fill="#3f7a44" />
+      <path d="M -15 6 C -16 -2 -11 -8 -3 -9.5 C -8 -4 -10 1 -10 6 Z" fill="#57a05c" opacity=".85" />
+      <path d="M -6 -9 q 1.6 7 1 15 M 2 -9.6 q 1.4 7 1 15.4 M 9 -6.6 q 1 5.6 .6 12.6" stroke="#2e5c34" strokeWidth="1" fill="none" opacity=".55" />
+    </g>
+  );
+  const FlowerShrub = ({ s = 1, c = "#e0527a" }) => (
+    <g transform={`scale(${s})`}>
+      <ellipse cx="3" cy="5" rx="12" ry="3.4" fill="#17301a" opacity=".3" />
+      <path d="M -10 4 C -12 -3 -7 -9 0 -9 C 7 -9 12 -3 10 4 Z" fill="#498a4e" />
+      <circle cx="-5" cy="-4" r="2" fill={c} /><circle cx="1" cy="-6.5" r="2" fill="#ffd166" />
+      <circle cx="6" cy="-3" r="2" fill={c} /><circle cx="-1" cy="-1" r="1.8" fill="#f4f0e8" />
+    </g>
+  );
+  const WildPlant = ({ s = 1, tall = false }) => (
+    <g transform={`scale(${s})`}>
+      <ellipse cx="2" cy="3" rx="9" ry="2.6" fill="#17301a" opacity=".25" />
+      {tall ? (
+        <>
+          <path d="M 0 2 C -1 -6 -1 -14 0 -20 M -4 2 C -6 -4 -7 -10 -7 -15 M 4 2 C 6 -4 7 -10 7 -14" stroke="#4e8a3e" strokeWidth="1.8" fill="none" strokeLinecap="round" />
+          <circle cx="0" cy="-21" r="2.6" fill="#e8c95a" /><circle cx="-7" cy="-16" r="2.2" fill="#d98ab0" /><circle cx="7" cy="-15" r="2.2" fill="#b98cff" />
+        </>
+      ) : (
+        <path d="M -1 2 Q -8 -6 -12 -6 M -1 2 Q -4 -9 -7 -12 M 0 2 Q 0 -10 1 -14 M 1 2 Q 5 -8 8 -11 M 1 2 Q 9 -5 12 -5" stroke="#57a05c" strokeWidth="2" fill="none" strokeLinecap="round" />
+      )}
+    </g>
+  );
+  const GrassTuft = ({ s = 1 }) => (
+    <g transform={`scale(${s})`}>
+      <path d="M -1 1 Q -5 -5 -7 -6 M -.5 1 Q -1.6 -7 -2.6 -9 M .5 1 Q 1.4 -6 3 -8 M 1 1 Q 5 -4 6.6 -5" stroke="#5d9750" strokeWidth="1.7" fill="none" strokeLinecap="round" />
+    </g>
+  );
+
+  // items live INSIDE the fence lines (yards); mailboxes stand at driveways
   const items = [
-    { x: .42, y: .16, C: Ball }, { x: .50, y: .30, C: Bowl }, { x: .44, y: .78, C: Bone },
-    { x: .935, y: .74, C: Yarn }, { x: .475, y: .625, C: Frisbee }, { x: .155, y: .315, C: Gnome },
-    { x: .715, y: .30, C: Can }, { x: .53, y: .485, C: Skateboard }, { x: .955, y: .34, C: Pot },
-    { x: .245, y: .755, C: Hose }, { x: .34, y: .405, C: Mailbox }, { x: .565, y: .59, C: Mailbox },
+    { x: .055, y: .16, C: Can }, { x: .305, y: .335, C: Gnome }, { x: .30, y: .135, C: Ball },
+    { x: .705, y: .125, C: Bowl }, { x: .487, y: .31, C: Yarn }, { x: .725, y: .30, C: Frisbee },
+    { x: .265, y: .62, C: Bone }, { x: .40, y: .607, C: Skateboard },
+    { x: .725, y: .62, C: Pot }, { x: .935, y: .86, C: Hose },
+    { x: .195, y: .402, C: Mailbox }, { x: .805, y: .585, C: Mailbox },
   ];
   const trees = [
-    { x: .455, y: .12, s: 1.1 }, { x: .545, y: .84, s: 1.0 }, { x: .955, y: .90, s: .9 },
-    { x: .035, y: .88, s: .85 }, { x: .975, y: .12, s: .9 }, { x: .025, y: .16, s: .8 },
+    { x: .415, y: .135, s: 1.15 }, { x: .875, y: .145, s: 1.0 }, { x: .955, y: .335, s: .8 },
+    { x: .06, y: .76, s: 1.05 }, { x: .635, y: .905, s: 1.1 }, { x: .155, y: .955, s: .85 },
+  ];
+  const wilds = [
+    { x: .40, y: .30, tall: true }, { x: .625, y: .615, tall: false }, { x: .03, y: .60, tall: false },
+    { x: .95, y: .63, tall: true }, { x: .445, y: .95, tall: false }, { x: .335, y: .105, tall: false },
+    { x: .96, y: .06, tall: false }, { x: .025, y: .13, tall: true },
   ];
   const beds = [
-    { x: .165, y: .345 }, { x: .755, y: .345 },
-    { x: .215, y: .625 }, { x: .715, y: .635 },
+    { x: .125, y: .305 }, { x: .565, y: .295 }, { x: .335, y: .662 }, { x: .795, y: .672 },
   ];
-  const fences = NEIGHBORHOOD_FENCES.map((f) => ({ x: f.x * w, y: f.y * h, fw: f.w * w, fh: f.h * h }));
+  // curated hedges inside each yard, hugging the house's street side
+  const hedgerows = g.houses.flatMap((hs, i) => {
+    const by = hs.topRow ? hs.py + hs.ph + 16 : hs.py - 16;
+    return [0.14, 0.5, 0.86].map((t, j) => ({ x: hs.px + hs.pw * t, y: by, key: `${i}-${j}` }));
+  });
 
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true"
@@ -1019,21 +1115,70 @@ function NeighborhoodScene({ bounds }) {
         <linearGradient id="sainb-asphalt" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#565b64" /><stop offset=".5" stopColor="#484d56" /><stop offset="1" stopColor="#3c4149" />
         </linearGradient>
-        <radialGradient id="sainb-canopy" cx="40%" cy="35%" r="75%">
-          <stop offset="0" stopColor="#79c98a" /><stop offset=".55" stopColor="#4e9c5f" /><stop offset="1" stopColor="#2f6b45" />
+        {/* one sun, upper-left: warm wash + soft falloff to the SE */}
+        <radialGradient id="sainb-sun" cx="0.16" cy="0.06" r="1.1">
+          <stop offset="0" stopColor="#fff3c0" stopOpacity=".5" />
+          <stop offset=".38" stopColor="#ffe9a0" stopOpacity=".18" />
+          <stop offset=".75" stopColor="#ffe9a0" stopOpacity="0" />
         </radialGradient>
-        <radialGradient id="sainb-vig" cx="50%" cy="46%" r="75%">
-          <stop offset=".6" stopColor="#000" stopOpacity="0" /><stop offset="1" stopColor="#12321a" stopOpacity=".5" />
+        <linearGradient id="sainb-shade" x1="0" y1="0" x2="1" y2="1">
+          <stop offset=".55" stopColor="#10240f" stopOpacity="0" />
+          <stop offset="1" stopColor="#10240f" stopOpacity=".34" />
+        </linearGradient>
+        <radialGradient id="sainb-vig" cx="50%" cy="46%" r="78%">
+          <stop offset=".62" stopColor="#000" stopOpacity="0" /><stop offset="1" stopColor="#122a12" stopOpacity=".5" />
         </radialGradient>
         <filter id="sainb-soft" x="-40%" y="-40%" width="180%" height="180%">
-          <feDropShadow dx="0" dy="3" stdDeviation="2.6" floodColor="#1e3a14" floodOpacity=".5" />
+          <feDropShadow dx="2.6" dy="3.4" stdDeviation="2.4" floodColor="#17301a" floodOpacity=".5" />
         </filter>
+        <filter id="sainb-blur9" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="9" />
+        </filter>
+        <filter id="sainb-grain" x="0" y="0" width="100%" height="100%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.8" numOctaves="2" seed="9" result="n" />
+          <feColorMatrix in="n" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .05 0" />
+        </filter>
+        <filter id="sainb-mottle" x="-20%" y="-20%" width="140%" height="140%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.006 0.009" numOctaves="2" seed="5" result="m" />
+          <feDisplacementMap in="SourceGraphic" in2="m" scale="60" />
+        </filter>
+        {/* ---- four distinct roof tilings ---- */}
+        <pattern id="sainb-pat-barrel" width="24" height="26" patternUnits="userSpaceOnUse">
+          <rect width="24" height="26" fill="#c96a4a" />
+          <path d="M 0 13 A 12 10 0 0 1 24 13" fill="#d97e5a" stroke="#9c4a32" strokeWidth="1.2" />
+          <path d="M -12 26 A 12 10 0 0 1 12 26" fill="#d97e5a" stroke="#9c4a32" strokeWidth="1.2" />
+          <path d="M 12 26 A 12 10 0 0 1 36 26" fill="#d97e5a" stroke="#9c4a32" strokeWidth="1.2" />
+        </pattern>
+        <pattern id="sainb-pat-slate" width="28" height="20" patternUnits="userSpaceOnUse">
+          <rect width="28" height="20" fill="#6e7a87" />
+          <rect x="0" y="0" width="13" height="9" fill="#8894a2" stroke="#57626e" strokeWidth="1" />
+          <rect x="14" y="0" width="13" height="9" fill="#7b8794" stroke="#57626e" strokeWidth="1" />
+          <rect x="-7" y="10" width="13" height="9" fill="#7b8794" stroke="#57626e" strokeWidth="1" />
+          <rect x="7" y="10" width="13" height="9" fill="#8894a2" stroke="#57626e" strokeWidth="1" />
+          <rect x="21" y="10" width="13" height="9" fill="#75818e" stroke="#57626e" strokeWidth="1" />
+        </pattern>
+        <pattern id="sainb-pat-metal" width="20" height="20" patternUnits="userSpaceOnUse">
+          <rect width="20" height="20" fill="#4a7a5a" />
+          <rect x="0" width="2.4" height="20" fill="#3a624a" />
+          <rect x="3.2" width="1.8" height="20" fill="#579068" opacity=".7" />
+        </pattern>
+        <pattern id="sainb-pat-shake" width="30" height="18" patternUnits="userSpaceOnUse">
+          <rect width="30" height="18" fill="#8a6a4a" />
+          <path d="M 7 0 v8 M 15 0 v9 M 23 0 v7.4" stroke="#6b4f33" strokeWidth="1.4" />
+          <path d="M 0 8.6 h30 M 0 17.6 h30" stroke="#5f462c" strokeWidth="1.3" />
+          <path d="M 3 9 v8 M 12 9 v8.4 M 20 9 v7.6 M 27 9 v8.2" stroke="#6b4f33" strokeWidth="1.4" />
+          <rect width="30" height="1.6" y="8.8" fill="#9c7a55" opacity=".5" />
+        </pattern>
       </defs>
 
-      {/* mow stripes on the lawn */}
-      {Array.from({ length: 8 }, (_, i) => (
-        <rect key={i} x="0" y={(i * 0.125) * h} width={w} height={0.0625 * h} fill="#ffffff" opacity=".035" />
-      ))}
+      {/* ---- lawn: soft mottled tone variation + grain (no stripes) ---- */}
+      <g filter="url(#sainb-mottle)" opacity=".5">
+        <ellipse cx={w * .3} cy={h * .22} rx={w * .28} ry={h * .2} fill="#79b264" />
+        <ellipse cx={w * .78} cy={h * .8} rx={w * .3} ry={h * .22} fill="#5f9a4e" />
+        <ellipse cx={w * .18} cy={h * .78} rx={w * .22} ry={h * .18} fill="#6aa658" />
+        <ellipse cx={w * .72} cy={h * .2} rx={w * .24} ry={h * .17} fill="#639f52" />
+      </g>
+      <rect width={w} height={h} filter="url(#sainb-grain)" opacity=".55" style={{ mixBlendMode: "overlay" }} />
 
       {/* street + sidewalks */}
       <rect x="0" y={g.streetY - g.walkH} width={w} height={g.walkH} fill="#b8b4a8" />
@@ -1050,9 +1195,9 @@ function NeighborhoodScene({ bounds }) {
       {g.dashes.map((x, i) => (
         <rect key={i} x={x} y={g.streetY + g.streetH / 2 - 2} width="30" height="4" rx="2" fill="#e8c95a" opacity=".85" />
       ))}
-      <ellipse cx={w * .58} cy={g.streetY + g.streetH * .68} rx="13" ry="9" fill="#3a3f47" stroke="#2c3038" strokeWidth="2" />
+      <ellipse cx={w * .48} cy={g.streetY + g.streetH * .68} rx="13" ry="9" fill="#3a3f47" stroke="#2c3038" strokeWidth="2" />
 
-      {/* driveways: house → sidewalk */}
+      {/* driveways */}
       {g.houses.map((hs, i) => {
         const dx = hs.px + hs.pw / 2 - 0.028 * w;
         const dw = 0.056 * w;
@@ -1066,67 +1211,35 @@ function NeighborhoodScene({ bounds }) {
         );
       })}
 
-      {/* flower beds */}
+      {/* lawn tufts (gentle sway) */}
+      {g.tufts.map((t, i) => (
+        <g key={i} transform={`translate(${t.x} ${t.y})`}>
+          <g className="sai-bg-sway" style={{ animationDelay: `${t.d}s`, animationDuration: "5.2s" }}>
+            <GrassTuft s={t.s} />
+          </g>
+        </g>
+      ))}
+
+      {/* flower beds (inside yards, beside the houses) */}
       {beds.map((b, i) => (
         <g key={i} transform={`translate(${b.x * w} ${b.y * h})`}>
-          <ellipse rx="26" ry="8" fill="#5a4430" opacity=".8" />
+          <ellipse cx="2.6" cy="2.6" rx="26" ry="8" fill="#17301a" opacity=".3" />
+          <ellipse rx="26" ry="8" fill="#5a4430" />
           {[-16, -6, 4, 14].map((fx, j) => (
             <circle key={j} cx={fx} cy={j % 2 ? -2 : 2} r="3" fill={["#e0527a", "#ffd166", "#b98cff", "#ff9ecb"][(i + j) % 4]} />
           ))}
         </g>
       ))}
 
-      {/* houses: shadow, roof, hip lines, ridge, chimney */}
-      {g.houses.map((hs, i) => {
-        const rx = hs.px, ry = hs.py, rw = hs.pw, rh = hs.ph;
-        const ridgeY = ry + rh / 2;
-        const inset = Math.min(rw, rh) * 0.32;
-        return (
-          <g key={i}>
-            <rect x={rx + 7} y={ry + 9} width={rw} height={rh} rx="8" fill="#1e3a14" opacity=".35" />
-            <rect x={rx} y={ry} width={rw} height={rh} rx="8" fill={hs.roof} />
-            <path d={`M ${rx} ${ry} L ${rx + inset} ${ridgeY} L ${rx} ${ry + rh} M ${rx + rw} ${ry} L ${rx + rw - inset} ${ridgeY} L ${rx + rw} ${ry + rh}`}
-              stroke={hs.ridge} strokeWidth="2.4" fill="none" opacity=".8" />
-            <path d={`M ${rx} ${ry} L ${rx + inset} ${ridgeY} L ${rx + rw - inset} ${ridgeY} L ${rx + rw} ${ry} Z`} fill="#ffffff" opacity=".10" />
-            <path d={`M ${rx} ${ry + rh} L ${rx + inset} ${ridgeY} L ${rx + rw - inset} ${ridgeY} L ${rx + rw} ${ry + rh} Z`} fill="#000000" opacity=".14" />
-            <line x1={rx + inset} y1={ridgeY} x2={rx + rw - inset} y2={ridgeY} stroke={hs.ridge} strokeWidth="3.4" strokeLinecap="round" />
-            {[0.25, 0.5, 0.75].map((t, j) => (
-              <line key={j} x1={rx + 6} y1={ry + rh * t} x2={rx + rw - 6} y2={ry + rh * t} stroke="#000" strokeWidth="1" opacity=".08" />
-            ))}
-            <rect x={rx + rw * .68} y={ry + rh * .18} width={rw * .085} height={rh * .12} rx="2" fill="#8a6a52" stroke={hs.ridge} strokeWidth="1" />
-            {i % 2 === 0 && (
-              <rect x={rx + rw * .16} y={ry + rh * .62} width={rw * .12} height={rh * .14} rx="2" fill="#b9c8cf" stroke="#7b8794" strokeWidth="1.2" opacity=".9" />
-            )}
-          </g>
-        );
-      })}
-
-      {/* bushes hugging the street-facing side of each house */}
-      {g.houses.map((hs, i) => {
-        const by = hs.topRow ? hs.py + hs.ph + 10 : hs.py - 10;
-        return (
-          <g key={i} filter="url(#sainb-soft)">
-            {[0.16, 0.5, 0.84].map((t, j) => (
-              <g key={j} transform={`translate(${hs.px + hs.pw * t} ${by})`}>
-                <circle r="9" fill="#4e9c5f" /><circle cx="-6" cy="2" r="6.4" fill="#3f8450" /><circle cx="6" cy="2" r="6.4" fill="#57a868" />
-              </g>
-            ))}
-          </g>
-        );
-      })}
-
       {/* white picket fences (same rects the dog collides with) */}
-      {fences.map((f, i) => {
+      {g.fences.map((f, i) => {
         const horiz = f.fw > f.fh;
         const picks = [];
-        if (horiz) {
-          for (let px = f.x + 5; px < f.x + f.fw - 3; px += 13) picks.push(px);
-        } else {
-          for (let py = f.y + 5; py < f.y + f.fh - 3; py += 13) picks.push(py);
-        }
+        if (horiz) for (let px = f.x + 5; px < f.x + f.fw - 3; px += 13) picks.push(px);
+        else for (let py = f.y + 5; py < f.y + f.fh - 3; py += 13) picks.push(py);
         const cy = f.y + f.fh / 2, cx = f.x + f.fw / 2;
         return (
-          <g key={i}>
+          <g key={i} filter="url(#sainb-soft)">
             {horiz ? (
               <>
                 <rect x={f.x} y={cy + 1} width={f.fw} height="2.4" fill="#d8d8d0" />
@@ -1151,22 +1264,109 @@ function NeighborhoodScene({ bounds }) {
         );
       })}
 
-      {/* yard trees (canopy top-down) */}
-      {trees.map((t, i) => (
-        <g key={i} transform={`translate(${t.x * w} ${t.y * h}) scale(${t.s})`} filter="url(#sainb-soft)">
-          <circle r="34" fill="url(#sainb-canopy)" />
-          <circle cx="-12" cy="-10" r="15" fill="#79c98a" opacity=".55" />
-          <circle cx="12" cy="8" r="13" fill="#2f6b45" opacity=".6" />
-          <circle r="4" fill="#24543a" />
+      {/* curated hedges inside the yards */}
+      {hedgerows.map((hd) => (
+        <g key={hd.key} transform={`translate(${hd.x} ${hd.y})`}><Hedge s={1.05} /></g>
+      ))}
+      {g.houses.map((hs, i) => (
+        <g key={i} transform={`translate(${hs.px + hs.pw + 26} ${hs.topRow ? hs.py + 12 : hs.py + hs.ph - 12})`}>
+          <FlowerShrub s={1} c={["#e0527a", "#b98cff", "#f2913e", "#ff9ecb"][i]} />
         </g>
       ))}
 
-      {/* scattered human & pet things */}
+      {/* houses: long soft SE shadow, patterned roof, hips, fixtures */}
+      {g.houses.map((hs, i) => {
+        const rx = hs.px, ry = hs.py, rw = hs.pw, rh = hs.ph;
+        const ridgeY = ry + rh / 2;
+        const inset = Math.min(rw, rh) * 0.32;
+        const gutterY = hs.topRow ? ry + rh - 2 : ry - 2;
+        return (
+          <g key={i}>
+            <rect x={rx + 14} y={ry + 16} width={rw} height={rh} rx="8" fill="#17301a" opacity=".42" filter="url(#sainb-blur9)" />
+            <rect x={rx} y={ry} width={rw} height={rh} rx="8" fill={`url(#sainb-pat-${hs.pat})`} />
+            <path d={`M ${rx} ${ry} L ${rx + inset} ${ridgeY} L ${rx + rw - inset} ${ridgeY} L ${rx + rw} ${ry} Z`} fill="#ffffff" opacity=".12" />
+            <path d={`M ${rx} ${ry + rh} L ${rx + inset} ${ridgeY} L ${rx + rw - inset} ${ridgeY} L ${rx + rw} ${ry + rh} Z`} fill="#000000" opacity=".16" />
+            <path d={`M ${rx} ${ry} L ${rx + inset} ${ridgeY} L ${rx} ${ry + rh} M ${rx + rw} ${ry} L ${rx + rw - inset} ${ridgeY} L ${rx + rw} ${ry + rh}`}
+              stroke={hs.ridge} strokeWidth="2.4" fill="none" opacity=".85" />
+            <line x1={rx + inset} y1={ridgeY} x2={rx + rw - inset} y2={ridgeY} stroke={hs.ridge} strokeWidth="3.4" strokeLinecap="round" />
+
+            {/* gutter along the street-facing eave + downspout at the corner */}
+            <rect x={rx + 2} y={gutterY} width={rw - 4} height="4" rx="2" fill="#cfd4da" stroke="#9aa0a8" strokeWidth=".8" />
+            <rect x={rx + rw - 7} y={hs.topRow ? gutterY + 4 : gutterY - 24} width="3.5" height="24" fill="#c2c8ce" stroke="#9aa0a8" strokeWidth=".7" />
+            <rect x={rx + rw - 9.5} y={hs.topRow ? gutterY + 27 : gutterY - 29} width="8" height="4" rx="1.6" fill="#b4bac2" />
+
+            {/* per-roof fixtures */}
+            {hs.pat === "barrel" && (
+              <g transform={`translate(${rx + rw * .7} ${ry + rh * .24})`}>
+                <rect x="4" y="4" width="17" height="23" rx="2" fill="#17301a" opacity=".35" filter="url(#sainb-blur9)" />
+                <rect x="0" y="0" width="17" height="23" rx="2" fill="#9c5a40" stroke="#6e3a28" strokeWidth="1.2" />
+                <path d="M 0 6 h17 M 0 12 h17 M 0 18 h17 M 8.5 0 v6 M 4 6 v6 M 12.5 6 v6 M 8.5 12 v6 M 4 18 v5" stroke="#6e3a28" strokeWidth=".9" opacity=".7" />
+                <rect x="-2" y="-4" width="21" height="5" rx="2" fill="#b86a4a" stroke="#6e3a28" strokeWidth="1" />
+                <ellipse cx="8.5" cy="-1.4" rx="6" ry="1.8" fill="#2a1c14" />
+              </g>
+            )}
+            {hs.pat === "slate" && (
+              <g transform={`translate(${rx + rw * .2} ${ry + rh * .3})`}>
+                <ellipse cx="3" cy="3.4" rx="12" ry="9" fill="#17301a" opacity=".3" filter="url(#sainb-blur9)" />
+                <ellipse rx="12" ry="9" fill="#d8dde2" stroke="#9aa0a8" strokeWidth="1" transform="rotate(-18)" />
+                <ellipse rx="7.5" ry="5.4" fill="#eef1f4" transform="rotate(-18)" />
+                <circle r="1.6" fill="#7b8794" />
+                <path d="M 1 1 L 9 9" stroke="#7b8794" strokeWidth="2" strokeLinecap="round" />
+                <rect x="7.4" y="8" width="5" height="3" rx="1.2" fill="#7b8794" />
+              </g>
+            )}
+            {hs.pat === "metal" && (
+              <g transform={`translate(${rx + rw * .3} ${ry + rh * .18})`}>
+                <rect x="3" y="4" width={rw * .42} height={rh * .34} fill="#17301a" opacity=".3" filter="url(#sainb-blur9)" />
+                <rect width={rw * .42} height={rh * .34} rx="2" fill="#22304a" stroke="#151f33" strokeWidth="1.4" />
+                {[1, 2].map((c) => (
+                  <line key={c} x1={(rw * .42 / 3) * c} y1="0" x2={(rw * .42 / 3) * c} y2={rh * .34} stroke="#3a527a" strokeWidth="1.4" />
+                ))}
+                <line x1="0" y1={rh * .17} x2={rw * .42} y2={rh * .17} stroke="#3a527a" strokeWidth="1.4" />
+                <path d={`M 2 ${rh * .3} L ${rw * .16} 2`} stroke="#7ea0d8" strokeWidth="2.4" opacity=".4" strokeLinecap="round" />
+              </g>
+            )}
+            {hs.pat === "shake" && (
+              <>
+                <g transform={`translate(${rx + rw * .74} ${ry + rh * .3})`}>
+                  <line x1="0" y1="0" x2="0" y2="-24" stroke="#9aa0a8" strokeWidth="2.2" strokeLinecap="round" />
+                  <path d="M -9 -22 h 18 M -7 -17 h 14 M -5 -12 h 10" stroke="#9aa0a8" strokeWidth="1.6" strokeLinecap="round" />
+                  <circle cy="-25.5" r="1.6" fill="#c2c8ce" />
+                  <rect x="-2.4" y="-2" width="4.8" height="5" rx="1.4" fill="#7b8794" />
+                </g>
+                <g transform={`translate(${rx + rw * .2} ${ry + rh * .62})`}>
+                  <rect x="3" y="3" width="13" height="16" rx="2" fill="#17301a" opacity=".35" filter="url(#sainb-blur9)" />
+                  <rect width="13" height="16" rx="2" fill="#8a5a40" stroke="#5e3a28" strokeWidth="1" />
+                  <path d="M 0 5 h13 M 0 10 h13 M 6.5 0 v5 M 3 5 v5 M 10 5 v5 M 6.5 10 v6" stroke="#5e3a28" strokeWidth=".8" opacity=".7" />
+                  <rect x="-1.6" y="-3.4" width="16.2" height="4.2" rx="1.8" fill="#a06a4a" stroke="#5e3a28" strokeWidth=".9" />
+                </g>
+              </>
+            )}
+          </g>
+        );
+      })}
+
+      {/* wild greens outside the fences */}
+      {trees.map((t, i) => (
+        <g key={i} transform={`translate(${t.x * w} ${t.y * h})`}><Tree s={t.s} /></g>
+      ))}
+      {wilds.map((p, i) => (
+        <g key={i} transform={`translate(${p.x * w} ${p.y * h})`}><WildPlant s={1.1} tall={p.tall} /></g>
+      ))}
+
+      {/* toys & things, all inside the yards */}
       {items.map(({ x, y, C }, i) => (
         <g key={i} transform={`translate(${x * w} ${y * h})`} filter="url(#sainb-soft)"><C /></g>
       ))}
 
-      <rect x="0" y="0" width={w} height={h} fill="url(#sainb-vig)" />
+      {/* ---- global light: warm sun (NW) + shade falloff (SE) + clouds ---- */}
+      <rect width={w} height={h} fill="url(#sainb-sun)" style={{ mixBlendMode: "screen" }} />
+      <rect width={w} height={h} fill="url(#sainb-shade)" />
+      <g opacity=".1" filter="url(#sainb-blur9)">
+        <ellipse className="sainb-cloud" cx={-w * .1} cy={h * .24} rx={w * .17} ry={h * .1} fill="#0c1c0c" />
+        <ellipse className="sainb-cloud c2" cx={-w * .16} cy={h * .68} rx={w * .2} ry={h * .12} fill="#0c1c0c" />
+      </g>
+      <rect width={w} height={h} fill="url(#sainb-vig)" />
     </svg>
   );
 }
@@ -1446,7 +1646,7 @@ function stepWorld(world, cfg, dt) {
   for (const a of agents) {
     if (a.dragging) continue;
     const busy = a.state === "fight" || a.state === "friendly" || a.state === "rescue" ||
-      AIR_STATES.has(a.state) || ROOF_STATES.has(a.state);
+      a.state === "sniff" || AIR_STATES.has(a.state) || ROOF_STATES.has(a.state);
     if (now >= a.intentUntil && !busy) {
       const swimP = def.hasWater ? SWIM_P[a.species] || 0 : 0;
       const perchP = def.perching && FLYERS.has(a.species) ? PERCH_P : 0;
@@ -1552,20 +1752,49 @@ function stepWorld(world, cfg, dt) {
     }
 
     // ---- rooftop life: birds fly up & perch, the cat hops up & patrols ----
-    if (a.state === "flyup") {
+    if (a.state === "takeoff") {
+      // anticipation beat: little crouch-hop on the spot before launching
+      a.vx = a.vy = 0;
+      a.z += (14 - a.z) * Math.min(1, dt * 6);
+      if (now >= a.stateUntil) {
+        const hs = def.houses[a.roofI];
+        if (!hs) { a.state = "wander"; }
+        else {
+          // aim at the nearest point on the roof's edge, not deep inside
+          const rr = roofRect(bounds, hs, 4);
+          a.airTarget = { x: clamp(a.x, rr.l, rr.r), y: clamp(a.y, rr.t, rr.b) };
+          a.state = "flyup";
+        }
+      }
+    } else if (a.state === "flyup") {
       const t = a.airTarget;
       if (!t || a.roofI < 0 || !def.houses[a.roofI]) { a.state = "wander"; }
       else {
         const dx = t.x - a.x, dy = t.y - a.y, d = Math.hypot(dx, dy) || 1;
-        const sp = cfg.speed * (a.species === "cat" ? 1.5 : 1.8);
+        const sp = cfg.speed * (a.species === "cat" ? 1.35 : 1.25); // brisk, not rocket
         a.vx = (dx / d) * sp; a.vy = (dy / d) * sp;
-        a.z += (ROOF_Z - a.z) * Math.min(1, dt * 5);
-        if (d < 20) {
-          a.x = t.x; a.y = t.y; a.vx = a.vy = 0; a.z = ROOF_Z;
-          if (a.species === "cat") { a.state = "patrol"; a.stateUntil = now + rand(5000, 9000); }
-          else { a.state = "roofwalk"; a.stateUntil = now + rand(6000, 14000); }
-          a.airTarget = roofPoint(bounds, def.houses[a.roofI]);
+        a.z += (EAVE_Z - a.z) * Math.min(1, dt * 5); // fly at eave height...
+        if (d < 16) {
+          // ...then a distinct hop-up over the edge to reach the top
+          const hs = def.houses[a.roofI];
+          const cx = (hs.x + hs.w / 2) * bounds.w, cy = (hs.y + hs.h / 2) * bounds.h;
+          const ux = cx - a.x, uy = cy - a.y, ud = Math.hypot(ux, uy) || 1;
+          a.airTarget = { x: a.x + (ux / ud) * 34, y: a.y + (uy / ud) * 34 };
+          a.state = "roofhop"; a.stateUntil = now + (a.species === "cat" ? 420 : 260);
         }
+      }
+    } else if (a.state === "roofhop") {
+      // the spring over the eave: slow horizontal creep, fast vertical rise
+      const t = a.airTarget;
+      const dx = t.x - a.x, dy = t.y - a.y, d = Math.hypot(dx, dy) || 1;
+      const sp = cfg.speed * 0.6;
+      a.vx = (dx / d) * sp; a.vy = (dy / d) * sp;
+      a.z += ((ROOF_Z + 7) - a.z) * Math.min(1, dt * 9);
+      if (now >= a.stateUntil || d < 8) {
+        a.z = ROOF_Z;
+        if (a.species === "cat") { a.state = "patrol"; a.stateUntil = now + rand(6000, 10000); }
+        else { a.state = "roofwalk"; a.stateUntil = now + rand(12000, 20000); } // 12s minimum up top
+        a.airTarget = roofPoint(bounds, def.houses[a.roofI]);
       }
     } else if (a.state === "roofwalk" || a.state === "patrol") {
       a.z = ROOF_Z;
@@ -1583,7 +1812,7 @@ function stepWorld(world, cfg, dt) {
         }
         if ((a.state === "roofwalk" || a.state === "patrol") && now >= a.stateUntil) {
           a.state = "flydown";
-          a.airTarget = a.species === "cat" ? besideRoof(world, hs, a.species) : interiorPoint(world, a.species);
+          a.airTarget = a.species === "cat" ? besideRoof(world, hs, a.species) : nearbyGround(world, a);
           a.intent = "wander"; a.intentUntil = now + rand(INTENT_MIN_S * 1000, INTENT_MAX_S * 1000);
         }
       }
@@ -1594,9 +1823,9 @@ function stepWorld(world, cfg, dt) {
         a.state = "dash"; a.stateUntil = now + 1600;
         a.airTarget = prey ? { x: prey.x, y: prey.y } : roofPoint(bounds, def.houses[a.roofI]);
         if (prey && prey.roofI === a.roofI && prey.state === "roofwalk") {
-          // the bird bails for the ground
+          // the bird bails for the ground — a short escape, not a cross-map flight
           prey.state = "flydown"; prey.roofI = -1;
-          prey.airTarget = interiorPoint(world, prey.species);
+          prey.airTarget = nearbyGround(world, prey);
           prey.intent = "wander"; prey.noEventUntil = Math.max(prey.noEventUntil, now + 3000);
         }
       }
@@ -1615,7 +1844,7 @@ function stepWorld(world, cfg, dt) {
       if (!t) { a.state = "wander"; }
       else {
         const dx = t.x - a.x, dy = t.y - a.y, d = Math.hypot(dx, dy) || 1;
-        const sp = cfg.speed * (a.species === "cat" ? 1.5 : 1.7);
+        const sp = cfg.speed * (a.species === "cat" ? 1.35 : 1.25);
         a.vx = (dx / d) * sp; a.vy = (dy / d) * sp;
         const zT = Math.min(a.z, Math.max(0, (d - 30) * 0.35));
         a.z += (zT - a.z) * Math.min(1, dt * 4);
@@ -1623,6 +1852,28 @@ function stepWorld(world, cfg, dt) {
           a.z = 0; a.roofI = -1; a.airTarget = null;
           a.state = "cooldown"; a.noEventUntil = Math.max(a.noEventUntil, now + 1200);
         }
+      }
+    }
+
+    // the dog's stop-and-sniff along a fence it's been stuck on
+    if (a.state === "sniff") {
+      a.vx = 0; a.vy = 0;
+      if (now >= a.stateUntil) {
+        const aw = a._fenceAway || { x: 0, y: 1 };
+        a.state = "wander";
+        a.vx = aw.x * cfg.speed * 0.9; a.vy = aw.y * cfg.speed * 0.9;
+        a._fenceHit = 0; a._fenceStuckSince = 0;
+        a.noEventUntil = Math.max(a.noEventUntil, now + 1500);
+      }
+    } else if (a.species === "labrador" && def.fences && isFreeState(a)) {
+      // nosing the same fence for 2s → stop and sniff it for 4s, then leave
+      if (a._fenceHit && now - a._fenceHit < 350) {
+        if (!a._fenceStuckSince) a._fenceStuckSince = now;
+        else if (now - a._fenceStuckSince > 2000) {
+          a.state = "sniff"; a.stateUntil = now + 4000; a.vx = 0; a.vy = 0;
+        }
+      } else if (a._fenceStuckSince && (!a._fenceHit || now - a._fenceHit > 900)) {
+        a._fenceStuckSince = 0;
       }
     }
 
@@ -1643,11 +1894,12 @@ function stepWorld(world, cfg, dt) {
 
     // navigation
     if (a.state === "wander") {
-      // launch a roof trip when the intent calls for one
+      // launch a roof trip when the intent calls for one: the NEAREST roof,
+      // starting with an anticipation hop (takeoff) before the flight
       if ((a.intent === "perch" || a.intent === "patrol") && def.houses.length && a.z === 0) {
-        a.roofI = (Math.random() * def.houses.length) | 0;
-        a.airTarget = roofPoint(bounds, def.houses[a.roofI]);
-        a.state = "flyup"; a.intent = "wander";
+        a.roofI = nearestRoof(bounds, def.houses, a.x, a.y);
+        a.state = "takeoff"; a.stateUntil = now + (a.species === "cat" ? 480 : 300);
+        a.vx = a.vy = 0; a.intent = "wander";
         continue;
       }
       if (a.intent === "swim" && canSwim(a.species) && def.hasWater) {
@@ -1717,12 +1969,33 @@ function stepWorld(world, cfg, dt) {
     // grounded rules only
     if (!onRoof && !inAir) {
       a.roofI = -1;
-      if (a.z > 0) { a.z *= Math.exp(-5 * dt); if (a.z < 0.5) a.z = 0; } // touch down
+      const hopping = now < (a.hopUntil || 0);
+      if (a.z > 0 && !hopping) { a.z *= Math.exp(-5 * dt); if (a.z < 0.5) a.z = 0; } // touch down
       if (def.hasWater && !canSwim(a.species)) keepAshore(a, bounds);
       if (a.z < 3) keepOutOfHouses(a, bounds, def.houses);
       if (def.fences) {
-        if (a.species === "labrador") keepOutOfFences(a, bounds, def.fences); // too big for the pickets
-        else if (FLYERS.has(a.species) && inAnyFence(bounds, def.fences, a.x, a.y)) a.z = Math.max(a.z, 15); // flutter over
+        if (a.species === "labrador") {
+          keepOutOfFences(a, bounds, def.fences); // too big for the pickets
+        } else if (FLYERS.has(a.species)) {
+          // a held flutter-hop clears the pickets (wings flap via data-air)
+          if (!hopping && inAnyFence(bounds, def.fences, a.x, a.y, 10)) a.hopUntil = now + 420;
+          if (now < (a.hopUntil || 0)) a.z = Math.max(a.z, 20);
+        } else if (a.species === "cat") {
+          // deliberate cat: pause at the fence, then one clean jump over
+          if (now < (a.hopPrepUntil || 0)) { a.vx = 0; a.vy = 0; }
+          else if (a._hopSaved) {
+            a.vx = a._hopSaved.x; a.vy = a._hopSaved.y; a._hopSaved = null;
+            a.hopUntil = now + 500;
+          }
+          if (now < (a.hopUntil || 0)) a.z = Math.max(a.z, 22);
+          else if (isFreeState(a) && a.z === 0 && !a.hopPrepUntil) {
+            const ax = a.x + a.vx * 0.22, ay = a.y + a.vy * 0.22; // ~0.2s ahead
+            if (inAnyFence(bounds, def.fences, ax, ay, 8) && !inAnyFence(bounds, def.fences, a.x, a.y, 8)) {
+              a.hopPrepUntil = now + 240; a._hopSaved = { x: a.vx, y: a.vy }; a.vx = 0; a.vy = 0;
+            }
+          }
+          if (a.hopPrepUntil && now >= a.hopPrepUntil && !a._hopSaved) a.hopPrepUntil = 0;
+        }
         // everyone else slips between the pickets
       }
     }
@@ -1854,6 +2127,8 @@ function renderWorld(world, iconsRef) {
       sprite.dataset.swimming = world.def.hasWater && canSwim(a.species) && inWater(world.bounds, a.x, a.y) ? '1' : '';
       // airborne (flying up/down or fluttering over a fence): flap + shrink shadow
       sprite.dataset.air = a.z > 3 ? '1' : '';
+      // the cat's pre-jump pause at a fence (little crouch via CSS)
+      sprite.dataset.prep = nowMs < (a.hopPrepUntil || 0) ? '1' : '';
       let dir = Number(sprite.dataset.dir || '1');
       if (a.vx < -8) dir = -1; else if (a.vx > 8) dir = 1;
       let jx = 0, jy = 0;
