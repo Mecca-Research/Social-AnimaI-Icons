@@ -277,7 +277,7 @@ const ROOF_Z = 46;      // visual elevation of a roof, px
 const EAVE_Z = 26;      // flight height on approach — the hop covers the rest
 const PERCH_P = 0.4;    // birds seek the rooftops 40% of the time
 const PATROL_P = 0.4;   // ...and so does the cat
-const ROOF_STATES = new Set(["roofwalk", "patrol", "crouch", "dash"]);
+const ROOF_STATES = new Set(["roofwalk", "patrol", "crouch", "dash", "roofedge"]);
 const AIR_STATES = new Set(["takeoff", "flyup", "roofhop", "flydown", "glide"]);
 
 function roofRect(bounds, hs, m = 18) {
@@ -2005,7 +2005,8 @@ function stepWorld(world, cfg, dt) {
       if (now >= a.stateUntil || d < 8) {
         a.z = ROOF_Z;
         if (a.species === "cat") { a.state = "patrol"; a.stateUntil = now + rand(6000, 10000); }
-        else { a.state = "roofwalk"; a.stateUntil = now + rand(12000, 20000); } // 12s minimum up top
+        else if (a.species === "sugarglider") { a.state = "roofwalk"; a.stateUntil = now + rand(7000, 14000); }
+        else { a.state = "roofwalk"; a.stateUntil = now + rand(12000, 20000); } // birds: 12s minimum up top
         a.airTarget = roofPoint(bounds, def.houses[a.roofI]);
       }
     } else if (a.state === "roofwalk" || a.state === "patrol") {
@@ -2039,25 +2040,48 @@ function stepWorld(world, cfg, dt) {
         }
         if ((a.state === "roofwalk" || a.state === "patrol") && now >= a.stateUntil) {
           if (a.species === "sugarglider") {
-            // the glider LAUNCHES: a long flat sail to a clear spot a good
-            // distance out — or clean off the map, where the edge wrap
-            // brings him back in at a random entry point
-            let t2 = null;
-            for (let i = 0; i < 12 && !t2; i++) {
-              const ang = rand(0, Math.PI * 2), r = rand(260, 420);
-              const x = a.x + Math.cos(ang) * r, y = a.y + Math.sin(ang) * r;
-              const off = x < 30 || x > bounds.w - 30 || y < 50 || y > bounds.h - 50;
-              if (off || spawnSafe(world, x, y, a.species)) t2 = { x, y };
-            }
-            const ang2 = rand(0, Math.PI * 2);
-            a.airTarget = t2 || { x: a.x + Math.cos(ang2) * 340, y: a.y + Math.sin(ang2) * 340 };
-            a.state = "glide";
-            a._glideFrom = { d: Math.hypot(a.airTarget.x - a.x, a.airTarget.y - a.y) };
+            // wander time's up — first walk to a random point on the
+            // roofline; the leap-and-glide only happens from the edge
+            const rr = roofRect(bounds, hs);
+            const side = (Math.random() * 4) | 0;
+            a.airTarget = side === 0 ? { x: rand(rr.l, rr.r), y: rr.t }
+              : side === 1 ? { x: rand(rr.l, rr.r), y: rr.b }
+              : side === 2 ? { x: rr.l, y: rand(rr.t, rr.b) }
+              : { x: rr.r, y: rand(rr.t, rr.b) };
+            a.state = "roofedge";
           } else {
             a.state = "flydown";
             a.airTarget = a.species === "cat" ? besideRoof(world, hs, a.species) : nearbyGround(world, a);
           }
           a.intent = "wander"; a.intentUntil = now + rand(INTENT_MIN_S * 1000, INTENT_MAX_S * 1000);
+        }
+      }
+    } else if (a.state === "roofedge") {
+      // the glider pads over to its chosen point on the roofline, then
+      // LEAPS: the glide launches outward from the edge, never mid-roof
+      a.z = ROOF_Z;
+      const hs = def.houses[a.roofI];
+      if (!hs || !a.airTarget) { a.state = "flydown"; a.airTarget = interiorPoint(world, a.species); }
+      else {
+        const t = a.airTarget;
+        const dx = t.x - a.x, dy = t.y - a.y, d = Math.hypot(dx, dy) || 1;
+        if (d < 10) {
+          const cx = (hs.x + hs.w / 2) * bounds.w, cy = (hs.y + hs.h / 2) * bounds.h;
+          const base = Math.atan2(a.y - cy, a.x - cx); // straight out over the eave
+          let t2 = null;
+          for (let i = 0; i < 12 && !t2; i++) {
+            const ang = base + rand(-0.9, 0.9), r = rand(260, 420);
+            const x = a.x + Math.cos(ang) * r, y = a.y + Math.sin(ang) * r;
+            const off = x < 30 || x > bounds.w - 30 || y < 50 || y > bounds.h - 50;
+            if (off || spawnSafe(world, x, y, a.species)) t2 = { x, y };
+          }
+          const ang2 = base + rand(-0.9, 0.9);
+          a.airTarget = t2 || { x: a.x + Math.cos(ang2) * 340, y: a.y + Math.sin(ang2) * 340 };
+          a.state = "glide";
+          a._glideFrom = { d: Math.hypot(a.airTarget.x - a.x, a.airTarget.y - a.y) };
+        } else {
+          const sp = cfg.speed * 0.5;
+          a.vx = (dx / d) * sp; a.vy = (dy / d) * sp;
         }
       }
     } else if (a.state === "crouch") {

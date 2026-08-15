@@ -965,16 +965,16 @@ body {
 }
 
 /* ==================== v0.18 sugar glider glide-down ==================== */
-/* membrane spread wide and flat, legs tucked away, a slow rocking sail —
-   overrides the generic air-lean and any walk-cycle motion */
+/* mid-glide the rig swaps to a dedicated flat, panned-out top-down pose
+   (membrane stretched between all four limbs), with a slow rocking sail */
+.sai-crit-glidepose{ display:none; }
+.sai-sprite[data-state="glide"] .sai-crit--sugarglider .sai-crit-body,
+.sai-sprite[data-state="glide"] .sai-crit--sugarglider .sai-crit-head,
+.sai-sprite[data-state="glide"] .sai-crit--sugarglider .sai-crit-tail,
+.sai-sprite[data-state="glide"] .sai-crit--sugarglider .sai-crit-leg{ display:none; }
+.sai-sprite[data-state="glide"] .sai-crit--sugarglider .sai-crit-glidepose{ display:inline; }
 .sai-sprite[data-state="glide"] .sai-crit-root{ animation:sai-glide-rock 1.8s ease-in-out infinite; }
-.sai-sprite[data-state="glide"] .sai-crit-body{ animation:sai-glide-spread .45s ease-out forwards; }
-.sai-sprite[data-state="glide"] .sai-crit-head{ animation:none; transform:translate(1.4px,1px) rotate(4deg); }
-.sai-sprite[data-state="glide"] .sai-crit-leg{ opacity:0; }
-.sai-sprite[data-state="glide"] .sai-crit-tail{ animation:none; transform:rotate(16deg); }
-@keyframes sai-glide-spread{ 0%{transform:scaleX(1) scaleY(1);} 100%{transform:scaleX(1.24) scaleY(.76);} }
-@keyframes sai-glide-rock{ 0%,100%{transform:rotate(4deg) translateY(0);} 50%{transform:rotate(-5deg) translateY(2.4px);} }
+@keyframes sai-glide-rock{ 0%,100%{transform:rotate(2.5deg) translateY(0);} 50%{transform:rotate(-3deg) translateY(2.4px);} }
 @media (prefers-reduced-motion: reduce){
-  .sai-sprite[data-state="glide"] .sai-crit-root,
-  .sai-sprite[data-state="glide"] .sai-crit-body{ animation:none; }
+  .sai-sprite[data-state="glide"] .sai-crit-root{ animation:none; }
 }
