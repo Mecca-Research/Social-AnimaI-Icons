@@ -1623,9 +1623,12 @@ function stepWorld(world, cfg, dt) {
   for (const a of agents) {
     if (a.dragging) continue;
 
-    // Locked engagements: hold pose + vibrate handled in render
+    // Locked engagements: glide into the shared contact point (lockX/Y is
+    // set nose-to-nose by lockTogether), then hold; choreography in render
     if (a.state === "friendly" || a.state === "fight") {
-      a.x = a.lockX; a.y = a.lockY; a.vx = 0; a.vy = 0;
+      const pull = 1 - Math.exp(-6 * dt);
+      a.x += (a.lockX - a.x) * pull; a.y += (a.lockY - a.y) * pull;
+      a.vx = 0; a.vy = 0;
       if (now >= a.engageEnd) {
         // separate the pair clearly, then wander with event cooldown
         if (a.targetId) {
@@ -1704,7 +1707,7 @@ function stepWorld(world, cfg, dt) {
         if (perSec(0.60, world.last - world.last + dt)) {
           const biasFight = (st.key === 'food' || st.key === 'water') ? 0.60 : 0.30; // play 30% fight, else 60% fight
           const doFight = Math.random() < biasFight;
-          if (doFight) startFight(a, b, agents, cfg); else startFriendly(a, b);
+          if (doFight) startFight(a, b, agents, cfg, bounds); else startFriendly(a, b, bounds);
         }
       }
     }
@@ -1723,7 +1726,7 @@ function stepWorld(world, cfg, dt) {
       if (ina || inb) continue;
       if (dist(a,b) > cfg.interactionRadius * 0.9) continue; // need proximity
       if (perSec(0.40, dt)) {
-        if (Math.random() < 0.5) startFriendly(a, b); else startFight(a, b, agents, cfg);
+        if (Math.random() < 0.5) startFriendly(a, b, bounds); else startFight(a, b, agents, cfg, bounds);
       }
     }
   }
@@ -1749,15 +1752,30 @@ function isFreeState(a) {
   return a.state === 'wander' || a.state === 'going_station' || a.state === 'idle' || a.state === 'cooldown';
 }
 
-function startFriendly(a, b) {
+// Set the pair's lock points nose-to-nose at their midpoint: centers end up
+// ~1.12*(ra+rb) apart, so muzzles nearly touch and the render-side nuzzles /
+// lunges (a few px each) read as real physical contact.
+function lockTogether(a, b, bounds) {
+  let dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy);
+  if (d < 0.001) { dx = 1; dy = 0; d = 1; }
+  const nx = dx / d, ny = dy / d;
+  const mx = clamp((a.x + b.x) / 2, 90, bounds.w - 90);
+  const my = clamp((a.y + b.y) / 2, 120, bounds.h - 110);
+  const half = (a.r + b.r) * 0.56;
+  a.lockX = mx - nx * half; a.lockY = my - ny * half;
+  b.lockX = mx + nx * half; b.lockY = my + ny * half;
+}
+
+function startFriendly(a, b, bounds) {
   const now = performance.now();
   a.state = b.state = "friendly"; a.targetId = b.id; b.targetId = a.id;
   a.engageEnd = b.engageEnd = now + ENGAGE_MS;
-  a.lockX = a.x; a.lockY = a.y; b.lockX = b.x; b.lockY = b.y; a.vx = a.vy = 0; b.vx = b.vy = 0;
+  lockTogether(a, b, bounds);
+  a.vx = a.vy = 0; b.vx = b.vy = 0;
   const ra = getRel(a, b.id); const rb = getRel(b, a.id); ra.last = 'friend'; rb.last = 'friend';
 }
 
-function startFight(a, b, agents, cfg) {
+function startFight(a, b, agents, cfg, bounds) {
   // Ally-assist BEFORE lock: ally with last=friend near A or B forces opponent to flee
   const ally = agents.find(c => c!==a && c!==b && !c.dragging && (dist(c,a) < cfg.interactionRadius*1.1 || dist(c,b) < cfg.interactionRadius*1.1) && ((getRel(c,a.id,false)?.last==='friend') || (getRel(c,b.id,false)?.last==='friend')));
   if (ally) {
@@ -1770,7 +1788,8 @@ function startFight(a, b, agents, cfg) {
   const now = performance.now();
   a.state = b.state = "fight"; a.targetId = b.id; b.targetId = a.id;
   a.engageEnd = b.engageEnd = now + ENGAGE_MS;
-  a.lockX = a.x; a.lockY = a.y; b.lockX = b.x; b.lockY = b.y; a.vx = a.vy = 0; b.vx = b.vy = 0;
+  lockTogether(a, b, bounds);
+  a.vx = a.vy = 0; b.vx = b.vy = 0;
   const ra = getRel(a, b.id); const rb = getRel(b, a.id); ra.last = 'rival'; rb.last = 'rival';
 }
 
@@ -1828,13 +1847,40 @@ function renderWorld(world, iconsRef) {
       sprite.dataset.walking = walking ? '1' : '';
       let dir = Number(sprite.dataset.dir || '1');
       if (a.vx < -8) dir = -1; else if (a.vx > 8) dir = 1;
-      sprite.dataset.dir = String(dir);
       let jx = 0, jy = 0;
       if (a.state === 'friendly' || a.state === 'fight') {
-        const amp = a.state === 'fight' ? 3.2 : 1.6;
-        jx = Math.sin(t * 22 + a.id.length) * amp;
-        jy = Math.cos(t * 28 + a.id.length * 1.3) * amp;
+        // choreographed pair contact: face the partner, then move along the
+        // axis between the two so touches actually connect.
+        const p = a.targetId ? world.agents.find(x => x.id === a.targetId) : null;
+        if (p) {
+          const dxp = p.x - a.x, dyp = p.y - a.y;
+          const d = Math.hypot(dxp, dyp) || 1;
+          const nx = dxp / d, ny = dyp / d;
+          if (dxp < -2) dir = -1; else if (dxp > 2) dir = 1; // face each other
+          const ph = a.id < p.id ? 0 : Math.PI;              // opposite roles
+          if (a.state === 'fight') {
+            // alternating lunges: one snaps forward while the other recoils
+            const w = t * 7.4 + ph;
+            const lunge = Math.pow(Math.max(0, Math.sin(w)), 3) * 8;
+            const recoil = Math.pow(Math.max(0, Math.sin(w + Math.PI)), 2) * 3;
+            const push = lunge - recoil;
+            jx = nx * push + Math.sin(t * 31 + a.id.length) * 1.2;
+            jy = ny * push * 0.7 + Math.cos(t * 37 + a.id.length * 1.3) * 1;
+          } else {
+            // synchronized nuzzle: both press in at once, cheeks meeting,
+            // with a soft shared sway
+            const nuz = Math.pow((Math.sin(t * 2.6) + 1) / 2, 1.6) * 5;
+            jx = nx * nuz - ny * Math.sin(t * 1.3 + ph) * 0.8;
+            jy = ny * nuz * 0.7 + Math.sin(t * 5.2 + ph) * 0.6;
+          }
+        } else {
+          // partner vanished mid-engagement — fall back to the old jitter
+          const amp = a.state === 'fight' ? 3.2 : 1.6;
+          jx = Math.sin(t * 22 + a.id.length) * amp;
+          jy = Math.cos(t * 28 + a.id.length * 1.3) * amp;
+        }
       }
+      sprite.dataset.dir = String(dir);
       sprite.style.transform = `translate(${jx}px, ${jy}px) scaleX(${dir})`;
     }
   }
