@@ -178,6 +178,34 @@ function yardAt(bounds, yards, x, y) {
   }
   return null;
 }
+// when a straight run is pinned against a house (or the pool deck), pick
+// the corner of the blocking rect that gives the shortest way around to
+// the target — a single sidestep waypoint that restores a clear path
+function detourCorner(bounds, def, x, y, tx, ty) {
+  const rects = def.pool ? [...def.houses, def.pool] : def.houses;
+  for (const hs of rects) {
+    const l = hs.x * bounds.w, r2 = (hs.x + hs.w) * bounds.w;
+    const t = hs.y * bounds.h, b2 = (hs.y + hs.h) * bounds.h;
+    const m = 30; // pressed against this rect's slide margin?
+    if (x < l - m || x > r2 + m || y < t - m || y > b2 + m) continue;
+    const m2 = 44;
+    const corners = [
+      { x: l - m2, y: t - m2 }, { x: r2 + m2, y: t - m2 },
+      { x: l - m2, y: b2 + m2 }, { x: r2 + m2, y: b2 + m2 },
+    ];
+    let best = null, bd = Infinity;
+    for (const c of corners) {
+      const d = Math.hypot(c.x - x, c.y - y) + Math.hypot(tx - c.x, ty - c.y);
+      if (d < bd) { bd = d; best = c; }
+    }
+    return best;
+  }
+  // pinned on nothing we know — sidestep perpendicular to the target line
+  const dx = tx - x, dy = ty - y, d = Math.hypot(dx, dy) || 1;
+  const side = Math.random() < 0.5 ? 1 : -1;
+  return { x: x - (dy / d) * 90 * side, y: y + (dx / d) * 90 * side };
+}
+
 // waypoints from (x,y) out of a yard: around the house via the nearest
 // side corridor when the straight shot is blocked, then through the
 // driveway gap, then on to the middle of the road
@@ -2048,27 +2076,33 @@ function stepWorld(world, cfg, dt) {
       }
     }
 
-    // ---- the cat actively hunts any bird that's up on a roof ----
+    // ---- the cat hunts birds on roofs — but she's a cat, not a cop ----
+    // She only notices birds within about half the map, takes a moment to
+    // react, and shrugs off ~30% of the ones she does notice. Once a
+    // pursuit starts, though, she sees it through as long as a bird she
+    // can see is still up on a rooftop.
     if (a.species === "cat" && def.perching) {
-      const birdRoofs = () => new Set(agents
-        .filter((c) => FLYERS.has(c.species) && c.roofI >= 0 && c.state === "roofwalk")
-        .map((c) => c.roofI));
+      const seekRange = Math.hypot(bounds.w, bounds.h) / 2; // ~half the map
+      const nearestBirdRoof = () => {
+        let bi = -1, bd = seekRange;
+        for (const c of agents) {
+          if (!FLYERS.has(c.species) || c.roofI < 0 || c.state !== "roofwalk") continue;
+          const hs = def.houses[c.roofI];
+          const d2 = Math.hypot((hs.x + hs.w / 2) * bounds.w - a.x, (hs.y + hs.h / 2) * bounds.h - a.y);
+          if (d2 < bd) { bd = d2; bi = c.roofI; }
+        }
+        return bi;
+      };
       if (a.state === "seekroof") {
-        const up = birdRoofs();
-        if (!up.has(a.roofI)) {
-          if (up.size) {
-            // that bird left, but another roof has one — retarget the closest
-            let bi = -1, bd = Infinity;
-            for (const ri of up) {
-              const hs = def.houses[ri];
-              const d2 = Math.hypot((hs.x + hs.w / 2) * bounds.w - a.x, (hs.y + hs.h / 2) * bounds.h - a.y);
-              if (d2 < bd) { bd = d2; bi = ri; }
-            }
-            a.roofI = bi;
-          } else {
-            // the bird flew off by itself — call the hunt off
+        const stillUp = agents.some((c) => FLYERS.has(c.species) && c.roofI === a.roofI && c.state === "roofwalk");
+        if (!stillUp) {
+          const bi = nearestBirdRoof(); // her bird left — another one in view?
+          if (bi >= 0) a.roofI = bi;
+          else {
+            // no roofed bird in sight — call the hunt off
             a.state = "wander"; a.roofI = -1;
             a.intent = "wander"; a._seekCd = now + 4000;
+            a._seekWp = null; a._seekProg = null;
           }
         }
         if (a.state === "seekroof") {
@@ -2079,21 +2113,37 @@ function stepWorld(world, cfg, dt) {
           const d2 = Math.hypot(a.x - nx2, a.y - ny2);
           if (d2 < 56 && a.z === 0 && now >= (a.hopUntil || 0)) {
             a.state = "takeoff"; a.stateUntil = now + 480; a.vx = a.vy = 0; // climb up after it
+            a._seekWp = null; a._seekProg = null;
           } else if (now >= (a.hopPrepUntil || 0)) {
-            const dd = d2 || 1, sp2 = cfg.speed * 1.45; // urgent trot, streaks flying
-            a.vx = ((nx2 - a.x) / dd) * sp2; a.vy = ((ny2 - a.y) / dd) * sp2;
+            const sp2 = cfg.speed * 1.45; // urgent trot, streaks flying
+            if (a._seekWp) {
+              // detouring around something that blocked the straight run
+              const dxw = a._seekWp.x - a.x, dyw = a._seekWp.y - a.y, dw = Math.hypot(dxw, dyw);
+              if (dw < 20) a._seekWp = null;
+              else { a.vx = (dxw / dw) * sp2; a.vy = (dyw / dw) * sp2; }
+            } else {
+              const dd = d2 || 1;
+              a.vx = ((nx2 - a.x) / dd) * sp2; a.vy = ((ny2 - a.y) / dd) * sp2;
+            }
+            // pinned against a house (or the pool deck) on the way? go
+            // around its best corner instead of running on the spot
+            if (!a._seekProg || now - a._seekProg.t > 600) {
+              if (a._seekProg && Math.hypot(a.x - a._seekProg.x, a.y - a._seekProg.y) < 6) {
+                a._seekWp = detourCorner(bounds, def, a.x, a.y, nx2, ny2);
+              }
+              a._seekProg = { x: a.x, y: a.y, t: now };
+            }
           }
         }
       } else if (a.z === 0 && isFreeState(a) && now >= (a._seekCd || 0)) {
-        const up = birdRoofs();
-        if (up.size) {
-          let bi = -1, bd = Infinity;
-          for (const ri of up) {
-            const hs = def.houses[ri];
-            const d2 = Math.hypot((hs.x + hs.w / 2) * bounds.w - a.x, (hs.y + hs.h / 2) * bounds.h - a.y);
-            if (d2 < bd) { bd = d2; bi = ri; }
+        const bi = nearestBirdRoof();
+        if (bi >= 0 && perSec(0.5, dt)) { // she notices after a beat...
+          if (Math.random() < 0.3) {
+            // ...and sometimes just isn't interested
+            a._seekCd = now + rand(6000, 12000);
+          } else {
+            a.state = "seekroof"; a.roofI = bi; a.intent = "wander";
           }
-          a.state = "seekroof"; a.roofI = bi; a.intent = "wander";
         }
       }
     }
@@ -2205,14 +2255,14 @@ function stepWorld(world, cfg, dt) {
         const sp = cfg.speed * 0.6;
         a.vx = (ux / d) * sp; a.vy = (uy / d) * sp;
       } else {
-        // the dog runs around: random short sprints ~30% of its wander time
+        // the dog runs around: random short sprints ~15% of its wander time
         if (a.species === "labrador" && a.z === 0) {
           if (now < (a._sprintUntil || 0)) {
             const spd = Math.hypot(a.vx, a.vy) || 1, k = cfg.speed * 1.9;
             a.vx = (a.vx / spd) * k; a.vy = (a.vy / spd) * k;
           } else {
-            if (a._sprintUntil) { // sprint just ended — ease off, rest a bit
-              a._sprintUntil = 0; a._sprintCd = now + rand(1900, 3800);
+            if (a._sprintUntil) { // sprint just ended — ease off, rest a while
+              a._sprintUntil = 0; a._sprintCd = now + rand(5200, 8400);
               a.vx *= 0.4; a.vy *= 0.4;
             } else if (now >= (a._sprintCd || 0)) {
               const base = Math.hypot(a.vx, a.vy) > 0.5 ? Math.atan2(a.vy, a.vx) : rand(0, Math.PI * 2);
@@ -2274,7 +2324,7 @@ function stepWorld(world, cfg, dt) {
 
     // grounded rules only
     if (!onRoof && !inAir) {
-      a.roofI = -1;
+      if (a.state !== "seekroof") a.roofI = -1; // the hunt keeps its target roof
       const hopping = now < (a.hopUntil || 0);
       if (a.z > 0 && !hopping) { a.z *= Math.exp(-5 * dt); if (a.z < 0.5) a.z = 0; } // touch down
       if (def.hasWater && !canSwimIn(def, a.species)) keepAshore(a, bounds);
