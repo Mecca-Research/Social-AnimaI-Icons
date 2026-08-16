@@ -1,14 +1,15 @@
 {
   "name": "social-animai-icons",
   "private": true,
-  "version": "0.31.0",
+  "version": "0.32.0",
   "type": "module",
   "description": "An interactive, emergent 'living desktop' of animal icons that wander, socialize, argue, and help each other.",
   "scripts": {
     "dev": "vite",
     "build": "vite build && node scripts/publish.mjs",
     "preview": "vite preview",
-    "test:bear": "node tests/ethogram.mjs"
+    "test:bear": "node tests/ethogram.mjs",
+    "test:forage": "node tests/forage.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

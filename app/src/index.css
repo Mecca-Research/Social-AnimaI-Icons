@@ -1221,3 +1221,866 @@ body {
   .sai-sprite[data-state="treeclimb"] .climb-leg-r,
   .sai-sprite[data-state="treeclimb"] .sai-crit-climbhead{ animation:none; }
 }
+
+/* ==================== v0.32 the squirrel's larder ==================== */
+/* Six species are getting behaviors at once and state names are only
+   namespaced inside the ethogram, not in the DOM — so every rule here is
+   scoped to the squirrel rather than trusting "dig" to stay his alone. */
+
+/* ---- the nut in the cheek: shown whenever he is carrying one, on the
+   normal rig. Both dedicated poses hide the head, so it disappears of its
+   own accord the moment he crouches over the hole. ---- */
+.sai-crit-cheeknut{ display:none; }
+.sai-sprite[data-carry="nut"] .sai-crit--squirrel .sai-crit-cheeknut{ display:inline; }
+
+/* ---- working a nut free of the tree: reaching up, head bobbing ---- */
+.sai-sprite[data-state="takenut"] .sai-crit--squirrel .sai-crit-head{ animation:sai-sq-pluck .48s ease-in-out infinite; }
+@keyframes sai-sq-pluck{ 0%,100%{transform:translate(0,0) rotate(-4deg);} 50%{transform:translate(1.4px,-3.2px) rotate(5deg);} }
+.sai-sprite[data-state="takenut"] .sai-crit--squirrel .sai-crit-leg-fr,
+.sai-sprite[data-state="takenut"] .sai-crit--squirrel .sai-crit-leg-fl{ animation:sai-sq-reach .48s ease-in-out infinite; }
+@keyframes sai-sq-reach{ 0%,100%{transform:rotate(-16deg);} 50%{transform:rotate(-34deg);} }
+
+/* ---- the dig: one crouch drawing serving all three ground states ---- */
+.sai-crit-digpose, .sai-crit-sitpose{ display:none; }
+.sai-sprite[data-state="cachedig"] .sai-crit--squirrel .sai-crit-digpose,
+.sai-sprite[data-state="unearth"] .sai-crit--squirrel .sai-crit-digpose,
+.sai-sprite[data-state="cachepat"] .sai-crit--squirrel .sai-crit-digpose{ display:inline; }
+.sai-sprite[data-state="cachedig"] .sai-crit--squirrel .sai-crit-body,
+.sai-sprite[data-state="cachedig"] .sai-crit--squirrel .sai-crit-head,
+.sai-sprite[data-state="cachedig"] .sai-crit--squirrel .sai-crit-tail,
+.sai-sprite[data-state="cachedig"] .sai-crit--squirrel .sai-crit-leg,
+.sai-sprite[data-state="unearth"] .sai-crit--squirrel .sai-crit-body,
+.sai-sprite[data-state="unearth"] .sai-crit--squirrel .sai-crit-head,
+.sai-sprite[data-state="unearth"] .sai-crit--squirrel .sai-crit-tail,
+.sai-sprite[data-state="unearth"] .sai-crit--squirrel .sai-crit-leg,
+.sai-sprite[data-state="cachepat"] .sai-crit--squirrel .sai-crit-body,
+.sai-sprite[data-state="cachepat"] .sai-crit--squirrel .sai-crit-head,
+.sai-sprite[data-state="cachepat"] .sai-crit--squirrel .sai-crit-tail,
+.sai-sprite[data-state="cachepat"] .sai-crit--squirrel .sai-crit-leg{ display:none; }
+
+/* burying his own nut and robbing his own cache are the same action, so
+   they share the animation as well as the drawing */
+.sai-sprite[data-state="cachedig"] .sai-crit--squirrel .sai-crit-digpose,
+.sai-sprite[data-state="unearth"] .sai-crit--squirrel .sai-crit-digpose{
+  transform-box:fill-box; transform-origin:35% 100%;
+  animation:sai-sq-scrape .3s ease-in-out infinite; }
+@keyframes sai-sq-scrape{ 0%,100%{transform:translate(0,0) rotate(0);} 50%{transform:translate(-1.8px,.9px) rotate(-2deg);} }
+/* forepaws alternating, so the earth comes out in a rhythm not a shudder */
+.sai-sprite[data-state="cachedig"] .sai-crit--squirrel .dig-paw-r,
+.sai-sprite[data-state="unearth"] .sai-crit--squirrel .dig-paw-r,
+.sai-sprite[data-state="cachedig"] .sai-crit--squirrel .dig-paw-l,
+.sai-sprite[data-state="unearth"] .sai-crit--squirrel .dig-paw-l{
+  transform-box:fill-box; transform-origin:50% 20%;
+  animation:sai-sq-rake .3s ease-in-out infinite; }
+.sai-sprite[data-state="cachedig"] .sai-crit--squirrel .dig-paw-l,
+.sai-sprite[data-state="unearth"] .sai-crit--squirrel .dig-paw-l{ animation-delay:.15s; }
+@keyframes sai-sq-rake{ 0%,100%{transform:translate(2.6px,-2.8px) rotate(-18deg);} 45%{transform:translate(-2.8px,1.9px) rotate(15deg);} }
+/* nose following the paws down into the hole, at half their tempo */
+.sai-sprite[data-state="cachedig"] .sai-crit--squirrel .dig-head,
+.sai-sprite[data-state="unearth"] .sai-crit--squirrel .dig-head{
+  transform-box:fill-box; transform-origin:20% 30%;
+  animation:sai-sq-nosedown .6s ease-in-out infinite; }
+@keyframes sai-sq-nosedown{ 0%,100%{transform:translate(0,0) rotate(0);} 50%{transform:translate(-1.2px,2.4px) rotate(4deg);} }
+.sai-sprite[data-state="cachedig"] .sai-crit--squirrel .dig-tail,
+.sai-sprite[data-state="unearth"] .sai-crit--squirrel .dig-tail{
+  transform-box:fill-box; transform-origin:85% 90%;
+  animation:sai-sq-digtail .6s ease-in-out infinite; }
+@keyframes sai-sq-digtail{ 0%,100%{transform:rotate(-5deg);} 50%{transform:rotate(6deg);} }
+/* the clods: staggered so they leave as a stream rather than a volley */
+.dig-dirt{ opacity:0; }
+.sai-sprite[data-state="cachedig"] .sai-crit--squirrel .dig-dirt,
+.sai-sprite[data-state="unearth"] .sai-crit--squirrel .dig-dirt{ opacity:1; }
+.sai-sprite[data-state="cachedig"] .sai-crit--squirrel .dig-dirt ellipse,
+.sai-sprite[data-state="unearth"] .sai-crit--squirrel .dig-dirt ellipse{
+  transform-box:fill-box; transform-origin:50% 50%;
+  animation:sai-sq-clod .6s ease-out infinite; }
+.sai-sprite[data-state="cachedig"] .sai-crit--squirrel .dig-dirt ellipse:nth-child(2),
+.sai-sprite[data-state="unearth"] .sai-crit--squirrel .dig-dirt ellipse:nth-child(2){ animation-delay:.09s; }
+.sai-sprite[data-state="cachedig"] .sai-crit--squirrel .dig-dirt ellipse:nth-child(3),
+.sai-sprite[data-state="unearth"] .sai-crit--squirrel .dig-dirt ellipse:nth-child(3){ animation-delay:.18s; }
+.sai-sprite[data-state="cachedig"] .sai-crit--squirrel .dig-dirt ellipse:nth-child(4),
+.sai-sprite[data-state="unearth"] .sai-crit--squirrel .dig-dirt ellipse:nth-child(4){ animation-delay:.27s; }
+.sai-sprite[data-state="cachedig"] .sai-crit--squirrel .dig-dirt ellipse:nth-child(5),
+.sai-sprite[data-state="unearth"] .sai-crit--squirrel .dig-dirt ellipse:nth-child(5){ animation-delay:.36s; }
+@keyframes sai-sq-clod{
+  0%{opacity:0; transform:translate(14px,10px) scale(.4);}
+  20%{opacity:.95;}
+  100%{opacity:0; transform:translate(-11px,-7px) scale(1.05);}
+}
+
+/* ---- setting the nut in and patting the soil back: same crouch, but
+   both paws press together, slow, and nothing flies ---- */
+.dig-nut{ display:none; }
+.sai-sprite[data-state="cachepat"] .sai-crit--squirrel .dig-nut{
+  display:inline; transform-box:fill-box; transform-origin:50% 50%;
+  animation:sai-sq-tuck 2s ease-in forwards; }
+@keyframes sai-sq-tuck{ 0%,45%{opacity:1; transform:translateY(-2px);} 100%{opacity:0; transform:translateY(2.4px);} }
+.sai-sprite[data-state="cachepat"] .sai-crit--squirrel .dig-paw-l,
+.sai-sprite[data-state="cachepat"] .sai-crit--squirrel .dig-paw-r{
+  transform-box:fill-box; transform-origin:50% 20%;
+  animation:sai-sq-pat .52s ease-in-out infinite; }
+@keyframes sai-sq-pat{ 0%,100%{transform:translateY(-3.4px);} 55%{transform:translateY(1.4px) scaleY(.85);} }
+.sai-sprite[data-state="cachepat"] .sai-crit--squirrel .sai-crit-digpose{
+  transform-box:fill-box; transform-origin:35% 100%;
+  animation:sai-sq-press 1.04s ease-in-out infinite; }
+@keyframes sai-sq-press{ 0%,100%{transform:translateY(0);} 55%{transform:translateY(1.8px);} }
+
+/* ---- hunting a cache he only half remembers: nose to the ground,
+   casting left and right across the patch he thinks it is in ---- */
+.sai-sprite[data-state="nuthunt"] .sai-crit--squirrel .sai-crit-head{ animation:sai-sq-cast .9s ease-in-out infinite; }
+@keyframes sai-sq-cast{ 0%,100%{transform:translate(1px,5px) rotate(-9deg);} 50%{transform:translate(3.4px,6.4px) rotate(9deg);} }
+.sai-sprite[data-state="nuthunt"] .sai-crit--squirrel .sai-crit-tail{ animation:sai-sq-huntail .5s ease-in-out infinite; }
+@keyframes sai-sq-huntail{ 0%,100%{transform:rotate(-7deg);} 50%{transform:rotate(8deg);} }
+
+/* ---- sitting up with the recovered nut: the payoff frame ---- */
+.sai-sprite[data-state="nutmunch"] .sai-crit--squirrel .sai-crit-sitpose{ display:inline; }
+.sai-sprite[data-state="nutmunch"] .sai-crit--squirrel .sai-crit-body,
+.sai-sprite[data-state="nutmunch"] .sai-crit--squirrel .sai-crit-head,
+.sai-sprite[data-state="nutmunch"] .sai-crit--squirrel .sai-crit-tail,
+.sai-sprite[data-state="nutmunch"] .sai-crit--squirrel .sai-crit-leg{ display:none; }
+/* quick little bites against a slow turn of the nut — the mismatch in
+   tempo is what makes it read as gnawing rather than nodding */
+.sai-sprite[data-state="nutmunch"] .sai-crit--squirrel .sit-head{
+  transform-box:fill-box; transform-origin:30% 90%;
+  animation:sai-sq-nibble .34s ease-in-out infinite; }
+@keyframes sai-sq-nibble{ 0%,100%{transform:rotate(0) translateY(0);} 50%{transform:rotate(2.6deg) translateY(1.3px);} }
+.sai-sprite[data-state="nutmunch"] .sai-crit--squirrel .sit-nut{
+  transform-box:fill-box; transform-origin:50% 50%;
+  animation:sai-sq-turnnut 1.6s ease-in-out infinite; }
+@keyframes sai-sq-turnnut{ 0%,100%{transform:rotate(-11deg) translate(0,0);} 50%{transform:rotate(13deg) translate(-1px,-.9px);} }
+.sai-sprite[data-state="nutmunch"] .sai-crit--squirrel .sit-paw-r,
+.sai-sprite[data-state="nutmunch"] .sai-crit--squirrel .sit-paw-l{
+  transform-box:fill-box; transform-origin:50% 50%;
+  animation:sai-sq-hold 1.6s ease-in-out infinite; }
+@keyframes sai-sq-hold{ 0%,100%{transform:translate(0,0);} 50%{transform:translate(-.9px,-.7px);} }
+.sai-sprite[data-state="nutmunch"] .sai-crit--squirrel .sit-tail{
+  transform-box:fill-box; transform-origin:60% 100%;
+  animation:sai-sq-sittail 2.6s ease-in-out infinite; }
+@keyframes sai-sq-sittail{ 0%,100%{transform:rotate(-2.5deg);} 50%{transform:rotate(3deg);} }
+
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-state="takenut"] .sai-crit--squirrel .sai-crit-head,
+  .sai-sprite[data-state="takenut"] .sai-crit--squirrel .sai-crit-leg-fr,
+  .sai-sprite[data-state="takenut"] .sai-crit--squirrel .sai-crit-leg-fl,
+  .sai-sprite[data-state="cachedig"] .sai-crit--squirrel .sai-crit-digpose,
+  .sai-sprite[data-state="unearth"] .sai-crit--squirrel .sai-crit-digpose,
+  .sai-sprite[data-state="cachepat"] .sai-crit--squirrel .sai-crit-digpose,
+  .sai-sprite[data-state="cachedig"] .sai-crit--squirrel .dig-paw-l,
+  .sai-sprite[data-state="cachedig"] .sai-crit--squirrel .dig-paw-r,
+  .sai-sprite[data-state="unearth"] .sai-crit--squirrel .dig-paw-l,
+  .sai-sprite[data-state="unearth"] .sai-crit--squirrel .dig-paw-r,
+  .sai-sprite[data-state="cachepat"] .sai-crit--squirrel .dig-paw-l,
+  .sai-sprite[data-state="cachepat"] .sai-crit--squirrel .dig-paw-r,
+  .sai-sprite[data-state="cachedig"] .sai-crit--squirrel .dig-head,
+  .sai-sprite[data-state="unearth"] .sai-crit--squirrel .dig-head,
+  .sai-sprite[data-state="cachedig"] .sai-crit--squirrel .dig-tail,
+  .sai-sprite[data-state="unearth"] .sai-crit--squirrel .dig-tail,
+  .sai-sprite[data-state="cachedig"] .sai-crit--squirrel .dig-dirt ellipse,
+  .sai-sprite[data-state="unearth"] .sai-crit--squirrel .dig-dirt ellipse,
+  .sai-sprite[data-state="cachepat"] .sai-crit--squirrel .dig-nut,
+  .sai-sprite[data-state="nuthunt"] .sai-crit--squirrel .sai-crit-head,
+  .sai-sprite[data-state="nuthunt"] .sai-crit--squirrel .sai-crit-tail,
+  .sai-sprite[data-state="nutmunch"] .sai-crit--squirrel .sit-head,
+  .sai-sprite[data-state="nutmunch"] .sai-crit--squirrel .sit-nut,
+  .sai-sprite[data-state="nutmunch"] .sai-crit--squirrel .sit-paw-l,
+  .sai-sprite[data-state="nutmunch"] .sai-crit--squirrel .sit-paw-r,
+  .sai-sprite[data-state="nutmunch"] .sai-crit--squirrel .sit-tail{ animation:none; }
+}
+
+/* ==================== v0.31 raccoon: hands, bush and the wash ==================== */
+/* Three poses the four-legged rig cannot reach — the two-paw hunch, the
+   sprawl up inside a berry bush, and the crouch at the waterline. All three
+   are drawn whole and swapped in, the same trick as the bear's tree poses. */
+.sai-crit-handpose, .sai-crit-bushpose, .sai-crit-washpose{ display:none; }
+
+/* ---- handling: the fruit turned over and over between both forepaws ---- */
+.sai-sprite[data-state="rachandle"] .sai-crit-handpose,
+.sai-sprite[data-state="raceat"] .sai-crit-handpose{ display:inline; }
+.sai-sprite[data-state="rachandle"] .sai-crit-body,
+.sai-sprite[data-state="rachandle"] .sai-crit-head,
+.sai-sprite[data-state="rachandle"] .sai-crit-tail,
+.sai-sprite[data-state="rachandle"] .sai-crit-leg,
+.sai-sprite[data-state="raceat"] .sai-crit-body,
+.sai-sprite[data-state="raceat"] .sai-crit-head,
+.sai-sprite[data-state="raceat"] .sai-crit-tail,
+.sai-sprite[data-state="raceat"] .sai-crit-leg{ display:none; }
+/* the hands are the whole point of him, so they run at roughly twice the
+   tempo of anything else on the sprite and out of phase with each other */
+.sai-sprite[data-state="rachandle"] .hand-paw-near{
+  transform-box:fill-box; transform-origin:10% 50%;
+  animation:sai-rac-handnear .38s ease-in-out infinite; }
+.sai-sprite[data-state="rachandle"] .hand-paw-far{
+  transform-box:fill-box; transform-origin:10% 50%;
+  animation:sai-rac-handfar .38s ease-in-out infinite; }
+@keyframes sai-rac-handnear{ 0%,100%{transform:rotate(-5deg) translate(0,0);} 50%{transform:rotate(4deg) translate(-1.4px,-1.6px);} }
+@keyframes sai-rac-handfar{ 0%,100%{transform:rotate(4deg) translate(0,0);} 50%{transform:rotate(-5deg) translate(-1.2px,1.6px);} }
+.sai-sprite[data-state="rachandle"] .hand-berry{
+  transform-box:fill-box; transform-origin:50% 50%;
+  animation:sai-rac-turnberry 1.14s linear infinite; }
+@keyframes sai-rac-turnberry{ 0%{transform:rotate(0) translateY(0);} 50%{transform:rotate(180deg) translateY(-1.2px);} 100%{transform:rotate(360deg) translateY(0);} }
+/* nose dipping in now and then to check what the fingers have found */
+.sai-sprite[data-state="rachandle"] .sai-crit-handhead{
+  transform-box:fill-box; transform-origin:30% 90%;
+  animation:sai-rac-sniff 1.9s ease-in-out infinite; }
+@keyframes sai-rac-sniff{ 0%,100%{transform:rotate(-2deg) translateY(0);} 45%{transform:rotate(4deg) translateY(2.2px);} }
+.sai-sprite[data-state="rachandle"] .sai-crit-handbody{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-rac-hunch 2.6s ease-in-out infinite; }
+@keyframes sai-rac-hunch{ 0%,100%{transform:scaleY(1) scaleX(1);} 50%{transform:scaleY(1.03) scaleX(.99);} }
+.sai-sprite[data-state="rachandle"] .hand-tail,
+.sai-sprite[data-state="raceat"] .hand-tail{
+  transform-box:fill-box; transform-origin:96% 40%;
+  animation:sai-rac-handtail 4.4s ease-in-out infinite; }
+@keyframes sai-rac-handtail{ 0%,100%{transform:rotate(-3deg);} 50%{transform:rotate(4deg);} }
+
+/* ---- eating: the same hunch, slower hands, the berry going down ---- */
+.sai-sprite[data-state="raceat"] .sai-crit-handhead{
+  transform-box:fill-box; transform-origin:30% 90%;
+  animation:sai-rac-chew .44s ease-in-out infinite; }
+@keyframes sai-rac-chew{ 0%,100%{transform:translateY(0) rotate(0);} 50%{transform:translateY(1.8px) rotate(2deg);} }
+.sai-sprite[data-state="raceat"] .hand-berry{
+  transform-box:fill-box; transform-origin:50% 50%;
+  animation:sai-rac-eatberry 2.4s ease-in forwards; }
+@keyframes sai-rac-eatberry{ 0%{transform:scale(1); opacity:1;} 70%{transform:scale(.5); opacity:1;} 100%{transform:scale(.14); opacity:0;} }
+.sai-sprite[data-state="raceat"] .hand-paw-near,
+.sai-sprite[data-state="raceat"] .hand-paw-far{
+  transform-box:fill-box; transform-origin:10% 50%;
+  animation:sai-rac-feed .88s ease-in-out infinite; }
+@keyframes sai-rac-feed{ 0%,100%{transform:translate(0,0);} 50%{transform:translate(-2px,-2.2px);} }
+.sai-sprite[data-state="raceat"] .sai-crit-mouth-open{ opacity:1; }
+.sai-sprite[data-state="raceat"] .sai-crit-mouth-rest{ opacity:0; }
+
+/* ---- the berry rides to the water in his jaws: walking takes all four
+   feet, so the hands only get it back once he is standing still ---- */
+.sai-crit-racberry{ display:none; }
+.sai-sprite[data-carry="berry"][data-state="racdouse"] .sai-crit-racberry{ display:inline; }
+
+/* ---- up in the bush: a bush is not a tree, so this is a scramble and a
+   stretch, not a haul. The height itself is the sim's z. ---- */
+.sai-sprite[data-state="racbushup"] .sai-crit-bushpose{ display:inline; }
+.sai-sprite[data-state="racbushup"] .sai-crit-body,
+.sai-sprite[data-state="racbushup"] .sai-crit-head,
+.sai-sprite[data-state="racbushup"] .sai-crit-tail,
+.sai-sprite[data-state="racbushup"] .sai-crit-leg{ display:none; }
+/* he is off the ground so data-air is set, but a bush is not the sky */
+.sai-sprite[data-state="racbushup"] .sai-crit-root{ animation:none; }
+.sai-sprite[data-state="racbushup"] .sai-crit-bushpose{
+  transform-box:fill-box; transform-origin:38% 96%;
+  animation:sai-rac-cling 1.15s ease-in-out infinite; }
+@keyframes sai-rac-cling{
+  0%,100%{transform:rotate(-2.4deg) translateY(0);}
+  50%{transform:rotate(1.8deg) translateY(-2px);}
+}
+/* the branch taking his weight, always a beat behind him */
+.sai-sprite[data-state="racbushup"] .bush-leaves{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-rac-jostle 1.15s ease-in-out infinite .12s; }
+@keyframes sai-rac-jostle{ 0%,100%{transform:rotate(1.6deg) translateY(0);} 50%{transform:rotate(-1.8deg) translateY(1.4px);} }
+/* the paw going out at the cluster and coming back with it */
+.sai-sprite[data-state="racbushup"] .bush-reach{
+  transform-box:fill-box; transform-origin:6% 94%;
+  animation:sai-rac-reach 2.3s ease-in-out infinite; }
+@keyframes sai-rac-reach{
+  0%,100%{transform:rotate(7deg) translate(-2px,2px);}
+  40%{transform:rotate(-7deg) translate(2.5px,-3px);}
+  62%{transform:rotate(-3deg) translate(1.5px,-1.5px);}
+}
+.sai-sprite[data-state="racbushup"] .bush-fruit{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-rac-cluster 2.3s ease-in-out infinite; }
+@keyframes sai-rac-cluster{ 0%,100%{transform:translate(0,0);} 45%{transform:translate(-2.4px,1.8px);} }
+.sai-sprite[data-state="racbushup"] .bush-tail{
+  transform-box:fill-box; transform-origin:62% 2%;
+  animation:sai-rac-bushtail 2.3s ease-in-out infinite; }
+@keyframes sai-rac-bushtail{ 0%,100%{transform:rotate(-5deg);} 50%{transform:rotate(6deg);} }
+.sai-sprite[data-state="racbushup"] .sai-crit-bushhead{
+  transform-box:fill-box; transform-origin:40% 92%;
+  animation:sai-rac-bushhead 2.3s ease-in-out infinite; }
+@keyframes sai-rac-bushhead{ 0%,100%{transform:rotate(-3deg) translate(0,0);} 45%{transform:rotate(4deg) translate(1.4px,-1px);} }
+
+/* ---- the wash: both forepaws under the surface, rings going out ---- */
+.sai-sprite[data-state="racwash"] .sai-crit-washpose{ display:inline; }
+.sai-sprite[data-state="racwash"] .sai-crit-body,
+.sai-sprite[data-state="racwash"] .sai-crit-head,
+.sai-sprite[data-state="racwash"] .sai-crit-tail,
+.sai-sprite[data-state="racwash"] .sai-crit-leg{ display:none; }
+/* the two hands work out of phase — that counter-rhythm is what makes it
+   read as kneading something rather than as one flat scrub */
+.sai-sprite[data-state="racwash"] .wash-arm-near{
+  transform-box:fill-box; transform-origin:50% 4%;
+  animation:sai-rac-washnear .46s ease-in-out infinite; }
+.sai-sprite[data-state="racwash"] .wash-arm-far{
+  transform-box:fill-box; transform-origin:50% 4%;
+  animation:sai-rac-washfar .46s ease-in-out infinite; }
+@keyframes sai-rac-washnear{ 0%,100%{transform:rotate(-6deg) translateY(0);} 50%{transform:rotate(5deg) translateY(1.6px);} }
+@keyframes sai-rac-washfar{ 0%,100%{transform:rotate(6deg) translateY(1.6px);} 50%{transform:rotate(-5deg) translateY(0);} }
+.sai-sprite[data-state="racwash"] .wash-food{
+  transform-box:fill-box; transform-origin:50% 50%;
+  animation:sai-rac-tumble .92s linear infinite; }
+@keyframes sai-rac-tumble{ 0%{transform:rotate(0) translateX(0);} 50%{transform:rotate(180deg) translateX(2px);} 100%{transform:rotate(360deg) translateX(0);} }
+/* a ring leaving his wrists every third of a beat */
+.sai-sprite[data-state="racwash"] .wash-rings ellipse{
+  transform-box:fill-box; transform-origin:50% 50%; opacity:0;
+  animation:sai-rac-ripple 1.38s ease-out infinite; }
+.sai-sprite[data-state="racwash"] .wash-rings ellipse:nth-child(2){ animation-delay:.46s; }
+.sai-sprite[data-state="racwash"] .wash-rings ellipse:nth-child(3){ animation-delay:.92s; }
+@keyframes sai-rac-ripple{
+  0%{opacity:.85; transform:scale(.35);}
+  70%{opacity:.35;}
+  100%{opacity:0; transform:scale(2.6);}
+}
+.sai-sprite[data-state="racwash"] .wash-drops{ animation:sai-rac-drops .46s ease-out infinite; }
+@keyframes sai-rac-drops{ 0%{opacity:.25; transform:translate(1px,3px) scale(.6);} 50%{opacity:1;} 100%{opacity:.15; transform:translate(-2px,-4px) scale(1.15);} }
+.sai-sprite[data-state="racwash"] .sai-crit-washbody{
+  transform-box:fill-box; transform-origin:14% 100%;
+  animation:sai-rac-washbody .92s ease-in-out infinite; }
+@keyframes sai-rac-washbody{ 0%,100%{transform:rotate(-1deg) scaleY(1);} 50%{transform:rotate(1deg) scaleY(1.025);} }
+/* and the famous part: he does not watch his own hands */
+.sai-sprite[data-state="racwash"] .sai-crit-washhead{
+  transform-box:fill-box; transform-origin:20% 95%;
+  animation:sai-rac-lookaway 4.2s ease-in-out infinite; }
+@keyframes sai-rac-lookaway{
+  0%,100%{transform:rotate(-6deg) translate(0,0);}
+  30%{transform:rotate(-15deg) translate(-2px,-2px);}
+  55%{transform:rotate(3deg) translate(1px,1.5px);}
+  78%{transform:rotate(-11deg) translate(-1px,-1px);}
+}
+.sai-sprite[data-state="racwash"] .wash-tail{
+  transform-box:fill-box; transform-origin:94% 92%;
+  animation:sai-rac-washtail 2.8s ease-in-out infinite; }
+@keyframes sai-rac-washtail{ 0%,100%{transform:rotate(-3deg);} 50%{transform:rotate(4deg);} }
+
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-state="rachandle"] .hand-paw-near,
+  .sai-sprite[data-state="rachandle"] .hand-paw-far,
+  .sai-sprite[data-state="rachandle"] .hand-berry,
+  .sai-sprite[data-state="rachandle"] .hand-tail,
+  .sai-sprite[data-state="rachandle"] .sai-crit-handhead,
+  .sai-sprite[data-state="rachandle"] .sai-crit-handbody,
+  .sai-sprite[data-state="raceat"] .hand-paw-near,
+  .sai-sprite[data-state="raceat"] .hand-paw-far,
+  .sai-sprite[data-state="raceat"] .hand-berry,
+  .sai-sprite[data-state="raceat"] .hand-tail,
+  .sai-sprite[data-state="raceat"] .sai-crit-handhead,
+  .sai-sprite[data-state="racbushup"] .sai-crit-bushpose,
+  .sai-sprite[data-state="racbushup"] .sai-crit-bushhead,
+  .sai-sprite[data-state="racbushup"] .bush-leaves,
+  .sai-sprite[data-state="racbushup"] .bush-reach,
+  .sai-sprite[data-state="racbushup"] .bush-fruit,
+  .sai-sprite[data-state="racbushup"] .bush-tail,
+  .sai-sprite[data-state="racwash"] .wash-arm-near,
+  .sai-sprite[data-state="racwash"] .wash-arm-far,
+  .sai-sprite[data-state="racwash"] .wash-food,
+  .sai-sprite[data-state="racwash"] .wash-rings ellipse,
+  .sai-sprite[data-state="racwash"] .wash-drops,
+  .sai-sprite[data-state="racwash"] .wash-tail,
+  .sai-sprite[data-state="racwash"] .sai-crit-washbody,
+  .sai-sprite[data-state="racwash"] .sai-crit-washhead{ animation:none; }
+}
+
+/* ==================== v0.31 the deer feeds ==================== */
+/* Two registers, and the difference between them is the point: a picky
+   browse at a shrub where the head has to travel between chosen bites,
+   and a head-down graze taken wherever he happens to be standing. Both
+   put the muzzle somewhere the four-legged rig cannot reach — his neck is
+   drawn into the body group — so each gets a purpose-drawn pose, the same
+   trick the bear uses to stand up and the goose to preen. */
+.sai-crit-reachpose, .sai-crit-grazepose, .sai-crit-alertears, .sai-crit-sprig{ display:none; }
+
+/* ---- selecting: the head swings slowly over the bush, looking the
+   shoots over, while the body stays put. This is the beat that makes him
+   read as choosing rather than vacuuming ---- */
+.sai-sprite[data-state="browsepick"] .sai-crit--deer .sai-crit-head{
+  animation:sai-deer-select 1.9s ease-in-out infinite; }
+@keyframes sai-deer-select{
+  0%,100%{transform:translate(0,0) rotate(-5deg);}
+  40%{transform:translate(2.2px,-2.6px) rotate(3deg);}
+  70%{transform:translate(.6px,-1.2px) rotate(-1deg);}
+}
+
+/* ---- reaching into the tender tips ---- */
+.sai-sprite[data-state="browsereach"] .sai-crit--deer .sai-crit-reachpose{ display:inline; }
+.sai-sprite[data-state="browsereach"] .sai-crit--deer .sai-crit-body,
+.sai-sprite[data-state="browsereach"] .sai-crit--deer .sai-crit-head{ display:none; }
+.sai-sprite[data-state="browsereach"] .sai-crit--deer .sai-crit-reachpose{
+  transform-box:fill-box; transform-origin:18% 92%;
+  animation:sai-deer-reach 1.15s ease-in-out infinite; }
+@keyframes sai-deer-reach{
+  0%,100%{transform:rotate(0) translate(0,0);}
+  34%{transform:rotate(-3deg) translate(1.8px,-2.4px);}   /* nose up into the shoot */
+  60%{transform:rotate(-1.4deg) translate(2.6px,-.6px);}  /* and pull it free */
+}
+/* the shoot whips as it tears — quicker than the neck that is pulling it */
+.sai-sprite[data-state="browsereach"] .sai-crit--deer .reach-shoot{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-deer-shoot .58s ease-in-out infinite; }
+@keyframes sai-deer-shoot{ 0%,100%{transform:rotate(-7deg);} 50%{transform:rotate(9deg) translateY(1px);} }
+
+/* ---- chewing: the head comes back to its natural carriage and the jaw
+   works, with the plucked shoot showing in the lips. The carry channel
+   drives the shoot, so it appears for the graze's mouthful too ---- */
+.sai-sprite[data-state="browsechew"] .sai-crit--deer .sai-crit-head,
+.sai-sprite[data-state="grazechew"] .sai-crit--deer .sai-crit-head{
+  animation:sai-deer-chew .46s ease-in-out infinite; }
+@keyframes sai-deer-chew{ 0%,100%{transform:translateY(0) rotate(0);} 50%{transform:translateY(1.4px) rotate(2.2deg);} }
+.sai-sprite[data-carry="browse"] .sai-crit--deer .sai-crit-sprig{
+  display:inline; transform-box:fill-box; transform-origin:8% 80%;
+  animation:sai-deer-sprig .46s ease-in-out infinite; }
+@keyframes sai-deer-sprig{ 0%,100%{transform:rotate(0);} 50%{transform:rotate(-9deg) translateX(-.8px);} }
+
+/* ---- the vigilance freeze: head up, ears hard forward, and nothing else
+   in the sprite moving at all. The stillness IS the behavior — a deer that
+   keeps breathing and swaying through a check has not checked ---- */
+.sai-sprite[data-state="browsealert"] .sai-crit--deer .sai-crit-alertears{ display:inline; }
+.sai-sprite[data-state="browsealert"] .sai-crit--deer .sai-crit-ear{ display:none; }
+.sai-sprite[data-state="browsealert"] .sai-crit--deer .sai-crit-head{
+  animation:none; transform:translateY(-3.2px) rotate(-3deg); }
+.sai-sprite[data-state="browsealert"] .sai-crit--deer .sai-crit-body,
+.sai-sprite[data-state="browsealert"] .sai-crit--deer .sai-crit-tail,
+.sai-sprite[data-state="browsealert"] .sai-crit--deer .sai-crit-shadow{ animation:none; }
+.sai-sprite[data-state="browsealert"] .sai-crit--deer .sai-crit-lid{ animation:none; transform:scaleY(0); }
+/* the ears are the exception, and they work independently of each other */
+.sai-sprite[data-state="browsealert"] .sai-crit--deer .alert-ear-l,
+.sai-sprite[data-state="browsealert"] .sai-crit--deer .alert-ear-r{
+  transform-box:fill-box; transform-origin:30% 88%;
+  animation:sai-deer-earscan 1.5s ease-in-out infinite; }
+.sai-sprite[data-state="browsealert"] .sai-crit--deer .alert-ear-r{ animation-direction:reverse; }
+@keyframes sai-deer-earscan{
+  0%,100%{transform:rotate(0);}
+  30%{transform:rotate(-11deg);}
+  62%{transform:rotate(7deg);}
+}
+
+/* ---- grazing: the neck folds right down to the sward. Cropping is a
+   short repeated nod that shuffles along, not a sweep — one mouthful, a
+   head's width sideways, the next ---- */
+.sai-sprite[data-state="grazedrop"] .sai-crit--deer .sai-crit-grazepose{ display:inline; }
+.sai-sprite[data-state="grazedrop"] .sai-crit--deer .sai-crit-body,
+.sai-sprite[data-state="grazedrop"] .sai-crit--deer .sai-crit-head{ display:none; }
+.sai-sprite[data-state="grazedrop"] .sai-crit--deer .sai-crit-grazepose{
+  transform-box:fill-box; transform-origin:22% 40%;
+  animation:sai-deer-crop 1.35s ease-in-out infinite; }
+@keyframes sai-deer-crop{
+  0%,100%{transform:rotate(0) translate(0,0);}
+  28%{transform:rotate(1.8deg) translate(-1px,1.4px);}   /* down into the grass */
+  55%{transform:rotate(.6deg) translate(.8px,.4px);}     /* tear it */
+  80%{transform:rotate(1.4deg) translate(2.2px,1px);}    /* shuffle along */
+}
+/* the muzzle works faster than the neck that is carrying it */
+.sai-sprite[data-state="grazedrop"] .sai-crit--deer .graze-muzzle{
+  transform-box:fill-box; transform-origin:10% 40%;
+  animation:sai-deer-jaw .34s ease-in-out infinite; }
+@keyframes sai-deer-jaw{ 0%,100%{transform:rotate(0);} 50%{transform:rotate(4deg) translateY(.6px);} }
+.sai-sprite[data-state="grazedrop"] .sai-crit--deer .graze-crop{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-deer-sward .34s ease-in-out infinite; }
+@keyframes sai-deer-sward{ 0%,100%{transform:rotate(-3deg);} 50%{transform:rotate(4deg);} }
+
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-state="browsepick"] .sai-crit--deer .sai-crit-head,
+  .sai-sprite[data-state="browsereach"] .sai-crit--deer .sai-crit-reachpose,
+  .sai-sprite[data-state="browsereach"] .sai-crit--deer .reach-shoot,
+  .sai-sprite[data-state="browsechew"] .sai-crit--deer .sai-crit-head,
+  .sai-sprite[data-state="grazechew"] .sai-crit--deer .sai-crit-head,
+  .sai-sprite[data-carry="browse"] .sai-crit--deer .sai-crit-sprig,
+  .sai-sprite[data-state="browsealert"] .sai-crit--deer .alert-ear-l,
+  .sai-sprite[data-state="browsealert"] .sai-crit--deer .alert-ear-r,
+  .sai-sprite[data-state="grazedrop"] .sai-crit--deer .sai-crit-grazepose,
+  .sai-sprite[data-state="grazedrop"] .sai-crit--deer .graze-muzzle,
+  .sai-sprite[data-state="grazedrop"] .sai-crit--deer .graze-crop{ animation:none; }
+}
+
+/* ==================== v0.32 the bear strips a berry bush ==================== */
+/* The longest bout in the world, so it is built out of short beats: one
+   4.2s branch — hook it, haul it to the lips, work it over, let it go —
+   repeated seven or eight times. The release is a real spring-back with an
+   overshoot, because he never breaks the plant; the fruit comes back on the
+   next branch, because the bush is never spent. Both postures share the
+   sub-part class names: only one pose is ever displayed, so they can't
+   collide, and the shared rules are the ones that keep the two readings of
+   the same behavior in step. */
+.sai-crit-sitstrippose, .sai-crit-standstrippose{ display:none; }
+.sai-sprite[data-state="stripsit"] .sai-crit-sitstrippose,
+.sai-sprite[data-state="stripstand"] .sai-crit-standstrippose{ display:inline; }
+.sai-sprite[data-state="stripsit"] .sai-crit-body,
+.sai-sprite[data-state="stripsit"] .sai-crit-head,
+.sai-sprite[data-state="stripsit"] .sai-crit-tail,
+.sai-sprite[data-state="stripsit"] .sai-crit-leg,
+.sai-sprite[data-state="stripstand"] .sai-crit-body,
+.sai-sprite[data-state="stripstand"] .sai-crit-head,
+.sai-sprite[data-state="stripstand"] .sai-crit-tail,
+.sai-sprite[data-state="stripstand"] .sai-crit-leg{ display:none; }
+
+/* the branch. It is DRAWN already hauled down, so 0deg is the pull and the
+   negative angles are the height it grew at */
+.sai-sprite[data-state="stripsit"] .sai-crit-striplimb{
+  transform-box:fill-box; transform-origin:95% 4%;
+  animation:sai-bear-branch 4.2s ease-in-out infinite; }
+.sai-sprite[data-state="stripstand"] .sai-crit-striplimb{
+  transform-box:fill-box; transform-origin:95% 6%;
+  animation:sai-bear-branch 4.2s ease-in-out infinite; }
+@keyframes sai-bear-branch{
+  0%{transform:rotate(-27deg);}     /* free, up where it grew */
+  12%{transform:rotate(-9deg);}     /* hooked on a claw */
+  22%{transform:rotate(1.5deg);}    /* hauled past rest, right to the lips */
+  28%{transform:rotate(0deg);}
+  46%{transform:rotate(-3deg);}     /* it creeps back and he takes it again */
+  64%{transform:rotate(.8deg);}
+  74%{transform:rotate(-36deg);}    /* let go — it snaps up past its own height */
+  86%{transform:rotate(-21deg);}    /* and rebounds, whole */
+  100%{transform:rotate(-27deg);}
+}
+/* the fruit goes into him and the next branch comes up laden: the site
+   itself is never depleted, which is the whole claim of the behavior */
+.sai-sprite[data-state="stripsit"] .sai-crit-stripfruit > g,
+.sai-sprite[data-state="stripstand"] .sai-crit-stripfruit > g{
+  transform-box:fill-box; transform-origin:50% 50%;
+  animation:sai-bear-fruit 4.2s ease-in-out infinite; }
+@keyframes sai-bear-fruit{
+  0%,26%{opacity:1; transform:scale(1);}
+  56%,73%{opacity:0; transform:scale(.5);}
+  80%,100%{opacity:1; transform:scale(1);}
+}
+/* the ones at his mouth go first, the ones up the stem follow */
+.sai-crit-stripfruit > g:nth-child(2){ animation-delay:.12s; }
+.sai-crit-stripfruit > g:nth-child(3){ animation-delay:.26s; }
+.sai-crit-stripfruit > g:nth-child(4){ animation-delay:.42s; }
+.sai-crit-stripfruit > g:nth-child(5){ animation-delay:.6s; }
+
+/* forepaws: they take the branch, hold it there, and open on the release */
+.sai-sprite[data-state="stripsit"] .strip-arm-near,
+.sai-sprite[data-state="stripstand"] .strip-arm-near{
+  transform-box:fill-box; transform-origin:8% 83%;
+  animation:sai-bear-striparm 4.2s ease-in-out infinite; }
+.sai-sprite[data-state="stripsit"] .strip-arm-far,
+.sai-sprite[data-state="stripstand"] .strip-arm-far{
+  transform-box:fill-box; transform-origin:6% 85%;
+  animation:sai-bear-striparmfar 4.2s ease-in-out infinite; }
+@keyframes sai-bear-striparm{
+  0%{transform:rotate(-13deg);} 14%{transform:rotate(-4deg);}
+  26%,66%{transform:rotate(0);} 76%{transform:rotate(-15deg);}
+  100%{transform:rotate(-13deg);}
+}
+@keyframes sai-bear-striparmfar{
+  0%{transform:rotate(-16deg);} 16%{transform:rotate(-5deg);}
+  28%,64%{transform:rotate(0);} 78%{transform:rotate(-18deg);}
+  100%{transform:rotate(-16deg);}
+}
+
+/* the work itself, and the only fast thing on him: lips and tongue picking
+   fruit off the stem. 1.05s is a quarter of the branch cycle, so the beats
+   never drift against the release, and he goes on chewing through it —
+   which is what a bear reaching for the next branch is actually doing */
+.sai-sprite[data-state="stripsit"] .sai-crit-striphead,
+.sai-sprite[data-state="stripstand"] .sai-crit-striphead{
+  transform-box:fill-box; transform-origin:20% 82%;
+  animation:sai-bear-striplips 1.05s ease-in-out infinite; }
+@keyframes sai-bear-striplips{
+  0%,100%{transform:rotate(0) translate(0,0);}
+  40%{transform:rotate(2.4deg) translate(1.4px,.8px);}
+  70%{transform:rotate(-1.2deg) translate(-.6px,-.4px);}
+}
+.sai-sprite[data-state="stripsit"] .sai-crit-mouth-open,
+.sai-sprite[data-state="stripstand"] .sai-crit-mouth-open{ animation:sai-bear-lipopen 1.05s ease-in-out infinite; }
+.sai-sprite[data-state="stripsit"] .sai-crit-mouth-rest,
+.sai-sprite[data-state="stripstand"] .sai-crit-mouth-rest{ animation:sai-bear-lipshut 1.05s ease-in-out infinite; }
+@keyframes sai-bear-lipopen{ 0%,100%{opacity:0;} 34%,58%{opacity:1;} }
+@keyframes sai-bear-lipshut{ 0%,100%{opacity:1;} 34%,58%{opacity:0;} }
+
+/* his weight going into the haul and coming back off it */
+.sai-sprite[data-state="stripsit"] .sai-crit-stripbody,
+.sai-sprite[data-state="stripstand"] .sai-crit-stripbody{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-bear-stripbody 4.2s ease-in-out infinite; }
+@keyframes sai-bear-stripbody{
+  0%,100%{transform:scaleX(1) scaleY(1);}
+  24%{transform:scaleX(.985) scaleY(1.02);}
+  62%{transform:scaleX(1.015) scaleY(.99);}
+}
+/* sitting he is braced on the ground and barely moves; standing, the whole
+   animal follows the branch down and rocks back as it goes — holding that
+   much bear upright is the difference between the two postures */
+.sai-sprite[data-state="stripsit"] .sai-crit-sitstrippose{
+  transform-box:fill-box; transform-origin:60% 100%;
+  animation:sai-bear-stripsettle 4.2s ease-in-out infinite; }
+@keyframes sai-bear-stripsettle{
+  0%,100%{transform:rotate(0) translateY(0);}
+  26%{transform:rotate(1deg) translateY(-1px);}
+  74%{transform:rotate(-.8deg) translateY(.6px);}
+}
+.sai-sprite[data-state="stripstand"] .sai-crit-standstrippose{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-bear-stripsway 4.2s ease-in-out infinite; }
+@keyframes sai-bear-stripsway{
+  0%,100%{transform:rotate(-1.6deg);}
+  30%{transform:rotate(1.8deg);}
+  76%{transform:rotate(-2.6deg);}
+}
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-state="stripsit"] .sai-crit-sitstrippose,
+  .sai-sprite[data-state="stripstand"] .sai-crit-standstrippose,
+  .sai-sprite[data-state="stripsit"] .sai-crit-striplimb,
+  .sai-sprite[data-state="stripstand"] .sai-crit-striplimb,
+  .sai-sprite[data-state="stripsit"] .sai-crit-stripfruit > g,
+  .sai-sprite[data-state="stripstand"] .sai-crit-stripfruit > g,
+  .sai-sprite[data-state="stripsit"] .strip-arm-near,
+  .sai-sprite[data-state="stripstand"] .strip-arm-near,
+  .sai-sprite[data-state="stripsit"] .strip-arm-far,
+  .sai-sprite[data-state="stripstand"] .strip-arm-far,
+  .sai-sprite[data-state="stripsit"] .sai-crit-striphead,
+  .sai-sprite[data-state="stripstand"] .sai-crit-striphead,
+  .sai-sprite[data-state="stripsit"] .sai-crit-stripbody,
+  .sai-sprite[data-state="stripstand"] .sai-crit-stripbody,
+  .sai-sprite[data-state="stripsit"] .sai-crit-mouth-open,
+  .sai-sprite[data-state="stripstand"] .sai-crit-mouth-open,
+  .sai-sprite[data-state="stripsit"] .sai-crit-mouth-rest,
+  .sai-sprite[data-state="stripstand"] .sai-crit-mouth-rest{ animation:none; }
+}
+
+/* ==================== v0.32 the skunk works the floor ==================== */
+/* Six species are getting behaviors at once and state names are namespaced
+   only inside the ethogram, never in the DOM — so every rule here, the
+   display:none defaults included, is scoped to the skunk. */
+
+/* ---- the nose-down head: one drawing for all three ground states, since
+   the litter is where he eats, where he searches and where he scratches.
+   The body and all four legs stay on the normal rig, so the walk cycle
+   goes on running underneath him while he patrols. ---- */
+.sai-crit--skunk .sai-crit-snuffhead{ display:none; }
+.sai-sprite[data-state="floorsnuff"] .sai-crit--skunk .sai-crit-snuffhead,
+.sai-sprite[data-state="windfalleat"] .sai-crit--skunk .sai-crit-snuffhead,
+.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .sai-crit-snuffhead{ display:inline; }
+.sai-sprite[data-state="floorsnuff"] .sai-crit--skunk .sai-crit-head,
+.sai-sprite[data-state="windfalleat"] .sai-crit--skunk .sai-crit-head,
+.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .sai-crit-head{ display:none; }
+
+/* quartering the ground: the nose sweeps across his line of travel rather
+   than along it, which is what separates searching from simply walking */
+.sai-sprite[data-state="floorsnuff"] .sai-crit--skunk .sai-crit-snuffhead{
+  transform-box:fill-box; transform-origin:17% 18%;
+  animation:sai-sk-quarter .78s ease-in-out infinite; }
+@keyframes sai-sk-quarter{
+  0%,100%{transform:rotate(-5deg) translate(-1px,0);}
+  50%{transform:rotate(6deg) translate(1.6px,1px);}
+}
+/* the nose works far faster than the sweep — the mismatch in tempo is what
+   makes it read as snuffling instead of nodding */
+.sai-sprite[data-state="floorsnuff"] .sai-crit--skunk .snuff-nose,
+.sai-sprite[data-state="windfalleat"] .sai-crit--skunk .snuff-nose{
+  transform-box:fill-box; transform-origin:50% 50%;
+  animation:sai-sk-twitch .2s ease-in-out infinite; }
+@keyframes sai-sk-twitch{ 0%,100%{transform:translate(0,0);} 50%{transform:translate(.6px,-.9px);} }
+/* litter shouldered aside, staggered so it leaves as a trickle */
+.sai-crit--skunk .snuff-litter{ opacity:0; }
+.sai-sprite[data-state="floorsnuff"] .sai-crit--skunk .snuff-litter{ opacity:1; }
+.sai-sprite[data-state="floorsnuff"] .sai-crit--skunk .snuff-litter ellipse{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-sk-litter .78s ease-out infinite; }
+.sai-sprite[data-state="floorsnuff"] .sai-crit--skunk .snuff-litter ellipse:nth-child(2){ animation-delay:.18s; }
+.sai-sprite[data-state="floorsnuff"] .sai-crit--skunk .snuff-litter ellipse:nth-child(3){ animation-delay:.34s; }
+@keyframes sai-sk-litter{
+  0%{opacity:0; transform:translate(0,0) scale(.6);}
+  35%{opacity:.85;}
+  100%{opacity:0; transform:translate(-4px,-2.6px) scale(1);}
+}
+/* head down means plume up: the tail is carried high and barely moves,
+   against the loose sway it has at rest */
+.sai-sprite[data-state="floorsnuff"] .sai-crit--skunk .sai-crit-tail{
+  animation:sai-sk-plume 1.1s ease-in-out infinite; }
+@keyframes sai-sk-plume{ 0%,100%{transform:rotate(-9deg);} 50%{transform:rotate(-2deg);} }
+
+/* ---- what he found, held at the lips. Same drawing as the crop it fell
+   from, so a berry patrol and a mast patrol look like different meals ---- */
+.sai-crit--skunk .snuff-berry,
+.sai-crit--skunk .snuff-nut{ display:none; }
+.sai-sprite[data-carry="berry"] .sai-crit--skunk .snuff-berry{ display:inline; }
+.sai-sprite[data-carry="nut"] .sai-crit--skunk .snuff-nut{ display:inline; }
+/* short bites, head held exactly where he found it */
+.sai-sprite[data-state="windfalleat"] .sai-crit--skunk .sai-crit-snuffhead{
+  transform-box:fill-box; transform-origin:17% 18%;
+  animation:sai-sk-chew .3s ease-in-out infinite; }
+@keyframes sai-sk-chew{
+  0%,100%{transform:rotate(2deg) translate(0,0);}
+  50%{transform:rotate(4.2deg) translate(.4px,1.2px);}
+}
+
+/* ---- the scrape. Everything about the timing is set against the
+   squirrel's dig: his stroke runs at .26s to the squirrel's .3s, the soil
+   lifts three pixels where the squirrel's clods travel thirty, and the
+   forequarters rock rather than fold. Fast and shallow, on purpose. ---- */
+.sai-crit--skunk .sai-crit-scrapepose{ display:none; }
+.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .sai-crit-scrapepose{ display:inline; }
+.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .sai-crit-leg-fr{ display:none; }
+.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-arm{
+  transform-box:fill-box; transform-origin:14% 6%;
+  animation:sai-sk-rake .26s ease-out infinite; }
+@keyframes sai-sk-rake{
+  0%,100%{transform:rotate(-13deg);}   /* reach out along the surface */
+  35%{transform:rotate(9deg);}         /* and draw it straight back */
+  60%{transform:rotate(6deg);}
+}
+.sai-crit--skunk .scrape-puff{ opacity:0; }
+.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-puff{ opacity:1; }
+.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-puff ellipse{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-sk-scuff .26s ease-out infinite; }
+.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-puff ellipse:nth-child(2){ animation-delay:.04s; }
+.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-puff ellipse:nth-child(3){ animation-delay:.07s; }
+.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-puff ellipse:nth-child(4){ animation-delay:.1s; }
+@keyframes sai-sk-scuff{
+  0%,30%{opacity:0; transform:translate(0,0) scale(.5);}
+  55%{opacity:.9; transform:translate(-3px,-3.4px) scale(1);}
+  100%{opacity:0; transform:translate(-6px,-.5px) scale(.85);}
+}
+/* the streaks come in over the first second and then stay: they are the
+   record of the action, so they must not blink with the stroke */
+.sai-crit--skunk .scrape-marks{ opacity:0; }
+.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-marks{
+  animation:sai-sk-marks 1.2s ease-out forwards; }
+@keyframes sai-sk-marks{ 0%{opacity:0;} 100%{opacity:1;} }
+/* forequarters braced over the working paw, at half the stroke tempo so
+   two rakes land per rock */
+.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .sai-crit-body{
+  transform-origin:20% 100%; animation:sai-sk-brace .52s ease-in-out infinite; }
+@keyframes sai-sk-brace{
+  0%,100%{transform:rotate(2.4deg) translateY(1px);}
+  50%{transform:rotate(3.4deg) translateY(2px);}
+}
+.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .sai-crit-tail{
+  animation:sai-sk-scrapetail .52s ease-in-out infinite; }
+@keyframes sai-sk-scrapetail{ 0%,100%{transform:rotate(-4deg);} 50%{transform:rotate(3deg);} }
+/* he watches the spot he is scratching, so the head shifts back over the
+   paw — the offset lives in the keyframes because the group is animated */
+.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .sai-crit-snuffhead{
+  transform-box:fill-box; transform-origin:17% 18%;
+  animation:sai-sk-watch .52s ease-in-out infinite; }
+@keyframes sai-sk-watch{
+  0%,100%{transform:rotate(-3deg) translate(-5px,2px);}
+  50%{transform:rotate(-1deg) translate(-6px,3.4px);}
+}
+
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-state="floorsnuff"] .sai-crit--skunk .sai-crit-snuffhead,
+  .sai-sprite[data-state="floorsnuff"] .sai-crit--skunk .snuff-nose,
+  .sai-sprite[data-state="floorsnuff"] .sai-crit--skunk .snuff-litter ellipse,
+  .sai-sprite[data-state="floorsnuff"] .sai-crit--skunk .sai-crit-tail,
+  .sai-sprite[data-state="windfalleat"] .sai-crit--skunk .sai-crit-snuffhead,
+  .sai-sprite[data-state="windfalleat"] .sai-crit--skunk .snuff-nose,
+  .sai-sprite[data-state="clawscrape"] .sai-crit--skunk .sai-crit-snuffhead,
+  .sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-arm,
+  .sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-puff ellipse,
+  .sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-marks,
+  .sai-sprite[data-state="clawscrape"] .sai-crit--skunk .sai-crit-body,
+  .sai-sprite[data-state="clawscrape"] .sai-crit--skunk .sai-crit-tail{ animation:none; }
+  /* the streaks are the whole point of the pose, so they are shown
+     outright rather than faded in */
+  .sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-marks{ opacity:1; }
+}
+
+/* ==================== v0.33 the fox helps himself ==================== */
+/* The lightest touch on the clearing of anyone here: two short poses and a
+   swallow, and then he is gone. Both poses are drawn whole and swapped in —
+   his body is one level ellipse with the head pasted on the front and no
+   neck between them, so the rig can put his muzzle neither at a branch tip
+   nor in the turf. Every rule is scoped to the fox: six species got
+   behaviors at once and state names are namespaced inside the ethogram,
+   never in the DOM. */
+.sai-crit-pluckpose, .sai-crit-nosepose, .sai-crit-foxberry{ display:none; }
+
+/* ---- the pluck: he is balanced on his hind feet, so almost everything in
+   the pose is holding still and only the head commits ---- */
+.sai-sprite[data-state="foxpluck"] .sai-crit--fox .sai-crit-pluckpose{ display:inline; }
+.sai-sprite[data-state="foxpluck"] .sai-crit--fox .sai-crit-body,
+.sai-sprite[data-state="foxpluck"] .sai-crit--fox .sai-crit-head,
+.sai-sprite[data-state="foxpluck"] .sai-crit--fox .sai-crit-tail,
+.sai-sprite[data-state="foxpluck"] .sai-crit--fox .sai-crit-leg{ display:none; }
+.sai-sprite[data-state="foxpluck"] .sai-crit--fox .sai-crit-pluckpose{
+  transform-box:fill-box; transform-origin:44% 100%;
+  animation:sai-fox-balance 2.4s ease-in-out infinite; }
+@keyframes sai-fox-balance{ 0%,100%{transform:rotate(-1.2deg) translateY(0);} 50%{transform:rotate(.9deg) translateY(-1.6px);} }
+/* the whole character of him is in this one curve: a long hold while he
+   makes sure of the berry, then the nose goes the last two pixels and comes
+   straight back. A fox does not grope at fruit */
+.sai-sprite[data-state="foxpluck"] .sai-crit--fox .sai-crit-pluckhead{
+  transform-box:fill-box; transform-origin:16% 92%;
+  animation:sai-fox-nip 1.9s ease-in-out infinite; }
+@keyframes sai-fox-nip{
+  0%,54%{transform:rotate(0) translate(0,0);}
+  66%{transform:rotate(-4deg) translate(1.8px,-2.4px);}
+  74%{transform:rotate(-3deg) translate(1.4px,-1.6px);}
+  100%{transform:rotate(0) translate(0,0);}
+}
+/* the twig gives where he touches it and springs back a beat after he lets
+   go — the branch is what tells you he actually made contact */
+.sai-sprite[data-state="foxpluck"] .sai-crit--fox .pluck-branch{
+  transform-box:fill-box; transform-origin:100% 0%;
+  animation:sai-fox-twig 1.9s ease-in-out infinite; }
+@keyframes sai-fox-twig{ 0%,58%{transform:rotate(0);} 70%{transform:rotate(3deg);} 86%{transform:rotate(-1.4deg);} 100%{transform:rotate(0);} }
+.sai-sprite[data-state="foxpluck"] .sai-crit--fox .pluck-berry{
+  animation:sai-fox-berrytug 1.9s ease-in-out infinite; }
+@keyframes sai-fox-berrytug{ 0%,58%{transform:translate(0,0);} 70%{transform:translate(-1.8px,2.2px);} 86%{transform:translate(.6px,-.8px);} 100%{transform:translate(0,0);} }
+/* the tucked paw and the brush are pure counterweight, and they run out of
+   phase with the body so he reads as balancing rather than as posed */
+.sai-sprite[data-state="foxpluck"] .sai-crit--fox .pluck-fore{
+  transform-box:fill-box; transform-origin:8% 12%;
+  animation:sai-fox-tuck 2.4s ease-in-out infinite; }
+@keyframes sai-fox-tuck{ 0%,100%{transform:rotate(3deg);} 50%{transform:rotate(-3.5deg);} }
+.sai-sprite[data-state="foxpluck"] .sai-crit--fox .pluck-tail{
+  transform-box:fill-box; transform-origin:96% 82%;
+  animation:sai-fox-plucktail 2.4s ease-in-out infinite .35s; }
+@keyframes sai-fox-plucktail{ 0%,100%{transform:rotate(2.4deg);} 50%{transform:rotate(-3deg);} }
+
+/* ---- the windfall: the tempo is the whole difference from the pluck.
+   Nothing here is delicate — the muzzle runs at four times the body ---- */
+.sai-sprite[data-state="foxnose"] .sai-crit--fox .sai-crit-nosepose{ display:inline; }
+.sai-sprite[data-state="foxnose"] .sai-crit--fox .sai-crit-body,
+.sai-sprite[data-state="foxnose"] .sai-crit--fox .sai-crit-head,
+.sai-sprite[data-state="foxnose"] .sai-crit--fox .sai-crit-tail,
+.sai-sprite[data-state="foxnose"] .sai-crit--fox .sai-crit-leg{ display:none; }
+.sai-sprite[data-state="foxnose"] .sai-crit--fox .sai-crit-nosehead{
+  transform-box:fill-box; transform-origin:18% 24%;
+  animation:sai-fox-snuffle .62s ease-in-out infinite; }
+@keyframes sai-fox-snuffle{
+  0%,100%{transform:rotate(-3deg) translate(-1px,0);}
+  50%{transform:rotate(3.5deg) translate(1.4px,1.2px);}
+}
+/* one slow beat under four quick ones, which is what keeps the snuffle from
+   reading as a tic: he is working ALONG the drop, not vibrating on it */
+.sai-sprite[data-state="foxnose"] .sai-crit--fox .sai-crit-nosebody{
+  transform-box:fill-box; transform-origin:10% 90%;
+  animation:sai-fox-shoulders 2.48s ease-in-out infinite; }
+@keyframes sai-fox-shoulders{ 0%,100%{transform:rotate(0) translate(0,0);} 50%{transform:rotate(1.4deg) translate(1.8px,.8px);} }
+/* the fruit goes where the nose puts it, a beat behind the nose */
+.sai-sprite[data-state="foxnose"] .sai-crit--fox .nose-fruit{
+  animation:sai-fox-rollfruit .62s ease-in-out infinite .1s; }
+@keyframes sai-fox-rollfruit{ 0%,100%{transform:translate(0,0);} 50%{transform:translate(1.6px,-.7px);} }
+.sai-sprite[data-state="foxnose"] .sai-crit--fox .nose-tail{
+  transform-box:fill-box; transform-origin:96% 88%;
+  animation:sai-fox-nosetail 2.48s ease-in-out infinite; }
+@keyframes sai-fox-nosetail{ 0%,100%{transform:rotate(-2.6deg);} 50%{transform:rotate(3.4deg);} }
+
+/* ---- the swallow. This state deliberately uses the NORMAL rig: dropping
+   back onto four feet with the berry still in his jaws is the "and off he
+   goes" that the whole behavior is built around ---- */
+.sai-sprite[data-state="foxchew"] .sai-crit--fox .sai-crit-head{
+  animation:sai-fox-chew .38s ease-in-out infinite; }
+@keyframes sai-fox-chew{ 0%,100%{transform:translateY(0) rotate(0);} 50%{transform:translateY(1.3px) rotate(2.4deg);} }
+.sai-sprite[data-carry="berry"] .sai-crit--fox .sai-crit-foxberry{
+  display:inline; transform-box:fill-box; transform-origin:50% 50%;
+  animation:sai-fox-swallow 1.7s ease-in forwards; }
+@keyframes sai-fox-swallow{ 0%{transform:scale(1); opacity:1;} 62%{transform:scale(.62); opacity:1;} 100%{transform:scale(.12); opacity:0;} }
+
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-state="foxpluck"] .sai-crit--fox .sai-crit-pluckpose,
+  .sai-sprite[data-state="foxpluck"] .sai-crit--fox .sai-crit-pluckhead,
+  .sai-sprite[data-state="foxpluck"] .sai-crit--fox .pluck-branch,
+  .sai-sprite[data-state="foxpluck"] .sai-crit--fox .pluck-berry,
+  .sai-sprite[data-state="foxpluck"] .sai-crit--fox .pluck-fore,
+  .sai-sprite[data-state="foxpluck"] .sai-crit--fox .pluck-tail,
+  .sai-sprite[data-state="foxnose"] .sai-crit--fox .sai-crit-nosehead,
+  .sai-sprite[data-state="foxnose"] .sai-crit--fox .sai-crit-nosebody,
+  .sai-sprite[data-state="foxnose"] .sai-crit--fox .nose-fruit,
+  .sai-sprite[data-state="foxnose"] .sai-crit--fox .nose-tail,
+  .sai-sprite[data-state="foxchew"] .sai-crit--fox .sai-crit-head,
+  .sai-sprite[data-carry="berry"] .sai-crit--fox .sai-crit-foxberry{ animation:none; }
+}
