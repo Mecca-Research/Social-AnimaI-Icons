@@ -61,6 +61,10 @@ const SWIM_P = {
   frog: 0.6, turtle: 0.5, beaver: 0.7, goose: 0.7,
   bear: 0.5, wolf: 0.4, deer: 0.3, raccoon: 0.2, cougar: 0.1,
 };
+// habitat groups for cross-habitat encounter boosting: the lake regulars
+// vs the species that never touch the water
+const AQUATIC = new Set(["frog", "turtle", "beaver", "goose"]);
+const LANDLOCKED = new Set(["fox", "skunk", "hedgehog", "squirrel", "owl"]);
 const POOL_SWIM_P = { labrador: 0.22, axolotl: 0.4, python: 0.3 };
 const canSwimIn = (def, species) => (def.swim?.[species] || 0) > 0;
 
@@ -2462,7 +2466,10 @@ function stepWorld(world, cfg, dt) {
 
   // encounters: nose-range only, and only within the same medium
   // (land ↔ land or water ↔ water — swimmers in the lake are off-limits
-  // to shore animals and vice versa)
+  // to shore animals and vice versa). The divided habitats meet rarely,
+  // so when an aquatic regular crosses paths with a never-wet lander the
+  // moment counts: those encounters trigger ~80% of the time (1.6/s over
+  // a typical ~1s of nose contact) instead of the baseline 0.4/s.
   for (let i = 0; i < agents.length; i++) {
     for (let j = i + 1; j < agents.length; j++) {
       const a = agents[i], b = agents[j];
@@ -2472,7 +2479,10 @@ function stepWorld(world, cfg, dt) {
       if (a.z > 2 || b.z > 2) continue; // ground-level only
       if (dist(a, b) > pairRange(a, b)) continue;
       if (isWet(a.x, a.y) !== isWet(b.x, b.y)) continue;
-      if (perSec(0.40, dt)) {
+      const cross = def.hasWater &&
+        ((AQUATIC.has(a.species) && LANDLOCKED.has(b.species)) ||
+         (LANDLOCKED.has(a.species) && AQUATIC.has(b.species)));
+      if (perSec(cross ? 1.6 : 0.40, dt)) {
         if (Math.random() < 0.5) startFriendly(a, b, world); else startFight(a, b, world);
       }
     }
