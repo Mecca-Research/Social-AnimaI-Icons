@@ -1045,17 +1045,26 @@ body {
 .sai-sprite[data-chorus="1"] .sai-crit-head{ animation:sai-frog-croakhead .82s ease-in-out infinite; }
 @keyframes sai-frog-croakhead{ 0%,100%{transform:translateY(0) rotate(0);} 45%{transform:translateY(-1.6px) rotate(-3deg);} }
 
-/* ---- goose preening & oiling: bill back to the tail gland, then combing
-   the breast; a slow, absorbed grooming cycle ---- */
-.sai-sprite[data-state="preen"] .sai-crit-head{ animation:sai-goose-preen 3.4s ease-in-out infinite; }
+/* ---- goose preening & oiling: the upright head gives way to a dedicated
+   curled-back pose — neck looped over the shoulder, bill buried in the back
+   feathers — which then works up and down the plumage ---- */
+.sai-crit-preenpose{ display:none; }
+.sai-sprite[data-state="preen"] .sai-crit-preenpose{ display:inline; }
+.sai-sprite[data-state="preen"] .sai-crit-head{ display:none; }
+.sai-sprite[data-state="preen"] .sai-crit-preenpose{
+  transform-box:fill-box; transform-origin:67% 92%;
+  animation:sai-goose-preen 3.6s ease-in-out infinite; }
 @keyframes sai-goose-preen{
   0%,100%{transform:rotate(0) translate(0,0);}
-  18%{transform:rotate(52deg) translate(-13px,10px);}   /* reach back to the gland */
-  34%{transform:rotate(58deg) translate(-15px,12px);}
-  52%{transform:rotate(24deg) translate(-6px,7px);}     /* comb the flank */
-  62%{transform:rotate(30deg) translate(-8px,8px);}
-  78%{transform:rotate(10deg) translate(-1px,4px);}     /* down the breast */
+  20%{transform:rotate(-7deg) translate(-2px,2.5px);}   /* dig deeper at the gland */
+  38%{transform:rotate(-4deg) translate(-1px,1px);}
+  56%{transform:rotate(8deg) translate(3px,1.5px);}     /* comb forward along the flank */
+  74%{transform:rotate(4deg) translate(1.5px,2.5px);}
+  88%{transform:rotate(-2deg) translate(0,1px);}
 }
+/* the bill nibbling through the feathers, quicker than the neck sweep */
+.sai-sprite[data-state="preen"] .preen-ruffle{ animation:sai-goose-ruffle .6s ease-in-out infinite; }
+@keyframes sai-goose-ruffle{ 0%,100%{opacity:.5; transform:translate(0,0);} 50%{opacity:1; transform:translate(-1.6px,-1px);} }
 .sai-sprite[data-state="preen"] .sai-crit-body{ animation:sai-goose-fluff 3.4s ease-in-out infinite; }
 @keyframes sai-goose-fluff{ 0%,100%{transform:scaleX(1) scaleY(1);} 30%{transform:scaleX(1.03) scaleY(1.05);} 70%{transform:scaleX(1.05) scaleY(1.02);} }
 .sai-sprite[data-state="preen"] .sai-crit-tail{ animation:sai-goose-tailflick 3.4s ease-in-out infinite; }
@@ -1093,7 +1102,8 @@ body {
   .sai-sprite[data-chorus="1"] .sai-crit-croaksac,
   .sai-sprite[data-chorus="1"] .sai-crit-croakwaves path,
   .sai-sprite[data-chorus="1"] .sai-crit-head,
-  .sai-sprite[data-state="preen"] .sai-crit-head,
+  .sai-sprite[data-state="preen"] .sai-crit-preenpose,
+  .sai-sprite[data-state="preen"] .preen-ruffle,
   .sai-sprite[data-state="preen"] .sai-crit-body,
   .sai-sprite[data-state="preen"] .sai-crit-tail,
   .sai-sprite[data-state="sploot"] .sai-crit-body,
