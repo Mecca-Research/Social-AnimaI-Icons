@@ -1174,14 +1174,18 @@ function HedgehogDraw({ uid }) {
   const spikes = [];
   for (let i = 0; i < 11; i++) {
     const a = Math.PI * (1.06 - i * 0.082);
-    const cx0 = 56, cy0 = 84, rBase = 26, rTip = 44;
+    const cx0 = 56, cy0 = 84, rBase = 28, rTip = 47;
     const x0 = cx0 + Math.cos(a + 0.16) * rBase, y0 = cy0 - Math.sin(a + 0.16) * (rBase * 0.78);
     const x1 = cx0 + Math.cos(a) * rTip, y1 = cy0 - Math.sin(a) * (rTip * 0.82);
     const x2 = cx0 + Math.cos(a - 0.16) * rBase, y2 = cy0 - Math.sin(a - 0.16) * (rBase * 0.78);
     spikes.push(<path key={i} d={`M ${x0} ${y0} L ${x1} ${y1} L ${x2} ${y2} Z`} fill={i % 2 ? spikeA : spikeB} />);
   }
   return (
-    <g transform="translate(60 106) scale(.86) translate(-60 -106)">
+    // Drawn to 1.52 rather than the 0.86 it had. Every other species fills
+    // most of its 120 box; this one filled about a third of it, so however
+    // its radius was set it came out roughly a quarter the squirrel's on
+    // screen — an animal that is heavier and rounder than a squirrel in life.
+    <g transform="translate(60 106) scale(1.52) translate(-60 -106)">
       <defs><Fur id={`${uid}f`} c={F} /></defs>
       <Leg x={44} top={90} len={13} w={6} color={F[2]} cls="bl" />
       <Leg x={72} top={90} len={13} w={6} color={F[2]} cls="fl" />
@@ -1189,7 +1193,7 @@ function HedgehogDraw({ uid }) {
       <Leg x={80} top={91} len={13} w={6} color={F[1]} cls="fr" />
       <g className="sai-crit-body">
         <g>{spikes}</g>
-        <ellipse cx="58" cy="86" rx="27" ry="16" fill={`url(#${uid}f)`} />
+        <ellipse cx="58" cy="85" rx="28" ry="18.5" fill={`url(#${uid}f)`} />
         <path d="M 58 70 C 44 70 33 77 32 86 C 40 74 52 72 58 72 Z" fill={spikeA} opacity=".65" />
         <BellyShade cx={60} cy={99} rx={18} />
       </g>
