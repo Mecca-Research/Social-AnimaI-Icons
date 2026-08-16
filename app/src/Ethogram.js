@@ -92,6 +92,8 @@
 //                              ENGINE
 // ---------------------------------------------------------------------
 
+import { gait } from "./Gait.js";
+
 /** species key -> compiled ethogram */
 export const ETHOGRAM = {};
 /** every state owned by any ethogram — the sim treats these as "busy" */
@@ -176,8 +178,11 @@ function freshState(now) {
  * downstream; this only sets the velocity.
  */
 export function stepToward(a, ctx, t, mul = 1) {
+  return stepTowardAt(a, ctx, t, ctx.cfg.speed * mul);
+}
+/** ...and the same thing given an absolute px/s, which is what gait returns */
+export function stepTowardAt(a, ctx, t, sp) {
   const dx = t.x - a.x, dy = t.y - a.y, d = Math.hypot(dx, dy) || 1;
-  const sp = ctx.cfg.speed * mul;
   a.vx = (dx / d) * sp; a.vy = (dy / d) * sp;
   return d;
 }
@@ -199,8 +204,11 @@ function driveGoto(a, ctx, S) {
   if (g.track) { const p = g.track(a, ctx, S.goal.ref); if (p) { S.goal.x = p.x; S.goal.y = p.y; } }
   // a leg that crosses the shoreline wants two speeds, the way every other
   // swim in this world does, so `speed` may also be read each frame
-  const sp = typeof g.speed === "function" ? g.speed(a, ctx) : (g.speed ?? 1);
-  const d = stepToward(a, ctx, S.goal, sp);
+  // A goto states its URGENCY; how fast that actually is belongs to the
+  // animal. A leg at a flat multiplier is what let a turtle cross the map.
+  const d = g.urgency !== undefined
+    ? stepTowardAt(a, ctx, S.goal, gait(a, ctx, g.urgency))
+    : stepToward(a, ctx, S.goal, typeof g.speed === "function" ? g.speed(a, ctx) : (g.speed ?? 1));
   if (d <= (g.within ?? 18)) {
     a.vx = 0; a.vy = 0;
     v.begin(a, ctx, S, S.goal.ref);
@@ -1576,7 +1584,7 @@ function nearestFloat(a, c, logs) {
 const FLOAT_GOTO = {
   within: 12, giveUp: 30000, none: 10000, lost: 10000,
   // slower in the water than out of it, like every other swim here
-  speed: (a, c) => (c.isWet(a.x, a.y) ? 0.55 : 0.9),
+  urgency: 0.35,   // medium is the species' own now — see Gait.js
   // the float drifts: a target fixed at pick time is one he paddles past
   track: (a, c, ref) => ref.site,
 };

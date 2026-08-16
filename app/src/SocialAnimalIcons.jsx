@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Critter, SPECIES, ALL_SPECIES } from "./Critters.jsx";
 import { PET_SPECIES } from "./CrittersPets.jsx";
 import { speciesSize } from "./SpeciesProfile.js";
+import { gait, gaitIn, speedCap, rescueReach, SPEED, GAIT_DEF } from "./Gait.js";
 import { stepEthogram, ethoSwimP, ethoShare, ETHOGRAM, ETHO_STATES, ETHO_Z_STATES, ETHO_OWNWATER_STATES, setTreeMetrics, ethoOffstage } from "./Ethogram.js";
 
 /**
@@ -647,8 +648,8 @@ function makeAgent(world, species) {
     emoji: ALL_SPECIES[species].badge,
     x: p.x,
     y: p.y,
-    vx: rand(-speed0 * 0.3, speed0 * 0.3),
-    vy: rand(-speed0 * 0.3, speed0 * 0.3),
+    vx: rand(-speed0 * 0.3, speed0 * 0.3) * (SPEED[species] || GAIT_DEF).base,
+    vy: rand(-speed0 * 0.3, speed0 * 0.3) * (SPEED[species] || GAIT_DEF).base,
     r,
     state: "wander", // idle | wander | friendly | fight | rescue | cooldown | drag | flee | separate
     targetId: null,
@@ -2264,7 +2265,7 @@ function stepWorld(world, cfg, dt) {
     const hasRescuer = agents.some((c) => c.state === "rescue" && (c.rescueFriendId === fa.id || c.rescueFriendId === fb.id));
     if (!hasRescuer) {
       // nearest free friend of either fighter, in the same medium
-      let best = null, bestD = RESCUE_RADIUS, bestFriend = null;
+      let best = null, bestD = Infinity, bestFriend = null;
       for (const c of agents) {
         if (c === fa || c === fb || c.dragging || !isFreeState(c)) continue;
         if (isWet(c.x, c.y) !== fightWet) continue;
@@ -2272,6 +2273,11 @@ function stepWorld(world, cfg, dt) {
         const friendOfB = getRel(c, fb.id, false)?.last === "friend";
         if (!friendOfA && !friendOfB) continue;
         const d = Math.hypot(c.x - mx, c.y - my);
+        // How far THIS candidate will volunteer to run, not a flat 620 for
+        // everyone: a turtle cannot cross that before the fight is over, so
+        // with one radius for all the rescue quietly stopped resolving for
+        // anything slow — it would commit and then never arrive.
+        if (d > Math.min(RESCUE_RADIUS, rescueReach(c))) continue;
         if (d < bestD) { best = c; bestD = d; bestFriend = friendOfA ? fa.id : fb.id; }
       }
       if (best) { best.state = "rescue"; best.rescueFriendId = bestFriend; }
@@ -2283,8 +2289,9 @@ function stepWorld(world, cfg, dt) {
       if (d < AVOID_RADIUS && d > 0.001) {
         const ux = (c.x - mx) / d, uy = (c.y - my) / d;
         const k = Math.min(1, dt * 4);
-        c.vx += (ux * cfg.speed - c.vx) * k;
-        c.vy += (uy * cfg.speed - c.vy) * k;
+        const wsp = gait(c, ethoCtx, 0.30);
+        c.vx += (ux * wsp - c.vx) * k;
+        c.vy += (uy * wsp - c.vy) * k;
       }
     }
   }
@@ -2292,6 +2299,7 @@ function stepWorld(world, cfg, dt) {
   // state machine + navigation
   for (const a of agents) {
     if (a.dragging) continue;
+    a._wet = isWet(a.x, a.y);   // asked five times a frame; lakeWobble is 3 sines
 
     // Locked engagements: glide into the shared contact point (lockX/Y is
     // set nose-to-nose by lockTogether), then hold; choreography in render
@@ -2326,7 +2334,7 @@ function stepWorld(world, cfg, dt) {
         a.state = "cooldown"; a.rescueFriendId = null;
       } else {
         const dx = friend.x - a.x, dy = friend.y - a.y; const d = Math.hypot(dx, dy) || 1;
-        const sp = cfg.speed * 1.5; // sprint — must arrive before the fight ends
+        const sp = gait(a, ethoCtx, 1.0); // the rescue: the one place top speed belongs
         a.vx = (dx / d) * sp; a.vy = (dy / d) * sp;
         if (d < RESCUE_REACH) {
           const opp = agents.find((x) => x.id === friend.targetId);
@@ -2684,7 +2692,7 @@ function stepWorld(world, cfg, dt) {
     if (a.state === "flee" && now >= a.fleeEnd) { a.state = "cooldown"; a.targetId = null; }
 
     if (a.state === "cooldown") {
-      a.vx *= 0.94; a.vy *= 0.94;
+      const kd = Math.exp(-3.7 * dt); a.vx *= kd; a.vy *= kd; // 0.94^60 ≈ e^-3.71
       if (Math.hypot(a.vx, a.vy) < 6) { a.vx = 0; a.vy = 0; }
       if (Math.random() < 0.02 && now >= a.noEventUntil) a.state = "wander";
     }
@@ -2736,7 +2744,7 @@ function stepWorld(world, cfg, dt) {
             : poolPoint(bounds, def.pool);
         }
         const dx = a.swimTarget.x - a.x, dy = a.swimTarget.y - a.y; const d = Math.hypot(dx, dy) || 1;
-        const sp = cfg.speed * (wet ? 0.55 : 0.9);
+        const sp = gait(a, ethoCtx, 0.30);   // medium is the species' own now
         a.vx = (dx / d) * sp; a.vy = (dy / d) * sp;
       } else if (canSwimIn(def, a.species) && isWet(a.x, a.y)) {
         // dip is over — paddle straight out to the nearest edge
@@ -2796,12 +2804,14 @@ function stepWorld(world, cfg, dt) {
   // integrate motion, collisions (shoreline / roofs / fences), edge wrap
   for (const a of agents) {
     if (a.dragging) continue;
-    const sp = cfg.speed;
-    const vmul = a.state === "dash" ? 2.4 : AIR_STATES.has(a.state) ? 1.9
-      : a.state === "rescue" || a.state === "seekroof" ? 1.6
-      : now < (a._sprintUntil || 0) ? 2.0 : 1.2;
-    const vlim = sp * vmul;
-    a.vx = clamp(a.vx, -vlim, vlim); a.vy = clamp(a.vy, -vlim, vlim);
+    // Geometry-driven states keep a fixed ceiling; everything else gets its
+    // own species'. Clamped as a CIRCLE: the old per-axis form let a diagonal
+    // run 1.414x past the limit it was meant to enforce.
+    const vlim = a.state === "dash" ? speedCap(a, cfg) * 1.1
+      : AIR_STATES.has(a.state) ? cfg.speed * 1.9
+      : speedCap(a, cfg);
+    const v2 = a.vx * a.vx + a.vy * a.vy;
+    if (v2 > vlim * vlim) { const sc = vlim / Math.sqrt(v2); a.vx *= sc; a.vy *= sc; }
     a._ix = a.x; a._iy = a.y; // pre-step position (for swept fence checks)
     if (a.state !== "friendly" && a.state !== "fight") { a.x += a.vx * dt; a.y += a.vy * dt; }
 
@@ -2864,7 +2874,7 @@ function stepWorld(world, cfg, dt) {
       a.z = 0; a.roofI = -1;
       // an ethogram may claim the re-entry (the beaver's dam run). Asked
       // before the wrap, because once he is back on stage the fact is gone.
-      if (!ethoOffstage(a, ethoCtx)) enterFromEdge(a, world, sp);
+      if (!ethoOffstage(a, ethoCtx)) enterFromEdge(a, world, gait(a, ethoCtx, 0.35));
     }
   }
 }
@@ -2940,9 +2950,13 @@ function separatePair(world, a, b, worldRefLike, force) {
   // Apply opposite impulses
   let dx = a.x - b.x, dy = a.y - b.y; let d = Math.hypot(dx, dy);
   if (!d) { const ang = Math.random() * Math.PI * 2; dx = Math.cos(ang); dy = Math.sin(ang); d = 1; }
-  const nx = dx / d, ny = dy / d; const sp = worldRefLike.cfg ? worldRefLike.cfg.speed * 1.1 : 90;
+  const nx = dx / d, ny = dy / d;
+  // each recoils at its OWN pace — a turtle and a bear used to spring apart
+  // at exactly the same speed
+  const cfgL = worldRefLike.cfg || { speed: 80 };
+  const spA = gaitIn(a, null, cfgL, 0.55), spB = gaitIn(b, null, cfgL, 0.55);
 
-  a.vx = nx * sp; a.vy = ny * sp; b.vx = -nx * sp; b.vy = -ny * sp;
+  a.vx = nx * spA; a.vy = ny * spA; b.vx = -nx * spB; b.vy = -ny * spB;
   a.state = b.state = 'separate';
   a.separateEnd = b.separateEnd = now + SEP_MS;
   // impose event cooldown + forced wander intent
@@ -2958,7 +2972,9 @@ function forceFlee(agent, cfg) {
   agent.state = 'flee'; agent.fleeEnd = performance.now() + FLEE_MS; agent.targetId = null;
   // run to a random spot away from current location
   const ang = Math.atan2(agent.y, agent.x) + rand(-0.8, 0.8);
-  const sp = Math.max(120, cfg.speed * 1.3);
+  // the max(120, ...) floor WON at the default 80, handing a turtle and a
+  // cougar the same flee speed
+  const sp = gaitIn(agent, null, cfg, 0.85);
   agent.vx = Math.cos(ang) * sp; agent.vy = Math.sin(ang) * sp;
   // also apply noEvent cooldown so they don't instantly re-engage
   agent.noEventUntil = performance.now() + rand(NOEVENT_MIN_MS, NOEVENT_MAX_MS);
