@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Critter, SPECIES, ALL_SPECIES } from "./Critters.jsx";
 import { PET_SPECIES } from "./CrittersPets.jsx";
+import { stepEthogram, ethoSwimP, ethoShare, ETHOGRAM, ETHO_STATES, setTreeMetrics } from "./Ethogram.js";
 
 /**
  * Social Animal Icons v0.11 — Lakeside world
@@ -127,40 +128,72 @@ const FOREST_TREES = [
   { x: .805, y: .89, s: 1.05 },
 ];
 const TREE_REACH = 96; // how close the bear must be to take an interest
+// Where the bear meets the tree, all in stage px above the anchor at scale
+// 1. The trunk art starts 18px up (svg y 2 maps to anchor + (2-20)*s), and
+// over the trunk's centre line the boughs close in about 107px up. Ending
+// a climb at 153 buries his head well inside them rather than brushing the
+// underside. The pose factors are the two drawn poses measured against the
+// sprite box (box = r * 3.1) — see .sai-crit-standpose / -climbpose.
+const TREE_BASE_PX = 18;    // foot of the drawn trunk
+const TREE_CANOPY_PX = 107; // where the boughs close over the trunk's centre line
+// How far past the leaf line his ears finish: head gone, back still showing.
+// Set from the WORST frame of a full sway cycle, not from a snapshot — the
+// canopy swings and the hug pose breathes. Deeper than this and the leaves
+// swallow his shoulders too, which loses the read entirely.
+const TREE_HEAD_DEEP = 50;
+const STAND_FEET = 0.348;   // upright pose: paws below the sprite centre
+const STAND_BACK = 0.232;   // upright pose: spine right of the sprite centre
+const CLIMB_HEAD = 0.768;   // hug pose: ear tips above the sprite centre
+// the bear's tree work lives in his ethogram, which stays free of the
+// world's layout — hand it the numbers rather than have it import them
+setTreeMetrics({
+  reach: TREE_REACH, basePx: TREE_BASE_PX, canopyPx: TREE_CANOPY_PX,
+  headDeep: TREE_HEAD_DEEP, standFeet: STAND_FEET, standBack: STAND_BACK,
+  climbHead: CLIMB_HEAD,
+});
 
-function TreeLayer({ bounds }) {
+function TreeLayer({ bounds, part }) {
   const { w, h } = bounds;
   if (!w || !h) return null;
+  const canopy = part === "canopy";
   return (
     <>
       {FOREST_TREES.map((t, i) => (
-        <div key={i} style={{ position: "absolute", left: t.x * w, top: t.y * h, zIndex: 2,
+        // trunks sit UNDER the animals (zIndex 2) so the bear hugs the near
+        // face of the bark; the boughs are a second pass OVER them (12), so
+        // a bear that climbs high enough disappears head-first into them
+        <div key={i} style={{ position: "absolute", left: t.x * w, top: t.y * h, zIndex: canopy ? 12 : 2,
           pointerEvents: "none", transform: `translate(-50%,-100%) scale(${t.s})`, transformOrigin: "50% 100%" }}>
           <svg width="150" height="210" viewBox="-75 -190 150 210" style={{ display: "block", overflow: "visible" }}>
-            {/* root shadow pooled on the forest floor */}
-            <ellipse cx="6" cy="4" rx="42" ry="12" fill="#0d2415" opacity=".45" />
-            {/* buttressed trunk with bark grain */}
-            <path d="M -13 2 C -12 -30 -9 -60 -8 -92 L 9 -92 C 10 -60 13 -30 15 2 C 6 5 -5 5 -13 2 Z" fill="#5b3f26" />
-            <path d="M -13 2 C -12 -30 -9 -60 -8 -92 L -2 -92 C -4 -58 -6 -28 -6 2 Z" fill="#6f4f30" />
-            <path d="M -7 -14 C -6 -38 -5 -62 -5 -84 M 3 -20 C 3 -44 2 -66 2 -84" stroke="#452f1c"
-              strokeWidth="2" fill="none" strokeLinecap="round" opacity=".65" />
-            <path d="M -13 -4 C -22 -8 -28 -4 -32 2 C -24 3 -18 3 -13 2 Z" fill="#4e3521" />
-            <path d="M 15 -6 C 24 -10 31 -6 35 1 C 27 3 20 3 15 2 Z" fill="#4e3521" />
-            {/* limbs reaching out from under the canopy */}
-            <path d="M -8 -86 C -22 -96 -34 -100 -46 -98 M 9 -88 C 22 -98 34 -102 46 -99" stroke="#5b3f26"
-              strokeWidth="5" fill="none" strokeLinecap="round" />
-            {/* canopy: stacked boughs, light from the upper left */}
-            <g className="sai-bg-sway" style={{ animationDuration: `${6.5 + i * 0.7}s`, animationDelay: `${i * 1.3}s`, transformOrigin: "50% 100%" }}>
-              <ellipse cx="-26" cy="-104" rx="34" ry="26" fill="#2f6b3f" />
-              <ellipse cx="28" cy="-108" rx="36" ry="27" fill="#2a6138" />
-              <ellipse cx="0" cy="-126" rx="44" ry="32" fill="#3a7d49" />
-              <ellipse cx="-20" cy="-142" rx="30" ry="24" fill="#469356" />
-              <ellipse cx="18" cy="-148" rx="27" ry="22" fill="#3f8850" />
-              <ellipse cx="-4" cy="-160" rx="22" ry="18" fill="#54a763" />
-              <ellipse cx="-16" cy="-150" rx="14" ry="11" fill="#69bf76" opacity=".75" />
-              <ellipse cx="12" cy="-120" rx="16" ry="12" fill="#1f4d2c" opacity=".5" />
-              <ellipse cx="-34" cy="-116" rx="13" ry="10" fill="#1f4d2c" opacity=".45" />
-            </g>
+            {canopy ? (
+              /* canopy: stacked boughs, light from the upper left */
+              <g className="sai-bg-sway" style={{ animationDuration: `${6.5 + i * 0.7}s`, animationDelay: `${i * 1.3}s`, transformOrigin: "50% 100%" }}>
+                <ellipse cx="-26" cy="-104" rx="34" ry="26" fill="#2f6b3f" />
+                <ellipse cx="28" cy="-108" rx="36" ry="27" fill="#2a6138" />
+                <ellipse cx="0" cy="-126" rx="44" ry="32" fill="#3a7d49" />
+                <ellipse cx="-20" cy="-142" rx="30" ry="24" fill="#469356" />
+                <ellipse cx="18" cy="-148" rx="27" ry="22" fill="#3f8850" />
+                <ellipse cx="-4" cy="-160" rx="22" ry="18" fill="#54a763" />
+                <ellipse cx="-16" cy="-150" rx="14" ry="11" fill="#69bf76" opacity=".75" />
+                <ellipse cx="12" cy="-120" rx="16" ry="12" fill="#1f4d2c" opacity=".5" />
+                <ellipse cx="-34" cy="-116" rx="13" ry="10" fill="#1f4d2c" opacity=".45" />
+              </g>
+            ) : (
+              <>
+                {/* root shadow pooled on the forest floor */}
+                <ellipse cx="6" cy="4" rx="42" ry="12" fill="#0d2415" opacity=".45" />
+                {/* buttressed trunk with bark grain */}
+                <path d="M -13 2 C -12 -30 -9 -60 -8 -92 L 9 -92 C 10 -60 13 -30 15 2 C 6 5 -5 5 -13 2 Z" fill="#5b3f26" />
+                <path d="M -13 2 C -12 -30 -9 -60 -8 -92 L -2 -92 C -4 -58 -6 -28 -6 2 Z" fill="#6f4f30" />
+                <path d="M -7 -14 C -6 -38 -5 -62 -5 -84 M 3 -20 C 3 -44 2 -66 2 -84" stroke="#452f1c"
+                  strokeWidth="2" fill="none" strokeLinecap="round" opacity=".65" />
+                <path d="M -13 -4 C -22 -8 -28 -4 -32 2 C -24 3 -18 3 -13 2 Z" fill="#4e3521" />
+                <path d="M 15 -6 C 24 -10 31 -6 35 1 C 27 3 20 3 15 2 Z" fill="#4e3521" />
+                {/* limbs reaching out from under the canopy */}
+                <path d="M -8 -86 C -22 -96 -34 -100 -46 -98 M 9 -88 C 22 -98 34 -102 46 -99" stroke="#5b3f26"
+                  strokeWidth="5" fill="none" strokeLinecap="round" />
+              </>
+            )}
           </svg>
         </div>
       ))}
@@ -584,8 +617,12 @@ export default function SocialAnimalsRPG() {
 
     // seed agents
     worldRef.current.agents = seedAgents(worldRef.current, DEFAULTS.numAgents);
-    // dev hook: lets tests & the console poke the live world
-    if (typeof window !== "undefined") window.__saiWorld = worldRef.current;
+    // dev hook: lets tests & the console poke the live world, and read back
+    // what each species' ethogram is currently planning
+    if (typeof window !== "undefined") {
+      window.__saiWorld = worldRef.current;
+      window.__saiEtho = { ETHOGRAM, ethoShare, states: ETHO_STATES };
+    }
 
     // main loop
     worldRef.current.last = performance.now();
@@ -675,7 +712,7 @@ export default function SocialAnimalsRPG() {
       <div ref={stageRef} className="relative rounded-2xl border border-emerald-900/60 overflow-hidden min-h-0 shadow-xl shadow-black/40" style={{ background: WORLDS[worldKey].bg }}>
         {worldKey === "forest" && <ForestScene />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <Lake bounds={snapshot.bounds} />}
-        {worldKey === "forest" && snapshot.bounds.w > 0 && <TreeLayer bounds={snapshot.bounds} />}
+        {worldKey === "forest" && snapshot.bounds.w > 0 && <TreeLayer bounds={snapshot.bounds} part="trunk" />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <PadLayer padsRef={padsRef} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <DamLayer damRefs={damRefs} />}
         {worldKey === "neighborhood" && snapshot.bounds.w > 0 && <NeighborhoodScene bounds={snapshot.bounds} />}
@@ -684,6 +721,10 @@ export default function SocialAnimalsRPG() {
         {snapshot.agents.map((a) => (
           <IconNode key={a.id} a={a} iconsRef={iconsRef} worldRef={worldRef} onSelect={()=>selectId(a.id)} />
         ))}
+
+        {/* the boughs paint last, over the animals: anything up in the
+            branches is hidden by the leaves the way it would be for real */}
+        {worldKey === "forest" && snapshot.bounds.w > 0 && <TreeLayer bounds={snapshot.bounds} part="canopy" />}
       </div>
     </div>
   );
@@ -1999,6 +2040,8 @@ function stepWorld(world, cfg, dt) {
   const now = performance.now();
   const isWet = (x, y) => def.hasWater ? inWater(bounds, x, y)
     : def.pool ? inPool(bounds, def.pool, x, y) : false;
+  // everything an ethogram is allowed to see, assembled once a frame
+  const ethoCtx = { now, dt, def, bounds, world, cfg, rand, isWet, isFreeState, lakePoint, LAKE };
 
   // ---- floats (lily pads + drift logs): VERY slow quasi-chaotic drift
   // (sums of incommensurate sines), held inside a "strange attractor" rim
@@ -2039,10 +2082,10 @@ function stepWorld(world, cfg, dt) {
     const busy = a.state === "fight" || a.state === "friendly" || a.state === "rescue" ||
       a.state === "sniff" || a.state === "walkoff" || a.state === "leaveyard" || a.state === "seekroof" ||
       a.state === "padsit" || a.state === "damrun" ||
-      a.state === "fishswim" || a.state === "fishdive" || a.state === "fishwait" ||
-      a.state === "fishcarry" || a.state === "fisheat" ||
       a.state === "preen" || a.state === "splash" || a.state === "sploot" ||
-      a.state === "treerub" || a.state === "treeclimb" ||
+      // every state any ethogram owns counts as busy without being listed
+      // here, so a new species event needs no edit to this line
+      ETHO_STATES.has(a.state) ||
       AIR_STATES.has(a.state) || ROOF_STATES.has(a.state);
     // a behavior trip already under way outranks a fresh intent roll: an
     // animal on its way to a float keeps going (and picks the trip back up
@@ -2058,7 +2101,12 @@ function stepWorld(world, cfg, dt) {
     }
     if (now >= a.intentUntil && !busy) {
       const ashore = now < (a._ashoreUntil || 0); // just hauled out — stay dry a moment
-      const swimP = ashore ? 0 : (def.hasWater || def.pool) ? def.swim?.[a.species] || 0 : 0;
+      // a species running an ethogram takes its water odds from its own
+      // land/water plan; everyone else keeps the world's static table
+      const planP = ethoSwimP(a);
+      const swimP = ashore ? 0
+        : (def.hasWater || def.pool) ? (planP !== undefined ? planP : def.swim?.[a.species] || 0)
+        : 0;
       const perchP = !def.perching ? 0
         : FLYERS.has(a.species) ? PERCH_P
         : a.species === "sugarglider" ? 0.10 : 0; // the glider climbs up now and then
@@ -2604,112 +2652,11 @@ function stepWorld(world, cfg, dt) {
       } else { a._dipUntil = 0; }
     }
 
-    // ---- the bear and the big trees: coming within reach of a trunk is a
-    // 60% chance of stopping for something, split 50/50 between a good
-    // back scratch against the bark and a climb up into the boughs. The
-    // roll only re-arms once he's wandered back out of reach.
-    if (a.species === "bear" && def.trees) {
-      let near = null;
-      for (const t of def.trees) {
-        if (Math.hypot(t.x * bounds.w - a.x, t.y * bounds.h - a.y) < TREE_REACH) { near = t; break; }
-      }
-      if (near && !a._nearTree && isFreeState(a) && now >= (a._treeCd || 0)) {
-        if (Math.random() < 0.6) {
-          a._treeX = near.x * bounds.w; a._treeY = near.y * bounds.h;
-          a.vx = 0; a.vy = 0;
-          if (Math.random() < 0.5) { a.state = "treerub"; a.stateUntil = now + 5400; }
-          else { a.state = "treeclimb"; a._climbT0 = now; }
-        } else a._treeCd = now + 9000; // not interested this pass
-      }
-      a._nearTree = !!near;
-    }
-    if (a.state === "treerub") {
-      // settle in beside the trunk and work the shoulders against it
-      a.vx = 0; a.vy = 0;
-      const k = Math.min(1, dt * 4);
-      a.x += ((a._treeX - 24) - a.x) * k; a.y += ((a._treeY - 4) - a.y) * k;
-      if (now >= a.stateUntil) {
-        a.state = "wander"; a.intent = "wander"; a._treeCd = now + 12000;
-        a.intentUntil = now + rand(4000, 8000);
-        a.noEventUntil = Math.max(a.noEventUntil, now + 900);
-      }
-    } else if (a.state === "treeclimb") {
-      // hug the trunk and haul up into the boughs, hold, then back down
-      a.vx = 0; a.vy = 0;
-      const k = Math.min(1, dt * 4);
-      a.x += (a._treeX - a.x) * k; a.y += ((a._treeY - 6) - a.y) * k;
-      const el = now - (a._climbT0 || now);
-      if (el < 2400) a.z = 58 * (el / 2400);
-      else if (el < 5600) a.z = 58;
-      else if (el < 8000) a.z = 58 * (1 - (el - 5600) / 2400);
-      else {
-        a.z = 0; a.state = "wander"; a.intent = "wander"; a._treeCd = now + 12000;
-        a.intentUntil = now + rand(4000, 8000);
-        a.noEventUntil = Math.max(a.noEventUntil, now + 900);
-      }
-    }
-
-    // ---- the bear goes fishing: 30% roll on each fresh entry into the
-    // water. He doesn't lunge straight in — he paddles around hunting for
-    // 6-12s first, then dives: up to 3 dives at 50/50 each. A catch is
-    // carried ashore and eaten, a bust resets him to plain wandering. The
-    // roll can only re-arm once he's left the water and come back in.
-    if (a.species === "bear" && def.hasWater) {
-      const wet = isWet(a.x, a.y);
-      if (wet && !a._wasWet && isFreeState(a) && Math.random() < 0.3) {
-        a.state = "fishswim"; a.stateUntil = now + rand(6000, 12000);
-        a._diveN = 0; a.swimTarget = null;
-      }
-      a._wasWet = wet;
-    }
-    if (a.state === "fishswim") {
-      // cruising the shallows looking for a fish
-      if (!isWet(a.x, a.y)) { a.state = "wander"; a._diveN = 0; }
-      else {
-        if (!a.swimTarget || Math.hypot(a.swimTarget.x - a.x, a.swimTarget.y - a.y) < 30) {
-          a.swimTarget = lakePoint(bounds, rand(0, Math.PI * 2), Math.sqrt(Math.random()) * 0.7);
-        }
-        const dx = a.swimTarget.x - a.x, dy = a.swimTarget.y - a.y, d = Math.hypot(dx, dy) || 1;
-        const sp2 = cfg.speed * 0.5;
-        a.vx = (dx / d) * sp2; a.vy = (dy / d) * sp2;
-        if (now >= a.stateUntil) { a.state = "fishdive"; a._diveN = 1; a.stateUntil = now + 1100; a.vx = 0; a.vy = 0; }
-      }
-    } else if (a.state === "fishdive" || a.state === "fishwait") {
-      a.vx = 0; a.vy = 0;
-      if (!isWet(a.x, a.y)) { a.state = "wander"; a._diveN = 0; }
-      else if (now >= a.stateUntil) {
-        if (a.state === "fishwait") { a.state = "fishdive"; a.stateUntil = now + 1100; }
-        else if (Math.random() < 0.5) {
-          // got one! carry it to the nearest stretch of shore
-          const ang = Math.atan2((a.y - LAKE.cy * bounds.h) / (LAKE.ry * bounds.h), (a.x - LAKE.cx * bounds.w) / (LAKE.rx * bounds.w));
-          a._fishTarget = lakePoint(bounds, ang, 1.12);
-          a.state = "fishcarry";
-        } else if ((a._diveN || 1) >= 3) {
-          a.state = "wander"; a.intent = "wander"; a._diveN = 0; // three misses — give it up
-          a.noEventUntil = Math.max(a.noEventUntil, now + 1200);
-        } else {
-          a._diveN = (a._diveN || 1) + 1;
-          a.state = "fishwait"; a.stateUntil = now + rand(900, 1600);
-        }
-      }
-    } else if (a.state === "fishcarry") {
-      const t2 = a._fishTarget;
-      if (!t2) a.state = "wander";
-      else {
-        const dx = t2.x - a.x, dy = t2.y - a.y, d = Math.hypot(dx, dy) || 1;
-        const sp2 = cfg.speed * (isWet(a.x, a.y) ? 0.6 : 0.9);
-        a.vx = (dx / d) * sp2; a.vy = (dy / d) * sp2;
-        if (d < 16) { a.state = "fisheat"; a.stateUntil = now + 2600; a.vx = 0; a.vy = 0; }
-      }
-    } else if (a.state === "fisheat") {
-      a.vx = 0; a.vy = 0;
-      if (now >= a.stateUntil) {
-        // the fish is gone — back to regular bear business
-        a.state = "wander"; a.intent = "wander"; a._fishTarget = null; a._diveN = 0;
-        a.intentUntil = now + rand(4000, 8000);
-        a.noEventUntil = Math.max(a.noEventUntil, now + 1200);
-      }
-    }
+    // ---- species behavior that runs off an ethogram (see Ethogram.js).
+    // One call covers the whole hierarchy for that species: the land/water
+    // time budget, the triggers, and every event it owns. Species without
+    // an ethogram fall straight through and keep their own blocks above.
+    stepEthogram(a, ethoCtx);
 
     // the beaver's dam run: to the lake's right end, swim across, place a log
     if (a.state === "damrun") {

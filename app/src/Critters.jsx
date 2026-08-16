@@ -180,6 +180,114 @@ function BearDraw({ uid }) {
         <path d="M 95 48.6 q 4.4 0 4.4 3.4 q 0 3 -4.4 3 q -4.4 0 -4.4 -3 q 0 -3.4 4.4 -3.4 Z" fill={ink} />
         <FaceKit lid={F[1]} e1={[77, 42]} e2={[93, 40]} er={2.9} iris={ink} mouth={[95, 61]} />
       </g>
+      {/* ---- STANDING BACK-SCRATCH POSE (treerub) ----
+          Up on his hind legs with his spine against the bark and his
+          muzzle tipped to the sky, forepaws hanging loose at the chest.
+          The four-legged rig can't bend into this, so the whole pose is
+          drawn separately and swapped in (same trick as the goose's
+          preen). Drawn facing right; the sim flips him so his back is
+          the side that meets the trunk. */}
+      <g className="sai-crit-standpose">
+        <g transform="translate(60 103) scale(1.1) translate(-60 -103)">
+          {/* far-side limbs first, in the darker shade */}
+          <g className="stand-arm-far">
+            <path d="M 52 46 C 43 52 38 63 40 74 C 46 77 52 74 55 68 C 54 59 54 51 57 46 Z" fill={F[2]} />
+            <ellipse cx="45" cy="75" rx="7" ry="5.4" fill="#4b2f16" />
+          </g>
+          <g className="stand-leg-far">
+            <path d="M 44 74 C 39 84 39 95 42 102 L 58 102 C 57 92 57 82 58 74 Z" fill={F[2]} />
+            <ellipse cx="48" cy="102" rx="10" ry="4.4" fill="#4b2f16" />
+          </g>
+          {/* torso: heavy haunches under a deep chest */}
+          <g className="sai-crit-standbody">
+            {/* one dark rim under the whole torso: bear brown and bark
+                brown are close kin, and he leans right against it */}
+            <path d="M 60 103 C 44 103 38 94 38 84 C 38 72 41 60 43 48 C 45 36 49 28 58 27 C 68 26 76 33 78 46
+                     C 80 58 82 72 82 84 C 82 95 74 103 60 103 Z" fill="none" stroke="#3a2410" strokeWidth="2.4" />
+            <ellipse cx="60" cy="84" rx="22" ry="19" fill={`url(#${uid}f)`} />
+            <ellipse cx="61" cy="52" rx="19.5" ry="31" fill={`url(#${uid}f)`} />
+            {/* shoulder hump running up into the neck */}
+            <ellipse cx="57" cy="31" rx="14" ry="12" fill={`url(#${uid}f)`} />
+            <ellipse cx="50" cy="54" rx="10" ry="28" fill="#4a2c12" opacity=".18" />
+            {/* pale bib running down the chest and belly */}
+            <ellipse cx="72" cy="56" rx="9.5" ry="24" fill={muz} opacity=".42" />
+            <ellipse cx="69" cy="86" rx="11" ry="12" fill={muz} opacity=".22" />
+          </g>
+          {/* near hind leg, planted */}
+          <g className="stand-leg-near">
+            <path d="M 60 74 C 57 84 57 95 60 102 L 78 102 C 76 92 76 82 77 74 Z" fill={F[1]} />
+            <ellipse cx="69" cy="102" rx="11" ry="4.8" fill={F[2]} />
+            <path d="M 63 100.5 h 12" stroke="#4b2f16" strokeWidth="1.3" opacity=".45" />
+          </g>
+          {/* near foreleg, hanging bent at the wrist */}
+          <g className="stand-arm-near">
+            <path d="M 73 44 C 82 50 87 61 85 73 C 79 76 72 73 69 67 C 70 58 70 49 68 44 Z" fill={F[1]} />
+            <ellipse cx="80" cy="75" rx="7.4" ry="5.6" fill={F[2]} />
+            <path d="M 76 78 l 1.6 2.8 M 80 79 l 1 2.9 M 84 77.5 l .3 2.9" stroke="#3a2410"
+              strokeWidth="1.2" fill="none" strokeLinecap="round" opacity=".65" />
+          </g>
+          {/* head thrown back, nose to the canopy */}
+          <g className="sai-crit-standhead">
+            <g className="sai-crit-ear sai-crit-ear-l"><circle cx="50" cy="13" r="6.2" fill={F[1]} /><circle cx="50" cy="13.5" r="2.9" fill={muz} /></g>
+            <g className="sai-crit-ear sai-crit-ear-r"><circle cx="67" cy="6" r="6.4" fill={F[1]} /><circle cx="67" cy="6.5" r="3" fill={muz} /></g>
+            <circle cx="61" cy="22" r="16" fill={`url(#${uid}f)`} />
+            <ellipse cx="77" cy="12" rx="10" ry="7.4" fill={muz} transform="rotate(-36 77 12)" />
+            <path d="M 81 7.5 q 4 -1.7 4.9 1.4 q .9 2.7 -3 4 q -4 1.3 -4.9 -1.4 q -.9 -3.1 3 -4 Z" fill={ink} />
+            <path d="M 69 18 C 73 15 78 14 81 14" stroke="#4a2c12" strokeWidth="1.4" fill="none"
+              strokeLinecap="round" opacity=".3" />
+            <FaceKit lid={F[1]} e1={[55, 18]} e2={[69, 11]} er={3} iris={ink} mouth={[76, 20]} />
+          </g>
+        </g>
+      </g>
+
+      {/* ---- TRUNK-HUG POSE (treeclimb) ----
+          Seen from behind as he goes up: a broad back squared to the
+          viewer, paws wrapped round both sides of the bark, head turned
+          just enough to show one cheek. CSS walks the paws up in pairs. */}
+      <g className="sai-crit-climbpose">
+        <g transform="translate(60 103) scale(1.12) translate(-60 -103)">
+          {/* hind paws gripping low, splayed either side of the bark */}
+          <g className="climb-leg-l"><path d="M 52 74 C 41 79 30 87 25 98 C 34 103 47 101 55 92 C 55 85 54 79 54 74 Z"
+              fill={F[2]} stroke="#3a2410" strokeWidth="1.6" strokeLinejoin="round" />
+            <path d="M 26 100 l -3.2 2.2 M 30.5 101.8 l -2.8 2.6 M 35.5 102.8 l -2 2.8" stroke="#f0e4d2"
+              strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".8" /></g>
+          <g className="climb-leg-r"><path d="M 68 74 C 79 79 90 87 95 98 C 86 103 73 101 65 92 C 65 85 66 79 66 74 Z"
+              fill={F[1]} stroke="#3a2410" strokeWidth="1.6" strokeLinejoin="round" />
+            <path d="M 94 100 l 3.2 2.2 M 89.5 101.8 l 2.8 2.6 M 84.5 102.8 l 2 2.8" stroke="#f0e4d2"
+              strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".8" /></g>
+          {/* forearms thrown round the trunk. They sit at shoulder height,
+              not up by his ears — anything higher is inside the leaves */}
+          <g className="climb-arm-l"><path d="M 50 62 C 38 60 26 54 17 43 C 12 51 13 62 20 70 C 28 78 41 79 50 75 Z"
+              fill={F[2]} stroke="#3a2410" strokeWidth="1.6" strokeLinejoin="round" />
+            <path d="M 17 42 l -3.4 -2.6 M 15 47 l -3.8 -1.4 M 14.2 52 l -3.8 -.2" stroke="#f0e4d2"
+              strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".85" /></g>
+          <g className="climb-arm-r"><path d="M 70 62 C 82 60 94 54 103 43 C 108 51 107 62 100 70 C 92 78 79 79 70 75 Z"
+              fill={F[1]} stroke="#3a2410" strokeWidth="1.6" strokeLinejoin="round" />
+            <path d="M 103 42 l 3.4 -2.6 M 105 47 l 3.8 -1.4 M 105.8 52 l 3.8 -.2" stroke="#f0e4d2"
+              strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".85" /></g>
+          {/* the broad back, squared to us as he goes up. A dark rim keeps
+              him off the bark — bear brown and bark brown are close kin */}
+          <g className="sai-crit-climbback">
+            <path d="M 37 99 C 31 79 34 51 44 37 C 51 27 69 27 76 37 C 86 51 89 79 83 99 C 70 106 50 106 37 99 Z"
+              fill={`url(#${uid}f)`} stroke="#3a2410" strokeWidth="2" strokeLinejoin="round" />
+            <path d="M 60 32 C 64 52 65 78 63 102" stroke="#4a2c12" strokeWidth="3.6" fill="none" opacity=".2" />
+            <path d="M 76 37 C 86 51 89 79 83 99 C 79 100.8 75 102 71 102.6 C 78 79 78 53 70 34 Z" fill="#4a2c12" opacity=".18" />
+            <ellipse cx="50" cy="52" rx="9" ry="15" fill="#e8d3ac" opacity=".13" />
+          </g>
+          <g className="sai-crit-climbhead">
+            <g className="sai-crit-ear sai-crit-ear-l"><circle cx="47" cy="14" r="7.2" fill={F[1]} /><circle cx="47" cy="14.5" r="3.4" fill={muz} /></g>
+            <g className="sai-crit-ear sai-crit-ear-r"><circle cx="74" cy="13" r="7.4" fill={F[1]} /><circle cx="74" cy="13.5" r="3.5" fill={muz} /></g>
+            <circle cx="60.5" cy="27" r="18" fill={`url(#${uid}f)`} />
+            {/* the muzzle is the giveaway: if this is under the leaves his
+                head has gone, whatever the head group's box says (its lower
+                half is buried in his shoulders) */}
+            <ellipse className="climb-muzzle" cx="76" cy="31" rx="9" ry="7" fill={muz} />
+            <path d="M 78.5 28 q 4 0 4 3 q 0 2.7 -4 2.7 q -4 0 -4 -2.7 q 0 -3 4 -3 Z" fill={ink} />
+            <FaceKit lid={F[1]} e1={[68, 24]} e2={[54, 25]} er={3} iris={ink} mouth={[76, 38]} />
+          </g>
+        </g>
+      </g>
+
       {/* the caught SILVER SALMON — steel back, bright silver flank,
           white belly, dark forked tail. CSS shows it in his mouth while
           carrying it ashore and while eating */}

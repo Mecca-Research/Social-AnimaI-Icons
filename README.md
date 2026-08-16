@@ -6,7 +6,11 @@
 
 An interactive, emergent “living desktop” made of animal icons that socialize, argue, help each other, and roam **switchable worlds** — a forest around a lake, or a suburban neighborhood of rooftops. Every icon runs a tiny state machine (wander, idle, swim, friendly, fight, rescue, flee, separate, cooldown, drag) and forms relationships via last-touch memory (friend or rival).
 
-Current release: v0.29 — **Trees the bear can actually use.** The four big ferns on the middle-left and bottom-right were only ground cover; they are now four **full trees with trunks** — buttressed root flare, bark grain, bare limbs and a canopy that sways — standing in the same clearings. They are real geometry, not scenery, so the **bear works them**: come within reach of a trunk and there is a **60% chance it stops**, then a **50/50 split** between a **back rub** — shoulders swung side to side against the bark, head rolling with it — and a **climb**, hugging the trunk and hauling itself a good body-height up before easing back down. Each tree then rests for about 12 seconds. The lake gained a **fourth floating log** in the top-right, the goose's **preen is now a flat 5 seconds** (it was running long), and the **squirrel's sploot doubled to 20%** — and a sploot it decided on now **survives an interrupting encounter** instead of being wiped by the reset, which is why it was so rarely seen.
+Current release: v0.31 — **The bear gets an ethogram.** His behavior had outgrown a scatter of per-frame coin flips, so it now runs on a declarative catalogue and a three-tier scheduler ([`app/src/Ethogram.js`](app/src/Ethogram.js)). **Tier 1** is a domain plan — where he *means* to be, land or water, held for a dwell window and re-picked on a weighting that accounts for the time he has actually spent, so his day converges on a **70/30 land-water split** instead of drifting wherever the dice fall. It is still random; it is managed random. The dwell clock starts **on arrival**, not on the decision, because the lake is a walk away. **Tier 2** is triggers — `enter`, `exit`, `dwell`, `approach` — edge-gated so they fire once per crossing. **Tier 3** is the events themselves: chance, cooldown, optional armed delay, then weighted variants (the 60% tree stop splitting 50/50 into a scratch or a climb is exactly this shape). Adding a behavior is now one descriptor in an array — the states it owns register themselves as busy, and its cooldowns and edge gates come for free. Adding a species is one `defineEthogram` call, and a species without one is untouched: same code path, byte for byte. The world's own mechanics — encounters, wander, navigation, physics, the intent roll — are unchanged; an ethogram only decides which *species-specific* action starts, and when. The bear also finally gets a haul-out, which he was the only swimmer in the world without. Checks live in [`tests/ethogram.mjs`](tests/ethogram.mjs) (`npm run test:bear`).
+
+Built on v0.30 — **Up the trunk, into the leaves.** The bear's two tree behaviors now have artwork of their own instead of the four-legged rig tilted on its side. The scratch is a **full standing pose** taken from the reference: up on his hind legs with his spine against the bark, muzzle tipped to the sky and forepaws hanging loose, working his shoulders up and down the trunk. The climb goes **all the way up** — a broad-backed hug pose with his paws hooked round both sides of the bark — and finishes with **his head buried in the canopy**, which is now a second paint pass drawn *over* the animals, so the leaves genuinely close over him instead of him sitting on top of them. Both heights are derived from the tree's own geometry, so the short trees and the tall ones each swallow him at the right point.
+
+Built on v0.29 — **Trees the bear can actually use.** The four big ferns on the middle-left and bottom-right were only ground cover; they are now four **full trees with trunks** — buttressed root flare, bark grain, bare limbs and a canopy that sways — standing in the same clearings. They are real geometry, not scenery, so the **bear works them**: come within reach of a trunk and there is a **60% chance it stops**, then a **50/50 split** between a **back rub** — shoulders swung side to side against the bark, head rolling with it — and a **climb**, hugging the trunk and hauling itself a good body-height up before easing back down. Each tree then rests for about 12 seconds. The lake gained a **fourth floating log** in the top-right, the goose's **preen is now a flat 5 seconds** (it was running long), and the **squirrel's sploot doubled to 20%** — and a sploot it decided on now **survives an interrupting encounter** instead of being wiped by the reset, which is why it was so rarely seen.
 
 Built on v0.28 — **A goose that really preens.** The preening animation was rotating the whole upright neck like a rigid blade, which just read as bobbing. It now swaps to a dedicated **curled-back pose** drawn from the reference photos: the neck loops up and over the shoulder, the head comes down onto the back, and the **bill drives into the plumage** — white chinstrap and eye showing on the inverted head, back feathers lifting where it works. The pose digs in at the tail gland, then combs forward along the flank, with the bill nibbling faster than the neck sweeps.
 
@@ -97,6 +101,31 @@ Hand‑rigged SVG sprites & scene — pure inline SVG + CSS keyframe animation, 
 Deployed to GitHub Pages via "Deploy from a branch" — the built site is committed and served directly
 
 The core UI is a single React component (`SocialAnimalsRPG`, in `app/src/SocialAnimalIcons.jsx`) you can drop into any app.
+
+## 🐻 Species behavior: the ethogram
+
+An *ethogram* is a biologist's catalogue of what an animal does. [`app/src/Ethogram.js`](app/src/Ethogram.js) makes that catalogue executable: a species declares its domains and its events as data, and one scheduler turns it into activity. The world's own mechanics are untouched — encounters, wander, navigation, physics and the intent roll all run exactly as they did. An ethogram only decides which **species-specific** action starts, and when.
+
+| tier | what it decides | how |
+| --- | --- | --- |
+| 1 · domain plan | *where* he means to be | shares of time between `land` and `water`, weighted by a decaying ledger of where he has actually been, so the split converges instead of drifting. The dwell clock starts on **arrival** — the lake is a walk away |
+| 2 · trigger | *whether* something may start | `enter` · `exit` · `dwell` · `approach`, edge-gated to fire once per crossing |
+| 3 · event | *what* happens | chance → cooldown → optional armed delay → `begin`, then the event's `drive` owns the frame until it calls `endEvent`. Weighted `variants` split one roll into flavors |
+
+**Adding a behavior** is one descriptor appended to a species' `events`. The states it owns register themselves as busy — so the intent roll and the encounter engine leave them alone — and its cooldowns and edge gates are handled for you:
+
+```js
+{ id: "bark", domain: "land", trigger: "approach", chance: .25,
+  cool: 20000, states: ["barkstrip"],
+  near: (a, c) => nearestTree(a, c),
+  begin(a, c, S, tree) { a.state = "barkstrip"; a.stateUntil = c.now + 4000; },
+  drive(a, c) { a.vx = a.vy = 0;
+    if (c.now >= a.stateUntil) endEvent(a, c, { reroll: true, quiet: 900 }); } }
+```
+
+**Adding a species** is one `defineEthogram("wolf", { domains, events })` call. A species with no ethogram is untouched — every entry point no-ops for it, the same code path as before.
+
+The bear is the reference implementation: a 70/30 land-water split, the tree stop (60%, splitting 50/50 into a back scratch or a climb) and the fishing bout (30% on a fresh entry into the water). Run its checks with `npm run test:bear` against a running dev server.
 
 ## 🌐 Live Demo & Deployment
 

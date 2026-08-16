@@ -1142,41 +1142,82 @@ body {
 }
 
 /* ==================== v0.29 bear & the big trees ==================== */
-/* back scratch: shoulders working side to side against the bark, with a
-   satisfied lean and a slow head roll */
-.sai-sprite[data-state="treerub"] .sai-crit-root{ animation:sai-bear-rub .62s ease-in-out infinite; }
-@keyframes sai-bear-rub{
-  0%,100%{transform:rotate(-4deg) translateX(0);}
-  50%{transform:rotate(4deg) translateX(3.5px);}
-}
-.sai-sprite[data-state="treerub"] .sai-crit-body{ animation:sai-bear-rubbody .62s ease-in-out infinite; }
-@keyframes sai-bear-rubbody{ 0%,100%{transform:scaleX(1.03) scaleY(.98);} 50%{transform:scaleX(.97) scaleY(1.02);} }
-.sai-sprite[data-state="treerub"] .sai-crit-head{ animation:sai-bear-rubhead 1.24s ease-in-out infinite; }
-@keyframes sai-bear-rubhead{ 0%,100%{transform:rotate(-7deg) translateY(1px);} 50%{transform:rotate(6deg) translateY(-1px);} }
+/* v0.30: both tree behaviors now swap in a purpose-drawn upright pose.
+   The four-legged rig can't stand on its hind legs or hug a trunk, and
+   rotating the quadruped body only ever read as a wobble. */
+.sai-crit-standpose, .sai-crit-climbpose{ display:none; }
 
-/* climbing: hugged to the trunk, hauling up paw over paw (the height
-   itself comes from the sim's z, this is the body language on top) */
-.sai-sprite[data-state="treeclimb"] .sai-crit-root{ animation:sai-bear-climb .78s ease-in-out infinite; }
-@keyframes sai-bear-climb{
-  0%,100%{transform:rotate(-3deg) translateX(-1px) scaleY(1.03);}
-  50%{transform:rotate(3deg) translateX(1px) scaleY(1.06);}
+/* ---- back scratch: standing on his hind legs, spine to the bark ---- */
+.sai-sprite[data-state="treerub"] .sai-crit-standpose{ display:inline; }
+.sai-sprite[data-state="treerub"] .sai-crit-body,
+.sai-sprite[data-state="treerub"] .sai-crit-head,
+.sai-sprite[data-state="treerub"] .sai-crit-tail,
+.sai-sprite[data-state="treerub"] .sai-crit-leg{ display:none; }
+/* the scrub itself: he leans into the trunk and works up and down it */
+.sai-sprite[data-state="treerub"] .sai-crit-standpose{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-bear-scrub .74s ease-in-out infinite; }
+@keyframes sai-bear-scrub{
+  0%,100%{transform:rotate(-2.6deg) translate(0,0);}
+  50%{transform:rotate(2.6deg) translate(2px,-2.5px);}
 }
-.sai-sprite[data-state="treeclimb"] .sai-crit-leg-fl,
-.sai-sprite[data-state="treeclimb"] .sai-crit-leg-br{ animation:sai-bear-reachA .78s ease-in-out infinite; }
-.sai-sprite[data-state="treeclimb"] .sai-crit-leg-fr,
-.sai-sprite[data-state="treeclimb"] .sai-crit-leg-bl{ animation:sai-bear-reachB .78s ease-in-out infinite; }
-@keyframes sai-bear-reachA{ 0%,100%{transform:rotate(-26deg);} 50%{transform:rotate(20deg);} }
-@keyframes sai-bear-reachB{ 0%,100%{transform:rotate(22deg);} 50%{transform:rotate(-24deg);} }
-.sai-sprite[data-state="treeclimb"] .sai-crit-head{ animation:sai-bear-climbhead 1.56s ease-in-out infinite; }
-@keyframes sai-bear-climbhead{ 0%,100%{transform:rotate(-6deg) translateY(-1px);} 50%{transform:rotate(2deg) translateY(1px);} }
+.sai-sprite[data-state="treerub"] .sai-crit-standbody{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-bear-scrubbody .74s ease-in-out infinite; }
+@keyframes sai-bear-scrubbody{ 0%,100%{transform:scaleX(1.04) scaleY(.98);} 50%{transform:scaleX(.96) scaleY(1.03);} }
+/* muzzle rolling at the sky, half the tempo of the shoulders */
+.sai-sprite[data-state="treerub"] .sai-crit-standhead{
+  transform-box:fill-box; transform-origin:35% 85%;
+  animation:sai-bear-scrubhead 1.48s ease-in-out infinite; }
+@keyframes sai-bear-scrubhead{ 0%,100%{transform:rotate(-6deg);} 50%{transform:rotate(5deg);} }
+/* forepaws swinging loose while the back does the work */
+.sai-sprite[data-state="treerub"] .stand-arm-near{
+  transform-box:fill-box; transform-origin:60% 8%;
+  animation:sai-bear-armnear .74s ease-in-out infinite; }
+.sai-sprite[data-state="treerub"] .stand-arm-far{
+  transform-box:fill-box; transform-origin:60% 8%;
+  animation:sai-bear-armfar .74s ease-in-out infinite; }
+@keyframes sai-bear-armnear{ 0%,100%{transform:rotate(7deg);} 50%{transform:rotate(-8deg);} }
+@keyframes sai-bear-armfar{ 0%,100%{transform:rotate(-6deg);} 50%{transform:rotate(7deg);} }
+
+/* ---- climbing: hugged to the trunk, hauling up paw over paw. The
+   height itself comes from the sim's z; this is the body language. ---- */
+.sai-sprite[data-state="treeclimb"] .sai-crit-climbpose{ display:inline; }
+.sai-sprite[data-state="treeclimb"] .sai-crit-body,
+.sai-sprite[data-state="treeclimb"] .sai-crit-head,
+.sai-sprite[data-state="treeclimb"] .sai-crit-tail,
+.sai-sprite[data-state="treeclimb"] .sai-crit-leg{ display:none; }
+/* he's off the ground, so data-air is set — but he's on bark, not in the
+   air, so the generic airborne lean has no business here */
+.sai-sprite[data-state="treeclimb"] .sai-crit-root{ animation:none; }
+.sai-sprite[data-state="treeclimb"] .sai-crit-climbpose{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-bear-hug .82s ease-in-out infinite; }
+@keyframes sai-bear-hug{
+  0%,100%{transform:rotate(-2deg) scaleY(1.02);}
+  50%{transform:rotate(2deg) scaleY(1.05);}
+}
+/* diagonal pairs: left paw and right foot reach together, then swap */
+.sai-sprite[data-state="treeclimb"] .climb-arm-l,
+.sai-sprite[data-state="treeclimb"] .climb-leg-r{ animation:sai-bear-hitchA .82s ease-in-out infinite; }
+.sai-sprite[data-state="treeclimb"] .climb-arm-r,
+.sai-sprite[data-state="treeclimb"] .climb-leg-l{ animation:sai-bear-hitchB .82s ease-in-out infinite; }
+@keyframes sai-bear-hitchA{ 0%,100%{transform:translateY(3px);} 50%{transform:translateY(-3.5px);} }
+@keyframes sai-bear-hitchB{ 0%,100%{transform:translateY(-3.5px);} 50%{transform:translateY(3px);} }
+.sai-sprite[data-state="treeclimb"] .sai-crit-climbhead{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-bear-hughead 1.64s ease-in-out infinite; }
+@keyframes sai-bear-hughead{ 0%,100%{transform:rotate(-4deg) translateY(0);} 50%{transform:rotate(3deg) translateY(-1.5px);} }
 @media (prefers-reduced-motion: reduce){
-  .sai-sprite[data-state="treerub"] .sai-crit-root,
-  .sai-sprite[data-state="treerub"] .sai-crit-body,
-  .sai-sprite[data-state="treerub"] .sai-crit-head,
-  .sai-sprite[data-state="treeclimb"] .sai-crit-root,
-  .sai-sprite[data-state="treeclimb"] .sai-crit-leg-fl,
-  .sai-sprite[data-state="treeclimb"] .sai-crit-leg-fr,
-  .sai-sprite[data-state="treeclimb"] .sai-crit-leg-bl,
-  .sai-sprite[data-state="treeclimb"] .sai-crit-leg-br,
-  .sai-sprite[data-state="treeclimb"] .sai-crit-head{ animation:none; }
+  .sai-sprite[data-state="treerub"] .sai-crit-standpose,
+  .sai-sprite[data-state="treerub"] .sai-crit-standbody,
+  .sai-sprite[data-state="treerub"] .sai-crit-standhead,
+  .sai-sprite[data-state="treerub"] .stand-arm-near,
+  .sai-sprite[data-state="treerub"] .stand-arm-far,
+  .sai-sprite[data-state="treeclimb"] .sai-crit-climbpose,
+  .sai-sprite[data-state="treeclimb"] .climb-arm-l,
+  .sai-sprite[data-state="treeclimb"] .climb-arm-r,
+  .sai-sprite[data-state="treeclimb"] .climb-leg-l,
+  .sai-sprite[data-state="treeclimb"] .climb-leg-r,
+  .sai-sprite[data-state="treeclimb"] .sai-crit-climbhead{ animation:none; }
 }
