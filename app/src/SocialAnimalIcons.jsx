@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Critter, SPECIES, ALL_SPECIES } from "./Critters.jsx";
 import { PET_SPECIES } from "./CrittersPets.jsx";
+import { stepEthogram, ethoSwimP, ethoShare, ETHOGRAM, ETHO_STATES, setTreeMetrics } from "./Ethogram.js";
 
 /**
  * Social Animal Icons v0.11 — Lakeside world
@@ -135,10 +136,21 @@ const TREE_REACH = 96; // how close the bear must be to take an interest
 // sprite box (box = r * 3.1) — see .sai-crit-standpose / -climbpose.
 const TREE_BASE_PX = 18;    // foot of the drawn trunk
 const TREE_CANOPY_PX = 107; // where the boughs close over the trunk's centre line
-const TREE_HEAD_DEEP = 44;  // how far past that his ears finish: head gone, back still showing
+// How far past the leaf line his ears finish: head gone, back still showing.
+// Set from the WORST frame of a full sway cycle, not from a snapshot — the
+// canopy swings and the hug pose breathes. Deeper than this and the leaves
+// swallow his shoulders too, which loses the read entirely.
+const TREE_HEAD_DEEP = 50;
 const STAND_FEET = 0.348;   // upright pose: paws below the sprite centre
 const STAND_BACK = 0.232;   // upright pose: spine right of the sprite centre
 const CLIMB_HEAD = 0.768;   // hug pose: ear tips above the sprite centre
+// the bear's tree work lives in his ethogram, which stays free of the
+// world's layout — hand it the numbers rather than have it import them
+setTreeMetrics({
+  reach: TREE_REACH, basePx: TREE_BASE_PX, canopyPx: TREE_CANOPY_PX,
+  headDeep: TREE_HEAD_DEEP, standFeet: STAND_FEET, standBack: STAND_BACK,
+  climbHead: CLIMB_HEAD,
+});
 
 function TreeLayer({ bounds, part }) {
   const { w, h } = bounds;
@@ -605,8 +617,12 @@ export default function SocialAnimalsRPG() {
 
     // seed agents
     worldRef.current.agents = seedAgents(worldRef.current, DEFAULTS.numAgents);
-    // dev hook: lets tests & the console poke the live world
-    if (typeof window !== "undefined") window.__saiWorld = worldRef.current;
+    // dev hook: lets tests & the console poke the live world, and read back
+    // what each species' ethogram is currently planning
+    if (typeof window !== "undefined") {
+      window.__saiWorld = worldRef.current;
+      window.__saiEtho = { ETHOGRAM, ethoShare, states: ETHO_STATES };
+    }
 
     // main loop
     worldRef.current.last = performance.now();
@@ -2024,6 +2040,8 @@ function stepWorld(world, cfg, dt) {
   const now = performance.now();
   const isWet = (x, y) => def.hasWater ? inWater(bounds, x, y)
     : def.pool ? inPool(bounds, def.pool, x, y) : false;
+  // everything an ethogram is allowed to see, assembled once a frame
+  const ethoCtx = { now, dt, def, bounds, world, cfg, rand, isWet, isFreeState, lakePoint, LAKE };
 
   // ---- floats (lily pads + drift logs): VERY slow quasi-chaotic drift
   // (sums of incommensurate sines), held inside a "strange attractor" rim
@@ -2064,10 +2082,10 @@ function stepWorld(world, cfg, dt) {
     const busy = a.state === "fight" || a.state === "friendly" || a.state === "rescue" ||
       a.state === "sniff" || a.state === "walkoff" || a.state === "leaveyard" || a.state === "seekroof" ||
       a.state === "padsit" || a.state === "damrun" ||
-      a.state === "fishswim" || a.state === "fishdive" || a.state === "fishwait" ||
-      a.state === "fishcarry" || a.state === "fisheat" ||
       a.state === "preen" || a.state === "splash" || a.state === "sploot" ||
-      a.state === "treerub" || a.state === "treeclimb" ||
+      // every state any ethogram owns counts as busy without being listed
+      // here, so a new species event needs no edit to this line
+      ETHO_STATES.has(a.state) ||
       AIR_STATES.has(a.state) || ROOF_STATES.has(a.state);
     // a behavior trip already under way outranks a fresh intent roll: an
     // animal on its way to a float keeps going (and picks the trip back up
@@ -2083,7 +2101,12 @@ function stepWorld(world, cfg, dt) {
     }
     if (now >= a.intentUntil && !busy) {
       const ashore = now < (a._ashoreUntil || 0); // just hauled out — stay dry a moment
-      const swimP = ashore ? 0 : (def.hasWater || def.pool) ? def.swim?.[a.species] || 0 : 0;
+      // a species running an ethogram takes its water odds from its own
+      // land/water plan; everyone else keeps the world's static table
+      const planP = ethoSwimP(a);
+      const swimP = ashore ? 0
+        : (def.hasWater || def.pool) ? (planP !== undefined ? planP : def.swim?.[a.species] || 0)
+        : 0;
       const perchP = !def.perching ? 0
         : FLYERS.has(a.species) ? PERCH_P
         : a.species === "sugarglider" ? 0.10 : 0; // the glider climbs up now and then
@@ -2629,132 +2652,11 @@ function stepWorld(world, cfg, dt) {
       } else { a._dipUntil = 0; }
     }
 
-    // ---- the bear and the big trees: coming within reach of a trunk is a
-    // 60% chance of stopping for something, split 50/50 between a good
-    // back scratch against the bark and a climb up into the boughs. The
-    // roll only re-arms once he's wandered back out of reach.
-    if (a.species === "bear" && def.trees) {
-      // if anything knocked him out of the scratch, let him steer again
-      if (a.state !== "treerub" && a._faceDir === -1) a._faceDir = 0;
-      let near = null;
-      for (const t of def.trees) {
-        if (Math.hypot(t.x * bounds.w - a.x, t.y * bounds.h - a.y) < TREE_REACH) { near = t; break; }
-      }
-      if (near && !a._nearTree && isFreeState(a) && now >= (a._treeCd || 0)) {
-        if (Math.random() < 0.6) {
-          a._treeX = near.x * bounds.w; a._treeY = near.y * bounds.h; a._treeS = near.s;
-          a.vx = 0; a.vy = 0;
-          if (Math.random() < 0.5) {
-            a.state = "treerub"; a.stateUntil = now + 6200;
-            a._faceDir = -1; // stand with his back, not his belly, to the bark
-          } else {
-            a.state = "treeclimb"; a._climbT0 = now;
-            // lift needed to carry his ears from the trunk's foot up past
-            // the underside of the boughs, so the leaves close over his head
-            a._climbTop = Math.max(28,
-              (TREE_CANOPY_PX - TREE_BASE_PX) * near.s + TREE_HEAD_DEEP
-              - a.r * 3.1 * (STAND_FEET + CLIMB_HEAD));
-          }
-        } else a._treeCd = now + 9000; // not interested this pass
-      }
-      a._nearTree = !!near;
-    }
-    if (a.state === "treerub" || a.state === "treeclimb") {
-      // both poses stand on the trunk's drawn foot, not on the anchor the
-      // div is hung from — the art starts TREE_BASE_PX * s further up
-      a._treeFootY = a._treeY - TREE_BASE_PX * (a._treeS || 1) - a.r * 3.1 * STAND_FEET;
-    }
-    if (a.state === "treerub") {
-      // rear up beside the trunk and work the shoulders against the bark
-      a.vx = 0; a.vy = 0;
-      const k = Math.min(1, dt * 4);
-      const backDX = 13 * (a._treeS || 1) + a.r * 3.1 * STAND_BACK; // spine on the bark
-      a.x += ((a._treeX - backDX) - a.x) * k; a.y += (a._treeFootY - a.y) * k;
-      if (now >= a.stateUntil) {
-        a.state = "wander"; a.intent = "wander"; a._treeCd = now + 12000;
-        a._faceDir = 0;
-        a.intentUntil = now + rand(4000, 8000);
-        a.noEventUntil = Math.max(a.noEventUntil, now + 900);
-      }
-    } else if (a.state === "treeclimb") {
-      // hug the trunk and haul up into the boughs, hold, then back down
-      a.vx = 0; a.vy = 0;
-      const k = Math.min(1, dt * 4);
-      a.x += (a._treeX - a.x) * k; a.y += (a._treeFootY - a.y) * k;
-      const top = a._climbTop || 58;
-      const el = now - (a._climbT0 || now);
-      // longer up and down legs than v0.29: it's a much taller climb now
-      if (el < 3400) a.z = top * (el / 3400);
-      else if (el < 6800) a.z = top;      // holds up in the leaves
-      else if (el < 9800) a.z = top * (1 - (el - 6800) / 3000);
-      else {
-        a.z = 0; a.state = "wander"; a.intent = "wander"; a._treeCd = now + 12000;
-        a.intentUntil = now + rand(4000, 8000);
-        a.noEventUntil = Math.max(a.noEventUntil, now + 900);
-      }
-    }
-
-    // ---- the bear goes fishing: 30% roll on each fresh entry into the
-    // water. He doesn't lunge straight in — he paddles around hunting for
-    // 6-12s first, then dives: up to 3 dives at 50/50 each. A catch is
-    // carried ashore and eaten, a bust resets him to plain wandering. The
-    // roll can only re-arm once he's left the water and come back in.
-    if (a.species === "bear" && def.hasWater) {
-      const wet = isWet(a.x, a.y);
-      if (wet && !a._wasWet && isFreeState(a) && Math.random() < 0.3) {
-        a.state = "fishswim"; a.stateUntil = now + rand(6000, 12000);
-        a._diveN = 0; a.swimTarget = null;
-      }
-      a._wasWet = wet;
-    }
-    if (a.state === "fishswim") {
-      // cruising the shallows looking for a fish
-      if (!isWet(a.x, a.y)) { a.state = "wander"; a._diveN = 0; }
-      else {
-        if (!a.swimTarget || Math.hypot(a.swimTarget.x - a.x, a.swimTarget.y - a.y) < 30) {
-          a.swimTarget = lakePoint(bounds, rand(0, Math.PI * 2), Math.sqrt(Math.random()) * 0.7);
-        }
-        const dx = a.swimTarget.x - a.x, dy = a.swimTarget.y - a.y, d = Math.hypot(dx, dy) || 1;
-        const sp2 = cfg.speed * 0.5;
-        a.vx = (dx / d) * sp2; a.vy = (dy / d) * sp2;
-        if (now >= a.stateUntil) { a.state = "fishdive"; a._diveN = 1; a.stateUntil = now + 1100; a.vx = 0; a.vy = 0; }
-      }
-    } else if (a.state === "fishdive" || a.state === "fishwait") {
-      a.vx = 0; a.vy = 0;
-      if (!isWet(a.x, a.y)) { a.state = "wander"; a._diveN = 0; }
-      else if (now >= a.stateUntil) {
-        if (a.state === "fishwait") { a.state = "fishdive"; a.stateUntil = now + 1100; }
-        else if (Math.random() < 0.5) {
-          // got one! carry it to the nearest stretch of shore
-          const ang = Math.atan2((a.y - LAKE.cy * bounds.h) / (LAKE.ry * bounds.h), (a.x - LAKE.cx * bounds.w) / (LAKE.rx * bounds.w));
-          a._fishTarget = lakePoint(bounds, ang, 1.12);
-          a.state = "fishcarry";
-        } else if ((a._diveN || 1) >= 3) {
-          a.state = "wander"; a.intent = "wander"; a._diveN = 0; // three misses — give it up
-          a.noEventUntil = Math.max(a.noEventUntil, now + 1200);
-        } else {
-          a._diveN = (a._diveN || 1) + 1;
-          a.state = "fishwait"; a.stateUntil = now + rand(900, 1600);
-        }
-      }
-    } else if (a.state === "fishcarry") {
-      const t2 = a._fishTarget;
-      if (!t2) a.state = "wander";
-      else {
-        const dx = t2.x - a.x, dy = t2.y - a.y, d = Math.hypot(dx, dy) || 1;
-        const sp2 = cfg.speed * (isWet(a.x, a.y) ? 0.6 : 0.9);
-        a.vx = (dx / d) * sp2; a.vy = (dy / d) * sp2;
-        if (d < 16) { a.state = "fisheat"; a.stateUntil = now + 2600; a.vx = 0; a.vy = 0; }
-      }
-    } else if (a.state === "fisheat") {
-      a.vx = 0; a.vy = 0;
-      if (now >= a.stateUntil) {
-        // the fish is gone — back to regular bear business
-        a.state = "wander"; a.intent = "wander"; a._fishTarget = null; a._diveN = 0;
-        a.intentUntil = now + rand(4000, 8000);
-        a.noEventUntil = Math.max(a.noEventUntil, now + 1200);
-      }
-    }
+    // ---- species behavior that runs off an ethogram (see Ethogram.js).
+    // One call covers the whole hierarchy for that species: the land/water
+    // time budget, the triggers, and every event it owns. Species without
+    // an ethogram fall straight through and keep their own blocks above.
+    stepEthogram(a, ethoCtx);
 
     // the beaver's dam run: to the lake's right end, swim across, place a log
     if (a.state === "damrun") {

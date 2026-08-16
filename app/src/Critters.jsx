@@ -278,7 +278,10 @@ function BearDraw({ uid }) {
             <g className="sai-crit-ear sai-crit-ear-l"><circle cx="47" cy="14" r="7.2" fill={F[1]} /><circle cx="47" cy="14.5" r="3.4" fill={muz} /></g>
             <g className="sai-crit-ear sai-crit-ear-r"><circle cx="74" cy="13" r="7.4" fill={F[1]} /><circle cx="74" cy="13.5" r="3.5" fill={muz} /></g>
             <circle cx="60.5" cy="27" r="18" fill={`url(#${uid}f)`} />
-            <ellipse cx="76" cy="31" rx="9" ry="7" fill={muz} />
+            {/* the muzzle is the giveaway: if this is under the leaves his
+                head has gone, whatever the head group's box says (its lower
+                half is buried in his shoulders) */}
+            <ellipse className="climb-muzzle" cx="76" cy="31" rx="9" ry="7" fill={muz} />
             <path d="M 78.5 28 q 4 0 4 3 q 0 2.7 -4 2.7 q -4 0 -4 -2.7 q 0 -3 4 -3 Z" fill={ink} />
             <FaceKit lid={F[1]} e1={[68, 24]} e2={[54, 25]} er={3} iris={ink} mouth={[76, 38]} />
           </g>
