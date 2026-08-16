@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Critter, SPECIES, ALL_SPECIES } from "./Critters.jsx";
 import { PET_SPECIES } from "./CrittersPets.jsx";
-import { stepEthogram, ethoSwimP, ethoShare, ETHOGRAM, ETHO_STATES, ETHO_Z_STATES, setTreeMetrics } from "./Ethogram.js";
+import { stepEthogram, ethoSwimP, ethoShare, ETHOGRAM, ETHO_STATES, ETHO_Z_STATES, setTreeMetrics, ethoOffstage } from "./Ethogram.js";
 
 /**
  * Social Animal Icons v0.11 — Lakeside world
@@ -68,10 +68,6 @@ const SWIM_P = {
 };
 // occasional dippers keep it brief: a 6-12s timer per visit to the water
 const DIP_TIMED = new Set(["wolf", "deer", "raccoon", "cougar"]);
-// the water regulars still haul out regularly — without this they simply
-// live in the lake and their on-exit behaviors (the goose's preening)
-// almost never get a chance to fire
-const SOAK_MS = { goose: [11000, 20000], frog: [16000, 30000], turtle: [18000, 34000], beaver: [13000, 24000] };
 const POOL_SWIM_P = { labrador: 0.22, axolotl: 0.4, python: 0.3 };
 const canSwimIn = (def, species) => (def.swim?.[species] || 0) > 0;
 
@@ -628,17 +624,6 @@ function enterFromEdge(a, world, sp) {
   }
 }
 
-// the beaver's off-screen ritual: it re-enters from a random spot along
-// the top-right corner, makes for the lake's right end, swims clear
-// across to the dam site and places the next log of the plan
-function startDamRun(a, world) {
-  const { bounds } = world;
-  if (Math.random() < 0.6) { a.x = bounds.w + EDGE_OFF * 0.85; a.y = rand(0.02, 0.30) * bounds.h; }
-  else { a.x = rand(0.85, 0.98) * bounds.w; a.y = -EDGE_OFF * 0.85; }
-  a.state = "damrun"; a._damPhase = 1;
-  a.vx = -20; a.vy = 20; a.targetId = null;
-  a.noEventUntil = performance.now() + 2000;
-}
 
 // ---------------- Agent Factory ----------------
 function makeAgent(world, species) {
@@ -1907,6 +1892,9 @@ const DAM_PLAN = (() => {
   }
   return plan;
 })();
+// the plan reaches the beaver's ethogram as def.dam. Attached here rather
+// than in the WORLDS literal above, which is evaluated 1300 lines earlier.
+WORLDS.forest.dam = DAM_PLAN;
 function DamLayer({ damRefs }) {
   return (
     <>
@@ -2190,13 +2178,20 @@ function stepWorld(world, cfg, dt) {
       const rhos = [.55, .6, .5, .42, .62, .38, .52, .45, .6, .5, .58]; // last: top-right
       world.pads = angs.map((ang, i) => ({
         ...lakePoint(bounds, ang, rhos[i]),
-        p1: ang * 2.3, p2: ang * 5.1 + 1.7, riderId: null,
+        p1: ang * 2.3, p2: ang * 5.1 + 1.7, userId: null,
+        log: !!PAD_SPECS[i].log,   // the turtle only hauls out on a log
       }));
     }
     const tsec = now / 1000;
     for (const p of world.pads) {
-      if (p.riderId != null && !agents.some((c) => c.id === p.riderId && c.state === "padsit")) p.riderId = null;
-      const base = 3 * (p.riderId != null ? 1.25 : 1); // px/s — barely a drift
+      // A float is spoken for from the moment someone sets out for it until
+      // he slides off — the engine's claim slot is the record, so the swim
+      // out is covered too and two riders never converge on one pad. Only a
+      // rider actually SEATED gives it the speed bonus.
+      const rider = p.userId != null ? agents.find((c) => c.id === p.userId) : null;
+      const held = !!(rider && rider._eth && rider._eth.claim === p);
+      if (!held) p.userId = null;
+      const base = 3 * (held && rider.state === "padsit" ? 1.25 : 1); // px/s — barely a drift
       p.x += (Math.sin(tsec * 0.11 + p.p1) + 0.7 * Math.sin(tsec * 0.043 + p.p2)) * base * dt;
       p.y += (Math.cos(tsec * 0.09 + p.p2) + 0.7 * Math.sin(tsec * 0.057 + p.p1)) * base * dt;
       const rr = lakeRho(bounds, p.x, p.y);
@@ -2218,18 +2213,10 @@ function stepWorld(world, cfg, dt) {
     if (a.dragging) continue;
     const busy = a.state === "fight" || a.state === "friendly" || a.state === "rescue" ||
       a.state === "sniff" || a.state === "walkoff" || a.state === "leaveyard" || a.state === "seekroof" ||
-      a.state === "padsit" || a.state === "damrun" ||
-      a.state === "preen" || a.state === "splash" ||
       // every state any ethogram owns counts as busy without being listed
       // here, so a new species event needs no edit to this line
       ETHO_STATES.has(a.state) ||
       AIR_STATES.has(a.state) || ROOF_STATES.has(a.state);
-    // a behavior trip already under way outranks a fresh intent roll: an
-    // animal on its way to a float keeps going (and picks the trip back up
-    // after a fight interrupts it) instead of silently forgetting it
-    if (!busy && a._padTrip && isFreeState(a) && a.intent !== "topad" && now < a._padTrip) {
-      a.intent = "topad"; a.intentUntil = now + 6000;
-    }
     if (now >= a.intentUntil && !busy) {
       const ashore = now < (a._ashoreUntil || 0); // just hauled out — stay dry a moment
       // a species running an ethogram takes its water odds from its own
@@ -2242,14 +2229,10 @@ function stepWorld(world, cfg, dt) {
         : FLYERS.has(a.species) ? PERCH_P
         : a.species === "sugarglider" ? 0.10 : 0; // the glider climbs up now and then
       const patrolP = def.perching && a.species === "cat" ? PATROL_P : 0;
-      // float sits: the frog takes any pad or log, the turtle basks on logs
-      // (0.4 each — a bigger slice of their unchanged 90% / 80% water shares)
-      const padP = def.hasWater && (a.species === "frog" || a.species === "turtle") ? 0.4 : 0;
       const roll = Math.random();
       a.intent = roll < swimP ? "swim"
         : roll < swimP + perchP ? "perch"
         : roll < swimP + patrolP ? "patrol"
-        : roll < swimP + perchP + patrolP + padP ? "topad"
         : "wander";
       a.swimTarget = null;
       a.intentUntil = now + rand(INTENT_MIN_S * 1000, INTENT_MAX_S * 1000);
@@ -2697,71 +2680,20 @@ function stepWorld(world, cfg, dt) {
 
     if (a.state === "idle" && now >= a.idleUntil) a.state = "wander";
 
-    // the rider (frog on any float, turtle basking on a log) rides its
-    // float, then slips back into the water
-    if (a.state === "padsit") {
-      const p = world.pads?.[a._padI];
-      if (!p) { a.state = "wander"; a._padI = null; }
-      else {
-        // ride the float, seated so the feet rest on it (sprite is
-        // centered on a.y; its feet sit ~25px below center)
-        a.x = p.x; a.y = p.y - 20; a.vx = 0; a.vy = 0;
-        if (now >= a.stateUntil) {
-          p.riderId = null; a._padI = null; a._chorus = false; a._padTrip = 0;
-          a.state = "wander"; a.intent = "wander";
-          a.intentUntil = now + rand(4000, 8000);
-          const ang = rand(0, Math.PI * 2);
-          a.vx = Math.cos(ang) * cfg.speed * 0.5; a.vy = Math.sin(ang) * cfg.speed * 0.5;
-          a.noEventUntil = Math.max(a.noEventUntil, now + 800);
-        }
-      }
-    } else if (a._padI != null && a.intent !== "topad") a._padI = null;
 
-    // ---- the goose preens & oils the moment it steps out of the water:
-    // waterproofing straight from the gland at the base of the tail, so a
-    // coin-flip of its exits turns into a full grooming session
-    // ...and 10% of its entries end in a wing-flapping splash: it swims a
-    // while (6-14s), then rears up and beats both wings on the water
-    if (a.species === "goose" && def.hasWater) {
-      const wet = isWet(a.x, a.y);
-      if (!wet && a._wasWet && isFreeState(a) && Math.random() < 0.5) {
-        a.state = "preen"; a.stateUntil = now + 5000; a.vx = 0; a.vy = 0;
-      }
-      if (wet && !a._wasWet && isFreeState(a) && Math.random() < 0.2) {
-        a._splashAt = now + rand(6000, 14000);
-      }
-      if (!wet) a._splashAt = 0; // left the water before it got round to it
-      if (a._splashAt && now >= a._splashAt && wet && isFreeState(a)) {
-        a.state = "splash"; a.stateUntil = now + 2800; a._splashAt = 0; a.vx = 0; a.vy = 0;
-      }
-      a._wasWet = wet;
-    }
-    if (a.state === "preen" || a.state === "splash") {
-      a.vx = 0; a.vy = 0;
-      if (now >= a.stateUntil) {
-        a.state = "wander"; a.intent = "wander"; a.intentUntil = now + rand(4000, 8000);
-        a.noEventUntil = Math.max(a.noEventUntil, now + 800);
-      }
-    }
 
     // (the squirrel's sploot moved to its ethogram in v0.32)
 
-    // everyone who swims eventually hauls out: the occasional dippers after
-    // 6-12s, the water regulars after a longer soak. Without a cap they'd
-    // simply re-roll "swim" forever and never come ashore at all — which is
-    // what kept the goose from ever preening.
-    if (def.hasWater && (DIP_TIMED.has(a.species) || SOAK_MS[a.species])) {
+    // the occasional dippers still haul out on a 6-12s timer. The water
+    // regulars no longer do: their haul-out is their ethogram's land dwell,
+    // and this block running as well would win — it is earlier in the frame
+    // — and cut every water visit short at a length nobody chose.
+    if (def.hasWater && DIP_TIMED.has(a.species)) {
       if (isWet(a.x, a.y)) {
-        if (!a._dipUntil) {
-          const win = SOAK_MS[a.species] || [6000, 12000];
-          a._dipUntil = now + rand(win[0], win[1]);
-        } else if (now > a._dipUntil && isFreeState(a) && !a._splashAt) {
-          // (a goose with a splash pending stays in until it has flapped)
+        if (!a._dipUntil) a._dipUntil = now + rand(6000, 12000);
+        else if (now > a._dipUntil && isFreeState(a)) {
           a.intent = "wander";                       // → paddles ashore
           a._ashoreUntil = now + 4000;               // and stays out a beat
-          // re-roll right after the shore break instead of idling on land
-          // for up to a full intent window — that dead time was what made
-          // the goose's water cycle (and so its preen/splash) so rare
           a.intentUntil = Math.min(a.intentUntil, a._ashoreUntil + 400);
         }
       } else { a._dipUntil = 0; }
@@ -2773,29 +2705,6 @@ function stepWorld(world, cfg, dt) {
     // an ethogram fall straight through and keep their own blocks above.
     stepEthogram(a, ethoCtx);
 
-    // the beaver's dam run: to the lake's right end, swim across, place a log
-    if (a.state === "damrun") {
-      const n = world.damCount || 0;
-      if (!def.hasWater || n >= DAM_PLAN.length) { a.state = "wander"; a._damPhase = 0; }
-      else {
-        const pl = DAM_PLAN[n];
-        const t2 = a._damPhase === 1 ? lakePoint(bounds, 0.05, 0.9) : lakePoint(bounds, pl.ang, pl.rho);
-        const dx = t2.x - a.x, dy = t2.y - a.y, d = Math.hypot(dx, dy) || 1;
-        const sp2 = cfg.speed * (isWet(a.x, a.y) ? 0.6 : 0.95);
-        a.vx = (dx / d) * sp2; a.vy = (dy / d) * sp2;
-        if (a._damPhase === 1 && d < 26) a._damPhase = 2;
-        else if (a._damPhase === 2 && d < 8) {
-          // he must physically reach and touch the planned point: snap to
-          // it, set the log, then back to normal wandering until the next
-          // off-screen event triggers another run
-          a.x = t2.x; a.y = t2.y;
-          world.damCount = n + 1; // one more log on the dam
-          a._damPhase = 0; a.state = "cooldown"; a.vx = 0; a.vy = 0;
-          a.noEventUntil = Math.max(a.noEventUntil, now + 1500);
-          a.intent = "wander"; a.intentUntil = now + rand(4000, 8000);
-        }
-      }
-    }
 
     // navigation
     if (a.state === "wander") {
@@ -2807,36 +2716,7 @@ function stepWorld(world, cfg, dt) {
         a.vx = a.vy = 0; a.intent = "wander";
         continue;
       }
-      if (a.intent === "topad" && def.hasWater && world.pads?.length) {
-        // paddle out to a float and climb on: the frog takes any pad or
-        // log, the turtle only basks on logs
-        if (a._padI == null) {
-          // head for the NEAREST eligible float — a random one across the
-          // lake often sat further away than a whole intent window, so the
-          // trip expired en route and the sit never happened
-          let bi = null, bd = Infinity;
-          world.pads.forEach((p2, i) => {
-            if (!(a.species === "frog" || PAD_SPECS[i].log)) return;
-            if (p2.riderId != null && p2.riderId !== a.id) return; // already taken
-            const d2 = Math.hypot(p2.x - a.x, p2.y - a.y);
-            if (d2 < bd) { bd = d2; bi = i; }
-          });
-          if (bi == null) { a.intent = "wander"; a._padTrip = 0; }
-          else { a._padI = bi; a._padTrip = now + 30000; } // commit to the trip
-        }
-        const p = a._padI != null ? world.pads[a._padI] : null; // the float drifts — re-aim every tick
-        const dx = p ? p.x - a.x : 0, dy = p ? p.y - a.y : 0, d = Math.hypot(dx, dy) || 1;
-        if (!p) { /* no float free right now */ }
-        else if (d < 12) {
-          a.state = "padsit"; a.stateUntil = now + rand(7000, 14000);
-          p.riderId = a.id; a.vx = 0; a.vy = 0; a._padTrip = 0;
-          // half the time a settled frog strikes up a chorus
-          a._chorus = a.species === "frog" && Math.random() < 0.5;
-        } else {
-          const sp = cfg.speed * (isWet(a.x, a.y) ? 0.55 : 0.9);
-          a.vx = (dx / d) * sp; a.vy = (dy / d) * sp;
-        }
-      } else if (a.intent === "swim" && canSwimIn(def, a.species) && (def.hasWater || def.pool)) {
+      if (a.intent === "swim" && canSwimIn(def, a.species) && (def.hasWater || def.pool)) {
         // paddle between random spots inside the lake (or the pool)
         const wet = isWet(a.x, a.y);
         if (!a.swimTarget || Math.hypot(a.swimTarget.x - a.x, a.swimTarget.y - a.y) < 30) {
@@ -2971,9 +2851,9 @@ function stepWorld(world, cfg, dt) {
     // corner and starts a dam run.
     if (a.x < -EDGE_OFF || a.x > bounds.w + EDGE_OFF || a.y < -EDGE_OFF || a.y > bounds.h + EDGE_OFF) {
       a.z = 0; a.roofI = -1;
-      if (a.species === "beaver" && def.hasWater && (world.damCount || 0) < DAM_PLAN.length && a.state !== "damrun") {
-        startDamRun(a, world);
-      } else enterFromEdge(a, world, sp);
+      // an ethogram may claim the re-entry (the beaver's dam run). Asked
+      // before the wrap, because once he is back on stage the fact is gone.
+      if (!ethoOffstage(a, ethoCtx)) enterFromEdge(a, world, sp);
     }
   }
 }

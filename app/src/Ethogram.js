@@ -74,7 +74,7 @@
  * CONTRACT for an event descriptor:
  *   id       unique within the species
  *   domain   "land" | "water" — where the trigger is evaluated
- *   trigger  "enter" | "exit" | "dwell" | "approach"
+ *   trigger  "enter" | "exit" | "dwell" | "approach" | "seek" | "offstage"
  *   chance   0..1, rolled once per trigger crossing
  *   after    (dwell only) ms into the visit before it may fire
  *   near     (approach only) (a, ctx) => feature | null
@@ -186,7 +186,10 @@ function driveGoto(a, ctx, S) {
   }
   // the target may be a live object (a drifting float, a claimed bush)
   if (g.track) { const p = g.track(a, ctx, S.goal.ref); if (p) { S.goal.x = p.x; S.goal.y = p.y; } }
-  const d = stepToward(a, ctx, S.goal, g.speed ?? 1);
+  // a leg that crosses the shoreline wants two speeds, the way every other
+  // swim in this world does, so `speed` may also be read each frame
+  const sp = typeof g.speed === "function" ? g.speed(a, ctx) : (g.speed ?? 1);
+  const d = stepToward(a, ctx, S.goal, sp);
   if (d <= (g.within ?? 18)) {
     a.vx = 0; a.vy = 0;
     v.begin(a, ctx, S, S.goal.ref);
@@ -315,6 +318,13 @@ function triggered(a, S, ev, ctx) {
       S.seekAt[ev.id] = ctx.now + ctx.rand(ev.every[0], ev.every[1]);
       return true;
     }
+    // He has walked clean off the map. This is the one fact about him that
+    // cannot be seen from inside the frame — by the time the ethogram runs
+    // again the sim has already ambled him back on stage — so ethoOffstage()
+    // below is its only caller and there is no edge left to gate. An
+    // optional `near` says whether the errand is still worth making: a
+    // finished dam is no reason to leave.
+    case "offstage": return ev.near ? (ev.near(a, ctx) || false) : true;
     default: return false;
   }
 }
@@ -401,8 +411,39 @@ export function stepEthogram(a, ctx) {
 
   // a world event (fight, friendly, rescue, drag…) outranks the ethogram
   if (!ctx.isFreeState(a)) return true;
-  for (const ev of eth.events) if (offer(a, S, ev, ctx)) return true;
+  // ...but an `offstage` event is not offered here. Its trigger is true only
+  // inside the sim's edge wrap, and offering it on an ordinary frame would
+  // fire it wherever he happens to be standing.
+  for (const ev of eth.events) {
+    if (ev.trigger === "offstage") continue;
+    if (offer(a, S, ev, ctx)) return true;
+  }
   return true;
+}
+
+/**
+ * The animal has walked clean off the map and the sim is about to bring him
+ * back in from another edge. It asks HERE first, so an ethogram can claim
+ * the re-entry and put him back where its own errand wants him — the beaver
+ * returns at the lake's far end with a log to place.
+ *
+ * A second entry point rather than a trigger `stepEthogram` could evaluate,
+ * because off-stage is not a state he is ever *in*: it lasts from the frame
+ * his position leaves the bounds to that same frame's wrap, in a loop that
+ * runs after the ethogram has already had its turn. Returns true if an event
+ * took him, in which case the caller must not wrap him.
+ */
+export function ethoOffstage(a, ctx) {
+  const eth = ETHOGRAM[a.species];
+  if (!eth) return false;
+  // an errand already under way keeps him: he is out there because something
+  // threw him out there, not because he set off on one
+  if (eth.byState.has(a.state)) return false;
+  const S = a._eth || (a._eth = freshState(ctx.now));
+  for (const ev of eth.events) {
+    if (ev.trigger === "offstage" && offer(a, S, ev, ctx)) return true;
+  }
+  return false;
 }
 
 /**
@@ -1488,6 +1529,286 @@ defineEthogram("fox", {
           drive: driveFox,
         },
       ],
+    },
+  ],
+});
+
+// ---------------------------------------------------------------------
+//  THE FLOATS — shared between the frog and the turtle.
+//
+//  Every other claimable thing in this world holds still. The floats drift,
+//  and that one difference is what shapes the trip: the target has to be
+//  re-read every frame, the reservation has to survive the swim out rather
+//  than being taken on arrival, and the sit itself is not a pose the animal
+//  holds but a ride he is carried on.
+// ---------------------------------------------------------------------
+
+/**
+ * The nearest float nobody has spoken for. `logs` is the turtle: he hauls
+ * out on a drift log and will not sit on a lily pad, which is also what
+ * keeps the two species off each other's floats when the lake is busy.
+ */
+function nearestFloat(a, c, logs) {
+  const pads = c.world.pads;
+  if (!pads) return null;
+  let best = null, bd = Infinity;
+  for (const p of pads) {
+    if (logs && !p.log) continue;
+    if (p.userId != null && p.userId !== a.id) continue;
+    const d = Math.hypot(p.x - a.x, p.y - a.y);
+    if (d < bd) { bd = d; best = p; }
+  }
+  return best ? { x: best.x, y: best.y, site: best } : null;
+}
+
+const FLOAT_GOTO = {
+  within: 12, giveUp: 30000, none: 10000, lost: 10000,
+  // slower in the water than out of it, like every other swim here
+  speed: (a, c) => (c.isWet(a.x, a.y) ? 0.55 : 0.9),
+  // the float drifts: a target fixed at pick time is one he paddles past
+  track: (a, c, ref) => ref.site,
+};
+
+/**
+ * Riding a float. He does not move under his own power at all — he IS
+ * wherever the float has drifted to, seated 20px up so his feet rest on the
+ * surface instead of in it. The claim slot is the float's rider record, so
+ * letting go of it is what frees the float for the next animal.
+ */
+function driveFloat(a, c, S) {
+  const p = S.claim;
+  if (!p) { endEvent(a, c, { reroll: true, quiet: 800, stop: true }); return; }
+  a.x = p.x; a.y = p.y - 20; a.vx = 0; a.vy = 0;
+  if (c.now < a.stateUntil) return;
+  a._chorus = false;
+  endEvent(a, c, { reroll: true, quiet: 800 });
+  // a push off the float rather than a leap — he slides back into the water
+  const ang = c.rand(0, Math.PI * 2);
+  a.vx = Math.cos(ang) * c.cfg.speed * 0.5;
+  a.vy = Math.sin(ang) * c.cfg.speed * 0.5;
+}
+
+/**
+ * The float trip, shared. It is a WATER activity decided on LAND, so the
+ * trigger's domain is land and everything it does happens in the lake: the
+ * appetite arrives while he is ashore, the walk crosses the shoreline, and
+ * the sit itself credits water time to the ledger. That is also why it is a
+ * `seek` and not a `dwell` — he has to be able to want it repeatedly from
+ * the bank without a domain transition to re-arm him.
+ */
+const FLOAT_EVENT = {
+  id: "float", domain: "land", trigger: "seek",
+  // The old intent band offered a trip on 40% of a roll taken every ~14s —
+  // an attempt about every 35s. A 30-55s appetite at slightly better than
+  // even odds lands in the same place, and the land gate means an urge that
+  // arrives mid-lake is spent the next time he is ashore instead of wasted.
+  every: [30000, 55000], chance: 0.55, cool: 20000,
+  states: ["padsit"],
+};
+
+defineEthogram("frog", {
+  domainOf: (a, c) => (c.def.hasWater && c.isWet(a.x, a.y) ? "water" : "land"),
+
+  domains: {
+    // 0.5 swim + 0.4 float of the old table was 90% of his ROLLS, which is
+    // not 90% of his time: every water visit was topped and tailed by the
+    // walk out, the forced 4.4s shore break after the soak, and the odd
+    // wander window in between. Working that duty cycle through against the
+    // 16-30s soak gives about 0.72 of the clock, and that is what is set here.
+    land:  { share: 0.28, dwell: [8000, 16000], travel: 9000 },
+    water: { share: 0.72, dwell: [16000, 30000], travel: 30000, pull: 0.92 },
+  },
+
+  // a drag lifts him off a float mid-sit, and the state that leaves him in
+  // is not one this ethogram will ever end — so the float has to be handed
+  // back here, and the throat sac shut off, or he croaks all the way home
+  tick(a, c, S) { if (S.claim) releaseClaim(a, S); if (a._chorus) a._chorus = false; },
+
+  events: [
+    {
+      ...FLOAT_EVENT,
+      goto: { state: "tofloat", pick: (a, c) => nearestFloat(a, c, false), ...FLOAT_GOTO },
+      begin(a, c) {
+        a.state = "padsit"; a.stateUntil = c.now + c.rand(7000, 14000);
+        a.vx = 0; a.vy = 0;
+        // half of settled frogs strike up; the other half just sit there,
+        // which is what makes a chorus read as a choice rather than a state
+        a._chorus = Math.random() < 0.5;
+      },
+      drive: driveFloat,
+    },
+  ],
+});
+
+defineEthogram("turtle", {
+  domainOf: (a, c) => (c.def.hasWater && c.isWet(a.x, a.y) ? "water" : "land"),
+
+  domains: {
+    // Same conversion as the frog, from 0.4 swim + 0.4 float = 80% of rolls
+    // against a longer 18-34s soak: about 0.70 of the clock.
+    land:  { share: 0.30, dwell: [9000, 18000], travel: 9000 },
+    water: { share: 0.70, dwell: [18000, 34000], travel: 30000, pull: 0.90 },
+  },
+
+  tick(a, c, S) { if (S.claim) releaseClaim(a, S); },
+
+  events: [
+    {
+      ...FLOAT_EVENT,
+      // The same appetite as the frog's on purpose: the old table gave them
+      // the same 0.4 band. What actually makes his trips rarer is the filter
+      // — four of the eleven floats are logs — and that is the right way for
+      // the difference to show, as a turtle finding nothing free rather than
+      // as a turtle who thinks about basking less often.
+      goto: { state: "tolog", pick: (a, c) => nearestFloat(a, c, true), ...FLOAT_GOTO },
+      begin(a, c) {
+        a.state = "padsit"; a.stateUntil = c.now + c.rand(7000, 14000);
+        a.vx = 0; a.vy = 0;
+      },
+      drive: driveFloat,
+    },
+  ],
+});
+
+// ---------------------------------------------------------------------
+
+/**
+ * THE GOOSE — the two things a waterbird does at the waterline.
+ *
+ * Both of his behaviors are edges rather than errands: nothing has to be
+ * near him and he goes nowhere to do them. Stepping out of the lake is the
+ * cue to oil the feathers; stepping into it is the cue that a bath may
+ * follow, once he has swum far enough out to be worth watching.
+ */
+defineEthogram("goose", {
+  domainOf: (a, c) => (c.def.hasWater && c.isWet(a.x, a.y) ? "water" : "land"),
+
+  domains: {
+    // 0.8 of his rolls was never 0.8 of his time: an 11-20s soak followed by
+    // the 4.4s shore break and, one exit in five, a full dry wander window
+    // works out near 0.59 of the clock. The land dwell is deliberately short
+    // — his whole repertoire is at the waterline, and a goose that stays
+    // ashore for half a minute is a goose that has stopped being a goose.
+    land:  { share: 0.40, dwell: [9000, 18000], travel: 10000 },
+    water: { share: 0.60, dwell: [11000, 20000], travel: 26000, pull: 0.90 },
+  },
+
+  events: [
+    // ---- oiling, the moment he steps out ------------------------------
+    // Waterproofing straight from the gland at the base of the tail. No
+    // cooldown: the exit edge is the whole gate, and he cannot exit twice
+    // without an 11s soak in between.
+    {
+      id: "preen", domain: "water", trigger: "exit",
+      chance: 0.50,     // a coin flip — half his haul-outs turn into a session
+      states: ["preen"],
+      begin(a, c) { a.state = "preen"; a.stateUntil = c.now + 5000; a.vx = 0; a.vy = 0; },
+      drive(a, c) {
+        a.vx = 0; a.vy = 0;
+        if (c.now >= a.stateUntil) endEvent(a, c, { reroll: true, quiet: 800, stop: true });
+      },
+    },
+
+    // ---- the bath, some way into a swim -------------------------------
+    // The delay is the behavior, not a pause before it: he rears up and
+    // beats both wings out in open water, so the entry only ARMS the bath
+    // and the swim that follows is what earns it. `hold` is the cancel —
+    // a goose that has gone back ashore has nothing left to splash in. The
+    // engine reads the armed water event as a commitment and will not push
+    // him out of the lake until he has flapped.
+    {
+      id: "splash", domain: "water", trigger: "enter",
+      chance: 0.20,     // one entry in five, so a bath stays an event
+      delay: [6000, 14000],
+      hold: (a, c) => c.isWet(a.x, a.y),
+      states: ["splash"],
+      begin(a, c) { a.state = "splash"; a.stateUntil = c.now + 2800; a.vx = 0; a.vy = 0; },
+      drive(a, c) {
+        a.vx = 0; a.vy = 0;
+        if (c.now >= a.stateUntil) endEvent(a, c, { reroll: true, quiet: 800, stop: true });
+      },
+    },
+  ],
+});
+
+// ---------------------------------------------------------------------
+
+/**
+ * THE BEAVER — the one animal here who changes the world.
+ *
+ * The dam is built off-stage and on-stage in halves: the log is cut where
+ * nobody can see it, and every trip back across the lake with one is the
+ * part you watch. Nothing about it is on a timer — the log appears when he
+ * physically reaches the point the plan wants it at, so a dam that grows
+ * slowly is a beaver who has not been roaming, which is the honest reading.
+ */
+defineEthogram("beaver", {
+  domainOf: (a, c) => (c.def.hasWater && c.isWet(a.x, a.y) ? "water" : "land"),
+
+  domains: {
+    // His old 0.5 roll worked out near 0.46 of the clock, and the dam runs
+    // then piled long swims on top of that. An even split is what the two
+    // together already came to, and it is the number the shore time wants:
+    // he has to be walking about on land to reach an edge and go off-stage,
+    // and a beaver kept in the lake would never build anything.
+    land:  { share: 0.50, dwell: [14000, 26000], travel: 10000 },
+    water: { share: 0.50, dwell: [13000, 24000], travel: 30000, pull: 0.88 },
+  },
+
+  events: [
+    // ---- the dam run ---------------------------------------------------
+    // `domain` here is a label on the substance of the run — an offstage
+    // trigger is evaluated where no domain applies.
+    {
+      id: "dam", domain: "water", trigger: "offstage",
+      chance: 1,   // walking off the map is already the rare part; a second
+                   // roll on top would make a 14-log plan a lottery
+      states: ["damrun"],
+      // the errand only exists while the plan is unfinished
+      near: (a, c) => {
+        const n = c.world.damCount || 0;
+        return c.def.dam && n < c.def.dam.length ? c.def.dam[n] : null;
+      },
+      begin(a, c) {
+        // He comes back in along the TOP-RIGHT, the far end of the lake from
+        // the dam, because the crossing is the thing worth watching — put
+        // him down beside the dam and the run is over before it reads.
+        // 60px out is off-stage but inside the wrap threshold, so the frame
+        // that starts the run does not immediately bounce him again.
+        const b = c.bounds;
+        if (Math.random() < 0.6) { a.x = b.w + 60; a.y = c.rand(0.02, 0.30) * b.h; }
+        else { a.x = c.rand(0.85, 0.98) * b.w; a.y = -60; }
+        a.state = "damrun"; a._damPhase = 1;
+        a.targetId = null;
+        // A safety valve, not a race. The hand-written run had no timeout at
+        // all; this only wants to catch a beaver genuinely wedged, so it is
+        // set far beyond the 15-25s the crossing actually takes.
+        a._damBy = c.now + 120000;
+        a.noEventUntil = c.now + 2000; // nobody accosts him on the way in
+      },
+      drive(a, c) {
+        // The plan slot is re-read every frame rather than held from begin:
+        // with two beavers in the roster the second must retarget when the
+        // first lays a log, not build the same one twice.
+        const plan = c.def.dam, n = c.world.damCount || 0;
+        if (!plan || n >= plan.length || c.now >= a._damBy) {
+          a._damPhase = 0; endEvent(a, c, { reroll: true, stop: true }); return;
+        }
+        const pl = plan[n];
+        // Two legs, not one: the straight line from the corner to the dam
+        // site cuts across the shore, so he makes the lake's right end first
+        // and only then strikes out across open water.
+        const t = a._damPhase === 1 ? c.lakePoint(c.bounds, 0.05, 0.9)
+                                    : c.lakePoint(c.bounds, pl.ang, pl.rho);
+        const d = stepToward(a, c, t, c.isWet(a.x, a.y) ? 0.6 : 0.95);
+        if (a._damPhase === 1) { if (d < 26) a._damPhase = 2; return; }
+        if (d >= 8) return;
+        // he must physically touch the planned point before the log exists
+        a.x = t.x; a.y = t.y;
+        c.world.damCount = n + 1;
+        a._damPhase = 0;
+        endEvent(a, c, { reroll: true, quiet: 1500, stop: true });
+      },
     },
   ],
 });
