@@ -992,3 +992,12 @@ body {
   .sai-sprite[data-walking="1"] .sai-crit--goose .sai-crit-root,
   .sai-sprite[data-walking="1"] .sai-crit--goose .sai-crit-head{ animation:none; }
 }
+
+/* ==================== v0.24 beaver dam runs ==================== */
+/* the beaver ferries a fresh log ahead of it while swimming a dam run */
+.sai-sprite[data-state="damrun"][data-swimming="1"]::after{
+  content:""; position:absolute; right:-14%; top:50%; width:44%; height:13%;
+  border-radius:7px; transform:translateY(-50%);
+  background:linear-gradient(#8a6236 0 42%, #5a3d22 42%);
+  box-shadow:0 2px 3px rgba(5,38,47,.4);
+}
