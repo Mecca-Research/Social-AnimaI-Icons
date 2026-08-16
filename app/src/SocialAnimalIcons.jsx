@@ -115,6 +115,59 @@ function keepAshore(a, bounds) {
   const vin = a.vx * nx + a.vy * ny;
   if (vin < 0) { a.vx -= vin * nx; a.vy -= vin * ny; } // slide, don't sink
 }
+// ---------------- Forest trees ----------------
+// Four big trunked trees — two on the middle-left, two at the bottom-right.
+// Held in stage fractions (not the background SVG's own viewBox) so the
+// drawn trunk IS the spot the bear walks up to, the same geometry-as-
+// physics contract the lake, floats and dam use.
+const FOREST_TREES = [
+  { x: .075, y: .56, s: 1.15 },
+  { x: .125, y: .30, s: 0.98 },
+  { x: .905, y: .70, s: 1.20 },
+  { x: .805, y: .89, s: 1.05 },
+];
+const TREE_REACH = 96; // how close the bear must be to take an interest
+
+function TreeLayer({ bounds }) {
+  const { w, h } = bounds;
+  if (!w || !h) return null;
+  return (
+    <>
+      {FOREST_TREES.map((t, i) => (
+        <div key={i} style={{ position: "absolute", left: t.x * w, top: t.y * h, zIndex: 2,
+          pointerEvents: "none", transform: `translate(-50%,-100%) scale(${t.s})`, transformOrigin: "50% 100%" }}>
+          <svg width="150" height="210" viewBox="-75 -190 150 210" style={{ display: "block", overflow: "visible" }}>
+            {/* root shadow pooled on the forest floor */}
+            <ellipse cx="6" cy="4" rx="42" ry="12" fill="#0d2415" opacity=".45" />
+            {/* buttressed trunk with bark grain */}
+            <path d="M -13 2 C -12 -30 -9 -60 -8 -92 L 9 -92 C 10 -60 13 -30 15 2 C 6 5 -5 5 -13 2 Z" fill="#5b3f26" />
+            <path d="M -13 2 C -12 -30 -9 -60 -8 -92 L -2 -92 C -4 -58 -6 -28 -6 2 Z" fill="#6f4f30" />
+            <path d="M -7 -14 C -6 -38 -5 -62 -5 -84 M 3 -20 C 3 -44 2 -66 2 -84" stroke="#452f1c"
+              strokeWidth="2" fill="none" strokeLinecap="round" opacity=".65" />
+            <path d="M -13 -4 C -22 -8 -28 -4 -32 2 C -24 3 -18 3 -13 2 Z" fill="#4e3521" />
+            <path d="M 15 -6 C 24 -10 31 -6 35 1 C 27 3 20 3 15 2 Z" fill="#4e3521" />
+            {/* limbs reaching out from under the canopy */}
+            <path d="M -8 -86 C -22 -96 -34 -100 -46 -98 M 9 -88 C 22 -98 34 -102 46 -99" stroke="#5b3f26"
+              strokeWidth="5" fill="none" strokeLinecap="round" />
+            {/* canopy: stacked boughs, light from the upper left */}
+            <g className="sai-bg-sway" style={{ animationDuration: `${6.5 + i * 0.7}s`, animationDelay: `${i * 1.3}s`, transformOrigin: "50% 100%" }}>
+              <ellipse cx="-26" cy="-104" rx="34" ry="26" fill="#2f6b3f" />
+              <ellipse cx="28" cy="-108" rx="36" ry="27" fill="#2a6138" />
+              <ellipse cx="0" cy="-126" rx="44" ry="32" fill="#3a7d49" />
+              <ellipse cx="-20" cy="-142" rx="30" ry="24" fill="#469356" />
+              <ellipse cx="18" cy="-148" rx="27" ry="22" fill="#3f8850" />
+              <ellipse cx="-4" cy="-160" rx="22" ry="18" fill="#54a763" />
+              <ellipse cx="-16" cy="-150" rx="14" ry="11" fill="#69bf76" opacity=".75" />
+              <ellipse cx="12" cy="-120" rx="16" ry="12" fill="#1f4d2c" opacity=".5" />
+              <ellipse cx="-34" cy="-116" rx="13" ry="10" fill="#1f4d2c" opacity=".45" />
+            </g>
+          </svg>
+        </div>
+      ))}
+    </>
+  );
+}
+
 // ---------------- Neighborhood geometry ----------------
 // House roofs are hard obstacles: rectangles in stage fractions, used by
 // BOTH the scene drawing and the physics so animals never cross a roof.
@@ -363,7 +416,7 @@ function keepOutOfHouses(a, bounds, houses) {
 const WORLDS = {
   forest: {
     key: "forest", label: "🌲 Forest", roster: SPECIES,
-    hasWater: true, houses: [], swim: SWIM_P,
+    hasWater: true, houses: [], swim: SWIM_P, trees: FOREST_TREES,
     fallback: { x: .25, y: .75 }, // SW is always land
     bg: "linear-gradient(165deg,#1e4a37 0%,#173a2b 46%,#0f2a1f 100%)",
   },
@@ -622,6 +675,7 @@ export default function SocialAnimalsRPG() {
       <div ref={stageRef} className="relative rounded-2xl border border-emerald-900/60 overflow-hidden min-h-0 shadow-xl shadow-black/40" style={{ background: WORLDS[worldKey].bg }}>
         {worldKey === "forest" && <ForestScene />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <Lake bounds={snapshot.bounds} />}
+        {worldKey === "forest" && snapshot.bounds.w > 0 && <TreeLayer bounds={snapshot.bounds} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <PadLayer padsRef={padsRef} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <DamLayer damRefs={damRefs} />}
         {worldKey === "neighborhood" && snapshot.bounds.w > 0 && <NeighborhoodScene bounds={snapshot.bounds} />}
@@ -785,8 +839,10 @@ function ForestScene() {
 
     const ferns = [];
     const fernSpots = [
-      [90, 640, 1.15], [1120, 610, 1.2], [40, 470, 0.8], [1170, 500, 0.85],
-      [250, 720, 1.0], [960, 730, 1.05], [700, 690, 0.9],
+      // the four big middle-left / bottom-right ferns are gone — real
+      // trunked trees stand there now (see TreeLayer)
+      [1170, 500, 0.85],
+      [250, 720, 1.0], [700, 690, 0.9],
       // upper clearings (left of the lake and along the top)
       [140, 150, 0.9], [420, 120, 0.8], [80, 310, 1.0], [300, 235, 0.7], [545, 320, 0.8],
     ];
@@ -1607,6 +1663,7 @@ const PAD_SPECS = [
   { rp: 16 }, { rp: 13 }, { rp: 15, bloom: true }, { rp: 12 },
   { rp: 14 }, { rp: 11 }, { rp: 13 },
   { log: true, len: 58 }, { log: true, len: 46 }, { log: true, len: 52 },
+  { log: true, len: 50 },
 ];
 function PadLayer({ padsRef }) {
   return (
@@ -1949,8 +2006,8 @@ function stepWorld(world, cfg, dt) {
   // (frog or basking turtle) drifts 25% faster.
   if (def.hasWater) {
     if (!world.pads || world.pads.length !== PAD_SPECS.length) {
-      const angs = [2.9, 1.9, 0.85, 3.7, 0.5, 2.35, 4.35, 1.35, 3.15, 4.9];
-      const rhos = [.55, .6, .5, .42, .62, .38, .52, .45, .6, .5];
+      const angs = [2.9, 1.9, 0.85, 3.7, 0.5, 2.35, 4.35, 1.35, 3.15, 4.9, 5.55];
+      const rhos = [.55, .6, .5, .42, .62, .38, .52, .45, .6, .5, .58]; // last: top-right
       world.pads = angs.map((ang, i) => ({
         ...lakePoint(bounds, ang, rhos[i]),
         p1: ang * 2.3, p2: ang * 5.1 + 1.7, riderId: null,
@@ -1985,12 +2042,19 @@ function stepWorld(world, cfg, dt) {
       a.state === "fishswim" || a.state === "fishdive" || a.state === "fishwait" ||
       a.state === "fishcarry" || a.state === "fisheat" ||
       a.state === "preen" || a.state === "splash" || a.state === "sploot" ||
+      a.state === "treerub" || a.state === "treeclimb" ||
       AIR_STATES.has(a.state) || ROOF_STATES.has(a.state);
     // a behavior trip already under way outranks a fresh intent roll: an
     // animal on its way to a float keeps going (and picks the trip back up
     // after a fight interrupts it) instead of silently forgetting it
     if (!busy && a._padTrip && isFreeState(a) && a.intent !== "topad" && now < a._padTrip) {
       a.intent = "topad"; a.intentUntil = now + 6000;
+    }
+    // same for a squirrel that meant to sploot: an encounter's intent reset
+    // used to wipe the plan outright, so the lie-down rarely happened
+    if (!busy && a._splootWant && isFreeState(a) && a.intent !== "sploot" &&
+        a.state !== "sploot" && now < a._splootWant) {
+      a.intent = "sploot"; a.intentUntil = now + 6000;
     }
     if (now >= a.intentUntil && !busy) {
       const ashore = now < (a._ashoreUntil || 0); // just hauled out — stay dry a moment
@@ -2003,7 +2067,7 @@ function stepWorld(world, cfg, dt) {
       // (0.4 each — a bigger slice of their unchanged 90% / 80% water shares)
       const padP = def.hasWater && (a.species === "frog" || a.species === "turtle") ? 0.4 : 0;
       // squirrels sploot on a cool patch of forest floor now and then
-      const splootP = a.species === "squirrel" ? 0.10 : 0;
+      const splootP = a.species === "squirrel" ? 0.20 : 0;
       const roll = Math.random();
       a.intent = roll < swimP ? "swim"
         : roll < swimP + perchP ? "perch"
@@ -2011,6 +2075,8 @@ function stepWorld(world, cfg, dt) {
         : roll < swimP + perchP + patrolP + padP ? "topad"
         : roll < swimP + perchP + patrolP + padP + splootP ? "sploot"
         : "wander";
+      if (a.intent === "sploot") a._splootWant = now + 25000; // hold the plan
+      else if (a.intent !== "topad") a._splootWant = 0;
       a.swimTarget = null;
       a.intentUntil = now + rand(INTENT_MIN_S * 1000, INTENT_MAX_S * 1000);
     }
@@ -2485,7 +2551,7 @@ function stepWorld(world, cfg, dt) {
     if (a.species === "goose" && def.hasWater) {
       const wet = isWet(a.x, a.y);
       if (!wet && a._wasWet && isFreeState(a) && Math.random() < 0.5) {
-        a.state = "preen"; a.stateUntil = now + rand(4000, 7000); a.vx = 0; a.vy = 0;
+        a.state = "preen"; a.stateUntil = now + 5000; a.vx = 0; a.vy = 0;
       }
       if (wet && !a._wasWet && isFreeState(a) && Math.random() < 0.2) {
         a._splashAt = now + rand(6000, 14000);
@@ -2514,7 +2580,7 @@ function stepWorld(world, cfg, dt) {
       }
     } else if (a.intent === "sploot" && a.species === "squirrel" && isFreeState(a) && a.z === 0) {
       a.state = "sploot"; a.stateUntil = now + rand(8000, 14000); a.vx = 0; a.vy = 0;
-      a.intent = "wander";
+      a.intent = "wander"; a._splootWant = 0;
     }
 
     // everyone who swims eventually hauls out: the occasional dippers after
@@ -2536,6 +2602,51 @@ function stepWorld(world, cfg, dt) {
           a.intentUntil = Math.min(a.intentUntil, a._ashoreUntil + 400);
         }
       } else { a._dipUntil = 0; }
+    }
+
+    // ---- the bear and the big trees: coming within reach of a trunk is a
+    // 60% chance of stopping for something, split 50/50 between a good
+    // back scratch against the bark and a climb up into the boughs. The
+    // roll only re-arms once he's wandered back out of reach.
+    if (a.species === "bear" && def.trees) {
+      let near = null;
+      for (const t of def.trees) {
+        if (Math.hypot(t.x * bounds.w - a.x, t.y * bounds.h - a.y) < TREE_REACH) { near = t; break; }
+      }
+      if (near && !a._nearTree && isFreeState(a) && now >= (a._treeCd || 0)) {
+        if (Math.random() < 0.6) {
+          a._treeX = near.x * bounds.w; a._treeY = near.y * bounds.h;
+          a.vx = 0; a.vy = 0;
+          if (Math.random() < 0.5) { a.state = "treerub"; a.stateUntil = now + 5400; }
+          else { a.state = "treeclimb"; a._climbT0 = now; }
+        } else a._treeCd = now + 9000; // not interested this pass
+      }
+      a._nearTree = !!near;
+    }
+    if (a.state === "treerub") {
+      // settle in beside the trunk and work the shoulders against it
+      a.vx = 0; a.vy = 0;
+      const k = Math.min(1, dt * 4);
+      a.x += ((a._treeX - 24) - a.x) * k; a.y += ((a._treeY - 4) - a.y) * k;
+      if (now >= a.stateUntil) {
+        a.state = "wander"; a.intent = "wander"; a._treeCd = now + 12000;
+        a.intentUntil = now + rand(4000, 8000);
+        a.noEventUntil = Math.max(a.noEventUntil, now + 900);
+      }
+    } else if (a.state === "treeclimb") {
+      // hug the trunk and haul up into the boughs, hold, then back down
+      a.vx = 0; a.vy = 0;
+      const k = Math.min(1, dt * 4);
+      a.x += (a._treeX - a.x) * k; a.y += ((a._treeY - 6) - a.y) * k;
+      const el = now - (a._climbT0 || now);
+      if (el < 2400) a.z = 58 * (el / 2400);
+      else if (el < 5600) a.z = 58;
+      else if (el < 8000) a.z = 58 * (1 - (el - 5600) / 2400);
+      else {
+        a.z = 0; a.state = "wander"; a.intent = "wander"; a._treeCd = now + 12000;
+        a.intentUntil = now + rand(4000, 8000);
+        a.noEventUntil = Math.max(a.noEventUntil, now + 900);
+      }
     }
 
     // ---- the bear goes fishing: 30% roll on each fresh entry into the
@@ -2754,7 +2865,8 @@ function stepWorld(world, cfg, dt) {
     if (!onRoof && !inAir) {
       if (a.state !== "seekroof") a.roofI = -1; // the hunt keeps its target roof
       const hopping = now < (a.hopUntil || 0);
-      if (a.z > 0 && !hopping) { a.z *= Math.exp(-5 * dt); if (a.z < 0.5) a.z = 0; } // touch down
+      // touch down (a bear up a trunk drives its own height)
+      if (a.z > 0 && !hopping && a.state !== "treeclimb") { a.z *= Math.exp(-5 * dt); if (a.z < 0.5) a.z = 0; }
       if (def.hasWater && !canSwimIn(def, a.species)) keepAshore(a, bounds);
       if (def.pool && !canSwimIn(def, a.species) && a.z < 3) keepOutOfPool(a, bounds, def.pool);
       if (a.z < 3) keepOutOfHouses(a, bounds, def.houses);
