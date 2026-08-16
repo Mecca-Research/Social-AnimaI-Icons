@@ -994,10 +994,41 @@ body {
 }
 
 /* ==================== v0.24 beaver dam runs ==================== */
-/* the beaver ferries a fresh log ahead of it while swimming a dam run */
-.sai-sprite[data-state="damrun"][data-swimming="1"]::after{
-  content:""; position:absolute; right:-14%; top:50%; width:44%; height:13%;
-  border-radius:7px; transform:translateY(-50%);
-  background:linear-gradient(#8a6236 0 42%, #5a3d22 42%);
-  box-shadow:0 2px 3px rgba(5,38,47,.4);
+/* the beaver PUSHES a real log ahead of his nose while swimming a dam
+   run: an in-sprite log that surges and dips out of phase with his bob */
+.sai-crit-damlog{ display:none; }
+.sai-sprite[data-state="damrun"][data-swimming="1"] .sai-crit-damlog{
+  display:inline; transform-box:fill-box; transform-origin:50% 50%;
+  animation:sai-damlog-push 1.15s ease-in-out infinite;
+}
+@keyframes sai-damlog-push{
+  0%,100%{transform:translate(0,0) rotate(0);}
+  40%{transform:translate(2.4px,-2.6px) rotate(-4deg);}
+  70%{transform:translate(1px,-.8px) rotate(-1.6deg);}
+}
+
+/* ==================== v0.25 the bear goes fishing ==================== */
+/* dive: plunge under (drop + tip + fade), one-shot per dive state */
+.sai-sprite[data-state="fishdive"] .sai-crit-root{ animation:sai-bear-dive 1.1s ease-in-out; }
+@keyframes sai-bear-dive{
+  0%{transform:translateY(0) rotate(0); opacity:1;}
+  30%{transform:translateY(10px) rotate(9deg); opacity:.4;}
+  65%{transform:translateY(10px) rotate(7deg); opacity:.4;}
+  100%{transform:translateY(0) rotate(0); opacity:1;}
+}
+/* the fish shows in his mouth while carrying + eating; nibbles away */
+.sai-crit-fish{ display:none; }
+.sai-sprite[data-state="fishcarry"] .sai-crit-fish,
+.sai-sprite[data-state="fisheat"] .sai-crit-fish{ display:inline; transform-box:fill-box; transform-origin:20% 50%; }
+.sai-sprite[data-state="fisheat"] .sai-crit-fish{ animation:sai-fish-nibble .5s ease-in-out infinite; }
+@keyframes sai-fish-nibble{ 0%,100%{transform:rotate(0) scale(1);} 50%{transform:rotate(-8deg) scale(.95);} }
+.sai-sprite[data-state="fisheat"] .sai-crit-head{ animation:sai-bear-chomp .5s ease-in-out infinite; }
+@keyframes sai-bear-chomp{ 0%,100%{transform:translateY(0) rotate(0);} 50%{transform:translateY(1.8px) rotate(2deg);} }
+.sai-sprite[data-state="fisheat"] .sai-crit-mouth-open{ opacity:1; }
+.sai-sprite[data-state="fisheat"] .sai-crit-mouth-rest{ opacity:0; }
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-state="damrun"][data-swimming="1"] .sai-crit-damlog,
+  .sai-sprite[data-state="fishdive"] .sai-crit-root,
+  .sai-sprite[data-state="fisheat"] .sai-crit-fish,
+  .sai-sprite[data-state="fisheat"] .sai-crit-head{ animation:none; }
 }
