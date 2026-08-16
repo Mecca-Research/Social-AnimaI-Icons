@@ -55,16 +55,12 @@ const EDGE_OFF = 70;         // fully off-screen distance before wrapping
 // Each world carries its own swimmer map: lake swimmers in the forest,
 // pool swimmers (dog, axolotl, python) in the neighborhood. Species not
 // in the map never enter the water (fox, hedgehog, squirrel, skunk, owl).
-// The frog's 80% water share = 0.6 swim + 0.2 float sitting; the turtle's
-// 70% = 0.5 swim + 0.2 basking on a drift log.
+// The frog's 90% water share = 0.7 swim + 0.2 float sitting; the turtle's
+// 80% = 0.6 swim + 0.2 basking on a drift log.
 const SWIM_P = {
-  frog: 0.6, turtle: 0.5, beaver: 0.7, goose: 0.7,
+  frog: 0.7, turtle: 0.6, beaver: 0.8, goose: 0.8,
   bear: 0.5, wolf: 0.4, deer: 0.3, raccoon: 0.2, cougar: 0.1,
 };
-// habitat groups for cross-habitat encounter boosting: the lake regulars
-// vs the species that never touch the water
-const AQUATIC = new Set(["frog", "turtle", "beaver", "goose"]);
-const LANDLOCKED = new Set(["fox", "skunk", "hedgehog", "squirrel", "owl"]);
 const POOL_SWIM_P = { labrador: 0.22, axolotl: 0.4, python: 0.3 };
 const canSwimIn = (def, species) => (def.swim?.[species] || 0) > 0;
 
@@ -414,6 +410,18 @@ function enterFromEdge(a, world, sp) {
   }
 }
 
+// the beaver's off-screen ritual: it re-enters from a random spot along
+// the top-right corner, makes for the lake's right end, swims clear
+// across to the dam site and places the next log of the plan
+function startDamRun(a, world) {
+  const { bounds } = world;
+  if (Math.random() < 0.6) { a.x = bounds.w + EDGE_OFF * 0.85; a.y = rand(0.02, 0.30) * bounds.h; }
+  else { a.x = rand(0.85, 0.98) * bounds.w; a.y = -EDGE_OFF * 0.85; }
+  a.state = "damrun"; a._damPhase = 1;
+  a.vx = -20; a.vy = 20; a.targetId = null;
+  a.noEventUntil = performance.now() + 2000;
+}
+
 // ---------------- Agent Factory ----------------
 function makeAgent(world, species) {
   const r = rand(18, 24) * 1.1; // +10% sprite size
@@ -484,6 +492,7 @@ export default function SocialAnimalsRPG() {
   const stageRef = useRef(null);
   const iconsRef = useRef(new Map()); // id -> HTMLElement
   const padsRef = useRef(new Map()); // lily pad index -> HTMLElement
+  const damRefs = useRef(new Map()); // dam log index -> HTMLElement
   const [cfg, setCfg] = useState(DEFAULTS);
   const cfgRef = useRef(cfg); cfgRef.current = cfg; // the RAF loop reads the live value
   const [worldKey, setWorldKey] = useState("forest");
@@ -525,7 +534,7 @@ export default function SocialAnimalsRPG() {
       worldRef.current.last = now;
       dt = Math.min(0.05, Math.max(0, dt));
       if (worldRef.current.running) stepWorld(worldRef.current, cfgRef.current, dt);
-      renderWorld(worldRef.current, iconsRef, padsRef);
+      renderWorld(worldRef.current, iconsRef, padsRef, damRefs);
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
@@ -550,13 +559,14 @@ export default function SocialAnimalsRPG() {
     if (s) { const a = makeAgent(w, s); enterFromEdge(a, w, DEFAULTS.speed); w.agents.push(a); }
   };
   const removeAgent = () => { worldRef.current.agents.pop(); };
-  const resetWorld = () => { const w = worldRef.current; w.agents = seedAgents(w, DEFAULTS.numAgents); };
+  const resetWorld = () => { const w = worldRef.current; w.agents = seedAgents(w, DEFAULTS.numAgents); w.damCount = 0; };
   const switchWorld = (key) => {
     if (!WORLDS[key]) return;
     setWorldKey(key);
     const w = worldRef.current;
     w.def = WORLDS[key];
     w.agents = seedAgents(w, DEFAULTS.numAgents);
+    w.damCount = 0;
     setSnapshot((s) => ({ ...s, selectedId: null }));
   };
 
@@ -603,6 +613,7 @@ export default function SocialAnimalsRPG() {
         {worldKey === "forest" && <ForestScene />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <Lake bounds={snapshot.bounds} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <PadLayer padsRef={padsRef} />}
+        {worldKey === "forest" && snapshot.bounds.w > 0 && <DamLayer damRefs={damRefs} />}
         {worldKey === "neighborhood" && snapshot.bounds.w > 0 && <NeighborhoodScene bounds={snapshot.bounds} />}
 
         {/* Agents */}
@@ -1585,7 +1596,7 @@ function NeighborhoodScene({ bounds }) {
 const PAD_SPECS = [
   { rp: 16 }, { rp: 13 }, { rp: 15, bloom: true }, { rp: 12 },
   { rp: 14 }, { rp: 11 }, { rp: 13 },
-  { log: true, len: 58 }, { log: true, len: 46 },
+  { log: true, len: 58 }, { log: true, len: 46 }, { log: true, len: 52 },
 ];
 function PadLayer({ padsRef }) {
   return (
@@ -1638,6 +1649,55 @@ function PadLayer({ padsRef }) {
         </div>
         );
       })}
+    </>
+  );
+}
+
+// ---------------- The beaver's dam ----------------
+// A PRE-PLANNED structure at the lake's left-center end, laid one log at
+// a time: three courses of logs along arcs of the shoreline geometry —
+// a 6-log base row at the waterline, 5 across the middle, 3 on top.
+// world.damCount says how many are placed; each beaver off-screen event
+// adds one, so total build time depends on how often the beaver roams.
+const DAM_PLAN = (() => {
+  const rows = [
+    { rho: .89, angs: [2.64, 2.86, 3.08, 3.30, 3.52, 3.74], len: 58 },
+    { rho: .83, angs: [2.75, 2.97, 3.19, 3.41, 3.63], len: 52 },
+    { rho: .77, angs: [2.97, 3.19, 3.41], len: 46 },
+  ];
+  const jit = [4, -5, 2, -3, 5, -2, 3, -4, 1, -5, 4, -2, 3, -3];
+  const plan = [];
+  let k = 0;
+  for (const r of rows) {
+    for (const ang of r.angs) {
+      plan.push({ ang, rho: r.rho, rot: (ang * 180) / Math.PI + 90 + jit[k % jit.length], len: r.len + ((k % 3) - 1) * 4 });
+      k++;
+    }
+  }
+  return plan;
+})();
+function DamLayer({ damRefs }) {
+  return (
+    <>
+      {DAM_PLAN.map((s, i) => (
+        <div key={i}
+          ref={(el) => { if (el) damRefs.current.set(i, el); else damRefs.current.delete(i); }}
+          style={{ position: "absolute", left: 0, top: 0, zIndex: 2, pointerEvents: "none", display: "none", willChange: "transform" }}>
+          <svg width={s.len + 14} height="30" viewBox={`${-(s.len + 14) / 2} -15 ${s.len + 14} 30`}
+            style={{ display: "block", marginLeft: -(s.len + 14) / 2, marginTop: -15, overflow: "visible" }}>
+            {/* a wet, chunky dam log: dark bark, ring at each end */}
+            <ellipse cx="0" cy="6" rx={s.len / 2 + 2} ry="7" fill="#05262f" opacity="0.45" />
+            <rect x={-s.len / 2} y="-7.5" width={s.len} height="15" rx="7" fill="#5a3d22" />
+            <rect x={-s.len / 2} y="-7.5" width={s.len} height="6" rx="3" fill="#74522f" opacity=".9" />
+            <path d={`M ${-s.len / 2 + 8} 2.6 h ${s.len - 20} M ${-s.len / 2 + 12} 5.2 h ${s.len - 28}`}
+              stroke="#3f2a15" strokeWidth="1.2" strokeLinecap="round" opacity=".7" />
+            <ellipse cx={-s.len / 2} cy="0" rx="4" ry="7.5" fill="#8a6236" />
+            <ellipse cx={-s.len / 2} cy="0" rx="2" ry="4" fill="#5a3d22" />
+            <ellipse cx={s.len / 2} cy="0" rx="4" ry="7.5" fill="#8a6236" />
+            <ellipse cx={s.len / 2} cy="0" rx="2" ry="4" fill="#5a3d22" />
+          </svg>
+        </div>
+      ))}
     </>
   );
 }
@@ -1879,8 +1939,8 @@ function stepWorld(world, cfg, dt) {
   // (frog or basking turtle) drifts 25% faster.
   if (def.hasWater) {
     if (!world.pads || world.pads.length !== PAD_SPECS.length) {
-      const angs = [2.9, 1.9, 0.85, 3.7, 0.5, 2.35, 4.35, 1.35, 3.15];
-      const rhos = [.55, .6, .5, .42, .62, .38, .52, .45, .6];
+      const angs = [2.9, 1.9, 0.85, 3.7, 0.5, 2.35, 4.35, 1.35, 3.15, 4.9];
+      const rhos = [.55, .6, .5, .42, .62, .38, .52, .45, .6, .5];
       world.pads = angs.map((ang, i) => ({
         ...lakePoint(bounds, ang, rhos[i]),
         p1: ang * 2.3, p2: ang * 5.1 + 1.7, riderId: null,
@@ -1893,7 +1953,11 @@ function stepWorld(world, cfg, dt) {
       p.x += (Math.sin(tsec * 0.11 + p.p1) + 0.7 * Math.sin(tsec * 0.043 + p.p2)) * base * dt;
       p.y += (Math.cos(tsec * 0.09 + p.p2) + 0.7 * Math.sin(tsec * 0.057 + p.p1)) * base * dt;
       const rr = lakeRho(bounds, p.x, p.y);
-      const maxR = Math.max(0.5, 0.97 - 38 / Math.min(LAKE.rx * bounds.w, LAKE.ry * bounds.h));
+      let maxR = Math.max(0.5, 0.97 - 38 / Math.min(LAKE.rx * bounds.w, LAKE.ry * bounds.h));
+      // keep floats out of the dam sector (the lake's west end shallows)
+      const pang = Math.atan2((p.y - LAKE.cy * bounds.h) / (LAKE.ry * bounds.h), (p.x - LAKE.cx * bounds.w) / (LAKE.rx * bounds.w));
+      const pa = pang < 0 ? pang + Math.PI * 2 : pang;
+      if (pa > 2.45 && pa < 3.95) maxR = Math.min(maxR, 0.58);
       if (rr > maxR) {
         const cxp = LAKE.cx * bounds.w, cyp = LAKE.cy * bounds.h;
         const s = maxR / rr;
@@ -1907,7 +1971,7 @@ function stepWorld(world, cfg, dt) {
     if (a.dragging) continue;
     const busy = a.state === "fight" || a.state === "friendly" || a.state === "rescue" ||
       a.state === "sniff" || a.state === "walkoff" || a.state === "leaveyard" || a.state === "seekroof" ||
-      a.state === "padsit" || AIR_STATES.has(a.state) || ROOF_STATES.has(a.state);
+      a.state === "padsit" || a.state === "damrun" || AIR_STATES.has(a.state) || ROOF_STATES.has(a.state);
     if (now >= a.intentUntil && !busy) {
       const swimP = (def.hasWater || def.pool) ? def.swim?.[a.species] || 0 : 0;
       const perchP = !def.perching ? 0
@@ -1915,7 +1979,7 @@ function stepWorld(world, cfg, dt) {
         : a.species === "sugarglider" ? 0.10 : 0; // the glider climbs up now and then
       const patrolP = def.perching && a.species === "cat" ? PATROL_P : 0;
       // float sits: the frog takes any pad or log, the turtle basks on logs
-      // (each 0.2 — part of their 80% / 70% water shares)
+      // (each 0.2 — part of their 90% / 80% water shares)
       const padP = def.hasWater && (a.species === "frog" || a.species === "turtle") ? 0.2 : 0;
       const roll = Math.random();
       a.intent = roll < swimP ? "swim"
@@ -2389,6 +2453,30 @@ function stepWorld(world, cfg, dt) {
       }
     } else if (a._padI != null && a.intent !== "topad") a._padI = null;
 
+    // the beaver's dam run: to the lake's right end, swim across, place a log
+    if (a.state === "damrun") {
+      const n = world.damCount || 0;
+      if (!def.hasWater || n >= DAM_PLAN.length) { a.state = "wander"; a._damPhase = 0; }
+      else {
+        const pl = DAM_PLAN[n];
+        const t2 = a._damPhase === 1 ? lakePoint(bounds, 0.05, 0.9) : lakePoint(bounds, pl.ang, pl.rho);
+        const dx = t2.x - a.x, dy = t2.y - a.y, d = Math.hypot(dx, dy) || 1;
+        const sp2 = cfg.speed * (isWet(a.x, a.y) ? 0.6 : 0.95);
+        a.vx = (dx / d) * sp2; a.vy = (dy / d) * sp2;
+        if (a._damPhase === 1 && d < 26) a._damPhase = 2;
+        else if (a._damPhase === 2 && d < 8) {
+          // he must physically reach and touch the planned point: snap to
+          // it, set the log, then back to normal wandering until the next
+          // off-screen event triggers another run
+          a.x = t2.x; a.y = t2.y;
+          world.damCount = n + 1; // one more log on the dam
+          a._damPhase = 0; a.state = "cooldown"; a.vx = 0; a.vy = 0;
+          a.noEventUntil = Math.max(a.noEventUntil, now + 1500);
+          a.intent = "wander"; a.intentUntil = now + rand(4000, 8000);
+        }
+      }
+    }
+
     // navigation
     if (a.state === "wander") {
       // launch a roof trip when the intent calls for one: the NEAREST roof,
@@ -2466,10 +2554,7 @@ function stepWorld(world, cfg, dt) {
 
   // encounters: nose-range only, and only within the same medium
   // (land ↔ land or water ↔ water — swimmers in the lake are off-limits
-  // to shore animals and vice versa). The divided habitats meet rarely,
-  // so when an aquatic regular crosses paths with a never-wet lander the
-  // moment counts: those encounters trigger ~80% of the time (1.6/s over
-  // a typical ~1s of nose contact) instead of the baseline 0.4/s.
+  // to shore animals and vice versa)
   for (let i = 0; i < agents.length; i++) {
     for (let j = i + 1; j < agents.length; j++) {
       const a = agents[i], b = agents[j];
@@ -2479,10 +2564,7 @@ function stepWorld(world, cfg, dt) {
       if (a.z > 2 || b.z > 2) continue; // ground-level only
       if (dist(a, b) > pairRange(a, b)) continue;
       if (isWet(a.x, a.y) !== isWet(b.x, b.y)) continue;
-      const cross = def.hasWater &&
-        ((AQUATIC.has(a.species) && LANDLOCKED.has(b.species)) ||
-         (LANDLOCKED.has(a.species) && AQUATIC.has(b.species)));
-      if (perSec(cross ? 1.6 : 0.40, dt)) {
+      if (perSec(0.40, dt)) {
         if (Math.random() < 0.5) startFriendly(a, b, world); else startFight(a, b, world);
       }
     }
@@ -2549,10 +2631,14 @@ function stepWorld(world, cfg, dt) {
       }
     }
 
-    // wander off one edge, amble back in from another — never pop mid-map
+    // wander off one edge, amble back in from another — never pop mid-map.
+    // A beaver with dam work left instead re-enters at the top-right
+    // corner and starts a dam run.
     if (a.x < -EDGE_OFF || a.x > bounds.w + EDGE_OFF || a.y < -EDGE_OFF || a.y > bounds.h + EDGE_OFF) {
       a.z = 0; a.roofI = -1;
-      enterFromEdge(a, world, sp);
+      if (a.species === "beaver" && def.hasWater && (world.damCount || 0) < DAM_PLAN.length && a.state !== "damrun") {
+        startDamRun(a, world);
+      } else enterFromEdge(a, world, sp);
     }
   }
 }
@@ -2649,13 +2735,26 @@ function forceFlee(agent, cfg) {
   agent.noEventUntil = performance.now() + rand(NOEVENT_MIN_MS, NOEVENT_MAX_MS);
 }
 
-function renderWorld(world, iconsRef, padsRef) {
+function renderWorld(world, iconsRef, padsRef, damRefs) {
   const t = performance.now() / 1000;
   // drifting lily pads
   if (world.pads && padsRef) {
     for (let i = 0; i < world.pads.length; i++) {
       const el = padsRef.current.get(i);
       if (el) el.style.transform = `translate(${world.pads[i].x}px, ${world.pads[i].y}px)`;
+    }
+  }
+  // the beaver's dam: show the first damCount logs of the plan
+  if (world.def?.hasWater && damRefs) {
+    const n = world.damCount || 0;
+    for (let i = 0; i < DAM_PLAN.length; i++) {
+      const el = damRefs.current.get(i);
+      if (!el) continue;
+      if (i < n) {
+        const p = lakePoint(world.bounds, DAM_PLAN[i].ang, DAM_PLAN[i].rho);
+        el.style.display = "";
+        el.style.transform = `translate(${p.x}px, ${p.y}px) rotate(${DAM_PLAN[i].rot}deg)`;
+      } else el.style.display = "none";
     }
   }
   for (const a of world.agents) {
