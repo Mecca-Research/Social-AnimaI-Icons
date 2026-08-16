@@ -53,8 +53,18 @@ const EDGE_OFF = 70;         // fully off-screen distance before wrapping
 
 // swim-time share per species (probability of picking a "swim" intent).
 // Each world carries its own swimmer map: lake swimmers in the forest,
-// pool swimmers (dog, axolotl, python) in the neighborhood.
-const SWIM_P = { beaver: 0.4, frog: 0.4, turtle: 0.4, goose: 0.35, bear: 0.1 };
+// pool swimmers (dog, axolotl, python) in the neighborhood. Species not
+// in the map never enter the water (fox, hedgehog, squirrel, skunk, owl).
+// The frog's 80% water share = 0.6 swim + 0.2 float sitting; the turtle's
+// 70% = 0.5 swim + 0.2 basking on a drift log.
+const SWIM_P = {
+  frog: 0.6, turtle: 0.5, beaver: 0.7, goose: 0.7,
+  bear: 0.5, wolf: 0.4, deer: 0.3, raccoon: 0.2, cougar: 0.1,
+};
+// habitat groups for cross-habitat encounter boosting: the lake regulars
+// vs the species that never touch the water
+const AQUATIC = new Set(["frog", "turtle", "beaver", "goose"]);
+const LANDLOCKED = new Set(["fox", "skunk", "hedgehog", "squirrel", "owl"]);
 const POOL_SWIM_P = { labrador: 0.22, axolotl: 0.4, python: 0.3 };
 const canSwimIn = (def, species) => (def.swim?.[species] || 0) > 0;
 
@@ -1569,26 +1579,47 @@ function NeighborhoodScene({ bounds }) {
 }
 
 // --------------- Lake (organic shoreline, upper-right) ---------------
-// Seven drifting lily pads (index 2 blooms). Positions live in world.pads
-// (stepped chaotically in stepWorld); renderWorld moves these elements.
+// Drifting floats: seven lily pads (index 2 blooms) + two logs. Positions
+// live in world.pads (stepped chaotically in stepWorld); renderWorld moves
+// these elements. The frog sits on any float; the turtle basks on logs.
 const PAD_SPECS = [
   { rp: 16 }, { rp: 13 }, { rp: 15, bloom: true }, { rp: 12 },
   { rp: 14 }, { rp: 11 }, { rp: 13 },
+  { log: true, len: 58 }, { log: true, len: 46 },
 ];
 function PadLayer({ padsRef }) {
   return (
     <>
-      {PAD_SPECS.map((s, i) => (
+      {PAD_SPECS.map((s, i) => {
+        const W = s.log ? s.len + 16 : s.rp * 2 + 16;
+        const H = s.log ? 40 : s.rp * 2 + 16;
+        return (
         <div key={i}
           ref={(el) => { if (el) padsRef.current.set(i, el); else padsRef.current.delete(i); }}
           style={{ position: "absolute", left: 0, top: 0, zIndex: 2, pointerEvents: "none", willChange: "transform" }}>
-          <svg width={s.rp * 2 + 16} height={s.rp * 2 + 16}
-            viewBox={`${-s.rp - 8} ${-s.rp - 8} ${s.rp * 2 + 16} ${s.rp * 2 + 16}`}
-            style={{ display: "block", marginLeft: -(s.rp + 8), marginTop: -(s.rp + 8), overflow: "visible" }}>
-            <g className={`sai-water-pad pad-${"abcabca"[i]}`}>
+          <svg width={W} height={H}
+            viewBox={`${-W / 2} ${-H / 2} ${W} ${H}`}
+            style={{ display: "block", marginLeft: -W / 2, marginTop: -H / 2, overflow: "visible" }}>
+            <g className={`sai-water-pad pad-${"abcabcabc"[i]}`}>
+              {s.log ? (
+                <>
+                  {/* a weathered drift log, end ring facing out */}
+                  <ellipse cx="2" cy="5" rx={s.len / 2} ry="8.5" fill="#06231a" opacity="0.4" />
+                  <rect x={-s.len / 2} y="-9" width={s.len} height="18" rx="8" fill="#6b4a2a" />
+                  <rect x={-s.len / 2} y="-9" width={s.len} height="7" rx="3.5" fill="#8a6236" opacity=".85" />
+                  <path d={`M ${-s.len / 2 + 9} 3 h ${s.len - 22} M ${-s.len / 2 + 13} 6.2 h ${s.len - 32}`}
+                    stroke="#4e3620" strokeWidth="1.3" strokeLinecap="round" opacity=".65" />
+                  <circle cx={-s.len / 5} cy="-3.4" r="2" fill="#4e3620" opacity=".6" />
+                  <ellipse cx={s.len / 2} cy="0" rx="4.8" ry="9" fill="#a87c4f" />
+                  <ellipse cx={s.len / 2} cy="0" rx="2.4" ry="4.8" fill="#8a6236" />
+                </>
+              ) : (
+                <>
               <ellipse cx="1" cy="3" rx={s.rp} ry={s.rp * 0.62} fill="#06231a" opacity="0.4" />
               <path d={`M 2 ${-s.rp * 0.66} A ${s.rp} ${s.rp * 0.66} 0 1 1 -2 ${-s.rp * 0.66} L -1 -1 Z`}
-                fill="url(#sailake-pad)" transform={`rotate(${[18, -24, 8, -10, 24, -14, 6][i]})`} />
+                fill="url(#sailake-pad)" transform={`rotate(${[18, -24, 8, -10, 24, -14, 6, 0, 0][i]})`} />
+                </>
+              )}
               {s.bloom && (
                 <g className="sai-water-bloom" style={{ transformOrigin: "-2px -3px" }}>
                   <g transform="translate(-2 -3)">
@@ -1605,7 +1636,8 @@ function PadLayer({ padsRef }) {
             </g>
           </svg>
         </div>
-      ))}
+        );
+      })}
     </>
   );
 }
@@ -1841,22 +1873,23 @@ function stepWorld(world, cfg, dt) {
   const isWet = (x, y) => def.hasWater ? inWater(bounds, x, y)
     : def.pool ? inPool(bounds, def.pool, x, y) : false;
 
-  // ---- lily pads: VERY slow quasi-chaotic drift (sums of incommensurate
-  // sines), held inside a "strange attractor" rim ~1cm (38px) short of the
-  // shoreline. A pad carrying the sitting frog drifts 25% faster.
+  // ---- floats (lily pads + drift logs): VERY slow quasi-chaotic drift
+  // (sums of incommensurate sines), held inside a "strange attractor" rim
+  // ~1cm (38px) short of the shoreline. A float carrying a sitting rider
+  // (frog or basking turtle) drifts 25% faster.
   if (def.hasWater) {
     if (!world.pads || world.pads.length !== PAD_SPECS.length) {
-      const angs = [2.9, 1.9, 0.85, 3.7, 0.5, 2.35, 4.35];
-      const rhos = [.55, .6, .5, .42, .62, .38, .52];
+      const angs = [2.9, 1.9, 0.85, 3.7, 0.5, 2.35, 4.35, 1.35, 3.15];
+      const rhos = [.55, .6, .5, .42, .62, .38, .52, .45, .6];
       world.pads = angs.map((ang, i) => ({
         ...lakePoint(bounds, ang, rhos[i]),
-        p1: ang * 2.3, p2: ang * 5.1 + 1.7, frogId: null,
+        p1: ang * 2.3, p2: ang * 5.1 + 1.7, riderId: null,
       }));
     }
     const tsec = now / 1000;
     for (const p of world.pads) {
-      if (p.frogId != null && !agents.some((c) => c.id === p.frogId && c.state === "padsit")) p.frogId = null;
-      const base = 3 * (p.frogId != null ? 1.25 : 1); // px/s — barely a drift
+      if (p.riderId != null && !agents.some((c) => c.id === p.riderId && c.state === "padsit")) p.riderId = null;
+      const base = 3 * (p.riderId != null ? 1.25 : 1); // px/s — barely a drift
       p.x += (Math.sin(tsec * 0.11 + p.p1) + 0.7 * Math.sin(tsec * 0.043 + p.p2)) * base * dt;
       p.y += (Math.cos(tsec * 0.09 + p.p2) + 0.7 * Math.sin(tsec * 0.057 + p.p1)) * base * dt;
       const rr = lakeRho(bounds, p.x, p.y);
@@ -1881,7 +1914,9 @@ function stepWorld(world, cfg, dt) {
         : FLYERS.has(a.species) ? PERCH_P
         : a.species === "sugarglider" ? 0.10 : 0; // the glider climbs up now and then
       const patrolP = def.perching && a.species === "cat" ? PATROL_P : 0;
-      const padP = def.hasWater && a.species === "frog" ? 0.22 : 0; // lily pad sits
+      // float sits: the frog takes any pad or log, the turtle basks on logs
+      // (each 0.2 — part of their 80% / 70% water shares)
+      const padP = def.hasWater && (a.species === "frog" || a.species === "turtle") ? 0.2 : 0;
       const roll = Math.random();
       a.intent = roll < swimP ? "swim"
         : roll < swimP + perchP ? "perch"
@@ -2334,16 +2369,17 @@ function stepWorld(world, cfg, dt) {
 
     if (a.state === "idle" && now >= a.idleUntil) a.state = "wander";
 
-    // the frog rides its lily pad, then hops back into the water
+    // the rider (frog on any float, turtle basking on a log) rides its
+    // float, then slips back into the water
     if (a.state === "padsit") {
       const p = world.pads?.[a._padI];
       if (!p) { a.state = "wander"; a._padI = null; }
       else {
-        // ride the pad, seated so the feet rest on it (sprite is centered
-        // on a.y; its feet sit ~25px below center)
+        // ride the float, seated so the feet rest on it (sprite is
+        // centered on a.y; its feet sit ~25px below center)
         a.x = p.x; a.y = p.y - 20; a.vx = 0; a.vy = 0;
         if (now >= a.stateUntil) {
-          p.frogId = null; a._padI = null;
+          p.riderId = null; a._padI = null;
           a.state = "wander"; a.intent = "wander";
           a.intentUntil = now + rand(4000, 8000);
           const ang = rand(0, Math.PI * 2);
@@ -2364,13 +2400,18 @@ function stepWorld(world, cfg, dt) {
         continue;
       }
       if (a.intent === "topad" && def.hasWater && world.pads?.length) {
-        // the frog paddles out to a lily pad and climbs on for a sit
-        if (a._padI == null) a._padI = (Math.random() * world.pads.length) | 0;
-        const p = world.pads[a._padI]; // the pad drifts — re-aim every tick
+        // paddle out to a float and climb on: the frog takes any pad or
+        // log, the turtle only basks on logs
+        if (a._padI == null) {
+          const opts = [];
+          world.pads.forEach((_, i) => { if (a.species === "frog" || PAD_SPECS[i].log) opts.push(i); });
+          a._padI = opts[(Math.random() * opts.length) | 0];
+        }
+        const p = world.pads[a._padI]; // the float drifts — re-aim every tick
         const dx = p.x - a.x, dy = p.y - a.y, d = Math.hypot(dx, dy) || 1;
         if (d < 12) {
           a.state = "padsit"; a.stateUntil = now + rand(7000, 14000);
-          p.frogId = a.id; a.vx = 0; a.vy = 0;
+          p.riderId = a.id; a.vx = 0; a.vy = 0;
         } else {
           const sp = cfg.speed * (isWet(a.x, a.y) ? 0.55 : 0.9);
           a.vx = (dx / d) * sp; a.vy = (dy / d) * sp;
@@ -2425,7 +2466,10 @@ function stepWorld(world, cfg, dt) {
 
   // encounters: nose-range only, and only within the same medium
   // (land ↔ land or water ↔ water — swimmers in the lake are off-limits
-  // to shore animals and vice versa)
+  // to shore animals and vice versa). The divided habitats meet rarely,
+  // so when an aquatic regular crosses paths with a never-wet lander the
+  // moment counts: those encounters trigger ~80% of the time (1.6/s over
+  // a typical ~1s of nose contact) instead of the baseline 0.4/s.
   for (let i = 0; i < agents.length; i++) {
     for (let j = i + 1; j < agents.length; j++) {
       const a = agents[i], b = agents[j];
@@ -2435,7 +2479,10 @@ function stepWorld(world, cfg, dt) {
       if (a.z > 2 || b.z > 2) continue; // ground-level only
       if (dist(a, b) > pairRange(a, b)) continue;
       if (isWet(a.x, a.y) !== isWet(b.x, b.y)) continue;
-      if (perSec(0.40, dt)) {
+      const cross = def.hasWater &&
+        ((AQUATIC.has(a.species) && LANDLOCKED.has(b.species)) ||
+         (LANDLOCKED.has(a.species) && AQUATIC.has(b.species)));
+      if (perSec(cross ? 1.6 : 0.40, dt)) {
         if (Math.random() < 0.5) startFriendly(a, b, world); else startFight(a, b, world);
       }
     }
