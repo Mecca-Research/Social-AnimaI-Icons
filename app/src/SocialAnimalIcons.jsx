@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Critter, SPECIES, ALL_SPECIES } from "./Critters.jsx";
 import { PET_SPECIES } from "./CrittersPets.jsx";
+import { speciesSize } from "./SpeciesProfile.js";
 import { stepEthogram, ethoSwimP, ethoShare, ETHOGRAM, ETHO_STATES, ETHO_Z_STATES, ETHO_OWNWATER_STATES, setTreeMetrics, ethoOffstage } from "./Ethogram.js";
 
 /**
@@ -47,7 +48,13 @@ const NOEVENT_MAX_MS = 7000; // max time to forbid new events after an interacti
 const INTENT_MIN_S = 10, INTENT_MAX_S = 18;
 
 // encounters trigger only at true nose-range
-const pairRange = (a, b) => Math.max(70, (a.r + b.r) * 1.6);
+// Nose range. The 1.6 was tuned when every radius was ~23 and the sum was
+// always ~74, so the multiplier and the floor were both nearly inert. With
+// real per-species radii the same formula would have a bear and a deer
+// engaging at 101px — well before their noses meet — so the coefficient
+// comes down and the floor with it, holding the effective range where it
+// has always been while still letting a big pair reach a little further.
+const pairRange = (a, b) => Math.max(60, (a.r + b.r) * 1.25);
 const AVOID_RADIUS = 190;    // bystanders this close to a fight clear out
 const RESCUE_RADIUS = 620;   // a friend this close sprints in to break a fight up
 const RESCUE_REACH = 95;     // ...and succeeds once this close to their friend
@@ -627,7 +634,11 @@ function enterFromEdge(a, world, sp) {
 
 // ---------------- Agent Factory ----------------
 function makeAgent(world, species) {
-  const r = rand(18, 24) * 1.1; // +10% sprite size
+  // Locked per species, not rolled. It used to be rand(18,24)*1.1 with no
+  // idea what animal it was making, which is why a bear could spawn smaller
+  // than a squirrel — and why it looked wrong as often as right, since a
+  // uniform draw lands at the bottom of the range as readily as the top.
+  const r = speciesSize(species);
   const speed0 = DEFAULTS.speed;
   const p = interiorPoint(world, species);
   return {
@@ -2896,6 +2907,9 @@ function lockTogether(a, b, world) {
     if (min === dl) mx = l; else if (min === dr) mx = r2;
     else if (min === dt2) my = t; else my = b2;
   }
+  // each is pushed clear by its OWN size. While every radius was near enough
+  // identical this was the same thing; now a bear and a frog need different
+  // room and a shared half-offset leaves the frog inside the bear.
   const half = (a.r + b.r) * 0.56;
   a.lockX = mx - nx * half; a.lockY = my - ny * half;
   b.lockX = mx + nx * half; b.lockY = my + ny * half;
