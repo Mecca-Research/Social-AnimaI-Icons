@@ -180,6 +180,20 @@ function BearDraw({ uid }) {
         <path d="M 95 48.6 q 4.4 0 4.4 3.4 q 0 3 -4.4 3 q -4.4 0 -4.4 -3 q 0 -3.4 4.4 -3.4 Z" fill={ink} />
         <FaceKit lid={F[1]} e1={[77, 42]} e2={[93, 40]} er={2.9} iris={ink} mouth={[95, 61]} />
       </g>
+      {/* the caught SILVER SALMON — steel back, bright silver flank,
+          white belly, dark forked tail. CSS shows it in his mouth while
+          carrying it ashore and while eating */}
+      <g className="sai-crit-fish">
+        <path d="M 89 62 l -7.2 -4.8 l 2 4.8 l -2 4.8 Z" fill="#3a424a" />
+        <path d="M 89 62 l -4.6 -3 l 1.2 3 l -1.2 3 Z" fill="#525c66" />
+        <ellipse cx="100" cy="62" rx="11.5" ry="4.7" fill="#b8c2cb" />
+        <path d="M 89.5 61 C 94 57.9 106 58 111 61.4 C 105 59.6 95 59.5 89.5 61 Z" fill="#5a6570" />
+        <path d="M 92 64.2 C 97 66.4 104.5 66.3 109.5 63.8" stroke="#e8edf0" strokeWidth="2" fill="none" strokeLinecap="round" />
+        <path d="M 97.5 58.4 l 2.6 -2.4 l 1.6 2.5 Z" fill="#3a424a" />
+        <path d="M 99 65.8 l 1.6 2 l 1.2 -1.9 Z" fill="#525c66" />
+        <circle cx="107.5" cy="60.9" r="1.1" fill="#141518" />
+        <circle cx="107.8" cy="60.6" r=".4" fill="#e8edf0" opacity=".8" />
+      </g>
     </g>
   );
 }
@@ -249,6 +263,22 @@ function BeaverDraw({ uid }) {
           <rect x="94.3" y="58.5" width="3.5" height="6.2" rx="1.1" fill="#fff6de" stroke="#caa15e" strokeWidth=".5" />
         </g>
         <FaceKit lid={F[1]} e1={[77, 44]} e2={[92, 42.5]} er={3} iris={ink} mouths={false} />
+      </g>
+      {/* the dam log he PUSHES: floating clear of his snout at the
+          waterline, bow wave breaking off its far end. CSS shows it only
+          while he's swimming a dam run */}
+      <g className="sai-crit-damlog">
+        <ellipse cx="119" cy="80" rx="20" ry="4.5" fill="#05262f" opacity=".38" />
+        <g transform="rotate(-5 119 69)">
+          <rect x="103" y="61.5" width="33" height="15" rx="7.5" fill="#6b4a2a" />
+          <rect x="103" y="61.5" width="33" height="6" rx="3" fill="#8a6236" opacity=".9" />
+          <path d="M 109 71.4 h 21" stroke="#4e3620" strokeWidth="1.3" strokeLinecap="round" opacity=".7" />
+          <ellipse cx="103" cy="69" rx="3.8" ry="7.5" fill="#8a6236" />
+          <ellipse cx="103" cy="69" rx="1.9" ry="3.8" fill="#5a3d22" />
+          <ellipse cx="136" cy="69" rx="3.6" ry="7.5" fill="#7a5730" />
+        </g>
+        <path d="M 140 64 q 4.4 5 0 10" stroke="#dff3fb" strokeWidth="2" fill="none" strokeLinecap="round" opacity=".7" />
+        <path d="M 134 78.5 q 6 1.6 10 -.6" stroke="#dff3fb" strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".45" />
       </g>
     </g>
   );

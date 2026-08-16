@@ -56,11 +56,14 @@ const EDGE_OFF = 70;         // fully off-screen distance before wrapping
 // pool swimmers (dog, axolotl, python) in the neighborhood. Species not
 // in the map never enter the water (fox, hedgehog, squirrel, skunk, owl).
 // The frog's 90% water share = 0.7 swim + 0.2 float sitting; the turtle's
-// 80% = 0.6 swim + 0.2 basking on a drift log.
+// 80% = 0.6 swim + 0.2 basking on a drift log. The beaver splits 50/50 —
+// more shore time means more off-screen dam trips.
 const SWIM_P = {
-  frog: 0.7, turtle: 0.6, beaver: 0.8, goose: 0.8,
-  bear: 0.5, wolf: 0.4, deer: 0.3, raccoon: 0.2, cougar: 0.1,
+  frog: 0.7, turtle: 0.6, beaver: 0.5, goose: 0.8,
+  bear: 0.4, wolf: 0.2, deer: 0.2, raccoon: 0.1, cougar: 0.1,
 };
+// occasional dippers keep it brief: a 6-12s timer per visit to the water
+const DIP_TIMED = new Set(["wolf", "deer", "raccoon", "cougar"]);
 const POOL_SWIM_P = { labrador: 0.22, axolotl: 0.4, python: 0.3 };
 const canSwimIn = (def, species) => (def.swim?.[species] || 0) > 0;
 
@@ -1971,7 +1974,9 @@ function stepWorld(world, cfg, dt) {
     if (a.dragging) continue;
     const busy = a.state === "fight" || a.state === "friendly" || a.state === "rescue" ||
       a.state === "sniff" || a.state === "walkoff" || a.state === "leaveyard" || a.state === "seekroof" ||
-      a.state === "padsit" || a.state === "damrun" || AIR_STATES.has(a.state) || ROOF_STATES.has(a.state);
+      a.state === "padsit" || a.state === "damrun" ||
+      a.state === "fishdive" || a.state === "fishwait" || a.state === "fishcarry" || a.state === "fisheat" ||
+      AIR_STATES.has(a.state) || ROOF_STATES.has(a.state);
     if (now >= a.intentUntil && !busy) {
       const swimP = (def.hasWater || def.pool) ? def.swim?.[a.species] || 0 : 0;
       const perchP = !def.perching ? 0
@@ -2452,6 +2457,62 @@ function stepWorld(world, cfg, dt) {
         }
       }
     } else if (a._padI != null && a.intent !== "topad") a._padI = null;
+
+    // occasional dippers (wolf, deer, raccoon, cougar) wade out after 6-12s
+    if (DIP_TIMED.has(a.species) && def.hasWater) {
+      if (isWet(a.x, a.y)) {
+        if (!a._dipUntil) a._dipUntil = now + rand(6000, 12000);
+        else if (now > a._dipUntil && a.intent === "swim") a.intent = "wander"; // → paddles ashore
+      } else a._dipUntil = 0;
+    }
+
+    // ---- the bear goes fishing: 20% roll on each fresh entry into the
+    // water; up to 3 dives at 50/50 each; a catch is carried ashore and
+    // eaten, a bust resets him to plain wandering. The roll can only
+    // re-arm once he's left the water and come back in.
+    if (a.species === "bear" && def.hasWater) {
+      const wet = isWet(a.x, a.y);
+      if (wet && !a._wasWet && isFreeState(a) && Math.random() < 0.2) {
+        a.state = "fishdive"; a._diveN = 1; a.stateUntil = now + 1100; a.vx = 0; a.vy = 0;
+      }
+      a._wasWet = wet;
+    }
+    if (a.state === "fishdive" || a.state === "fishwait") {
+      a.vx = 0; a.vy = 0;
+      if (!isWet(a.x, a.y)) { a.state = "wander"; a._diveN = 0; }
+      else if (now >= a.stateUntil) {
+        if (a.state === "fishwait") { a.state = "fishdive"; a.stateUntil = now + 1100; }
+        else if (Math.random() < 0.5) {
+          // got one! carry it to the nearest stretch of shore
+          const ang = Math.atan2((a.y - LAKE.cy * bounds.h) / (LAKE.ry * bounds.h), (a.x - LAKE.cx * bounds.w) / (LAKE.rx * bounds.w));
+          a._fishTarget = lakePoint(bounds, ang, 1.12);
+          a.state = "fishcarry";
+        } else if ((a._diveN || 1) >= 3) {
+          a.state = "wander"; a.intent = "wander"; a._diveN = 0; // three misses — give it up
+          a.noEventUntil = Math.max(a.noEventUntil, now + 1200);
+        } else {
+          a._diveN = (a._diveN || 1) + 1;
+          a.state = "fishwait"; a.stateUntil = now + rand(900, 1600);
+        }
+      }
+    } else if (a.state === "fishcarry") {
+      const t2 = a._fishTarget;
+      if (!t2) a.state = "wander";
+      else {
+        const dx = t2.x - a.x, dy = t2.y - a.y, d = Math.hypot(dx, dy) || 1;
+        const sp2 = cfg.speed * (isWet(a.x, a.y) ? 0.6 : 0.9);
+        a.vx = (dx / d) * sp2; a.vy = (dy / d) * sp2;
+        if (d < 16) { a.state = "fisheat"; a.stateUntil = now + 2600; a.vx = 0; a.vy = 0; }
+      }
+    } else if (a.state === "fisheat") {
+      a.vx = 0; a.vy = 0;
+      if (now >= a.stateUntil) {
+        // the fish is gone — back to regular bear business
+        a.state = "wander"; a.intent = "wander"; a._fishTarget = null; a._diveN = 0;
+        a.intentUntil = now + rand(4000, 8000);
+        a.noEventUntil = Math.max(a.noEventUntil, now + 1200);
+      }
+    }
 
     // the beaver's dam run: to the lake's right end, swim across, place a log
     if (a.state === "damrun") {
