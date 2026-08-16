@@ -102,6 +102,13 @@ export const ETHO_STATES = new Set();
  * be exempt, and declaring it here beats naming each state in the physics.
  */
 export const ETHO_Z_STATES = new Set();
+/**
+ * States that draw their own presence in the water and must not also get the
+ * generic swimming rig — tucked legs, ripple ring, bobbing. The float sit was
+ * the first of these and was special-cased by name in the renderer; a raccoon
+ * standing in the shallows washing a berry is the second, so it is a flag now.
+ */
+export const ETHO_OWNWATER_STATES = new Set();
 
 // How fast the domain ledger forgets. Long enough that a single long swim
 // doesn't swing the plan, short enough that the split is a *recent* average
@@ -125,7 +132,11 @@ export function defineEthogram(species, spec) {
   for (const ev of spec.events) {
     for (const v of ev.variants || [ev]) {
       v.owner = ev;
-      for (const s of v.states || []) { claim(s, v); if (v.holdsZ) ETHO_Z_STATES.add(s); }
+      for (const s of v.states || []) {
+        claim(s, v);
+        if (v.holdsZ) ETHO_Z_STATES.add(s);
+        if (v.ownsWater) ETHO_OWNWATER_STATES.add(s);
+      }
       // an event with a `goto` gets its walk-there state driven by the
       // engine, so it needs an entry in the dispatch table of its own
       if (v.goto) claim(v.goto.state, { owner: ev, self: v, drive: driveGoto, isGoto: true });
@@ -997,16 +1008,17 @@ function nearestForage(a, c, kind) {
 }
 
 /**
- * The nearest stretch of shoreline, standing IN it. rho 1.05 leaves his feet
- * on the bottom a little short of open water: the domain test reads that as
- * land — correctly, he is wading — and he never ends up swimming with both
- * hands full. This is the number to nudge if the drawn shallows in his
- * washing pose sit off the real waterline.
+ * The nearest stretch of shallows, standing IN the water. He has to be past
+ * the waterline for the wash to read at all — on the mud at rho 1.05 he was
+ * miming it at a lake he had not reached.
  */
 function waterEdge(a, c) {
   const ang = Math.atan2((a.y - c.LAKE.cy * c.bounds.h) / (c.LAKE.ry * c.bounds.h),
                          (a.x - c.LAKE.cx * c.bounds.w) / (c.LAKE.rx * c.bounds.w));
-  return c.lakePoint(c.bounds, ang, 1.05);
+  // rho 0.93, not 1.05. Above 1 he stands on the mud with the water in front
+  // of him and the wash reads as a mime; inside the waterline his body is
+  // actually in the shallows, which is the whole point of dousing.
+  return c.lakePoint(c.bounds, ang, 0.93);
 }
 
 /**
@@ -1121,7 +1133,7 @@ defineEthogram("raccoon", {
         {
           // GROUND PICK — the common case. He works the low fruit over in
           // both hands before deciding it is worth carrying anywhere.
-          id: "racpick", w: 3,
+          id: "racpick", w: 3, ownsWater: true,
           states: ["rachandle", "racdouse", "racwash", "raceat"],
           goto: { state: "toberry", ...RAC_TOBERRY },
           begin(a, c) {
