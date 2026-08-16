@@ -32,7 +32,8 @@ const perSec = (rate, dt) => Math.random() < 1 - Math.exp(-rate * dt); // Poisso
 
 // ---------------- Config ----------------
 const DEFAULTS = {
-  numAgents: 8,
+  numAgents: 14, // the full cast: every species has signature behavior now,
+                 // and an 8-of-14 random draw left half of it unseen
   speed: 80,                 // px/s nominal (UI rescaled)
 };
 const MAX_AGENTS = Object.keys(SPECIES).length; // one of each species, no repeats
@@ -66,6 +67,10 @@ const SWIM_P = {
 };
 // occasional dippers keep it brief: a 6-12s timer per visit to the water
 const DIP_TIMED = new Set(["wolf", "deer", "raccoon", "cougar"]);
+// the water regulars still haul out regularly — without this they simply
+// live in the lake and their on-exit behaviors (the goose's preening)
+// almost never get a chance to fire
+const SOAK_MS = { goose: [11000, 20000], frog: [16000, 30000], turtle: [18000, 34000], beaver: [13000, 24000] };
 const POOL_SWIM_P = { labrador: 0.22, axolotl: 0.4, python: 0.3 };
 const canSwimIn = (def, species) => (def.swim?.[species] || 0) > 0;
 
@@ -1981,8 +1986,15 @@ function stepWorld(world, cfg, dt) {
       a.state === "fishcarry" || a.state === "fisheat" ||
       a.state === "preen" || a.state === "splash" || a.state === "sploot" ||
       AIR_STATES.has(a.state) || ROOF_STATES.has(a.state);
+    // a behavior trip already under way outranks a fresh intent roll: an
+    // animal on its way to a float keeps going (and picks the trip back up
+    // after a fight interrupts it) instead of silently forgetting it
+    if (!busy && a._padTrip && isFreeState(a) && a.intent !== "topad" && now < a._padTrip) {
+      a.intent = "topad"; a.intentUntil = now + 6000;
+    }
     if (now >= a.intentUntil && !busy) {
-      const swimP = (def.hasWater || def.pool) ? def.swim?.[a.species] || 0 : 0;
+      const ashore = now < (a._ashoreUntil || 0); // just hauled out — stay dry a moment
+      const swimP = ashore ? 0 : (def.hasWater || def.pool) ? def.swim?.[a.species] || 0 : 0;
       const perchP = !def.perching ? 0
         : FLYERS.has(a.species) ? PERCH_P
         : a.species === "sugarglider" ? 0.10 : 0; // the glider climbs up now and then
@@ -2455,7 +2467,7 @@ function stepWorld(world, cfg, dt) {
         // centered on a.y; its feet sit ~25px below center)
         a.x = p.x; a.y = p.y - 20; a.vx = 0; a.vy = 0;
         if (now >= a.stateUntil) {
-          p.riderId = null; a._padI = null; a._chorus = false;
+          p.riderId = null; a._padI = null; a._chorus = false; a._padTrip = 0;
           a.state = "wander"; a.intent = "wander";
           a.intentUntil = now + rand(4000, 8000);
           const ang = rand(0, Math.PI * 2);
@@ -2475,7 +2487,7 @@ function stepWorld(world, cfg, dt) {
       if (!wet && a._wasWet && isFreeState(a) && Math.random() < 0.5) {
         a.state = "preen"; a.stateUntil = now + rand(4000, 7000); a.vx = 0; a.vy = 0;
       }
-      if (wet && !a._wasWet && isFreeState(a) && Math.random() < 0.1) {
+      if (wet && !a._wasWet && isFreeState(a) && Math.random() < 0.2) {
         a._splashAt = now + rand(6000, 14000);
       }
       if (!wet) a._splashAt = 0; // left the water before it got round to it
@@ -2501,16 +2513,29 @@ function stepWorld(world, cfg, dt) {
         a.noEventUntil = Math.max(a.noEventUntil, now + 800);
       }
     } else if (a.intent === "sploot" && a.species === "squirrel" && isFreeState(a) && a.z === 0) {
-      a.state = "sploot"; a.stateUntil = now + rand(5000, 9000); a.vx = 0; a.vy = 0;
+      a.state = "sploot"; a.stateUntil = now + rand(8000, 14000); a.vx = 0; a.vy = 0;
       a.intent = "wander";
     }
 
-    // occasional dippers (wolf, deer, raccoon, cougar) wade out after 6-12s
-    if (DIP_TIMED.has(a.species) && def.hasWater) {
+    // everyone who swims eventually hauls out: the occasional dippers after
+    // 6-12s, the water regulars after a longer soak. Without a cap they'd
+    // simply re-roll "swim" forever and never come ashore at all — which is
+    // what kept the goose from ever preening.
+    if (def.hasWater && (DIP_TIMED.has(a.species) || SOAK_MS[a.species])) {
       if (isWet(a.x, a.y)) {
-        if (!a._dipUntil) a._dipUntil = now + rand(6000, 12000);
-        else if (now > a._dipUntil && a.intent === "swim") a.intent = "wander"; // → paddles ashore
-      } else a._dipUntil = 0;
+        if (!a._dipUntil) {
+          const win = SOAK_MS[a.species] || [6000, 12000];
+          a._dipUntil = now + rand(win[0], win[1]);
+        } else if (now > a._dipUntil && isFreeState(a) && !a._splashAt) {
+          // (a goose with a splash pending stays in until it has flapped)
+          a.intent = "wander";                       // → paddles ashore
+          a._ashoreUntil = now + 4000;               // and stays out a beat
+          // re-roll right after the shore break instead of idling on land
+          // for up to a full intent window — that dead time was what made
+          // the goose's water cycle (and so its preen/splash) so rare
+          a.intentUntil = Math.min(a.intentUntil, a._ashoreUntil + 400);
+        }
+      } else { a._dipUntil = 0; }
     }
 
     // ---- the bear goes fishing: 30% roll on each fresh entry into the
@@ -2613,15 +2638,25 @@ function stepWorld(world, cfg, dt) {
         // paddle out to a float and climb on: the frog takes any pad or
         // log, the turtle only basks on logs
         if (a._padI == null) {
-          const opts = [];
-          world.pads.forEach((_, i) => { if (a.species === "frog" || PAD_SPECS[i].log) opts.push(i); });
-          a._padI = opts[(Math.random() * opts.length) | 0];
+          // head for the NEAREST eligible float — a random one across the
+          // lake often sat further away than a whole intent window, so the
+          // trip expired en route and the sit never happened
+          let bi = null, bd = Infinity;
+          world.pads.forEach((p2, i) => {
+            if (!(a.species === "frog" || PAD_SPECS[i].log)) return;
+            if (p2.riderId != null && p2.riderId !== a.id) return; // already taken
+            const d2 = Math.hypot(p2.x - a.x, p2.y - a.y);
+            if (d2 < bd) { bd = d2; bi = i; }
+          });
+          if (bi == null) { a.intent = "wander"; a._padTrip = 0; }
+          else { a._padI = bi; a._padTrip = now + 30000; } // commit to the trip
         }
-        const p = world.pads[a._padI]; // the float drifts — re-aim every tick
-        const dx = p.x - a.x, dy = p.y - a.y, d = Math.hypot(dx, dy) || 1;
-        if (d < 12) {
+        const p = a._padI != null ? world.pads[a._padI] : null; // the float drifts — re-aim every tick
+        const dx = p ? p.x - a.x : 0, dy = p ? p.y - a.y : 0, d = Math.hypot(dx, dy) || 1;
+        if (!p) { /* no float free right now */ }
+        else if (d < 12) {
           a.state = "padsit"; a.stateUntil = now + rand(7000, 14000);
-          p.riderId = a.id; a.vx = 0; a.vy = 0;
+          p.riderId = a.id; a.vx = 0; a.vy = 0; a._padTrip = 0;
           // half the time a settled frog strikes up a chorus
           a._chorus = a.species === "frog" && Math.random() < 0.5;
         } else {
