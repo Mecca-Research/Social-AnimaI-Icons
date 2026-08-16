@@ -63,7 +63,131 @@ function FoxDraw({ uid }) {
         <path d="M 90 49 C 99 47 106 50 109 55 C 104 59 96 60 90 57 Z" fill={bib} />
         <ellipse cx="108" cy="54" rx="3.4" ry="2.9" fill={ink} />
         <FaceKit lid={F[1]} e1={[78, 43]} e2={[94, 41]} er={3.4} iris={ink} mouth={[95, 60]} />
+        {/* ---- (1) LAST child of <g className="sai-crit-head">, after the FaceKit:
+             the berry riding in his jaws for the one second it takes to go down.
+             It hangs off the carry channel, so it is hidden of its own accord
+             while either dedicated pose is up and the normal head is off. */}
+        <g className="sai-crit-foxberry">
+          <circle cx="103" cy="61" r="3.6" fill="#8e1f46" />
+          <circle cx="101.9" cy="59.9" r="1.3" fill="#d46b95" opacity=".7" />
+        </g>
       </g>
+        {/* ---- (2) and (3) at the END of FoxDraw's outer <g>, after the head group
+             — the two feeding poses. His body is one level ellipse with the head
+             pasted on the front of it and no neck drawn at all, so rotating the
+             head rig only tears it off the shoulders: neither a muzzle at a branch
+             tip nor a muzzle in the turf is reachable. Both are therefore drawn
+             whole and swapped in, the same trick as the bear's back-scratch. */}
+
+        {/* THE DELICATE PLUCK (foxpluck): risen just onto the hind feet, one
+            forepaw braced on the ground and the other curled loose at the chest.
+            The twig comes with him rather than being borrowed from the bush he is
+            standing at — two berries on a bare stem read as ONE branch of that
+            bush, where a second drawn thicket would read as a second bush. */}
+        <g className="sai-crit-pluckpose">
+          <g className="pluck-branch">
+            <path d="M 120 2 C 115 10 110 18 105 26" stroke="#5a4a2c" strokeWidth="3.2" fill="none" strokeLinecap="round" />
+            <ellipse cx="117" cy="9" rx="10" ry="7" fill="#2f6b3f" />
+            <ellipse cx="112" cy="19" rx="7.5" ry="5.5" fill="#3a7d49" />
+            <circle cx="113" cy="13" r="3" fill="#a8244f" />
+          </g>
+          {/* the brush drops low and back — it is the counterweight that lets him
+              hold a rear this shallow without windmilling */}
+          <g className="pluck-tail">
+            <path d="M 42 90 C 20 98 2 86 6 62 C 8 50 20 46 27 53 C 23 64 28 74 38 79 C 42 81 44 84 46 86 Z" fill={`url(#${uid}f)`} />
+            <path d="M 6 62 C 7 53 15 48 22 51 C 18 57 16 64 18 71 C 11 69 6 66 6 62 Z" fill={bib} />
+          </g>
+          <rect x="32" y="84" width="8.5" height="19" rx="4.2" fill={sockF} />
+          <path d="M 63 58 C 68 70 72 86 72 102 L 79 102 C 79 86 75 70 70 57 Z" fill={sockF} />
+          <ellipse cx="75.5" cy="102" rx="5.2" ry="3.2" fill={sockF} />
+          <g className="sai-crit-pluckbody">
+            <path d="M 28 82 C 28 68 34 58 46 54 C 58 50 70 54 76 64 C 80 72 78 82 70 88 C 58 96 38 96 30 90 C 28 88 28 85 28 82 Z" fill={`url(#${uid}f)`} />
+            <ellipse cx="42" cy="82" rx="19" ry="17" fill={`url(#${uid}f)`} />
+            <BackShade cx={52} cy={70} rx={26} ry={20} color="#8a4514" op={.16} />
+            <Under cx={48} cy={82} rx={22} ry={17} color={bib} k={.5} opacity={.85} />
+            <path d="M 66 58 C 74 64 78 74 74 84 C 68 82 63 74 62 64 Z" fill={bib} opacity=".9" />
+            <BellyShade cx={48} cy={94} rx={18} />
+          </g>
+          <rect x="40" y="82" width="9" height="21" rx="4.5" fill={sock} />
+          <g className="pluck-fore">
+            <path d="M 66 60 C 74 62 81 68 84 76 C 80 81 74 80 70 74 C 69 69 68 64 65 60 Z" fill={sock} />
+            <ellipse cx="82" cy="77" rx="4.8" ry="3.9" fill={sockF} />
+          </g>
+          <g className="sai-crit-pluckhead">
+            <g className="sai-crit-ear sai-crit-ear-l">
+              <path d="M 65 34 L 66 11 L 81 28 Z" fill={F[1]} />
+              <path d="M 68 30 L 69 18 L 77 27 Z" fill={earIn} />
+            </g>
+            <g className="sai-crit-ear sai-crit-ear-r">
+              <path d="M 83 28 L 90 6 L 96 30 Z" fill={F[1]} />
+              <path d="M 86 25 L 90 12 L 93 27 Z" fill={earIn} />
+            </g>
+            <circle cx="82" cy="46" r="18.5" fill={`url(#${uid}f)`} />
+            <path d="M 64 52 l -5 3 4 2 Z M 65 57 l -4 3 4 1.4 Z" fill={F[1]} />
+            {/* the muzzle tipped 42° to the fruit. A static transform on a child of
+                an animated group is fine — the group itself carries none */}
+            <g transform="rotate(-42 82 46)">
+              <path d="M 87 43 C 96 41 103 44 106 49 C 101 53 93 54 87 51 Z" fill={bib} />
+              <path d="M 92 51.5 C 96 52.6 100 52.4 103 51" stroke={ink} strokeWidth="1.3" fill="none" strokeLinecap="round" opacity=".55" />
+              <ellipse cx="105" cy="47.6" rx="3.2" ry="2.7" fill={ink} />
+            </g>
+            <FaceKit lid={F[1]} e1={[76, 43]} e2={[90, 39]} er={3.2} iris={ink} mouths={false} />
+          </g>
+          {/* drawn last so it sits AT the nose and not behind the skull */}
+          <g className="pluck-berry">
+            <circle cx="104" cy="27" r="3.5" fill="#8e1f46" />
+            <circle cx="102.8" cy="25.8" r="1.3" fill="#d46b95" opacity=".7" />
+          </g>
+        </g>
+
+        {/* HEAD DOWN IN THE WINDFALL (foxnose): shoulders dropped, rump high, the
+            muzzle working through the grass at the foot of the bush. Nothing here
+            reaches for anything — this is the half of his opportunism that costs
+            him nothing but a lowered head. */}
+        <g className="sai-crit-nosepose">
+          <g className="nose-tail">
+            <path d="M 34 64 C 22 58 10 58 4 50 C 0 43 6 36 13 39 C 10 47 15 54 26 58 C 30 60 33 62 34 64 Z" fill={`url(#${uid}f)`} />
+            <path d="M 4 50 C 0 43 6 36 13 39 C 9 43 8 48 10 53 C 7 53 5 52 4 50 Z" fill={bib} />
+          </g>
+          <rect x="34" y="76" width="8.5" height="27" rx="4.2" fill={sockF} />
+          <rect x="63" y="80" width="8.5" height="23" rx="4.2" fill={sockF} />
+          <g className="sai-crit-nosebody">
+            <path d="M 24 76 C 22 60 33 50 50 49 C 64 48 76 55 82 68 C 86 77 82 88 70 91 C 50 95 28 91 24 76 Z" fill={`url(#${uid}f)`} />
+            <BackShade cx={50} cy={64} rx={27} ry={18} color="#8a4514" op={.18} />
+            <Under cx={52} cy={76} rx={26} ry={18} color={bib} k={.56} opacity={.92} />
+            <BellyShade cx={52} cy={90} rx={21} />
+          </g>
+          <rect x="43" y="78" width="9" height="25" rx="4.5" fill={sock} />
+          <rect x="71" y="82" width="9" height="21" rx="4.5" fill={sock} />
+          <g className="sai-crit-nosehead">
+            <g className="sai-crit-ear sai-crit-ear-l">
+              <path d="M 70 68 L 71 46 L 86 62 Z" fill={F[1]} />
+              <path d="M 73 64 L 74 52 L 82 61 Z" fill={earIn} />
+            </g>
+            <g className="sai-crit-ear sai-crit-ear-r">
+              <path d="M 88 62 L 95 41 L 101 64 Z" fill={F[1]} />
+              <path d="M 91 59 L 95 47 L 98 61 Z" fill={earIn} />
+            </g>
+            <circle cx="87" cy="78" r="17" fill={`url(#${uid}f)`} />
+            <path d="M 70 84 l -5 3 4 2 Z M 71 89 l -4 3 4 1.4 Z" fill={F[1]} />
+            {/* swung 52° the other way: the same muzzle, and it lands in the grass */}
+            <g transform="rotate(52 87 78)">
+              <path d="M 92 75 C 101 73 108 76 111 81 C 106 85 98 86 92 83 Z" fill={bib} />
+              <path d="M 97 83.5 C 101 84.6 105 84.4 108 83" stroke={ink} strokeWidth="1.3" fill="none" strokeLinecap="round" opacity=".55" />
+              <ellipse cx="110" cy="79.6" rx="3.2" ry="2.7" fill={ink} />
+            </g>
+            <FaceKit lid={F[1]} e1={[80, 74]} e2={[94, 71]} er={3.1} iris={ink} mouths={false} />
+          </g>
+          {/* what has already dropped — drawn after the head so a berry sits under
+              the nose rather than behind the cheek */}
+          <g className="nose-fruit">
+            <circle cx="96" cy="100" r="3.4" fill="#8e1f46" />
+            <circle cx="95" cy="99" r="1.2" fill="#d46b95" opacity=".7" />
+            <circle cx="105" cy="99" r="3.1" fill="#7d1b3e" />
+            <circle cx="88" cy="101.5" r="2.9" fill="#a8244f" />
+          </g>
+          <path d="M 82 103 l -1.4 -6 M 92 103.5 l .6 -5.6 M 110 102 l 2.2 -5.4" stroke="#4f9a5c" strokeWidth="1.7" fill="none" strokeLinecap="round" opacity=".85" />
+        </g>
     </g>
   );
 }
@@ -301,6 +425,154 @@ function BearDraw({ uid }) {
         <path d="M 99 65.8 l 1.6 2 l 1.2 -1.9 Z" fill="#525c66" />
         <circle cx="107.5" cy="60.9" r="1.1" fill="#141518" />
         <circle cx="107.8" cy="60.6" r=".4" fill="#e8edf0" opacity=".8" />
+      </g>
+      {/* ---- SITTING BERRY STRIP (stripsit) ----
+          Haunches down, hind legs stretched out in front with the soles
+          up, both forepaws hauling one laden branch in to his lips. The
+          four-legged rig has no seated pose, so this is drawn whole and
+          swapped in the way the tree poses are. The branch is drawn in
+          its PULLED position — the CSS angles are what it does when he
+          lets go of it. */}
+      <g className="sai-crit-sitstrippose">
+        <g transform="translate(60 103) scale(1.04) translate(-60 -103)">
+          {/* far-side limbs first, in the darker shade */}
+          <g className="strip-leg-far">
+            <path d="M 46 74 C 58 76 70 80 78 87 C 82 90 82 96 77 97 C 66 97 54 92 46 85 Z" fill={F[2]} />
+            <ellipse cx="80" cy="91" rx="5" ry="8" fill="#4b2f16" transform="rotate(26 80 91)" />
+          </g>
+          <g className="strip-arm-far">
+            <rect x="60" y="42.5" width="49" height="11" rx="5.5" fill={F[2]} transform="rotate(-29 60 48)" />
+            <ellipse cx="103" cy="24" rx="6.4" ry="5" fill="#4b2f16" />
+          </g>
+          {/* the seated mass: rump parked on the ground, chest rising forward */}
+          <g className="sai-crit-stripbody">
+            {/* one dark rim round the whole torso — he sits against foliage
+                nearly his own value, and without it he sinks into the bush */}
+            <path d="M 22 100 C 17 90 18 74 25 62 C 31 51 36 44 41 38 C 46 30 55 27 62 31
+                     C 70 36 76 48 76 62 C 76 76 76 90 73 100 C 60 104 36 104 22 100 Z"
+              fill="none" stroke="#3a2410" strokeWidth="2.4" />
+            <ellipse cx="40" cy="82" rx="21" ry="21" fill={`url(#${uid}f)`} />
+            <ellipse cx="56" cy="66" rx="19" ry="24" fill={`url(#${uid}f)`} />
+            {/* shoulder hump, the one line that says bear at any size */}
+            <ellipse cx="58" cy="46" rx="15" ry="13" fill={`url(#${uid}f)`} />
+            <ellipse cx="34" cy="78" rx="12" ry="17" fill="#4a2c12" opacity=".18" />
+            <ellipse cx="68" cy="64" rx="9" ry="20" fill={muz} opacity=".38" />
+            <ellipse cx="48" cy="94" rx="15" ry="9" fill={muz} opacity=".18" />
+            <ellipse cx="46" cy="101" rx="22" ry="4.4" fill="#1a0e04" opacity=".2" />
+          </g>
+          {/* near hind leg thrown forward, sole up — how a sitting bear parks his feet */}
+          <g className="strip-leg-near">
+            <path d="M 44 80 C 57 82 70 86 79 93 C 83 96 83 102 78 102 C 65 102 52 98 44 91 Z" fill={F[1]} />
+            <ellipse cx="81" cy="97" rx="5.4" ry="8.6" fill={muz} transform="rotate(22 81 97)" />
+            <path d="M 84 91.5 l 3 -1.4 M 85.6 95 l 3.2 -.6 M 85.4 99 l 3 .8"
+              stroke="#3a2410" strokeWidth="1.2" fill="none" strokeLinecap="round" opacity=".6" />
+          </g>
+          {/* head down and forward, muzzle out to meet the fruit */}
+          <g className="sai-crit-striphead">
+            <g className="sai-crit-ear sai-crit-ear-l"><circle cx="58" cy="22" r="6.2" fill={F[1]} /><circle cx="58" cy="22.5" r="2.9" fill={muz} /></g>
+            <g className="sai-crit-ear sai-crit-ear-r"><circle cx="78" cy="21" r="6.4" fill={F[1]} /><circle cx="78" cy="21.5" r="3" fill={muz} /></g>
+            <circle cx="68" cy="34" r="16.5" fill={`url(#${uid}f)`} />
+            <ellipse cx="82" cy="44" rx="9.5" ry="7.4" fill={muz} transform="rotate(18 82 44)" />
+            <path d="M 88 41.8 q 4.3 0 4.3 3.3 q 0 2.9 -4.3 2.9 q -4.3 0 -4.3 -2.9 q 0 -3.3 4.3 -3.3 Z" fill={ink} />
+            <FaceKit lid={F[1]} e1={[62, 31]} e2={[76, 29]} er={2.9} iris={ink} mouth={[82, 51]} />
+          </g>
+          {/* the branch he has hauled down. Its base is still on the bush and
+              nothing is broken off — the CSS lets go and it springs back up
+              where it grew, which is the point of the whole behavior */}
+          <g className="sai-crit-striplimb">
+            <path d="M 118 4 C 108 16 98 30 86 50" stroke="#5a4a2c" strokeWidth="3.2" fill="none" strokeLinecap="round" />
+            <path d="M 104 20 C 100 15 96 12 91 11 M 96 32 C 92 30 88 30 84 31"
+              stroke="#5a4a2c" strokeWidth="2.1" fill="none" strokeLinecap="round" />
+            <ellipse cx="110" cy="11" rx="8.6" ry="6.2" fill="#2f6b3f" transform="rotate(-40 110 11)" />
+            <ellipse cx="100" cy="26" rx="8.2" ry="5.8" fill="#3a7d49" transform="rotate(-36 100 26)" />
+            <ellipse cx="91" cy="14" rx="6.8" ry="4.8" fill="#469356" transform="rotate(-16 91 14)" />
+            <ellipse cx="88" cy="36" rx="7.4" ry="5.2" fill="#2a6138" transform="rotate(-30 88 36)" />
+            <ellipse cx="82" cy="34" rx="6" ry="4.2" fill="#54a763" opacity=".85" transform="rotate(-12 82 34)" />
+            {/* fruit, the one at his lips first: the CSS takes them off in
+                that order and hands him a fresh laden branch every cycle */}
+            <g className="sai-crit-stripfruit">
+              <g><circle cx="86" cy="50" r="3.4" fill="#8e1f46" /><circle cx="85" cy="49" r="1.2" fill="#d46b95" opacity=".7" /></g>
+              <g><circle cx="91" cy="43" r="3.1" fill="#a8244f" /><circle cx="90" cy="42" r="1.1" fill="#e08bad" opacity=".7" /></g>
+              <g><circle cx="97" cy="34" r="3.2" fill="#7d1b3e" /><circle cx="96" cy="33" r="1.1" fill="#c96289" opacity=".7" /></g>
+              <g><circle cx="104" cy="23" r="2.9" fill="#9c2149" /><circle cx="103" cy="22" r="1" fill="#dc7fa3" opacity=".7" /></g>
+              <g><circle cx="111" cy="12" r="2.8" fill="#8e1f46" /></g>
+            </g>
+          </g>
+          {/* near forepaw last, curled over the stem where he grips it */}
+          <g className="strip-arm-near">
+            <rect x="63" y="48" width="36" height="12" rx="6" fill={F[1]} transform="rotate(-30 63 54)" />
+            <ellipse cx="94" cy="36" rx="6.6" ry="5.2" fill={F[2]} />
+            <path d="M 97 32 l 3 -1.8 M 99 35.6 l 3.2 -.8 M 98.6 39.4 l 3 .8"
+              stroke="#3a2410" strokeWidth="1.2" fill="none" strokeLinecap="round" opacity=".7" />
+          </g>
+        </g>
+      </g>
+
+      {/* ---- STANDING BERRY STRIP (stripstand) ----
+          Up on his hind legs after the fruit at the crown, both forepaws
+          hooked over a branch and hauling it down to his muzzle. Not the
+          back scratch: there his head goes back and his arms hang loose,
+          here every line in him runs up and forward into the work. */}
+      <g className="sai-crit-standstrippose">
+        <g transform="translate(60 103) scale(1.08) translate(-60 -103)">
+          <g className="strip-leg-far">
+            <path d="M 44 70 C 39 82 39 94 42 102 L 58 102 C 57 90 57 80 58 70 Z" fill={F[2]} />
+            <ellipse cx="48" cy="102" rx="10" ry="4.4" fill="#4b2f16" />
+          </g>
+          <g className="strip-arm-far">
+            <rect x="58" y="27" width="47" height="11" rx="5.5" fill={F[2]} transform="rotate(-26.6 58 32.5)" />
+            <ellipse cx="100" cy="11" rx="6.4" ry="5" fill="#4b2f16" />
+            <path d="M 103 7 l 3.2 -1.8 M 105 10.4 l 3.2 -.8"
+              stroke="#3a2410" strokeWidth="1.2" fill="none" strokeLinecap="round" opacity=".7" />
+          </g>
+          <g className="sai-crit-stripbody">
+            <path d="M 58 102 C 44 102 38 93 39 83 C 40 70 42 56 44 44 C 46 32 51 24 60 23
+                     C 70 22 77 30 78 42 C 79 54 80 70 79 83 C 78 94 71 102 58 102 Z"
+              fill="none" stroke="#3a2410" strokeWidth="2.4" />
+            <ellipse cx="57" cy="84" rx="20" ry="18" fill={`url(#${uid}f)`} />
+            <ellipse cx="59" cy="54" rx="18.5" ry="28" fill={`url(#${uid}f)`} />
+            <ellipse cx="57" cy="30" rx="14" ry="12" fill={`url(#${uid}f)`} />
+            <ellipse cx="47" cy="56" rx="9" ry="25" fill="#4a2c12" opacity=".18" />
+            <ellipse cx="70" cy="56" rx="9" ry="22" fill={muz} opacity=".4" />
+            <ellipse cx="67" cy="86" rx="10" ry="12" fill={muz} opacity=".2" />
+          </g>
+          <g className="strip-leg-near">
+            <path d="M 58 70 C 55 82 55 94 58 102 L 76 102 C 74 90 74 80 75 70 Z" fill={F[1]} />
+            <ellipse cx="67" cy="102" rx="11" ry="4.8" fill={F[2]} />
+            <path d="M 61 100.5 h 12" stroke="#4b2f16" strokeWidth="1.3" opacity=".45" />
+          </g>
+          <g className="sai-crit-striphead">
+            <g className="sai-crit-ear sai-crit-ear-l"><circle cx="58" cy="11" r="6.2" fill={F[1]} /><circle cx="58" cy="11.5" r="2.9" fill={muz} /></g>
+            <g className="sai-crit-ear sai-crit-ear-r"><circle cx="76" cy="8" r="6.4" fill={F[1]} /><circle cx="76" cy="8.5" r="3" fill={muz} /></g>
+            <circle cx="68" cy="24" r="16" fill={`url(#${uid}f)`} />
+            <ellipse cx="83" cy="19" rx="9.6" ry="7.4" fill={muz} transform="rotate(-24 83 19)" />
+            <path d="M 89 12.8 q 4.3 0 4.3 3.3 q 0 2.9 -4.3 2.9 q -4.3 0 -4.3 -2.9 q 0 -3.3 4.3 -3.3 Z" fill={ink} />
+            <FaceKit lid={F[1]} e1={[63, 20]} e2={[77, 16]} er={2.9} iris={ink} mouth={[83, 28]} />
+          </g>
+          <g className="sai-crit-striplimb">
+            <path d="M 112 0 C 104 8 96 16 85 28" stroke="#5a4a2c" strokeWidth="3.2" fill="none" strokeLinecap="round" />
+            <path d="M 99 13 C 96 8 93 5 88 3 M 92 21 C 88 20 84 20 80 21"
+              stroke="#5a4a2c" strokeWidth="2.1" fill="none" strokeLinecap="round" />
+            <ellipse cx="105" cy="5" rx="8.4" ry="6" fill="#2f6b3f" transform="rotate(-38 105 5)" />
+            <ellipse cx="96" cy="17" rx="8" ry="5.6" fill="#3a7d49" transform="rotate(-34 96 17)" />
+            <ellipse cx="88" cy="6" rx="6.6" ry="4.6" fill="#469356" transform="rotate(-14 88 6)" />
+            <ellipse cx="86" cy="24" rx="7.2" ry="5" fill="#2a6138" transform="rotate(-28 86 24)" />
+            <ellipse cx="79" cy="22" rx="5.8" ry="4" fill="#54a763" opacity=".85" transform="rotate(-10 79 22)" />
+            <g className="sai-crit-stripfruit">
+              <g><circle cx="85" cy="28" r="3.4" fill="#8e1f46" /><circle cx="84" cy="27" r="1.2" fill="#d46b95" opacity=".7" /></g>
+              <g><circle cx="90" cy="24" r="3.1" fill="#a8244f" /><circle cx="89" cy="23" r="1.1" fill="#e08bad" opacity=".7" /></g>
+              <g><circle cx="95" cy="17" r="3.2" fill="#7d1b3e" /><circle cx="94" cy="16" r="1.1" fill="#c96289" opacity=".7" /></g>
+              <g><circle cx="101" cy="9" r="2.9" fill="#9c2149" /><circle cx="100" cy="8" r="1" fill="#dc7fa3" opacity=".7" /></g>
+              <g><circle cx="107" cy="2" r="2.8" fill="#8e1f46" /></g>
+            </g>
+          </g>
+          <g className="strip-arm-near">
+            <rect x="62" y="34.5" width="36" height="12" rx="6" fill={F[1]} transform="rotate(-32 62 40.5)" />
+            <ellipse cx="93" cy="21" rx="6.6" ry="5.2" fill={F[2]} />
+            <path d="M 96 17 l 3 -1.8 M 98 20.6 l 3.2 -.8 M 97.6 24.4 l 3 .8"
+              stroke="#3a2410" strokeWidth="1.2" fill="none" strokeLinecap="round" opacity=".7" />
+          </g>
+        </g>
       </g>
     </g>
   );
@@ -623,6 +895,80 @@ function SkunkDraw({ uid }) {
           <circle cx="94" cy="43" r="3.4" fill="#fff" /><circle cx="94.9" cy="43" r="2" fill={ink} />
         </g>
         <FaceKit lid={K[1]} e1={[79, 44]} e2={[94, 43]} er={3.4} drawEyes={false} mouth={[94, 59]} browCol="#0c0b10" />
+      </g>
+      {/* ---- NOSE-DOWN HEAD (floorsnuff, windfalleat, clawscrape) ----
+          The standing head is no use to an animal whose food is all on the
+          floor, so this one hangs off the shoulders with the nose in the
+          litter. Only the head is swapped — the goose's preen trick — which
+          leaves body and all four legs on the normal rig, and he has to go
+          on walking while he does this. */}
+      <g className="sai-crit-snuffhead">
+        <path d="M 74 63 C 84 65 91 72 94 81" stroke={K[1]} strokeWidth="17" fill="none" strokeLinecap="round" />
+        <g className="sai-crit-ear"><circle cx="78" cy="72" r="4.8" fill={K[2]} /></g>
+        <circle cx="91" cy="85" r="15" fill={`url(#${uid}f)`} />
+        {/* the blaze, running now from a nose in the dirt back up the
+            muzzle and over the crown */}
+        <path d="M 103.5 91 C 99 83.5 94 76.5 86.5 71.5 C 83 73 81.2 76.4 82.4 79.8 C 89 83 94.6 88.6 98.6 95 Z" fill={white} />
+        <g className="sai-crit-eyes-normal">
+          <circle cx="94" cy="80" r="3.2" fill="#fff" /><circle cx="94.8" cy="80.2" r="1.9" fill={ink} />
+        </g>
+        {/* nose and whiskers move together: the whiskers are what makes a
+            twitch of two pixels legible at sprite size */}
+        <g className="snuff-nose">
+          <ellipse cx="104" cy="96" rx="3.1" ry="2.7" fill={ink} />
+          <path d="M 106 91.5 l 9.5 -2.6 M 106.5 94.5 l 9 .6 M 105.5 97.5 l 7.5 4.5"
+            stroke={white} strokeWidth="1" fill="none" strokeLinecap="round" opacity=".55" />
+        </g>
+        {/* What he has picked up. Both items are kept inside the whiskers'
+            reach on purpose: they come and go with data-carry, and anything
+            sticking out past them would move the group's own bounding box
+            and drag the head's pivot with it. */}
+        <g className="snuff-berry">
+          <circle cx="107.5" cy="97.5" r="3.2" fill="#8e1f46" />
+          <circle cx="106.6" cy="96.5" r="1.1" fill="#d46b95" opacity=".7" />
+          <circle cx="111" cy="99" r="2.4" fill="#7d1b3e" />
+        </g>
+        <g className="snuff-nut">
+          <ellipse cx="108.5" cy="98" rx="3.4" ry="4" fill="#7a5227" />
+          <ellipse cx="108.5" cy="96.6" rx="1.6" ry="1.4" fill="#a9793f" />
+        </g>
+        {/* leaf litter shouldered aside as the nose ploughs through it */}
+        <g className="snuff-litter">
+          <ellipse cx="110" cy="98.4" rx="1.5" ry="1.2" fill="#6d5030" />
+          <ellipse cx="114" cy="99.2" rx="1.2" ry="1" fill="#4a3520" />
+          <ellipse cx="107" cy="99.6" rx="1.3" ry="1.1" fill="#5d4327" />
+        </g>
+      </g>
+
+      {/* ---- LIGHT CLAW SCRAPE (clawscrape) ----
+          Only the near foreleg is redrawn. The rig's front shank is a plain
+          rounded rect and this action is entirely about the claws, which a
+          skunk carries long and pale. Everything else — body, hind legs,
+          the nose-down head above — stays on the normal rig, and that is
+          what keeps this reading as a scratch taken in passing rather than
+          a hole he has committed to. */}
+      <g className="sai-crit-scrapepose">
+        <g className="scrape-arm">
+          <path d="M 68 71 C 73 80 79 89 86 96 L 93 92 C 87 84 81 76 77 68 Z" fill={K[1]} />
+          <ellipse cx="89" cy="96" rx="6" ry="3.8" fill={K[2]} />
+          <path d="M 93 97.6 l 5.4 3.4 M 89.6 99 l 3 4.2 M 85.6 99 l 1 4.4"
+            stroke={white} strokeWidth="1.7" fill="none" strokeLinecap="round" opacity=".85" />
+        </g>
+        {/* loose surface soil lifted and dropped more or less where it was.
+            Nothing is thrown clear and nothing is heaped: what he leaves
+            behind is a scuff, not a scrape with a rim */}
+        <g className="scrape-puff">
+          <ellipse cx="96" cy="100" rx="2.4" ry="1.9" fill="#5d4327" />
+          <ellipse cx="101" cy="99" rx="1.9" ry="1.5" fill="#6d5030" />
+          <ellipse cx="92" cy="99.4" rx="1.7" ry="1.4" fill="#4a3520" />
+          <ellipse cx="105" cy="100.6" rx="1.5" ry="1.2" fill="#5d4327" />
+        </g>
+        {/* the marks themselves — parallel surface streaks, the whole
+            evidence that he was ever here */}
+        <g className="scrape-marks">
+          <path d="M 92 101.6 q 7 -1.6 13 -.4 M 90 104.2 q 8 -1.8 15 -.6"
+            stroke="#4a3520" strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".7" />
+        </g>
       </g>
     </g>
   );

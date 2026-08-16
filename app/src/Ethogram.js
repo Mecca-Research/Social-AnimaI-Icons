@@ -467,6 +467,66 @@ export function setTreeMetrics(m) { TREE = m; }
  * his alone is in this one block: the chances, the timings, the cooldowns,
  * the poses. Nothing about him is decided anywhere else.
  */
+// ---------------------------------------------------------------------
+// BEAR — berry stripping. Three consts + two helpers go just ABOVE
+// defineEthogram("bear", ...); the descriptor at the END of his `events`
+// array, after "fish".
+// ---------------------------------------------------------------------
+
+/**
+ * One branch: hook it, haul it down to the lips, work it over, let it go.
+ * The CSS cycle on .sai-crit-striplimb is cut to the same length, so a bout
+ * always ends on a release and the bush he walks away from is visibly whole
+ * and springing back rather than snapped off mid-pull.
+ */
+const STRIP_BRANCH = 4200;
+
+/**
+ * He works a bush from its WEST side. The sprite is drawn facing right with
+ * the limb coming in over his right shoulder, so arriving east of the bush
+ * would have him hauling on open grass; from here the branch he pulls down
+ * is the bush's own.
+ */
+const bushWest = (f) => (f ? { x: f.px - 30, y: f.py + 6, site: f } : null);
+
+// Both postures walk to the same place. They need separate walk states only
+// because the engine claims one goto state per variant — by the time he sets
+// off he has already decided whether he is after the low fruit or the high.
+const STRIP_GOTO = { within: 22, giveUp: 26000, speed: 0.82, none: 14000, lost: 14000,
+  pick: (a, c) => bushWest(nearestSite(a, c, "berry")) };
+
+function beginStrip(a, c, g, state, branches) {
+  a.vx = 0; a.vy = 0;
+  a._faceDir = 1;                                    // turn in to the bush he just walked past
+  a._stripX = g ? g.x : a.x; a._stripY = g ? g.y : a.y;
+  a._branch = 0; a._branchN = branches;
+  a.state = state; a.stateUntil = c.now + STRIP_BRANCH;
+}
+
+/**
+ * Both postures run off the same clock, and both hold their ground: half a
+ * minute is long enough for the crowd separation to have walked him off the
+ * bush entirely, so the working spot is kept rather than merely arrived at.
+ */
+function driveStrip(a, c) {
+  a.vx = 0; a.vy = 0;
+  const k = Math.min(1, c.dt * 3);
+  a.x += (a._stripX - a.x) * k; a.y += (a._stripY - a.y) * k;
+  if (c.now < a.stateUntil) return;
+  if (++a._branch >= a._branchN) {
+    a._faceDir = 0;
+    endEvent(a, c, { reroll: true, quiet: 1600, stop: true });
+    return;
+  }
+  a.stateUntil = c.now + STRIP_BRANCH;               // reach for the next one
+}
+
+// ---- and inside defineEthogram("bear", ...), the existing tick widens by
+// one character so a strip can clear its facing too. Was `=== -1`:
+//
+//   tick(a) { if (a._faceDir) a._faceDir = 0; },
+//
+
 defineEthogram("bear", {
   domainOf: (a, c) => (c.def.hasWater && c.isWet(a.x, a.y) ? "water" : "land"),
 
@@ -607,6 +667,46 @@ defineEthogram("bear", {
           }
         }
       },
+    },
+
+    // ---- LAND: stripping a berry bush ---------------------------------
+    // The longest forage bout in the world by some way. He settles at one
+    // bush and works it branch by branch for half a minute, where the
+    // raccoon holds a bush ten seconds and the fox barely stops walking.
+    // That length IS the behavior, so what gets rationed is the appetite:
+    // 82-146s between the thoughts, a bout every two and a half minutes or
+    // so, which is bout-plus-amble under a quarter of his time ashore and
+    // well under a fifth of his day. Seven berry sites and he only ever
+    // holds one: heaviest user of the clearing, never its owner.
+    {
+      id: "strip", domain: "land", trigger: "seek",
+      every: [82000, 146000],
+      // three appetites in four are acted on: the timer already makes this
+      // rare, and the roll is only here to keep the rhythm off a metronome
+      chance: 0.75,
+      cool: 30000,
+      // no `miss` — a seek reschedules its own window on the roll itself, so
+      // a failed one has already cost him a full appetite cycle
+      variants: [
+        {
+          // SITTING — haunches down, both forepaws pulling a laden branch
+          // in to his mouth. Braced on the ground, so it is the posture he
+          // can hold longest and the one he settles into most often.
+          id: "stripsit", w: 3, states: ["stripsit"],
+          goto: { state: "tostripsit", ...STRIP_GOTO },
+          begin(a, c, S, g) { beginStrip(a, c, g, "stripsit", Math.round(c.rand(7, 9))); },
+          drive: driveStrip,
+        },
+        {
+          // STANDING — up on his hind legs after the fruit at the crown.
+          // Holding that much bear upright is work, so he takes fewer
+          // branches before he drops back down.
+          id: "stripstand", w: 2, states: ["stripstand"],
+          goto: { state: "tostripstand", ...STRIP_GOTO },
+          begin(a, c, S, g) { beginStrip(a, c, g, "stripstand", Math.round(c.rand(5, 7))); },
+          drive: driveStrip,
+        },
+      ],
     },
   ],
 });
@@ -1155,6 +1255,239 @@ defineEthogram("deer", {
           endEvent(a, c, { reroll: true, quiet: 500, stop: true });
         }
       },
+    },
+  ],
+});
+
+// ---------------------------------------------------------------------
+//  THE SKUNK — a floor feeder, and the only one here who never touches
+//  the crop.
+//
+//  Everything else in the clearing takes its food off the plant. He takes
+//  what the plant has already dropped, which makes his relationship to a
+//  berry bush entirely different: he walks to one, lets go of it, and
+//  spends the bout on the litter in a ring around its base. That is why
+//  he is the cheapest forager in the world despite being a frequent one —
+//  he occupies sites for seconds and ground for minutes.
+// ---------------------------------------------------------------------
+
+/**
+ * Nearest unclaimed site out of several kinds. `nearestSite` asks for one
+ * kind, which is the wrong question for an animal who is not eating the
+ * plant: what has fallen under a hazel and what has fallen under a berry
+ * bush are the same meal to him, and sending him past the near one to
+ * reach a preferred kind would be the wrong behavior to draw.
+ */
+function nearestOfKinds(a, c, kinds) {
+  let best = null, bestD = Infinity;
+  for (const f of c.world.forage || []) {
+    if (!kinds.includes(f.kind) || (f.userId && f.userId !== a.id)) continue;
+    const d = Math.hypot(f.px - a.x, f.py - a.y);
+    if (d < bestD) { best = f; bestD = d; }
+  }
+  return best;
+}
+
+defineEthogram("skunk", {
+  // The shoreline is a wall to him, so tier 1 has only one answer. The
+  // dwell window still earns its keep — it is what paces the quiet
+  // stretches between bouts.
+  domainOf: () => "land",
+  domains: { land: { share: 1, dwell: [17000, 33000] } },
+
+  // A drag can lift him out of a bout with a berry still in his jaws and
+  // a bush still booked in his name. Both have to be handed back here, or
+  // that site stays reserved against him for the rest of the session.
+  tick(a, c, S) { if (S.claim || a._carry) { releaseClaim(a, S); a._carry = null; } },
+
+  events: [
+    // ---- WINDFALL: working the litter under the crop -------------------
+    // His staple, and the reason he is worth adding to a clearing that
+    // already has five foragers in it: he competes with none of them. The
+    // walk-in claims the site only so two floor-workers cannot end up nose
+    // to nose; the moment he arrives he gives it back.
+    {
+      id: "windfall", domain: "land", trigger: "seek",
+      every: [32000, 58000], chance: 0.55, miss: 12000, cool: 24000,
+      states: ["floorsnuff", "windfalleat"],
+      goto: {
+        // 30 stops him at the drip line rather than at the stem: fallen
+        // fruit lies in a ring around a bush, not underneath its middle
+        state: "tofloor", within: 30, giveUp: 22000, speed: 1, none: 9000,
+        pick: (a, c) => siteGoal(nearestOfKinds(a, c, ["berry", "nut"])),
+      },
+      begin(a, c, S, g) {
+        // he wants the ground, not the bush — so the bush goes straight
+        // back on the board for whoever can actually climb it
+        releaseClaim(a, S);
+        a._fell = g && g.site && g.site.kind === "nut" ? "nut" : "berry";
+        a._snuffUntil = c.now + c.rand(9000, 13000);
+        a._probe = null;
+        a.state = "floorsnuff";
+        a.vx = 0; a.vy = 0;
+      },
+      drive(a, c, S) {
+        if (a.state === "floorsnuff") {
+          if (c.now >= a._snuffUntil) { endEvent(a, c, { reroll: true, quiet: 900, stop: true }); return; }
+          // He quarters the ring instead of homing on a point. A windfall
+          // is scattered, so a find has to happen where his nose happens
+          // to be — not on a timer that would have him stop dead in open
+          // ground with nothing under him.
+          if (!a._probe || stepToward(a, c, a._probe, 0.32) < 7) {
+            if (a._probe && Math.random() < 0.40) {   // that pass turned something up
+              a.state = "windfalleat"; a.stateUntil = c.now + c.rand(2200, 3000);
+              a._carry = a._fell; a.vx = 0; a.vy = 0; return;
+            }
+            const ang = Math.random() * Math.PI * 2, rad = 17 + Math.random() * 19;
+            a._probe = { x: S.goal.x + Math.cos(ang) * rad, y: S.goal.y + Math.sin(ang) * rad };
+          }
+        } else {
+          a.vx = 0; a.vy = 0;
+          if (c.now < a.stateUntil) return;
+          a._carry = null;
+          // he leaves on his own clock rather than when the ground runs
+          // out, so the bout has a length instead of a stopping condition
+          if (c.now >= a._snuffUntil) endEvent(a, c, { reroll: true, quiet: 1100, stop: true });
+          else { a.state = "floorsnuff"; a._probe = null; }
+        }
+      },
+    },
+
+    // ---- SCRAPE: three or four strokes, then on ------------------------
+    // Rooting for insects is the real business and it is not modelled
+    // here; this is the aside he makes on the way past likely ground, so
+    // it is deliberately the rarer and much the shorter of his two bouts.
+    // Taking soil and nut litter as equally good spreads him over five
+    // sites rather than the clearing's two soil patches, which the
+    // squirrel needs for burying.
+    {
+      id: "scrape", domain: "land", trigger: "seek",
+      every: [38000, 66000], chance: 0.35, miss: 16000, cool: 34000,
+      states: ["clawscrape"],
+      goto: {
+        state: "toscrape", within: 20, giveUp: 20000, speed: 1, none: 10000,
+        pick: (a, c) => siteGoal(nearestOfKinds(a, c, ["soil", "nut"])),
+      },
+      begin(a, c) {
+        // a scuff, not an excavation — long enough to read, short enough
+        // that he is gone before anyone else has crossed the patch
+        a.state = "clawscrape"; a.stateUntil = c.now + c.rand(3400, 4800);
+        a.vx = 0; a.vy = 0;
+      },
+      drive(a, c) {
+        a.vx = 0; a.vy = 0;
+        // nothing comes of it, which is the point: if the surface paid he
+        // would not spend his day on windfall
+        if (c.now >= a.stateUntil) endEvent(a, c, { reroll: true, quiet: 900, stop: true });
+      },
+    },
+  ],
+});
+
+// ---------------------------------------------------------------------
+//  THE FOX — an opportunist, not a forager.
+//
+//  Everyone else in the clearing goes TO the fruit. He goes past it, and
+//  helps himself only when it is already under his nose. That is the whole
+//  design: the appetite is the slowest of the six, the site is one he was
+//  walking by anyway, and the bout is over in five seconds. Two ways of
+//  taking it, and the difference between them is effort — the neat pluck
+//  off a branch tip, or the windfall lying free at his feet.
+// ---------------------------------------------------------------------
+
+/**
+ * The bush he is already passing. Plain nearest-unclaimed would send him
+ * the width of the clearing for one berry, which is the raccoon's behavior
+ * and not his — beyond a third of the stage it is simply not worth the
+ * walk and the appetite lapses. This is also what keeps his pressure on the
+ * seven shared berry sites near nil: he only ever claims one he could have
+ * seen from where he was standing.
+ */
+function foxWindfall(a, c) {
+  const near = nearestForage(a, c, "berry");
+  return near && Math.hypot(near.x - a.x, near.y - a.y) < c.bounds.w * 0.34 ? near : null;
+}
+
+// Both variants walk to the same bush and only the state they walk in
+// differs, because the engine claims a goto state per variant.
+const FOX_TOBERRY = { within: 22, giveUp: 16000, speed: 1, none: 11000, lost: 8000,
+  pick: (a, c) => foxWindfall(a, c) };
+
+/**
+ * The tail of both variants. However he got the berry he swallows it back
+ * down on all fours, and that is what sells "passing through": the pose he
+ * leaves in is the pose he arrived in.
+ */
+function driveFox(a, c) {
+  a.vx = 0; a.vy = 0;
+  if (c.now < a.stateUntil) return;
+  if (a.state === "foxchew") { a._faceDir = 0; endEvent(a, c, { reroll: true, quiet: 900, stop: true }); return; }
+  a._carry = "berry";                    // in the jaws for the one swallow
+  a.state = "foxchew"; a.stateUntil = c.now + c.rand(1500, 2100);
+}
+
+defineEthogram("fox", {
+  // He has no entry in this world's swim table at all, so there is one
+  // domain and the tier-1 pick is a formality — the squirrel's shape.
+  domainOf: () => "land",
+  domains: { land: { share: 1, dwell: [20000, 38000] } },
+
+  // A drag or an encounter can take him off a bush mid-bout and leave him
+  // in a state this ethogram will never end, so the bush and the mouthful
+  // are handed back here or that site stays booked against him all session.
+  tick(a, c, S) {
+    if (S.claim) releaseClaim(a, S);
+    if (a._faceDir) a._faceDir = 0;
+    if (a._carry) a._carry = null;
+  },
+
+  events: [
+    // ---- LAND: helping himself on the way past --------------------------
+    // An urge every 40-72s works out at a bout roughly every two and a half
+    // minutes, and the distance test in foxWindfall throws a good share of
+    // those away again — call it four minutes of fox for five seconds of
+    // eating. The raccoon runs a twenty-second bout every hundred seconds
+    // and the bear stops at every trunk he passes; this is under a tenth of
+    // either, which is the point of him.
+    {
+      id: "scrump", domain: "land", trigger: "seek",
+      every: [40000, 72000],
+      // A third of the urges taken. Half would put him level with the deer's
+      // graze, and he is meant to be the one you notice feeding least.
+      chance: 0.35,
+      cool: 26000,
+      variants: [
+        {
+          // THE PLUCK — up on his hind feet just far enough, and one berry
+          // taken off the branch tip with the very end of the muzzle.
+          id: "foxpluck", w: 1,
+          // the swallow is claimed here; the windfall variant hands the
+          // frame across to it mid-bout, the way the raccoon's climb does
+          states: ["foxpluck", "foxchew"],
+          goto: { state: "foxtoberry", ...FOX_TOBERRY },
+          begin(a, c, S, g) {
+            a.vx = 0; a.vy = 0;
+            a._faceDir = g.x >= a.x ? 1 : -1;   // muzzle to the bush, not away from it
+            a.state = "foxpluck"; a.stateUntil = c.now + c.rand(2400, 3200);
+          },
+          drive: driveFox,
+        },
+        {
+          // FALLEN FRUIT — no reaching at all: he noses over what has
+          // already dropped. Evenly weighted against the pluck, because for
+          // a fox neither is an occasion — the branch is just nearer on
+          // some days than others.
+          id: "foxfallen", w: 1,
+          states: ["foxnose"],
+          goto: { state: "foxtofallen", ...FOX_TOBERRY },
+          begin(a, c, S, g) {
+            a.vx = 0; a.vy = 0;
+            a._faceDir = g.x >= a.x ? 1 : -1;
+            a.state = "foxnose"; a.stateUntil = c.now + c.rand(3000, 4000);
+          },
+          drive: driveFox,
+        },
+      ],
     },
   ],
 });
