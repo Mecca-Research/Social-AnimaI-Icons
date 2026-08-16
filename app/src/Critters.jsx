@@ -446,11 +446,6 @@ function BearDraw({ uid }) {
           </g>
           {/* the seated mass: rump parked on the ground, chest rising forward */}
           <g className="sai-crit-stripbody">
-            {/* one dark rim round the whole torso — he sits against foliage
-                nearly his own value, and without it he sinks into the bush */}
-            <path d="M 22 100 C 17 90 18 74 25 62 C 31 51 36 44 41 38 C 46 30 55 27 62 31
-                     C 70 36 76 48 76 62 C 76 76 76 90 73 100 C 60 104 36 104 22 100 Z"
-              fill="none" stroke="#3a2410" strokeWidth="2.4" />
             <ellipse cx="40" cy="82" rx="21" ry="21" fill={`url(#${uid}f)`} />
             <ellipse cx="56" cy="66" rx="19" ry="24" fill={`url(#${uid}f)`} />
             {/* shoulder hump, the one line that says bear at any size */}
@@ -526,9 +521,6 @@ function BearDraw({ uid }) {
               stroke="#3a2410" strokeWidth="1.2" fill="none" strokeLinecap="round" opacity=".7" />
           </g>
           <g className="sai-crit-stripbody">
-            <path d="M 58 102 C 44 102 38 93 39 83 C 40 70 42 56 44 44 C 46 32 51 24 60 23
-                     C 70 22 77 30 78 42 C 79 54 80 70 79 83 C 78 94 71 102 58 102 Z"
-              fill="none" stroke="#3a2410" strokeWidth="2.4" />
             <ellipse cx="57" cy="84" rx="20" ry="18" fill={`url(#${uid}f)`} />
             <ellipse cx="59" cy="54" rx="18.5" ry="28" fill={`url(#${uid}f)`} />
             <ellipse cx="57" cy="30" rx="14" ry="12" fill={`url(#${uid}f)`} />

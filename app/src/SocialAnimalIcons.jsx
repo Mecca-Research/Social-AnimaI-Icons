@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Critter, SPECIES, ALL_SPECIES } from "./Critters.jsx";
 import { PET_SPECIES } from "./CrittersPets.jsx";
-import { stepEthogram, ethoSwimP, ethoShare, ETHOGRAM, ETHO_STATES, ETHO_Z_STATES, setTreeMetrics, ethoOffstage } from "./Ethogram.js";
+import { stepEthogram, ethoSwimP, ethoShare, ETHOGRAM, ETHO_STATES, ETHO_Z_STATES, ETHO_OWNWATER_STATES, setTreeMetrics, ethoOffstage } from "./Ethogram.js";
 
 /**
  * Social Animal Icons v0.11 — Lakeside world
@@ -2997,7 +2997,10 @@ function renderWorld(world, iconsRef, padsRef, damRefs) {
       const defW = world.def;
       const wetHere = defW.hasWater ? inWater(world.bounds, a.x, a.y)
         : defW.pool ? inPool(world.bounds, defW.pool, a.x, a.y) : false;
-      sprite.dataset.swimming = wetHere && canSwimIn(defW, a.species) && a.state !== 'padsit' ? '1' : '';
+      // a state that draws its own water presence (a float sit, a raccoon
+      // washing in the shallows) keeps the generic swimming rig off
+      sprite.dataset.swimming = wetHere && canSwimIn(defW, a.species) &&
+        a.state !== 'padsit' && !ETHO_OWNWATER_STATES.has(a.state) ? '1' : '';
       // a frog chorusing on its float (croak + sound rings)
       sprite.dataset.chorus = a.state === 'padsit' && a._chorus ? '1' : '';
       // airborne (flying up/down or fluttering over a fence): flap + shrink shadow
