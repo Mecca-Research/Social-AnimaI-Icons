@@ -333,6 +333,37 @@ function GooseDraw({ uid }) {
         </g>
         <FaceKit lid={dark} e1={[86, 26]} e2={[93, 25]} er={2.4} drawEyes={false} mouths={false} blushCol="#c9857a" />
       </g>
+      {/* WING-FLAP SPLASH: both wings thrown wide and high off the water,
+          primaries fanned, spray flying. CSS shows this only mid-splash */}
+      <g className="sai-crit-splashwings">
+        {/* far wing: a broad fan thrown up and back, primaries splayed */}
+        <g className="wing-far">
+          <path d="M 56 72 C 44 56 26 38 4 24 C 2 44 10 66 26 78 C 38 86 50 84 56 72 Z" fill="#6a6151" />
+          <path d="M 4 24 C 20 38 34 54 44 70 M 4 34 C 18 46 30 60 39 74 M 8 48 C 18 56 27 66 34 78
+                   M 14 16 C 28 32 40 50 49 66" stroke="#4e4738" strokeWidth="1.5" fill="none" opacity=".7" />
+        </g>
+        {/* near wing: bigger still, towering over the head */}
+        <g className="wing-near">
+          <path d="M 62 74 C 54 48 42 20 22 -2 C 14 22 24 56 40 76 C 48 86 58 86 62 74 Z" fill={F[1]} />
+          <path d="M 22 -2 C 34 22 44 48 52 70 M 17 8 C 28 30 38 54 46 74 M 15 22 C 24 42 33 62 41 78
+                   M 16 38 C 23 52 30 66 36 79" stroke={F[2]} strokeWidth="1.6" fill="none" opacity=".8" />
+          <path d="M 22 -2 C 32 8 40 22 47 38 C 38 26 29 12 22 -2 Z" fill={white} opacity=".5" />
+          <path d="M 44 76 C 50 80 56 80 61 75 C 56 82 48 83 44 76 Z" fill={F[2]} opacity=".6" />
+        </g>
+        {/* water thrown off the primaries and around the breast */}
+        <g className="splash-spray" fill="#dff3fb">
+          <ellipse cx="14" cy="34" rx="3.4" ry="4.6" opacity=".85" />
+          <ellipse cx="8" cy="52" rx="2.6" ry="3.6" opacity=".75" />
+          <ellipse cx="26" cy="14" rx="2.8" ry="4" opacity=".8" />
+          <ellipse cx="34" cy="30" rx="2.2" ry="3.2" opacity=".7" />
+          <ellipse cx="22" cy="72" rx="3.6" ry="2.8" opacity=".8" />
+          <ellipse cx="78" cy="80" rx="3.2" ry="4.2" opacity=".75" />
+          <ellipse cx="90" cy="88" rx="2.6" ry="3.4" opacity=".65" />
+          <ellipse cx="66" cy="92" rx="4" ry="2.6" opacity=".7" />
+        </g>
+        <path d="M 18 90 q 14 -9 30 -3 M 62 94 q 16 -8 30 -1" stroke="#dff3fb" strokeWidth="3"
+          fill="none" strokeLinecap="round" opacity=".8" />
+      </g>
     </g>
   );
 }
@@ -550,6 +581,18 @@ function FrogDraw({ uid }) {
           <ellipse cx="81" cy="82.6" rx="4" ry="2.4" fill="#ff8ba0" />
         </g>
         <FaceKit lid={F[1]} e1={[75, 60.5]} e2={[91, 61.5]} er={5} drawEyes={false} mouths={false} browCol={ink} blushCol="#f4a2b0" />
+        {/* the chorus: inflating throat sac under the chin + call rings
+            rolling off the head. CSS shows this only while chorusing */}
+        <g className="sai-crit-croaksac">
+          <ellipse cx="82" cy="83" rx="11.5" ry="9" fill={F[0]} />
+          <ellipse cx="82" cy="85" rx="8" ry="5.6" fill={belly} opacity=".55" />
+          <path d="M 74 80 q 8 4.4 16 0" stroke={F[2]} strokeWidth="1.2" fill="none" opacity=".5" />
+        </g>
+      </g>
+      <g className="sai-crit-croakwaves">
+        <path d="M 101 52 q 6 6 0 12" stroke="#eaffd6" strokeWidth="2.4" fill="none" strokeLinecap="round" />
+        <path d="M 108 47 q 9 11 0 22" stroke="#eaffd6" strokeWidth="2.1" fill="none" strokeLinecap="round" />
+        <path d="M 115 42 q 12 16 0 32" stroke="#eaffd6" strokeWidth="1.8" fill="none" strokeLinecap="round" />
       </g>
     </g>
   );
