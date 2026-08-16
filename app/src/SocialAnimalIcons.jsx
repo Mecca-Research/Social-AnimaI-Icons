@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Critter, SPECIES, ALL_SPECIES } from "./Critters.jsx";
 import { PET_SPECIES } from "./CrittersPets.jsx";
-import { stepEthogram, ethoSwimP, ethoShare, ETHOGRAM, ETHO_STATES, setTreeMetrics } from "./Ethogram.js";
+import { stepEthogram, ethoSwimP, ethoShare, ETHOGRAM, ETHO_STATES, ETHO_Z_STATES, setTreeMetrics } from "./Ethogram.js";
 
 /**
  * Social Animal Icons v0.11 — Lakeside world
@@ -192,6 +192,128 @@ function TreeLayer({ bounds, part }) {
                 {/* limbs reaching out from under the canopy */}
                 <path d="M -8 -86 C -22 -96 -34 -100 -46 -98 M 9 -88 C 22 -98 34 -102 46 -99" stroke="#5b3f26"
                   strokeWidth="5" fill="none" strokeLinecap="round" />
+              </>
+            )}
+          </svg>
+        </div>
+      ))}
+    </>
+  );
+}
+
+// ---------------- Forage ground ----------------
+// The open green between the western trees and the lake is the vegetation
+// larder: berry bushes, nut trees, low shrubs and patches of soft soil.
+// Same geometry-as-physics contract as the trees — the drawn bush IS the
+// spot an animal walks to. `kind` is what the ethograms match on.
+//   berry  ripe fruit: bear strips it, raccoon climbs it, fox plucks low
+//   nut    mast crop: the squirrel's supply, the skunk's windfall
+//   shrub  browse: the deer's selective nibbling
+//   soil   soft diggable ground: squirrel caches, skunk rooting
+const FORAGE_SITES = [
+  // north arc, up around the mossy log
+  { x: .265, y: .250, s: 1.00, kind: "berry" },
+  { x: .330, y: .245, s: 0.92, kind: "berry" },
+  { x: .395, y: .265, s: 0.88, kind: "shrub" },
+  // west berry thicket
+  { x: .255, y: .400, s: 1.05, kind: "berry" },
+  { x: .245, y: .520, s: 0.95, kind: "berry" },
+  { x: .300, y: .455, s: 1.10, kind: "berry" },
+  // nut trees around the edge of the clearing
+  { x: .335, y: .335, s: 1.05, kind: "nut" },
+  { x: .285, y: .600, s: 0.98, kind: "nut" },
+  { x: .445, y: .565, s: 1.02, kind: "nut" },
+  // browse shrubs through the middle
+  { x: .375, y: .425, s: 1.00, kind: "shrub" },
+  { x: .225, y: .455, s: 0.92, kind: "shrub" },
+  { x: .415, y: .625, s: 1.05, kind: "shrub" },
+  // east berries, out toward the shore
+  { x: .430, y: .330, s: 1.08, kind: "berry" },
+  // (kept west of .45: east of that the 60px approach ring dips under the
+  // rho 1.12 the spawn guard uses, and animals start getting shoved ashore)
+  { x: .450, y: .465, s: 0.96, kind: "berry" },
+  // bare soft ground: caches and rooting
+  { x: .345, y: .525, s: 1.00, kind: "soil" },
+  { x: .385, y: .335, s: 0.95, kind: "soil" },
+];
+const FORAGE_REACH = 26;   // how close counts as "at" a site
+function ForageLayer({ bounds, sites }) {
+  const { w, h } = bounds;
+  if (!w || !h) return null;
+  return (
+    <>
+      {sites.map((f, i) => (
+        <div key={i} style={{ position: "absolute", left: f.x * w, top: f.y * h, zIndex: 2,
+          pointerEvents: "none", transform: `translate(-50%,-100%) scale(${f.s})`,
+          transformOrigin: "50% 100%" }}>
+          <svg width="96" height="104" viewBox="-48 -88 96 104" style={{ display: "block", overflow: "visible" }}>
+            <ellipse cx="2" cy="9" rx={f.kind === "soil" ? 30 : 26} ry="7" fill="#0d2415" opacity=".38" />
+            {f.kind === "berry" && (
+              <g className="sai-bg-sway" style={{ animationDuration: `${5.2 + i * 0.4}s`, animationDelay: `${i * 0.7}s`, transformOrigin: "50% 100%" }}>
+                <path d="M -6 8 C -8 -6 -6 -18 -2 -26 M 4 8 C 7 -4 8 -16 6 -24" stroke="#5a4a2c" strokeWidth="3" fill="none" strokeLinecap="round" />
+                <ellipse cx="-15" cy="-20" rx="19" ry="16" fill="#2f6b3f" />
+                <ellipse cx="14" cy="-23" rx="20" ry="17" fill="#2a6138" />
+                <ellipse cx="0" cy="-34" rx="22" ry="17" fill="#3a7d49" />
+                <ellipse cx="-11" cy="-42" rx="14" ry="11" fill="#469356" />
+                <ellipse cx="10" cy="-44" rx="12" ry="10" fill="#54a763" opacity=".85" />
+                {/* ripe fruit — the thing everybody comes for */}
+                <g className="forage-berries">
+                  <circle cx="-22" cy="-18" r="3.4" fill="#8e1f46" /><circle cx="-23" cy="-19" r="1.2" fill="#d46b95" opacity=".7" />
+                  <circle cx="-8" cy="-27" r="3.2" fill="#a8244f" /><circle cx="-9" cy="-28" r="1.1" fill="#e08bad" opacity=".7" />
+                  <circle cx="9" cy="-15" r="3.5" fill="#7d1b3e" /><circle cx="8" cy="-16" r="1.2" fill="#c96289" opacity=".7" />
+                  <circle cx="21" cy="-26" r="3.1" fill="#9c2149" /><circle cx="20" cy="-27" r="1.1" fill="#dc7fa3" opacity=".7" />
+                  <circle cx="2" cy="-45" r="2.9" fill="#8e1f46" />
+                  <circle cx="-18" cy="-35" r="3" fill="#a8244f" />
+                  <circle cx="16" cy="-36" r="2.8" fill="#7d1b3e" />
+                </g>
+              </g>
+            )}
+            {f.kind === "nut" && (
+              <>
+                <path d="M -5 10 C -4 -8 -3 -24 -3 -40 L 6 -40 C 6 -24 7 -8 9 10 C 4 12 0 12 -5 10 Z" fill="#5b3f26" />
+                <path d="M -5 10 C -4 -8 -3 -24 -3 -40 L 0 -40 C -1 -22 -2 -6 -1 10 Z" fill="#6f4f30" />
+                <path d="M -3 -36 C -12 -42 -19 -44 -26 -43 M 6 -37 C 14 -43 21 -45 28 -44" stroke="#5b3f26" strokeWidth="3.2" fill="none" strokeLinecap="round" />
+                <g className="sai-bg-sway" style={{ animationDuration: `${5.8 + i * 0.5}s`, animationDelay: `${i * 0.9}s`, transformOrigin: "50% 100%" }}>
+                  <ellipse cx="-16" cy="-48" rx="20" ry="15" fill="#2f6b3f" />
+                  <ellipse cx="17" cy="-50" rx="21" ry="16" fill="#2a6138" />
+                  <ellipse cx="0" cy="-60" rx="25" ry="18" fill="#3a7d49" />
+                  <ellipse cx="-10" cy="-70" rx="16" ry="12" fill="#469356" />
+                  <ellipse cx="11" cy="-72" rx="13" ry="10" fill="#54a763" opacity=".8" />
+                  {/* the mast crop, in husked clusters */}
+                  <g className="forage-nuts">
+                    <ellipse cx="-20" cy="-44" rx="3.6" ry="4.2" fill="#7a5227" /><ellipse cx="-20" cy="-45.4" rx="1.7" ry="1.5" fill="#a9793f" />
+                    <ellipse cx="-4" cy="-40" rx="3.4" ry="4" fill="#6d491f" /><ellipse cx="-4" cy="-41.3" rx="1.6" ry="1.4" fill="#9c6d38" />
+                    <ellipse cx="14" cy="-42" rx="3.6" ry="4.2" fill="#7a5227" /><ellipse cx="14" cy="-43.4" rx="1.7" ry="1.5" fill="#a9793f" />
+                    <ellipse cx="24" cy="-52" rx="3.2" ry="3.8" fill="#6d491f" />
+                  </g>
+                </g>
+              </>
+            )}
+            {f.kind === "shrub" && (
+              <g className="sai-bg-sway" style={{ animationDuration: `${4.6 + i * 0.35}s`, animationDelay: `${i * 0.5}s`, transformOrigin: "50% 100%" }}>
+                <ellipse cx="-14" cy="-9" rx="18" ry="12" fill="#2a6138" />
+                <ellipse cx="13" cy="-11" rx="19" ry="13" fill="#2f6b3f" />
+                <ellipse cx="0" cy="-19" rx="20" ry="13" fill="#3a7d49" />
+                <ellipse cx="-9" cy="-25" rx="12" ry="9" fill="#469356" />
+                <ellipse cx="9" cy="-26" rx="10" ry="8" fill="#54a763" opacity=".8" />
+                {/* a few tender shoots — what the deer actually picks out */}
+                <path d="M -6 -30 C -7 -37 -4 -42 -1 -44 M 6 -31 C 7 -38 11 -42 14 -43"
+                  stroke="#7cc48a" strokeWidth="2.2" fill="none" strokeLinecap="round" />
+                <ellipse cx="-1" cy="-45" rx="3.4" ry="2.4" fill="#8fd69c" />
+                <ellipse cx="14.5" cy="-44" rx="3.2" ry="2.2" fill="#8fd69c" />
+              </g>
+            )}
+            {f.kind === "soil" && (
+              <>
+                <ellipse cx="0" cy="0" rx="27" ry="13" fill="#4a3520" />
+                <ellipse cx="-2" cy="-2" rx="22" ry="10" fill="#5d4327" />
+                <ellipse cx="-6" cy="-3" rx="9" ry="4.5" fill="#6d5030" opacity=".8" />
+                <ellipse cx="9" cy="1" rx="7" ry="3.4" fill="#3f2c1a" opacity=".7" />
+                <circle cx="-15" cy="3" r="2.1" fill="#6b6257" /><circle cx="12" cy="-5" r="1.7" fill="#6b6257" />
+                <circle cx="2" cy="5" r="1.5" fill="#5c544a" />
+                {/* a couple of tufts clinging to the edge of the bare patch */}
+                <path d="M -24 1 l -2 -8 M -21 2 l 1 -9 M 22 -1 l 3 -8 M 25 0 l 1 -7"
+                  stroke="#3f7c4a" strokeWidth="1.8" fill="none" strokeLinecap="round" opacity=".9" />
               </>
             )}
           </svg>
@@ -449,7 +571,7 @@ function keepOutOfHouses(a, bounds, houses) {
 const WORLDS = {
   forest: {
     key: "forest", label: "🌲 Forest", roster: SPECIES,
-    hasWater: true, houses: [], swim: SWIM_P, trees: FOREST_TREES,
+    hasWater: true, houses: [], swim: SWIM_P, trees: FOREST_TREES, forage: FORAGE_SITES,
     fallback: { x: .25, y: .75 }, // SW is always land
     bg: "linear-gradient(165deg,#1e4a37 0%,#173a2b 46%,#0f2a1f 100%)",
   },
@@ -713,6 +835,7 @@ export default function SocialAnimalsRPG() {
         {worldKey === "forest" && <ForestScene />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <Lake bounds={snapshot.bounds} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <TreeLayer bounds={snapshot.bounds} part="trunk" />}
+        {worldKey === "forest" && snapshot.bounds.w > 0 && <ForageLayer bounds={snapshot.bounds} sites={FORAGE_SITES} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <PadLayer padsRef={padsRef} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <DamLayer damRefs={damRefs} />}
         {worldKey === "neighborhood" && snapshot.bounds.w > 0 && <NeighborhoodScene bounds={snapshot.bounds} />}
@@ -2040,6 +2163,20 @@ function stepWorld(world, cfg, dt) {
   const now = performance.now();
   const isWet = (x, y) => def.hasWater ? inWater(bounds, x, y)
     : def.pool ? inPool(bounds, def.pool, x, y) : false;
+  // Forage sites, in stage pixels with a claim slot so two animals never
+  // work the same bush at once — the lily pads' riderId trick. Rebuilt on a
+  // resize; `userId` is carried across so nobody loses their place.
+  if (def.forage) {
+    if (!world.forage || world.forage.length !== def.forage.length) {
+      world.forage = def.forage.map((f, i) => ({ ...f, i, userId: null }));
+    }
+    for (const f of world.forage) { f.px = f.x * bounds.w; f.py = f.y * bounds.h; }
+    for (const f of world.forage) {
+      // a claim dies with the animal that made it, or when it wanders off
+      if (f.userId && !agents.some((c) => c.id === f.userId && c._eth && c._eth.claim === f)) f.userId = null;
+    }
+  }
+
   // everything an ethogram is allowed to see, assembled once a frame
   const ethoCtx = { now, dt, def, bounds, world, cfg, rand, isWet, isFreeState, lakePoint, LAKE };
 
@@ -2082,7 +2219,7 @@ function stepWorld(world, cfg, dt) {
     const busy = a.state === "fight" || a.state === "friendly" || a.state === "rescue" ||
       a.state === "sniff" || a.state === "walkoff" || a.state === "leaveyard" || a.state === "seekroof" ||
       a.state === "padsit" || a.state === "damrun" ||
-      a.state === "preen" || a.state === "splash" || a.state === "sploot" ||
+      a.state === "preen" || a.state === "splash" ||
       // every state any ethogram owns counts as busy without being listed
       // here, so a new species event needs no edit to this line
       ETHO_STATES.has(a.state) ||
@@ -2092,12 +2229,6 @@ function stepWorld(world, cfg, dt) {
     // after a fight interrupts it) instead of silently forgetting it
     if (!busy && a._padTrip && isFreeState(a) && a.intent !== "topad" && now < a._padTrip) {
       a.intent = "topad"; a.intentUntil = now + 6000;
-    }
-    // same for a squirrel that meant to sploot: an encounter's intent reset
-    // used to wipe the plan outright, so the lie-down rarely happened
-    if (!busy && a._splootWant && isFreeState(a) && a.intent !== "sploot" &&
-        a.state !== "sploot" && now < a._splootWant) {
-      a.intent = "sploot"; a.intentUntil = now + 6000;
     }
     if (now >= a.intentUntil && !busy) {
       const ashore = now < (a._ashoreUntil || 0); // just hauled out — stay dry a moment
@@ -2114,17 +2245,12 @@ function stepWorld(world, cfg, dt) {
       // float sits: the frog takes any pad or log, the turtle basks on logs
       // (0.4 each — a bigger slice of their unchanged 90% / 80% water shares)
       const padP = def.hasWater && (a.species === "frog" || a.species === "turtle") ? 0.4 : 0;
-      // squirrels sploot on a cool patch of forest floor now and then
-      const splootP = a.species === "squirrel" ? 0.20 : 0;
       const roll = Math.random();
       a.intent = roll < swimP ? "swim"
         : roll < swimP + perchP ? "perch"
         : roll < swimP + patrolP ? "patrol"
         : roll < swimP + perchP + patrolP + padP ? "topad"
-        : roll < swimP + perchP + patrolP + padP + splootP ? "sploot"
         : "wander";
-      if (a.intent === "sploot") a._splootWant = now + 25000; // hold the plan
-      else if (a.intent !== "topad") a._splootWant = 0;
       a.swimTarget = null;
       a.intentUntil = now + rand(INTENT_MIN_S * 1000, INTENT_MAX_S * 1000);
     }
@@ -2618,18 +2744,7 @@ function stepWorld(world, cfg, dt) {
       }
     }
 
-    // ---- the squirrel sploots: flat on its belly, limbs spread over a
-    // cool patch of forest floor, dumping heat
-    if (a.state === "sploot") {
-      a.vx = 0; a.vy = 0;
-      if (now >= a.stateUntil) {
-        a.state = "wander"; a.intent = "wander"; a.intentUntil = now + rand(4000, 8000);
-        a.noEventUntil = Math.max(a.noEventUntil, now + 800);
-      }
-    } else if (a.intent === "sploot" && a.species === "squirrel" && isFreeState(a) && a.z === 0) {
-      a.state = "sploot"; a.stateUntil = now + rand(8000, 14000); a.vx = 0; a.vy = 0;
-      a.intent = "wander"; a._splootWant = 0;
-    }
+    // (the squirrel's sploot moved to its ethogram in v0.32)
 
     // everyone who swims eventually hauls out: the occasional dippers after
     // 6-12s, the water regulars after a longer soak. Without a cap they'd
@@ -2813,7 +2928,9 @@ function stepWorld(world, cfg, dt) {
       if (a.state !== "seekroof") a.roofI = -1; // the hunt keeps its target roof
       const hopping = now < (a.hopUntil || 0);
       // touch down (a bear up a trunk drives its own height)
-      if (a.z > 0 && !hopping && a.state !== "treeclimb") { a.z *= Math.exp(-5 * dt); if (a.z < 0.5) a.z = 0; }
+      // ETHO_Z_STATES are the ones holding themselves up something — a trunk,
+      // a bush — and they set their own height each frame
+      if (a.z > 0 && !hopping && !ETHO_Z_STATES.has(a.state)) { a.z *= Math.exp(-5 * dt); if (a.z < 0.5) a.z = 0; }
       if (def.hasWater && !canSwimIn(def, a.species)) keepAshore(a, bounds);
       if (def.pool && !canSwimIn(def, a.species) && a.z < 3) keepOutOfPool(a, bounds, def.pool);
       if (a.z < 3) keepOutOfHouses(a, bounds, def.houses);
@@ -3005,6 +3122,8 @@ function renderWorld(world, iconsRef, padsRef, damRefs) {
       sprite.dataset.chorus = a.state === 'padsit' && a._chorus ? '1' : '';
       // airborne (flying up/down or fluttering over a fence): flap + shrink shadow
       sprite.dataset.air = a.z > 3 ? '1' : '';
+      // whatever he is holding: a berry, a nut, a fish. CSS shows the item.
+      sprite.dataset.carry = a._carry || '';
       // the cat's pre-jump pause at a fence (little crouch via CSS)
       sprite.dataset.prep = nowMs < (a.hopPrepUntil || 0) ? '1' : '';
       let dir = Number(sprite.dataset.dir || '1');
