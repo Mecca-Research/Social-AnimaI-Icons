@@ -333,6 +333,34 @@ function GooseDraw({ uid }) {
         </g>
         <FaceKit lid={dark} e1={[86, 26]} e2={[93, 25]} er={2.4} drawEyes={false} mouths={false} blushCol="#c9857a" />
       </g>
+      {/* PREENING POSE: the neck curls back over the shoulder and the bill
+          works down INTO the back feathers (oiling from the gland at the
+          tail base). CSS swaps this in for the upright head while preening */}
+      <g className="sai-crit-preenpose">
+        {/* neck: up out of the breast, arcing over the crown, then down
+            the far side so the head lands on the back */}
+        <path d="M 71 76 C 78 60 87 45 82 33 C 77 21 61 23 55 36 C 51 45 52 51 56 55"
+          stroke={dark} strokeWidth="11.5" fill="none" strokeLinecap="round" />
+        <path d="M 71 76 C 77 61 85 47 81 36" stroke="#2c3036" strokeWidth="4" fill="none"
+          strokeLinecap="round" opacity=".5" />
+        {/* head tucked down against the back */}
+        <circle cx="57" cy="56" r="9.5" fill={dark} />
+        {/* white chinstrap, now facing up-left as the head is inverted */}
+        <path d="M 52 51 C 48.5 53.5 48 58 50.5 61.5 C 54.5 62 58 60 59 56.5 C 58 52.5 55 50.5 52 51 Z" fill={white} />
+        {/* bill driven down into the back plumage */}
+        <path d="M 52 62 L 43.5 70.5 L 51.5 68.5 Q 52.5 65 52 62 Z" fill={shank} />
+        <path d="M 50.5 64.5 l -2.6 2.8" stroke="#3c4046" strokeWidth="1" strokeLinecap="round" />
+        <g className="sai-crit-eyes-normal">
+          <circle cx="60" cy="52.5" r="2.4" fill="#fff" opacity=".9" /><circle cx="60.2" cy="52.8" r="1.6" fill={ink} />
+        </g>
+        {/* feathers lifted where the bill is working */}
+        <g className="preen-ruffle">
+          <path d="M 44 66 q -5 -2.4 -8.5 -0.6 M 45 71 q -5.4 .6 -8.6 3.4" stroke={F[2]}
+            strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".7" />
+          <ellipse cx="38" cy="62" rx="2.4" ry="1.4" fill={F[0]} opacity=".65" transform="rotate(-24 38 62)" />
+        </g>
+      </g>
+
       {/* WING-FLAP SPLASH: both wings thrown wide and high off the water,
           primaries fanned, spray flying. CSS shows this only mid-splash */}
       <g className="sai-crit-splashwings">
