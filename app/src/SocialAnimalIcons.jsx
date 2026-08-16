@@ -58,8 +58,10 @@ const EDGE_OFF = 70;         // fully off-screen distance before wrapping
 // The frog's 90% water share = 0.7 swim + 0.2 float sitting; the turtle's
 // 80% = 0.6 swim + 0.2 basking on a drift log. The beaver splits 50/50 —
 // more shore time means more off-screen dam trips.
+// (frog 0.5 swim + 0.4 float = 0.9; turtle 0.4 + 0.4 = 0.8 — the float
+// share grew, the totals held)
 const SWIM_P = {
-  frog: 0.7, turtle: 0.6, beaver: 0.5, goose: 0.8,
+  frog: 0.5, turtle: 0.4, beaver: 0.5, goose: 0.8,
   bear: 0.4, wolf: 0.2, deer: 0.2, raccoon: 0.1, cougar: 0.1,
 };
 // occasional dippers keep it brief: a 6-12s timer per visit to the water
@@ -1975,7 +1977,9 @@ function stepWorld(world, cfg, dt) {
     const busy = a.state === "fight" || a.state === "friendly" || a.state === "rescue" ||
       a.state === "sniff" || a.state === "walkoff" || a.state === "leaveyard" || a.state === "seekroof" ||
       a.state === "padsit" || a.state === "damrun" ||
-      a.state === "fishdive" || a.state === "fishwait" || a.state === "fishcarry" || a.state === "fisheat" ||
+      a.state === "fishswim" || a.state === "fishdive" || a.state === "fishwait" ||
+      a.state === "fishcarry" || a.state === "fisheat" ||
+      a.state === "preen" || a.state === "splash" || a.state === "sploot" ||
       AIR_STATES.has(a.state) || ROOF_STATES.has(a.state);
     if (now >= a.intentUntil && !busy) {
       const swimP = (def.hasWater || def.pool) ? def.swim?.[a.species] || 0 : 0;
@@ -1984,13 +1988,16 @@ function stepWorld(world, cfg, dt) {
         : a.species === "sugarglider" ? 0.10 : 0; // the glider climbs up now and then
       const patrolP = def.perching && a.species === "cat" ? PATROL_P : 0;
       // float sits: the frog takes any pad or log, the turtle basks on logs
-      // (each 0.2 — part of their 90% / 80% water shares)
-      const padP = def.hasWater && (a.species === "frog" || a.species === "turtle") ? 0.2 : 0;
+      // (0.4 each — a bigger slice of their unchanged 90% / 80% water shares)
+      const padP = def.hasWater && (a.species === "frog" || a.species === "turtle") ? 0.4 : 0;
+      // squirrels sploot on a cool patch of forest floor now and then
+      const splootP = a.species === "squirrel" ? 0.10 : 0;
       const roll = Math.random();
       a.intent = roll < swimP ? "swim"
         : roll < swimP + perchP ? "perch"
         : roll < swimP + patrolP ? "patrol"
         : roll < swimP + perchP + patrolP + padP ? "topad"
+        : roll < swimP + perchP + patrolP + padP + splootP ? "sploot"
         : "wander";
       a.swimTarget = null;
       a.intentUntil = now + rand(INTENT_MIN_S * 1000, INTENT_MAX_S * 1000);
@@ -2448,7 +2455,7 @@ function stepWorld(world, cfg, dt) {
         // centered on a.y; its feet sit ~25px below center)
         a.x = p.x; a.y = p.y - 20; a.vx = 0; a.vy = 0;
         if (now >= a.stateUntil) {
-          p.riderId = null; a._padI = null;
+          p.riderId = null; a._padI = null; a._chorus = false;
           a.state = "wander"; a.intent = "wander";
           a.intentUntil = now + rand(4000, 8000);
           const ang = rand(0, Math.PI * 2);
@@ -2458,6 +2465,46 @@ function stepWorld(world, cfg, dt) {
       }
     } else if (a._padI != null && a.intent !== "topad") a._padI = null;
 
+    // ---- the goose preens & oils the moment it steps out of the water:
+    // waterproofing straight from the gland at the base of the tail, so a
+    // coin-flip of its exits turns into a full grooming session
+    // ...and 10% of its entries end in a wing-flapping splash: it swims a
+    // while (6-14s), then rears up and beats both wings on the water
+    if (a.species === "goose" && def.hasWater) {
+      const wet = isWet(a.x, a.y);
+      if (!wet && a._wasWet && isFreeState(a) && Math.random() < 0.5) {
+        a.state = "preen"; a.stateUntil = now + rand(4000, 7000); a.vx = 0; a.vy = 0;
+      }
+      if (wet && !a._wasWet && isFreeState(a) && Math.random() < 0.1) {
+        a._splashAt = now + rand(6000, 14000);
+      }
+      if (!wet) a._splashAt = 0; // left the water before it got round to it
+      if (a._splashAt && now >= a._splashAt && wet && isFreeState(a)) {
+        a.state = "splash"; a.stateUntil = now + 2800; a._splashAt = 0; a.vx = 0; a.vy = 0;
+      }
+      a._wasWet = wet;
+    }
+    if (a.state === "preen" || a.state === "splash") {
+      a.vx = 0; a.vy = 0;
+      if (now >= a.stateUntil) {
+        a.state = "wander"; a.intent = "wander"; a.intentUntil = now + rand(4000, 8000);
+        a.noEventUntil = Math.max(a.noEventUntil, now + 800);
+      }
+    }
+
+    // ---- the squirrel sploots: flat on its belly, limbs spread over a
+    // cool patch of forest floor, dumping heat
+    if (a.state === "sploot") {
+      a.vx = 0; a.vy = 0;
+      if (now >= a.stateUntil) {
+        a.state = "wander"; a.intent = "wander"; a.intentUntil = now + rand(4000, 8000);
+        a.noEventUntil = Math.max(a.noEventUntil, now + 800);
+      }
+    } else if (a.intent === "sploot" && a.species === "squirrel" && isFreeState(a) && a.z === 0) {
+      a.state = "sploot"; a.stateUntil = now + rand(5000, 9000); a.vx = 0; a.vy = 0;
+      a.intent = "wander";
+    }
+
     // occasional dippers (wolf, deer, raccoon, cougar) wade out after 6-12s
     if (DIP_TIMED.has(a.species) && def.hasWater) {
       if (isWet(a.x, a.y)) {
@@ -2466,18 +2513,32 @@ function stepWorld(world, cfg, dt) {
       } else a._dipUntil = 0;
     }
 
-    // ---- the bear goes fishing: 20% roll on each fresh entry into the
-    // water; up to 3 dives at 50/50 each; a catch is carried ashore and
-    // eaten, a bust resets him to plain wandering. The roll can only
-    // re-arm once he's left the water and come back in.
+    // ---- the bear goes fishing: 30% roll on each fresh entry into the
+    // water. He doesn't lunge straight in — he paddles around hunting for
+    // 6-12s first, then dives: up to 3 dives at 50/50 each. A catch is
+    // carried ashore and eaten, a bust resets him to plain wandering. The
+    // roll can only re-arm once he's left the water and come back in.
     if (a.species === "bear" && def.hasWater) {
       const wet = isWet(a.x, a.y);
-      if (wet && !a._wasWet && isFreeState(a) && Math.random() < 0.2) {
-        a.state = "fishdive"; a._diveN = 1; a.stateUntil = now + 1100; a.vx = 0; a.vy = 0;
+      if (wet && !a._wasWet && isFreeState(a) && Math.random() < 0.3) {
+        a.state = "fishswim"; a.stateUntil = now + rand(6000, 12000);
+        a._diveN = 0; a.swimTarget = null;
       }
       a._wasWet = wet;
     }
-    if (a.state === "fishdive" || a.state === "fishwait") {
+    if (a.state === "fishswim") {
+      // cruising the shallows looking for a fish
+      if (!isWet(a.x, a.y)) { a.state = "wander"; a._diveN = 0; }
+      else {
+        if (!a.swimTarget || Math.hypot(a.swimTarget.x - a.x, a.swimTarget.y - a.y) < 30) {
+          a.swimTarget = lakePoint(bounds, rand(0, Math.PI * 2), Math.sqrt(Math.random()) * 0.7);
+        }
+        const dx = a.swimTarget.x - a.x, dy = a.swimTarget.y - a.y, d = Math.hypot(dx, dy) || 1;
+        const sp2 = cfg.speed * 0.5;
+        a.vx = (dx / d) * sp2; a.vy = (dy / d) * sp2;
+        if (now >= a.stateUntil) { a.state = "fishdive"; a._diveN = 1; a.stateUntil = now + 1100; a.vx = 0; a.vy = 0; }
+      }
+    } else if (a.state === "fishdive" || a.state === "fishwait") {
       a.vx = 0; a.vy = 0;
       if (!isWet(a.x, a.y)) { a.state = "wander"; a._diveN = 0; }
       else if (now >= a.stateUntil) {
@@ -2561,6 +2622,8 @@ function stepWorld(world, cfg, dt) {
         if (d < 12) {
           a.state = "padsit"; a.stateUntil = now + rand(7000, 14000);
           p.riderId = a.id; a.vx = 0; a.vy = 0;
+          // half the time a settled frog strikes up a chorus
+          a._chorus = a.species === "frog" && Math.random() < 0.5;
         } else {
           const sp = cfg.speed * (isWet(a.x, a.y) ? 0.55 : 0.9);
           a.vx = (dx / d) * sp; a.vy = (dy / d) * sp;
@@ -2844,6 +2907,8 @@ function renderWorld(world, iconsRef, padsRef, damRefs) {
       const wetHere = defW.hasWater ? inWater(world.bounds, a.x, a.y)
         : defW.pool ? inPool(world.bounds, defW.pool, a.x, a.y) : false;
       sprite.dataset.swimming = wetHere && canSwimIn(defW, a.species) && a.state !== 'padsit' ? '1' : '';
+      // a frog chorusing on its float (croak + sound rings)
+      sprite.dataset.chorus = a.state === 'padsit' && a._chorus ? '1' : '';
       // airborne (flying up/down or fluttering over a fence): flap + shrink shadow
       sprite.dataset.air = a.z > 3 ? '1' : '';
       // the cat's pre-jump pause at a fence (little crouch via CSS)

@@ -1008,14 +1008,71 @@ body {
 }
 
 /* ==================== v0.25 the bear goes fishing ==================== */
-/* dive: plunge under (drop + tip + fade), one-shot per dive state */
+/* dive: a solid, weighty plunge — rear up, tip nose-down and drive under,
+   then surface. No fading: he stays fully opaque throughout. */
 .sai-sprite[data-state="fishdive"] .sai-crit-root{ animation:sai-bear-dive 1.1s ease-in-out; }
 @keyframes sai-bear-dive{
-  0%{transform:translateY(0) rotate(0); opacity:1;}
-  30%{transform:translateY(10px) rotate(9deg); opacity:.4;}
-  65%{transform:translateY(10px) rotate(7deg); opacity:.4;}
-  100%{transform:translateY(0) rotate(0); opacity:1;}
+  0%{transform:translateY(0) rotate(0) scaleY(1);}
+  18%{transform:translateY(-4px) rotate(-7deg) scaleY(1.04);}
+  42%{transform:translateY(13px) rotate(15deg) scaleY(.82);}
+  66%{transform:translateY(15px) rotate(12deg) scaleY(.8);}
+  86%{transform:translateY(2px) rotate(-3deg) scaleY(1.03);}
+  100%{transform:translateY(0) rotate(0) scaleY(1);}
 }
+/* splash collar where he goes under */
+.sai-sprite[data-state="fishdive"]::before{ content:""; position:absolute; left:50%; top:64%;
+  width:86%; height:30%; transform:translate(-50%,-50%); border-radius:50%; pointer-events:none;
+  border:2.5px solid rgba(223,243,251,.75); animation:sai-bear-splash 1.1s ease-out; }
+@keyframes sai-bear-splash{
+  0%{opacity:0; transform:translate(-50%,-50%) scale(.5);}
+  40%{opacity:.9; transform:translate(-50%,-50%) scale(1);}
+  100%{opacity:0; transform:translate(-50%,-50%) scale(1.5);}
+}
+/* hunting the shallows before the dive: a slow searching sweep */
+.sai-sprite[data-state="fishswim"] .sai-crit-head{ animation:sai-bear-scan 2.4s ease-in-out infinite; }
+@keyframes sai-bear-scan{ 0%,100%{transform:rotate(-5deg) translateY(1px);} 50%{transform:rotate(6deg) translateY(2.5px);} }
+
+/* ---- frog chorus: throat sac pumping + call rings rolling away ---- */
+.sai-crit-croaksac, .sai-crit-croakwaves{ display:none; }
+.sai-sprite[data-chorus="1"] .sai-crit-croaksac{ display:inline; transform-box:fill-box; transform-origin:50% 15%;
+  animation:sai-frog-sac .82s ease-in-out infinite; }
+@keyframes sai-frog-sac{ 0%,100%{transform:scale(.35);} 45%{transform:scale(1);} 70%{transform:scale(.9);} }
+.sai-sprite[data-chorus="1"] .sai-crit-croakwaves{ display:inline; }
+.sai-sprite[data-chorus="1"] .sai-crit-croakwaves path{ opacity:0; animation:sai-frog-call .82s ease-out infinite; }
+.sai-sprite[data-chorus="1"] .sai-crit-croakwaves path:nth-child(2){ animation-delay:.1s; }
+.sai-sprite[data-chorus="1"] .sai-crit-croakwaves path:nth-child(3){ animation-delay:.2s; }
+@keyframes sai-frog-call{ 0%{opacity:0; transform:translateX(-5px) scale(.85);} 40%{opacity:.85;} 100%{opacity:0; transform:translateX(7px) scale(1.1);} }
+.sai-sprite[data-chorus="1"] .sai-crit-head{ animation:sai-frog-croakhead .82s ease-in-out infinite; }
+@keyframes sai-frog-croakhead{ 0%,100%{transform:translateY(0) rotate(0);} 45%{transform:translateY(-1.6px) rotate(-3deg);} }
+
+/* ---- goose preening & oiling: bill back to the tail gland, then combing
+   the breast; a slow, absorbed grooming cycle ---- */
+.sai-sprite[data-state="preen"] .sai-crit-head{ animation:sai-goose-preen 3.4s ease-in-out infinite; }
+@keyframes sai-goose-preen{
+  0%,100%{transform:rotate(0) translate(0,0);}
+  18%{transform:rotate(52deg) translate(-13px,10px);}   /* reach back to the gland */
+  34%{transform:rotate(58deg) translate(-15px,12px);}
+  52%{transform:rotate(24deg) translate(-6px,7px);}     /* comb the flank */
+  62%{transform:rotate(30deg) translate(-8px,8px);}
+  78%{transform:rotate(10deg) translate(-1px,4px);}     /* down the breast */
+}
+.sai-sprite[data-state="preen"] .sai-crit-body{ animation:sai-goose-fluff 3.4s ease-in-out infinite; }
+@keyframes sai-goose-fluff{ 0%,100%{transform:scaleX(1) scaleY(1);} 30%{transform:scaleX(1.03) scaleY(1.05);} 70%{transform:scaleX(1.05) scaleY(1.02);} }
+.sai-sprite[data-state="preen"] .sai-crit-tail{ animation:sai-goose-tailflick 3.4s ease-in-out infinite; }
+@keyframes sai-goose-tailflick{ 0%,100%{transform:rotate(0);} 20%{transform:rotate(-13deg);} 40%{transform:rotate(6deg);} }
+
+/* ---- squirrel splooting: flat on the belly, limbs spread, heat dumping ---- */
+.sai-sprite[data-state="sploot"] .sai-crit-root{ animation:sai-sploot-settle .7s ease-out forwards; }
+@keyframes sai-sploot-settle{ 0%{transform:translateY(0) scaleY(1) scaleX(1);} 100%{transform:translateY(7px) scaleY(.62) scaleX(1.16);} }
+.sai-sprite[data-state="sploot"] .sai-crit-body{ animation:sai-sploot-breathe 3.2s ease-in-out infinite; }
+@keyframes sai-sploot-breathe{ 0%,100%{transform:scaleY(1);} 50%{transform:scaleY(1.06);} }
+.sai-sprite[data-state="sploot"] .sai-crit-leg-fl,
+.sai-sprite[data-state="sploot"] .sai-crit-leg-fr{ transform:rotate(-58deg); }
+.sai-sprite[data-state="sploot"] .sai-crit-leg-bl,
+.sai-sprite[data-state="sploot"] .sai-crit-leg-br{ transform:rotate(58deg); }
+.sai-sprite[data-state="sploot"] .sai-crit-tail{ animation:sai-sploot-tail 4.4s ease-in-out infinite; }
+@keyframes sai-sploot-tail{ 0%,100%{transform:rotate(-4deg);} 50%{transform:rotate(5deg);} }
+.sai-sprite[data-state="sploot"] .sai-crit-head{ animation:none; transform:translateY(2px) rotate(4deg); }
 /* the fish shows in his mouth while carrying + eating; nibbles away */
 .sai-crit-fish{ display:none; }
 .sai-sprite[data-state="fishcarry"] .sai-crit-fish,
@@ -1029,6 +1086,47 @@ body {
 @media (prefers-reduced-motion: reduce){
   .sai-sprite[data-state="damrun"][data-swimming="1"] .sai-crit-damlog,
   .sai-sprite[data-state="fishdive"] .sai-crit-root,
+  .sai-sprite[data-state="fishdive"]::before,
+  .sai-sprite[data-state="fishswim"] .sai-crit-head,
   .sai-sprite[data-state="fisheat"] .sai-crit-fish,
-  .sai-sprite[data-state="fisheat"] .sai-crit-head{ animation:none; }
+  .sai-sprite[data-state="fisheat"] .sai-crit-head,
+  .sai-sprite[data-chorus="1"] .sai-crit-croaksac,
+  .sai-sprite[data-chorus="1"] .sai-crit-croakwaves path,
+  .sai-sprite[data-chorus="1"] .sai-crit-head,
+  .sai-sprite[data-state="preen"] .sai-crit-head,
+  .sai-sprite[data-state="preen"] .sai-crit-body,
+  .sai-sprite[data-state="preen"] .sai-crit-tail,
+  .sai-sprite[data-state="sploot"] .sai-crit-body,
+  .sai-sprite[data-state="sploot"] .sai-crit-tail{ animation:none; }
+}
+
+/* ---- goose wing-flap splash: rears up out of the water and beats both
+   wings, spray flying off the primaries ---- */
+.sai-crit-splashwings{ display:none; }
+.sai-sprite[data-state="splash"] .sai-crit-splashwings{ display:inline; }
+.sai-sprite[data-state="splash"] .sai-crit-wing{ display:none; }   /* folded wing gives way */
+.sai-sprite[data-state="splash"] .sai-crit-root{ animation:sai-goose-rear 2.8s ease-in-out; }
+@keyframes sai-goose-rear{
+  0%{transform:translateY(0) rotate(0);}
+  16%{transform:translateY(-7px) rotate(-5deg);}
+  50%{transform:translateY(-9px) rotate(-6deg);}
+  84%{transform:translateY(-6px) rotate(-4deg);}
+  100%{transform:translateY(0) rotate(0);}
+}
+.sai-sprite[data-state="splash"] .sai-crit-splashwings .wing-near{
+  transform-box:fill-box; transform-origin:92% 92%; animation:sai-goose-flapnear .34s ease-in-out infinite; }
+.sai-sprite[data-state="splash"] .sai-crit-splashwings .wing-far{
+  transform-box:fill-box; transform-origin:92% 92%; animation:sai-goose-flapfar .34s ease-in-out infinite; }
+@keyframes sai-goose-flapnear{ 0%,100%{transform:rotate(-16deg) scaleY(.94);} 50%{transform:rotate(12deg) scaleY(1.04);} }
+@keyframes sai-goose-flapfar{ 0%,100%{transform:rotate(-10deg) scaleY(.96);} 50%{transform:rotate(16deg) scaleY(1.03);} }
+.sai-sprite[data-state="splash"] .splash-spray{ animation:sai-goose-spray .34s ease-out infinite; }
+@keyframes sai-goose-spray{ 0%{opacity:.2; transform:translate(2px,3px) scale(.7);} 55%{opacity:1;} 100%{opacity:.15; transform:translate(-3px,-4px) scale(1.25);} }
+.sai-sprite[data-state="splash"] .sai-crit-head{ animation:sai-goose-splashneck .7s ease-in-out infinite; }
+@keyframes sai-goose-splashneck{ 0%,100%{transform:rotate(0) translateY(0);} 50%{transform:rotate(-6deg) translateY(-2px);} }
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-state="splash"] .sai-crit-root,
+  .sai-sprite[data-state="splash"] .sai-crit-splashwings .wing-near,
+  .sai-sprite[data-state="splash"] .sai-crit-splashwings .wing-far,
+  .sai-sprite[data-state="splash"] .splash-spray,
+  .sai-sprite[data-state="splash"] .sai-crit-head{ animation:none; }
 }
