@@ -888,78 +888,156 @@ function SkunkDraw({ uid }) {
         </g>
         <FaceKit lid={K[1]} e1={[79, 44]} e2={[94, 43]} er={3.4} drawEyes={false} mouth={[94, 59]} browCol="#0c0b10" />
       </g>
-      {/* ---- NOSE-DOWN HEAD (floorsnuff, windfalleat, clawscrape) ----
+      {/* ---- NOSE-DOWN HEAD (floorsnuff, windfalleat) ----
           The standing head is no use to an animal whose food is all on the
           floor, so this one hangs off the shoulders with the nose in the
           litter. Only the head is swapped — the goose's preen trick — which
           leaves body and all four legs on the normal rig, and he has to go
-          on walking while he does this. */}
+          on walking while he does this.
+          Two groups, not one: the outer takes the stride bob and nothing
+          else, so the neck rides the torso instead of floating clear of it
+          every step, and the nod lives on the inner one. clawscrape no
+          longer borrows this head — see the crouch below. */}
       <g className="sai-crit-snuffhead">
-        <path d="M 74 63 C 84 65 91 72 94 81" stroke={K[1]} strokeWidth="17" fill="none" strokeLinecap="round" />
-        <g className="sai-crit-ear"><circle cx="78" cy="72" r="4.8" fill={K[2]} /></g>
-        <circle cx="91" cy="85" r="15" fill={`url(#${uid}f)`} />
-        {/* the blaze, running now from a nose in the dirt back up the
-            muzzle and over the crown */}
-        <path d="M 103.5 91 C 99 83.5 94 76.5 86.5 71.5 C 83 73 81.2 76.4 82.4 79.8 C 89 83 94.6 88.6 98.6 95 Z" fill={white} />
-        <g className="sai-crit-eyes-normal">
-          <circle cx="94" cy="80" r="3.2" fill="#fff" /><circle cx="94.8" cy="80.2" r="1.9" fill={ink} />
-        </g>
-        {/* nose and whiskers move together: the whiskers are what makes a
-            twitch of two pixels legible at sprite size */}
-        <g className="snuff-nose">
-          <ellipse cx="104" cy="96" rx="3.1" ry="2.7" fill={ink} />
-          <path d="M 106 91.5 l 9.5 -2.6 M 106.5 94.5 l 9 .6 M 105.5 97.5 l 7.5 4.5"
-            stroke={white} strokeWidth="1" fill="none" strokeLinecap="round" opacity=".55" />
-        </g>
-        {/* What he has picked up. Both items are kept inside the whiskers'
-            reach on purpose: they come and go with data-carry, and anything
-            sticking out past them would move the group's own bounding box
-            and drag the head's pivot with it. */}
-        <g className="snuff-berry">
-          <circle cx="107.5" cy="97.5" r="3.2" fill="#8e1f46" />
-          <circle cx="106.6" cy="96.5" r="1.1" fill="#d46b95" opacity=".7" />
-          <circle cx="111" cy="99" r="2.4" fill="#7d1b3e" />
-        </g>
-        <g className="snuff-nut">
-          <ellipse cx="108.5" cy="98" rx="3.4" ry="4" fill="#7a5227" />
-          <ellipse cx="108.5" cy="96.6" rx="1.6" ry="1.4" fill="#a9793f" />
-        </g>
-        {/* leaf litter shouldered aside as the nose ploughs through it */}
-        <g className="snuff-litter">
-          <ellipse cx="110" cy="98.4" rx="1.5" ry="1.2" fill="#6d5030" />
-          <ellipse cx="114" cy="99.2" rx="1.2" ry="1" fill="#4a3520" />
-          <ellipse cx="107" cy="99.6" rx="1.3" ry="1.1" fill="#5d4327" />
+        <g className="snuff-swing">
+          {/* Neck root pulled back to (71,70). Its round cap is a disc of
+              radius 8, and started further forward that disc stood proud of
+              his own topline — a black half-moon floating above the white
+              dorsal stripe, which reads as a lump and not as a neck. Here
+              the cap's crown lands at y 62 against a back that is at 61.8,
+              so it finishes inside the silhouette. */}
+          <path d="M 71 70 C 80 71 88 76 93 83" stroke={K[1]} strokeWidth="16" fill="none" strokeLinecap="round" />
+          {/* Plain circle, deliberately NOT .sai-crit-ear: the shared ear
+              bounce rotates about the middle of the viewBox, and on a head
+              that has itself moved down and forward that throws the ear four
+              pixels off the skull — and floorsnuff is a walking state, so it
+              would run the entire bout. */}
+          <circle cx="78" cy="73" r="4.8" fill={K[2]} />
+          <circle cx="91" cy="85" r="15" fill={`url(#${uid}f)`} />
+          {/* the blaze, running now from a nose in the dirt back up the
+              muzzle and over the crown */}
+          <path d="M 103.5 91 C 99 83.5 94 76.5 86.5 71.5 C 83 73 81.2 76.4 82.4 79.8 C 89 83 94.6 88.6 98.6 95 Z" fill={white} />
+          <g className="sai-crit-eyes-normal">
+            <circle cx="94" cy="80" r="3.2" fill="#fff" /><circle cx="94.8" cy="80.2" r="1.9" fill={ink} />
+          </g>
+          {/* nose and whiskers move together: the whiskers are what makes a
+              twitch of two pixels legible at sprite size. The lower one is
+              cut short — at its old length the bottom of the sweep dragged
+              its tip four units through the floor and out past the far edge
+              of his own shadow. */}
+          <g className="snuff-nose">
+            <ellipse cx="104" cy="96" rx="3.1" ry="2.7" fill={ink} />
+            <path d="M 106 91.5 l 8 -2.2 M 106.5 94.5 l 7.5 .5 M 105.5 97.5 l 5 2"
+              stroke={white} strokeWidth="1" fill="none" strokeLinecap="round" opacity=".55" />
+          </g>
+          {/* What he has picked up. Both items are kept inside the whiskers'
+              reach on purpose: they come and go with data-carry, and anything
+              sticking out past them would move the group's own bounding box
+              and drag the head's pivot with it. */}
+          <g className="snuff-berry">
+            <circle cx="107.5" cy="97.5" r="3.2" fill="#8e1f46" />
+            <circle cx="106.6" cy="96.5" r="1.1" fill="#d46b95" opacity=".7" />
+            <circle cx="111" cy="99" r="2.4" fill="#7d1b3e" />
+          </g>
+          <g className="snuff-nut">
+            <ellipse cx="108.5" cy="98" rx="3.4" ry="3.6" fill="#7a5227" />
+            <ellipse cx="108.5" cy="96.8" rx="1.6" ry="1.4" fill="#a9793f" />
+          </g>
+          {/* leaf litter shouldered aside as the nose ploughs through it */}
+          <g className="snuff-litter">
+            <ellipse cx="110" cy="98.4" rx="1.5" ry="1.2" fill="#6d5030" />
+            <ellipse cx="114" cy="99.2" rx="1.2" ry="1" fill="#4a3520" />
+            <ellipse cx="107" cy="99.6" rx="1.3" ry="1.1" fill="#5d4327" />
+          </g>
         </g>
       </g>
 
-      {/* ---- LIGHT CLAW SCRAPE (clawscrape) ----
-          Only the near foreleg is redrawn. The rig's front shank is a plain
-          rounded rect and this action is entirely about the claws, which a
-          skunk carries long and pale. Everything else — body, hind legs,
-          the nose-down head above — stays on the normal rig, and that is
-          what keeps this reading as a scratch taken in passing rather than
-          a hole he has committed to. */}
+      {/* ---- SURFACE SCRATCH (clawscrape) ----
+          Drawn whole rather than posed on the rig. The rig's torso is a
+          single level ellipse and its forelegs are full-length shanks, so
+          nothing in CSS could drop his chest without stretching a leg
+          through the floor — the same reason the squirrel's dig is a
+          separate drawing. Posing it on the rig is what produced a foreleg
+          that reached across his own face: the only place the shoulder
+          could put a paw was inside the skull.
+          What separates this from that dig is depth. The squirrel is in a
+          hole with both forepaws and a rim of thrown earth. This one keeps
+          his rump up over extended hocks, his chest low but off the ground,
+          one paw working the top half-inch, and leaves streaks rather than
+          a pit. */}
       <g className="sai-crit-scrapepose">
-        <g className="scrape-arm">
-          <path d="M 68 71 C 73 80 79 89 86 96 L 93 92 C 87 84 81 76 77 68 Z" fill={K[1]} />
-          <ellipse cx="89" cy="96" rx="6" ry="3.8" fill={K[2]} />
-          <path d="M 93 97.6 l 5.4 3.4 M 89.6 99 l 3 4.2 M 85.6 99 l 1 4.4"
-            stroke={white} strokeWidth="1.7" fill="none" strokeLinecap="round" opacity=".85" />
-        </g>
-        {/* loose surface soil lifted and dropped more or less where it was.
-            Nothing is thrown clear and nothing is heaped: what he leaves
-            behind is a scuff, not a scrape with a rim */}
-        <g className="scrape-puff">
-          <ellipse cx="96" cy="100" rx="2.4" ry="1.9" fill="#5d4327" />
-          <ellipse cx="101" cy="99" rx="1.9" ry="1.5" fill="#6d5030" />
-          <ellipse cx="92" cy="99.4" rx="1.7" ry="1.4" fill="#4a3520" />
-          <ellipse cx="105" cy="100.6" rx="1.5" ry="1.2" fill="#5d4327" />
-        </g>
-        {/* the marks themselves — parallel surface streaks, the whole
-            evidence that he was ever here */}
+        {/* laid down first so the paw works on top of its own marks */}
         <g className="scrape-marks">
-          <path d="M 92 101.6 q 7 -1.6 13 -.4 M 90 104.2 q 8 -1.8 15 -.6"
+          <path d="M 66 101.8 q 7 -1.5 13 -.3 M 63 104.4 q 8 -1.7 15 -.6"
             stroke="#4a3520" strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".7" />
+        </g>
+        {/* The plume is the one thing a skunk never lowers, so it is the
+            part of him that still reads at a glance while the rest is down.
+            Static inner transform re-aims the tail he already has; the
+            animated group itself carries no transform attribute. */}
+        <g className="scrape-tail"><g transform="translate(0 -5) rotate(-12 44 76)">
+          <path d="M 44 80 C 24 84 8 72 10 52 C 12 34 26 24 40 28 C 36 40 38 54 46 64 C 50 70 50 76 44 80 Z" fill={K[1]} />
+          <path d="M 12 56 C 11 41 21 29 35 29.5 C 32 38 32.5 48 37 57 C 28 62 17 62 12 56 Z" fill={white} />
+        </g></g>
+        {/* hocks still under him at nearly full stretch: the rump never came
+            down, and that alone is the difference between a scratch and a
+            dig at this size */}
+        <g className="scrape-hind">
+          <rect x="32" y="79" width="8.5" height="24" rx="4.25" fill={K[2]} />
+          <ellipse cx="36.5" cy="101.4" rx="5.2" ry="3" fill="#101015" />
+          <rect x="42" y="81" width="8.5" height="22" rx="4.25" fill={K[1]} />
+          <ellipse cx="46.5" cy="101.4" rx="5.6" ry="3.2" fill={K[2]} />
+        </g>
+        {/* off-side foreleg propping the low end. It is static on purpose —
+            it gives the eye a fixed vertical to read the raking one against,
+            without which two dark shanks in the same band just flicker */}
+        <g className="scrape-far">
+          <rect x="82" y="90" width="8" height="13" rx="4" fill={K[2]} />
+          <ellipse cx="86.3" cy="101.6" rx="5" ry="3" fill="#101015" />
+        </g>
+        <g className="scrape-body">
+          <path d="M 28 80 C 27 66 38 58 54 59 C 68 60 79 67 86 78 C 89 83 88 91 81 94 C 66 99 42 98 33 92 C 29 89 28 85 28 80 Z"
+            fill={`url(#${uid}f)`} />
+          <path d="M 32 76 C 34 65 44 60 56 61 C 68 62 77 68 83 77 L 78 79 C 72 71 65 66 55 65 C 45 64 38 68 36 77 Z" fill={white} />
+          <Under cx={57} cy={80} rx={24} ry={14} color="#4d4d59" k={.5} opacity={.85} />
+          <BellyShade cx={56} cy={94} rx={18} />
+        </g>
+        {/* The working foreleg, and its whole visible run is the daylight
+            between belly and ground. The upper arm stays buried in the
+            chest: a shank drawn across the torso is a bar of the same colour
+            as the torso, so all it does is add a seam. */}
+        <g className="scrape-arm">
+          <path d="M 76 87 C 74.5 92 75 97 76.5 99.5" stroke={K[1]} strokeWidth="9.5" fill="none" strokeLinecap="round" />
+          <ellipse cx="78" cy="100.4" rx="6.4" ry="3.6" fill={K[2]} />
+          {/* Claws live below y=102 and are coloured off the soil, not off
+              the blaze. Pale strokes anywhere near the muzzle merge with the
+              face stripe at sprite size and read as a second nose — which is
+              exactly what the old white claws did. */}
+          <path d="M 82.4 102 l 2.8 .9 M 78.6 102.8 l 1.3 1.8 M 74.6 102.6 l -.7 1.8"
+            stroke="#c9bda6" strokeWidth="1.5" fill="none" strokeLinecap="round" opacity=".8" />
+        </g>
+        {/* Nose already in the soil at rest, so the nod only has to work the
+            last two pixels. Nothing has to swing far to sell a pose that is
+            already committed in the drawing. */}
+        <g className="scrape-head">
+          <circle cx="83" cy="71" r="4.4" fill={K[2]} />
+          <circle cx="92" cy="84" r="14.5" fill={`url(#${uid}f)`} />
+          <path d="M 91 95.5 C 96 96.8 101 98.6 104.8 100.4 C 106.2 101 106 102.6 104.4 102.6 C 99 102.6 92 100.6 88 97.4 Z" fill={K[1]} />
+          {/* the blaze stops short of the nose. Run all the way in, it and
+              the whiskers and the nose pad collapse into one pale smudge */}
+          <path d="M 85 77 C 87 84 91 92 97 97" stroke={white} strokeWidth="7" fill="none" strokeLinecap="round" />
+          <circle cx="95" cy="81" r="3.2" fill="#fff" /><circle cx="95.8" cy="81.3" r="1.9" fill={ink} />
+          <ellipse cx="104" cy="100.6" rx="3" ry="2.6" fill={ink} />
+          <path d="M 106 98 l 5 -2.2 M 106.4 100.8 l 5 2" stroke={white} strokeWidth="1" fill="none" strokeLinecap="round" opacity=".5" />
+        </g>
+        {/* Surface litter flicked back under him: it travels a few pixels and
+            settles. Nothing is thrown clear and nothing is heaped — what he
+            leaves behind is a scuff, not a scrape with a rim. */}
+        <g className="scrape-puff">
+          <ellipse cx="72" cy="101" rx="2.4" ry="1.9" fill="#5d4327" />
+          <ellipse cx="67" cy="100.4" rx="1.9" ry="1.5" fill="#6d5030" />
+          <ellipse cx="76" cy="101.4" rx="1.7" ry="1.4" fill="#4a3520" />
+          <ellipse cx="63" cy="101.8" rx="1.5" ry="1.2" fill="#5d4327" />
         </g>
       </g>
     </g>

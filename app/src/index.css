@@ -1842,26 +1842,40 @@ body {
    only inside the ethogram, never in the DOM — so every rule here, the
    display:none defaults included, is scoped to the skunk. */
 
-/* ---- the nose-down head: one drawing for all three ground states, since
-   the litter is where he eats, where he searches and where he scratches.
-   The body and all four legs stay on the normal rig, so the walk cycle
-   goes on running underneath him while he patrols. ---- */
+/* ---- the nose-down head, for the two states he can hold while moving.
+   The body and all four legs stay on the normal rig, so the walk cycle goes
+   on running underneath him while he patrols. clawscrape used to borrow this
+   head; it is stationary and needs a crouch the rig cannot make, so it now
+   has a drawing of its own. ---- */
 .sai-crit--skunk .sai-crit-snuffhead{ display:none; }
 .sai-sprite[data-state="floorsnuff"] .sai-crit--skunk .sai-crit-snuffhead,
-.sai-sprite[data-state="windfalleat"] .sai-crit--skunk .sai-crit-snuffhead,
-.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .sai-crit-snuffhead{ display:inline; }
+.sai-sprite[data-state="windfalleat"] .sai-crit--skunk .sai-crit-snuffhead{ display:inline; }
 .sai-sprite[data-state="floorsnuff"] .sai-crit--skunk .sai-crit-head,
-.sai-sprite[data-state="windfalleat"] .sai-crit--skunk .sai-crit-head,
-.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .sai-crit-head{ display:none; }
+.sai-sprite[data-state="windfalleat"] .sai-crit--skunk .sai-crit-head{ display:none; }
 
-/* quartering the ground: the nose sweeps across his line of travel rather
-   than along it, which is what separates searching from simply walking */
-.sai-sprite[data-state="floorsnuff"] .sai-crit--skunk .sai-crit-snuffhead{
-  transform-box:fill-box; transform-origin:17% 18%;
+/* The swapped head is a SIBLING of the torso, so it inherited none of the
+   torso's stride bob and hung three pixels clear of the shoulders on every
+   step. Same shape and period as sai-crit-walkbody's translate, and both are
+   bound to the same [data-walking] flip, so they cannot drift apart. */
+.sai-sprite[data-walking="1"] .sai-crit--skunk .sai-crit-snuffhead{
+  animation:sai-sk-ride var(--sai-gait,.5s) ease-in-out infinite; }
+@keyframes sai-sk-ride{
+  0%,100%{transform:translateY(0);} 25%{transform:translateY(-3px);}
+  50%{transform:translateY(0);}     75%{transform:translateY(-3px);}
+}
+
+/* Quartering the ground: the nose sweeps across his line of travel rather
+   than along it, which is what separates searching from simply walking.
+   The pivot is the NECK ROOT, which is also the left edge of the group's
+   fill box — hence 0%. Put it inside the skull, as 17% 18% did, and the base
+   of the neck itself travels four units across the shoulder through the
+   sweep, which at sprite size is the whole head coming unhitched. */
+.sai-sprite[data-state="floorsnuff"] .sai-crit--skunk .snuff-swing{
+  transform-box:fill-box; transform-origin:0% 5%;
   animation:sai-sk-quarter .78s ease-in-out infinite; }
 @keyframes sai-sk-quarter{
-  0%,100%{transform:rotate(-5deg) translate(-1px,0);}
-  50%{transform:rotate(6deg) translate(1.6px,1px);}
+  0%,100%{transform:rotate(-3deg) translate(-1px,0);}
+  50%{transform:rotate(4deg) translate(1.6px,1px);}
 }
 /* the nose works far faster than the sweep — the mismatch in tempo is what
    makes it read as snuffling instead of nodding */
@@ -1895,85 +1909,108 @@ body {
 .sai-crit--skunk .snuff-nut{ display:none; }
 .sai-sprite[data-carry="berry"] .sai-crit--skunk .snuff-berry{ display:inline; }
 .sai-sprite[data-carry="nut"] .sai-crit--skunk .snuff-nut{ display:inline; }
-/* short bites, head held exactly where he found it */
-.sai-sprite[data-state="windfalleat"] .sai-crit--skunk .sai-crit-snuffhead{
-  transform-box:fill-box; transform-origin:17% 18%;
+/* short bites, head held exactly where he found it. Same neck-root pivot,
+   so the amplitude is cut to match — it is four times further from the nose
+   than the old one and would otherwise throw the muzzle twice as far. */
+.sai-sprite[data-state="windfalleat"] .sai-crit--skunk .snuff-swing{
+  transform-box:fill-box; transform-origin:0% 5%;
   animation:sai-sk-chew .3s ease-in-out infinite; }
 @keyframes sai-sk-chew{
-  0%,100%{transform:rotate(2deg) translate(0,0);}
-  50%{transform:rotate(4.2deg) translate(.4px,1.2px);}
+  0%,100%{transform:rotate(1.4deg) translate(0,0);}
+  50%{transform:rotate(2.8deg) translate(.3px,.8px);}
 }
 
-/* ---- the scrape. Everything about the timing is set against the
-   squirrel's dig: his stroke runs at .26s to the squirrel's .3s, the soil
-   lifts three pixels where the squirrel's clods travel thirty, and the
-   forequarters rock rather than fold. Fast and shallow, on purpose. ---- */
+/* ---- the scrape. A whole crouch swapped in, rig and swapped head both
+   hidden: the drop in the forequarters is drawn, not animated, because a
+   level ellipse and two full-length shanks cannot be talked into one.
+   Everything about the timing is then set against the squirrel's dig — his
+   stroke runs at .22s to the squirrel's .3s, his litter travels six pixels
+   where the squirrel's clods travel twenty-five, and there is no mound. Fast
+   and shallow, on purpose. ---- */
 .sai-crit--skunk .sai-crit-scrapepose{ display:none; }
 .sai-sprite[data-state="clawscrape"] .sai-crit--skunk .sai-crit-scrapepose{ display:inline; }
-.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .sai-crit-leg-fr{ display:none; }
+.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .sai-crit-body,
+.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .sai-crit-head,
+.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .sai-crit-snuffhead,
+.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .sai-crit-tail,
+.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .sai-crit-leg{ display:none; }
+
+/* Weight rocking over the working paw. A pure translate, so it needs no
+   transform-box and cannot be knocked off by its own children's animated
+   bounding boxes; a pixel of it moves the hind feet by less than half a
+   screen pixel, which reads as weight and not as sliding. */
+.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .sai-crit-scrapepose{
+  animation:sai-sk-settle .44s ease-in-out infinite; }
+@keyframes sai-sk-settle{ 0%,100%{transform:translate(0,0);} 50%{transform:translate(-.6px,.7px);} }
+
+/* The rake. Pivot (76,87) — the shoulder, 32% across and flush with the top
+   of the group's fill box. Rotation alone off a shoulder swings a paw
+   through an arc that lifts as much as it travels, so the stroke is mostly
+   translate with the rotation only shaping it: the paw drags eleven units
+   back and presses a unit and a half down, then retracts two and a half to
+   carry forward. Power stroke inside the first 38%, recovery over the rest. */
 .sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-arm{
-  transform-box:fill-box; transform-origin:14% 6%;
-  animation:sai-sk-rake .26s ease-out infinite; }
+  transform-box:fill-box; transform-origin:32% 0%;
+  animation:sai-sk-rake .22s cubic-bezier(.35,0,.25,1) infinite; }
 @keyframes sai-sk-rake{
-  0%,100%{transform:rotate(-13deg);}   /* reach out along the surface */
-  35%{transform:rotate(9deg);}         /* and draw it straight back */
-  60%{transform:rotate(6deg);}
+  0%{transform:translate(3.4px,-.6px) rotate(-9deg);}    /* set down, forward */
+  38%{transform:translate(-3.6px,.4px) rotate(8deg);}    /* dragged back, pressed in */
+  50%{transform:translate(-2.6px,-2.4px) rotate(4deg);}  /* picked up */
+  100%{transform:translate(3.4px,-.6px) rotate(-9deg);}  /* carried forward */
 }
+/* He watches the spot he is scratching, at half the stroke tempo so two
+   rakes land per nod. Pivot at the nape; the nose is thirty units out from
+   it, so three degrees is all it takes to move it two pixels. */
+.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-head{
+  transform-box:fill-box; transform-origin:13% 31%;
+  animation:sai-sk-snout .44s ease-in-out infinite; }
+@keyframes sai-sk-snout{
+  0%,100%{transform:rotate(0) translate(0,0);}
+  50%{transform:rotate(3deg) translate(-.4px,.9px);}
+}
+.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-tail{
+  transform-box:fill-box; transform-origin:92% 94%;
+  animation:sai-sk-scrapetail .44s ease-in-out infinite; }
+@keyframes sai-sk-scrapetail{ 0%,100%{transform:rotate(-3deg);} 50%{transform:rotate(3deg);} }
+/* loose surface soil lifted and dropped more or less where it was */
 .sai-crit--skunk .scrape-puff{ opacity:0; }
 .sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-puff{ opacity:1; }
 .sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-puff ellipse{
   transform-box:fill-box; transform-origin:50% 100%;
-  animation:sai-sk-scuff .26s ease-out infinite; }
-.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-puff ellipse:nth-child(2){ animation-delay:.04s; }
-.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-puff ellipse:nth-child(3){ animation-delay:.07s; }
-.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-puff ellipse:nth-child(4){ animation-delay:.1s; }
+  animation:sai-sk-scuff .22s ease-out infinite; }
+.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-puff ellipse:nth-child(2){ animation-delay:.035s; }
+.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-puff ellipse:nth-child(3){ animation-delay:.06s; }
+.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-puff ellipse:nth-child(4){ animation-delay:.09s; }
 @keyframes sai-sk-scuff{
   0%,30%{opacity:0; transform:translate(0,0) scale(.5);}
-  55%{opacity:.9; transform:translate(-3px,-3.4px) scale(1);}
-  100%{opacity:0; transform:translate(-6px,-.5px) scale(.85);}
+  55%{opacity:.9; transform:translate(-2.6px,-2.4px) scale(1);}
+  100%{opacity:0; transform:translate(-5px,-.4px) scale(.85);}
 }
 /* the streaks come in over the first second and then stay: they are the
    record of the action, so they must not blink with the stroke */
 .sai-crit--skunk .scrape-marks{ opacity:0; }
 .sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-marks{
-  animation:sai-sk-marks 1.2s ease-out forwards; }
+  animation:sai-sk-marks 1.1s ease-out forwards; }
 @keyframes sai-sk-marks{ 0%{opacity:0;} 100%{opacity:1;} }
-/* forequarters braced over the working paw, at half the stroke tempo so
-   two rakes land per rock */
-.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .sai-crit-body{
-  transform-origin:20% 100%; animation:sai-sk-brace .52s ease-in-out infinite; }
-@keyframes sai-sk-brace{
-  0%,100%{transform:rotate(2.4deg) translateY(1px);}
-  50%{transform:rotate(3.4deg) translateY(2px);}
-}
-.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .sai-crit-tail{
-  animation:sai-sk-scrapetail .52s ease-in-out infinite; }
-@keyframes sai-sk-scrapetail{ 0%,100%{transform:rotate(-4deg);} 50%{transform:rotate(3deg);} }
-/* he watches the spot he is scratching, so the head shifts back over the
-   paw — the offset lives in the keyframes because the group is animated */
-.sai-sprite[data-state="clawscrape"] .sai-crit--skunk .sai-crit-snuffhead{
-  transform-box:fill-box; transform-origin:17% 18%;
-  animation:sai-sk-watch .52s ease-in-out infinite; }
-@keyframes sai-sk-watch{
-  0%,100%{transform:rotate(-3deg) translate(-5px,2px);}
-  50%{transform:rotate(-1deg) translate(-6px,3.4px);}
-}
 
 @media (prefers-reduced-motion: reduce){
-  .sai-sprite[data-state="floorsnuff"] .sai-crit--skunk .sai-crit-snuffhead,
+  .sai-sprite[data-walking="1"] .sai-crit--skunk .sai-crit-snuffhead,
+  .sai-sprite[data-state="floorsnuff"] .sai-crit--skunk .snuff-swing,
   .sai-sprite[data-state="floorsnuff"] .sai-crit--skunk .snuff-nose,
   .sai-sprite[data-state="floorsnuff"] .sai-crit--skunk .snuff-litter ellipse,
   .sai-sprite[data-state="floorsnuff"] .sai-crit--skunk .sai-crit-tail,
-  .sai-sprite[data-state="windfalleat"] .sai-crit--skunk .sai-crit-snuffhead,
+  .sai-sprite[data-state="windfalleat"] .sai-crit--skunk .snuff-swing,
   .sai-sprite[data-state="windfalleat"] .sai-crit--skunk .snuff-nose,
-  .sai-sprite[data-state="clawscrape"] .sai-crit--skunk .sai-crit-snuffhead,
+  .sai-sprite[data-state="clawscrape"] .sai-crit--skunk .sai-crit-scrapepose,
   .sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-arm,
+  .sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-head,
+  .sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-tail,
   .sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-puff ellipse,
-  .sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-marks,
-  .sai-sprite[data-state="clawscrape"] .sai-crit--skunk .sai-crit-body,
-  .sai-sprite[data-state="clawscrape"] .sai-crit--skunk .sai-crit-tail{ animation:none; }
-  /* the streaks are the whole point of the pose, so they are shown
-     outright rather than faded in */
+  .sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-marks{ animation:none; }
+  /* the crouch and the streaks under it are the whole point of the pose, so
+     both are shown outright rather than faded in. The soil ellipses inherit
+     opacity 1 from their group once nothing is animating them, which leaves
+     loose litter lying at the paw — the correct still frame. */
   .sai-sprite[data-state="clawscrape"] .sai-crit--skunk .scrape-marks{ opacity:1; }
 }
 
