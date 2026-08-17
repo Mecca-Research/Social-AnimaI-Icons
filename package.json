@@ -9,7 +9,8 @@
     "build": "vite build && node scripts/publish.mjs",
     "preview": "vite preview",
     "test:bear": "node tests/ethogram.mjs",
-    "test:forage": "node tests/forage.mjs"
+    "test:forage": "node tests/forage.mjs",
+    "test:gait": "node tests/gait.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

@@ -741,6 +741,9 @@ export default function SocialAnimalsRPG() {
     if (typeof window !== "undefined") {
       window.__saiWorld = worldRef.current;
       window.__saiEtho = { ETHOGRAM, ethoShare, states: ETHO_STATES };
+      // the gait core, so a test can ask an animal how fast it would move at a
+      // given urgency instead of inferring it from a smoothed random walk
+      window.__saiGait = { gait, SPEED, GAIT_DEF, speedCap };
     }
 
     // main loop

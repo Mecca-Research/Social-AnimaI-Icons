@@ -38,7 +38,7 @@
 export const SPEED = {
   //           base  top   sit  drain recov  wob  bRate   bK   bMs  water reach
   turtle:   { base:.28, top:1.40, sit:.06, drain:1.10, recov:.14, wob:.10, bRate:.04, bK:1.25, bMs: 700, water:1.70, reach:200 },
-  frog:     { base:.14, top:1.60, sit:.82, drain:6.00, recov:.55, wob:.10, bRate:.42, bK:14.0, bMs: 300, water:1.60, reach:320 },
+  frog:     { base:.14, top:1.60, sit:.82, drain:1.30, recov:.55, wob:.10, bRate:.42, bK:14.0, bMs: 300, water:1.60, reach:320 },
   beaver:   { base:.40, top:1.45, sit:.05, drain:0.95, recov:.20, wob:.14, bRate:.06, bK:1.30, bMs: 800, water:1.50, reach:280 },
   owl:      { base:.46, top:1.55, sit:.25, drain:0.55, recov:.26, wob:.08, bRate:.05, bK:1.35, bMs: 900, water:0.55, reach:340 },
   hedgehog: { base:.50, top:1.30, sit:.04, drain:1.20, recov:.22, wob:.20, bRate:.10, bK:1.35, bMs: 600, water:0.55, reach:300 },
@@ -115,18 +115,26 @@ export function gait(a, ctx, urgency = 0.30) {
   // Ignition is gated on being rested and unhurried; a window already open
   // runs to completion. Appetite for a burst rises with urgency, which is
   // how a hurrying frog becomes a chain of hops rather than a fast slide.
+  // The burst factor is deliberately held OUT of `pace` here and applied
+  // after the easing below. A frog's leap is 300ms at 14x; run through a
+  // 0.29s low-pass it all but disappears, which is exactly what was
+  // happening — the frog had a leap in the table and a slide on screen.
+  let burst = 1;
   if (now < (a._burstUntil || 0)) {
-    pace *= g.bK;
+    burst = g.bK;
   } else {
     if (ex < 0.5 && Math.random() < g.bRate * (1 + 3 * u) * dt) {
       a._burstUntil = now + g.bMs;
-      pace *= g.bK;
+      burst = g.bK;
     } else if (g.sit) {
       pace *= 1 - g.sit * (1 - u);      // the sitter's rest between bursts
     }
   }
 
-  a._pace = pace;                        // fed back into the ledger next frame
+  // The ledger sees the sustained pace only. Billing it the burst multiplier
+  // pinned a frog's exertion in one frame — 14x cruise — and the ex gate then
+  // locked out every subsequent leap, which is a sitter that never leaps.
+  a._pace = pace;
 
   // ---- 5. ease the MAGNITUDE only ---------------------------------------
   // Steering stays instant (every caller assigns vx/vy outright); only how
@@ -134,12 +142,14 @@ export function gait(a, ctx, urgency = 0.30) {
   // and the bursts shimmer, because nothing downstream smooths anything.
   const k = 1 - Math.exp(-3.5 * dt);
   a._gv = (a._gv === undefined) ? pace : a._gv + (pace - a._gv) * k;
+  // ...and the leap rides on top of the eased pace, abrupt by design
+  const paced = a._gv * burst;
 
   // ---- 6. medium --------------------------------------------------------
   // >1 for the turtle, beaver, frog, goose, axolotl, python: better wet than
   // dry. This replaces every hard-coded `wet ? 0.55 : 0.9` in the codebase.
   const wet = a._wet !== undefined ? a._wet : ctx.isWet(a.x, a.y);
-  return ctx.cfg.speed * g.base * a._gv * (wet ? g.water : 1);
+  return ctx.cfg.speed * g.base * paced * (wet ? g.water : 1);
 }
 
 // Two-argument form for the handful of call sites outside stepWorld's ctx.
