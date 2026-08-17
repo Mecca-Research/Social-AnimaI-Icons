@@ -97,6 +97,7 @@
 // ---------------------------------------------------------------------
 
 import { gait } from "./Gait.js";
+import { SPECIES_PROFILE } from "./SpeciesProfile.js";
 
 /** species key -> compiled ethogram */
 export const ETHOGRAM = {};
@@ -126,6 +127,15 @@ const LEDGER_HALF_LIFE = 90000;
 const DEBT_PULL = 2.5;
 
 export function defineEthogram(species, spec) {
+  // A second call for the same species used to overwrite the first without a
+  // word, and the failure is worse than it sounds: the hedgehog's foraging
+  // vanished the moment his roll-up was added in a separate block, and
+  // everything still built, still ran, and still had a hedgehog in it. Add a
+  // behavior by appending a descriptor to the existing `events` array — that
+  // is the whole extension point.
+  if (ETHOGRAM[species]) {
+    throw new Error(`ethogram(${species}): already defined — append to its events array instead of redefining it`);
+  }
   const byState = new Map();
   // Dispatch is per species, so two species may own the same state name —
   // the frog and the turtle both sit on floats. Only a clash WITHIN one
@@ -2376,5 +2386,97 @@ defineEthogram("hedgehog", {
         endEvent(a, c, { reroll: true, quiet: 1200, stop: true });
       },
     },
+    {
+      id: "curl", domain: "land", trigger: "approach",
+      // Not 1. A hedgehog that has spent a season next to the same deer
+      // stops paying it much attention, and a defence that fires every
+      // single time reads as a tripwire rather than as nerve.
+      chance: 0.85,
+      miss: 4000, cool: 6000,
+      near: (a, c) => hogThreat(a, c, HOG_ALARM),
+      states: ["hogcurl", "hogball", "hoguncurl"],
+      begin(a, c) {
+        hogCurl(a, c.now, c.rand);
+        a.noEventUntil = c.now + 1200;   // nobody accosts a ball
+      },
+      drive(a, c) {
+        a.vx = 0; a.vy = 0;
+        if (a.state === "hogcurl") {
+          if (c.now >= a.stateUntil) a.state = "hogball";
+          return;
+        }
+        if (a.state === "hogball") {
+          // The hold is RENEWED while anything big is still about rather
+          // than tested once, which is what makes a ball that two animals
+          // walk past in turn stay shut for both of them.
+          if (hogThreat(a, c, HOG_CALM)) { a._hogHold = c.now + c.rand(1400, 2400); return; }
+          if (c.now < a._hogHold) return;
+          a.state = "hoguncurl"; a.stateUntil = c.now + 900;
+          return;
+        }
+        if (c.now >= a.stateUntil) endEvent(a, c, { reroll: true, quiet: 900, stop: true });
+      },
+    },
   ],
 });
+
+// ---------------------------------------------------------------------
+
+/**
+ * THE HEDGEHOG — the one animal here whose answer to trouble is to stop.
+ *
+ * Every other species resolves a scare by running: forceFlee points them
+ * somewhere else and spends 0.85 urgency getting them there. A hedgehog at
+ * base .50 and top 1.30 is slower than everything that would want to eat it,
+ * so a flee is a lie the numbers do not support — it would be caught, and on
+ * screen it reads as a small animal losing a race it chose to enter.
+ *
+ * That makes the roll-up the one behavior in this file where the animation
+ * IS the event. Every other state produces displacement you could read off
+ * the map with the sprite deleted; this one produces none at all, and if the
+ * ball is not drawn then as far as the world is concerned nothing happened.
+ *
+ * Land only, so tier 1 is a formality — the real gate is the approach edge,
+ * which is exactly the shape this wants: it fires once when something
+ * arrives and re-arms only after that something has gone away again.
+ */
+
+// Bulk, not species. A hedgehog does not identify what is walking toward it;
+// it responds to something bigger than itself closing the distance, and the
+// bulk index in SpeciesProfile is that judgement already made once, for all
+// fourteen. The threshold sits just above the skunk (26.0) — which shares
+// its ground, its hours and its temperament, and is nobody's threat.
+const HOG_LOOMS = 26.5;
+// Wider than pairRange on purpose, so the curl PRE-EMPTS the encounter roll
+// instead of interrupting it. A hedgehog that gets as far as a friendly
+// nuzzle has already failed to be a hedgehog.
+const HOG_ALARM = 84;
+// ...and it does not unroll the instant the visitor takes one step back.
+const HOG_CALM = 118;
+
+/** the nearest thing on the ground with real bulk, inside `r` */
+function hogThreat(a, c, r) {
+  let best = null, bd = Infinity;
+  for (const o of c.world.agents) {
+    if (o === a || o.dragging) continue;
+    if (o.z > 2) continue;                     // anything on a roof is weather
+    if ((SPECIES_PROFILE[o.species]?.size || 0) < HOG_LOOMS) continue;
+    const d = Math.hypot(o.x - a.x, o.y - a.y);
+    if (d < r && d < bd) { bd = d; best = o; }
+  }
+  return best;
+}
+
+/**
+ * Shared with the world's forceFlee, which hands the hedgehog here instead
+ * of setting "flee" on it. Both entry points have to agree on the hold, or a
+ * scare arriving down the rescue path would produce a shorter, cheaper ball
+ * than one arriving down the approach path — the same event, two lengths.
+ */
+export function hogCurl(a, now, rnd) {
+  a.state = "hogcurl";
+  a.stateUntil = now + 380;                    // the tuck
+  a._hogHold = now + rnd(2600, 4200);          // the minimum ball
+  a.vx = 0; a.vy = 0;
+  a.targetId = null;
+}

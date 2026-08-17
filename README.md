@@ -6,7 +6,24 @@
 
 An interactive, emergent “living desktop” made of animal icons that socialize, argue, help each other, and roam **switchable worlds** — a forest around a lake, or a suburban neighborhood of rooftops. Every icon runs a tiny state machine (wander, idle, swim, friendly, fight, rescue, flee, separate, cooldown, drag) and forms relationships via last-touch memory (friend or rival).
 
-Current release: v0.32 — **The forage ground.** The open green west of the lake is now a larder: **berry bushes, nut trees, browse shrubs and patches of bare soft soil**, sixteen sites placed as real geometry so the drawn bush *is* the spot an animal walks to. Six species work it, each in its own way, and every one of them runs on the ethogram:
+Current release: v0.33 — **Every animal moves like itself.**
+
+**Size is the species now, not a dice roll.** Every animal drew its radius from `rand(18,24)*1.1` at spawn, so the same bear was a different size every reload and sometimes came up smaller than the squirrel standing next to him. Sizes are now derived once from real-world mass, body length and shoulder height — `M^(1/6) · L^(1/4) · H^(1/4)`, tail excluded — anchored with the bear as the largest at +20% and the frog as the floor, and held in [`app/src/SpeciesProfile.js`](app/src/SpeciesProfile.js) alongside each animal's real dimensions, top speed and habits.
+
+**And speed is the species too.** [`app/src/Gait.js`](app/src/Gait.js) gives each animal a cruise, a top, a stamina drain, a burst rate and a water factor, and every call site states an *urgency* — 0.30 for an amble, 0.45 for an errand, 1.0 only for the dash to break up a friend's fight — which the animal prices for itself. The turtle used to cross the entire screen at a wolf's pace because its swim leg was a flat multiple of one global speed; that flat multiplier is gone from all of them. Measured in-world while wandering: **wolf 80 px/s down to turtle 24**, with the frog sitting at 6 and peaking at 93, because a frog travels by leaping rather than walking. Speed also varies continuously — a two-harmonic drift so it never reads as a loop — and a sustained sprint tires: a cougar flat out for ten seconds drops from 154 px/s to 61. Checks live in [`tests/gait.mjs`](tests/gait.mjs) (`npm run test:gait`).
+
+**Two more foragers, and two that were drawn wrong.**
+
+| | what changed |
+| --- | --- |
+| **Hedgehog** | **new** — the only insectivore here, so he gets timber of his own at the map's edge rather than a seventh seat at the berry bushes. He digs beside a surface root, bores into its underside **seen from behind**, and goes in through the rot hole in a fallen log with his back legs still out on the bark. Cornered, he does not run — he could not win that race — he **balls up** |
+| **Goose** | **new** — grazing on land and dabbling in the shallows. Grazing is step-and-crop, not walk-and-eat: bill down for a second and a half, half a second of stride, bill down again. Dabbling puts his head and neck under the surface with his legs still on the bottom, and he comes up with weed |
+| **Squirrel** | his scattered caches were invisible — a squirrel digging in one of two soil patches looks like a squirrel digging. He now has **one larder** with four scrapes for the life of the world, and the stock is drawn. Nuts come **up the nut tree, into the leaves and out of sight**, and back down to the same stump |
+| **Skunk** | his scrape was a pale wedge across his own face: the foreleg was drawn ending *inside* the skull. Redrawn as a proper crouch, and the nose-down head no longer floats clear of a body it never rode |
+
+**Forage cadence is balanced to a ladder** rather than left to whatever each species' timers happened to say — skunk 1.41 bouts a minute, deer 1.15, goose 0.88, hedgehog 0.83, bear 0.70, squirrel 0.60, raccoon 0.27, fox 0.21. Checks live in [`tests/cadence.mjs`](tests/cadence.mjs) (`npm run test:cadence`).
+
+Built on v0.32 — **The forage ground.** The open green west of the lake is now a larder: **berry bushes, nut trees, browse shrubs and patches of bare soft soil**, sixteen sites placed as real geometry so the drawn bush *is* the spot an animal walks to. Six species work it, each in its own way, and every one of them runs on the ethogram:
 
 | | what it does |
 | --- | --- |

@@ -702,6 +702,16 @@ function BeaverDraw({ uid }) {
   return (
     <g transform="translate(60 106) scale(.98) translate(-60 -106)">
       <defs><Fur id={`${uid}f`} c={F} /></defs>
+      {/* He does not carry the paddle on land, he drags it. The furrow is the
+          cheapest way to say so and the only one that survives the sprite
+          being 90px wide — a tail held at the right angle reads as a tail
+          held at some angle, but a mark left behind it reads as weight. */}
+      <g className="sai-crit-tailscuff">
+        <path d="M 3 99 q 18 -3 34 -1" stroke="#6a5236" strokeWidth="2.6" fill="none" strokeLinecap="round" opacity=".55" />
+        <path d="M 6 103 q 16 -2 28 -.5" stroke="#5a4529" strokeWidth="1.8" fill="none" strokeLinecap="round" opacity=".4" />
+        <ellipse cx="12" cy="101" rx="4.6" ry="1.9" fill="#7d6244" opacity=".45" />
+        <ellipse cx="24" cy="99.5" rx="3.4" ry="1.5" fill="#7d6244" opacity=".35" />
+      </g>
       <g className="sai-crit-tail">
         <ellipse cx="25" cy="91" rx="20" ry="9.5" fill={tailC} transform="rotate(-14 25 91)" />
         <ellipse cx="25" cy="91" rx="20" ry="9.5" fill="none" stroke={tailD} strokeWidth="1.4" transform="rotate(-14 25 91)" />
@@ -753,6 +763,15 @@ function GooseDraw({ uid }) {
   return (
     <g transform="translate(60 106) scale(1.05) translate(-60 -106)">
       <defs><Fur id={`${uid}f`} c={F} /></defs>
+      {/* The wake is the whole argument for water factor 1.25: on land he is
+          a set of moving parts and on the water he is one shape being carried,
+          and a shape with no moving parts needs something else to say it is
+          travelling. CSS shows it only while swimming. */}
+      <g className="sai-crit-wake">
+        <path d="M 34 92 C 20 95 8 99 -3 104" stroke="#dff3fb" strokeWidth="2.6" fill="none" strokeLinecap="round" opacity=".55" />
+        <path d="M 34 91 C 22 88 10 86 -3 85" stroke="#dff3fb" strokeWidth="2.2" fill="none" strokeLinecap="round" opacity=".4" />
+        <ellipse cx="29" cy="92" rx="10" ry="3" fill="#dff3fb" opacity=".26" />
+      </g>
       {/* black tail feathers over the white stern */}
       <g className="sai-crit-tail">
         <path d="M 38 68 C 30 62 22 58 14 57 C 16 62 20 66 25 69 C 21 70 17 72 15 75 C 22 77 30 77 36 74 Z" fill={dark} />
@@ -1455,6 +1474,34 @@ function HedgehogDraw({ uid }) {
         <circle cx="104.5" cy="83.5" r="3.2" fill={ink} />
         <FaceKit lid={F[1]} e1={[85, 79]} e2={[95, 79.5]} er={2.8} iris={ink} mouth={[98, 90]} />
       </g>
+      {/* ---- THE BALL (hogcurl / hogball / hoguncurl) ----
+          There is no rig deformation that gets here. The spike crown is a
+          fixed fan over the back, the snout is a wedge off the front of the
+          skull, and the four legs are stubs — squash the lot and you get a
+          flatter hedgehog, not a sphere. So the sphere is drawn: a serrated
+          ring in the same two spike tones as the crown, which is what makes
+          the ball obviously the same animal as the one that just walked in.
+          Two paths rather than one so the teeth still alternate. */}
+      <g className="sai-crit-ballpose">
+        <circle cx="60" cy="78.2" r="18.4" fill={`url(#${uid}f)`} />
+        <g className="ball-spines">
+          <path d="M 76 72.6 L 82.2 65.8 L 73 67.6 Z M 68.5 63.9 L 68.8 54.9 L 63 62 Z M 57 62 L 51.2 54.9 L 51.5 63.9 Z M 47 67.6 L 37.8 65.8 L 44 72.6 Z M 43 78.2 L 34.8 82.5 L 44 83.8 Z M 47 88.8 L 43.5 97.2 L 51.5 92.5 Z M 57 94.4 L 60 103 L 63 94.4 Z M 68.5 92.5 L 76.5 97.2 L 73 88.8 Z M 76 83.8 L 85.2 82.5 L 77 78.2 Z" fill={spikeA} />
+          <path d="M 77 78.2 L 85.2 73.9 L 76 72.6 Z M 73 67.6 L 76.5 59.2 L 68.5 63.9 Z M 63 62 L 60 53.4 L 57 62 Z M 51.5 63.9 L 43.5 59.2 L 47 67.6 Z M 44 72.6 L 34.8 73.9 L 43 78.2 Z M 44 83.8 L 37.8 90.6 L 47 88.8 Z M 51.5 92.5 L 51.2 101.5 L 57 94.4 Z M 63 94.4 L 68.8 101.5 L 68.5 92.5 Z M 73 88.8 L 82.2 90.6 L 76 83.8 Z" fill={spikeB} />
+        </g>
+        {/* the spines that meet the ground are crushed flat under him, which
+            is also what stops the bottom teeth poking through the floor */}
+        <ellipse cx="60" cy="102.4" rx="17" ry="3.4" fill={spikeB} />
+        <BellyShade cx={60} cy={103} rx={15} />
+        {/* the pale skirt of belly fur the tuck leaves showing at the seam */}
+        <path d="M 44 84 C 47 92 53 97 61 99 C 51 99 44 94 41 86 Z" fill={F[0]} opacity=".5" />
+        {/* the snout, out only on the way back down — this group is the
+            difference between a ball and an animal deciding it is over */}
+        <g className="ball-face">
+          <path d="M 66 96 C 72 92.6 79 92.4 84 94.6 C 79 98 71 99.2 66 98 Z" fill={F[0]} />
+          <circle cx="84" cy="94.4" r="2.4" fill={ink} />
+          <path d="M 70 92.4 q 3 2.2 6 .4" stroke={ink} strokeWidth="1.5" fill="none" strokeLinecap="round" opacity=".75" />
+        </g>
+      </g>
       {/* =================================================================
           THE THREE FORAGING POSES. All three are drawn whole and swapped
           in, because the four-legged rig has one level body with the head
@@ -1965,6 +2012,56 @@ function FrogDraw({ uid }) {
         <path d="M 101 52 q 6 6 0 12" stroke="#eaffd6" strokeWidth="2.4" fill="none" strokeLinecap="round" />
         <path d="M 108 47 q 9 11 0 22" stroke="#eaffd6" strokeWidth="2.1" fill="none" strokeLinecap="round" />
         <path d="M 115 42 q 12 16 0 32" stroke="#eaffd6" strokeWidth="1.8" fill="none" strokeLinecap="round" />
+      </g>
+      {/* ---- THE LEAP (data-burst) ----
+          The rig has two stub legs under the chest and a haunch drawn as a
+          bulge on the body: it can be squashed and it can be lifted, but it
+          cannot extend, and extension is the entire silhouette of a frog in
+          the air. Drawn whole and swapped in for the 300ms the burst window
+          is open — the same trick as the bear's stand and the goose's preen,
+          but on a tenth of their timescale, which is why the pose is drawn
+          GATHERED rather than mid-flight: reduced motion leaves a frog
+          crouched on the ground instead of one hanging in the sky. */}
+      <g className="sai-crit-leappose">
+        {/* both hind legs before the trunk, so they emerge from inside the
+            silhouette the way every quadruped here is built */}
+        <g className="leap-hind leap-hind-far">
+          <path d="M 46 80 C 37 84 26 88 17 92" stroke={F[2]} strokeWidth="7" fill="none" strokeLinecap="round" />
+          <path d="M 17 92 L 4 88 L 3 95 L 13 98 Z" fill={F[2]} />
+          <path d="M 17 92 l -13 -4 M 17 92 l -14 3 M 17 92 l -5 6" stroke={F[2]} strokeWidth="1.5" fill="none" strokeLinecap="round" />
+        </g>
+        <g className="leap-hind leap-hind-near">
+          <path d="M 52 84 C 43 90 33 95 23 98" stroke={F[1]} strokeWidth="7.6" fill="none" strokeLinecap="round" />
+          <path d="M 23 98 L 10 94 L 9 101 L 19 102 Z" fill={F[1]} />
+          <path d="M 23 98 l -13 -5 M 23 98 l -14 3 M 23 98 l -5 5" stroke={F[1]} strokeWidth="1.6" fill="none" strokeLinecap="round" />
+        </g>
+        {/* the trunk: one nose-up teardrop, no neck. A frog in flight has no
+            joint between body and head and drawing one would cost the pose
+            the thing that makes it read at 40px */}
+        <path d="M 40 91 C 34 80 40 68 58 63 C 74 59 88 62 93 69 C 97 75 92 83 78 88 C 64 93 47 96 40 91 Z" fill={`url(#${uid}f)`} />
+        <path d="M 47 89 C 57 95 72 93 85 84 C 84 90 70 97 55 95 C 51 94 48 92 47 89 Z" fill={belly} opacity=".9" />
+        <circle cx="56" cy="72" r="2" fill={F[2]} opacity=".7" />
+        <circle cx="66" cy="68" r="1.7" fill={F[2]} opacity=".7" />
+        <circle cx="48" cy="80" r="1.6" fill={F[2]} opacity=".7" />
+        {/* forelimbs thrown forward to take the landing — the half of the
+            cycle that tells you it is coming DOWN and not still going up */}
+        <g className="leap-fore">
+          <path d="M 78 80 C 84 84 90 86 96 86" stroke={F[2]} strokeWidth="4.4" fill="none" strokeLinecap="round" />
+          <circle cx="97" cy="86.4" r="2.6" fill={F[2]} />
+          <path d="M 80 84 C 86 89 93 91 99 91" stroke={F[1]} strokeWidth="4.8" fill="none" strokeLinecap="round" />
+          <circle cx="100" cy="91.4" r="2.8" fill={F[1]} />
+        </g>
+        {/* eye domes ride on top and forward; the dome fill is what keeps
+            them reading as part of the skull rather than as pasted-on eyes */}
+        <circle cx="83" cy="61" r="8.6" fill={F[1]} />
+        <circle cx="97" cy="64" r="8" fill={F[1]} />
+        <circle cx="84" cy="59.6" r="5" fill="#fdfef4" />
+        <circle cx="85.4" cy="59.6" r="2.8" fill={ink} />
+        <circle cx="85.9" cy="58.6" r="1" fill="#fff" />
+        <circle cx="98" cy="62.6" r="4.6" fill="#fdfef4" />
+        <circle cx="99.3" cy="62.6" r="2.6" fill={ink} />
+        <circle cx="99.8" cy="61.7" r=".9" fill="#fff" />
+        <path d="M 82 74 q 10 6 19 -2" stroke={ink} strokeWidth="2.6" fill="none" strokeLinecap="round" />
       </g>
     </g>
   );

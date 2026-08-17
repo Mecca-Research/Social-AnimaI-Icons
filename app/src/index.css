@@ -2637,3 +2637,429 @@ body {
   .forage-canopy[data-shake="1"] .sai-bg-sway,
   .sai-larder-cap .cap-leaf{ animation:none; }
 }
+
+/* ==================== v0.34 movement profiles ====================
+   Gait.js gave every species a speed character; six of them do not read as
+   a character until the drawing agrees. Two new channels carry the parts of
+   that character the renderer cannot infer from displacement:
+
+     data-burst   a._burstUntil is open THIS FRAME. Displacement alone cannot
+                  tell a 300ms leap from a fast walk — both are just px/s —
+                  and by the time an easing filter could tell them apart the
+                  leap is over.
+     data-spent   a._ex is past 0.6. The stamina half of the table: which
+                  animals cannot hold their top, and which never notice.
+
+   Both are set for EVERY species, so every rule below is scoped to one. */
+
+/* ---- FROG: base .14, bK 14.0, bMs 300. A sitter that travels in leaps ---- */
+.sai-crit--frog{ --sai-swing:8deg; --sai-gait:.5s; --sai-leap:.3s; }  /* --sai-leap == SPEED.frog.bMs */
+
+/* The sit. The old rig ran a continuous spring at .56s whenever displacement
+   crossed the walk threshold, which is what a base of .14 looks like when the
+   animation has never heard of the burst: a frog hopping on the spot while
+   sliding forward at 11 px/s. Between leaps he does nothing but breathe, so
+   the walk rules hand him back exactly the idle he already has. */
+.sai-sprite[data-walking="1"] .sai-crit--frog .sai-crit-body{
+  animation:sai-crit-breathe 3.6s ease-in-out infinite var(--sai-crit-ph,0s); }
+.sai-sprite[data-walking="1"] .sai-crit--frog .sai-crit-head{
+  animation:sai-crit-headbob 3.6s ease-in-out infinite var(--sai-crit-ph,0s); }
+.sai-sprite[data-walking="1"] .sai-crit--frog .sai-crit-leg{ animation:none; }
+
+/* ...and the leap, for exactly as long as the window is open */
+.sai-crit-leappose{ display:none; }
+.sai-sprite[data-burst="1"] .sai-crit--frog .sai-crit-leappose{ display:inline; }
+.sai-sprite[data-burst="1"] .sai-crit--frog .sai-crit-body,
+.sai-sprite[data-burst="1"] .sai-crit--frog .sai-crit-head,
+.sai-sprite[data-burst="1"] .sai-crit--frog .sai-crit-leg{ display:none; }
+
+/* Crouch, launch, land, in one pass — `forwards` so a window that outlives
+   its 300ms by a frame holds the landing instead of snapping back to the
+   crouch. The origin is the hind feet: that is what he pushes off. */
+.sai-sprite[data-burst="1"] .sai-crit--frog .sai-crit-leappose{
+  transform-box:fill-box; transform-origin:16% 100%;
+  animation:sai-frog-leap var(--sai-leap,.3s) cubic-bezier(.22,.9,.3,1) forwards; }
+@keyframes sai-frog-leap{
+  0%   {transform:translate(0,0) scale(1.10,.80);}        /* already loaded */
+  12%  {transform:translate(-1px,2px) scale(1.16,.74);}   /* deepest crouch */
+  26%  {transform:translate(3px,-9px) scale(.92,1.14);}   /* the kick */
+  52%  {transform:translate(6px,-15px) scale(1,1);}       /* apex */
+  78%  {transform:translate(9px,-6px) scale(1.02,.98);}
+  92%  {transform:translate(10px,2px) scale(1.14,.82);}   /* landing squash */
+  100% {transform:translate(10px,0) scale(1.06,.92);}
+}
+/* the hind legs are the leap. Positive rotation about the hip drives the
+   ankle back and up, which is extension; negative folds it under him */
+.sai-sprite[data-burst="1"] .sai-crit--frog .leap-hind{
+  transform-box:fill-box; transform-origin:100% 0%;
+  animation:sai-frog-kick var(--sai-leap,.3s) cubic-bezier(.22,.9,.3,1) forwards; }
+.sai-sprite[data-burst="1"] .sai-crit--frog .leap-hind-near{ animation-delay:.012s; }
+@keyframes sai-frog-kick{
+  0%  {transform:rotate(-30deg);}
+  12% {transform:rotate(-38deg);}
+  30% {transform:rotate(10deg);}
+  60% {transform:rotate(6deg);}
+  86% {transform:rotate(-26deg);}
+  100%{transform:rotate(-18deg);}
+}
+.sai-sprite[data-burst="1"] .sai-crit--frog .leap-fore{
+  transform-box:fill-box; transform-origin:0% 20%;
+  animation:sai-frog-catch var(--sai-leap,.3s) ease-out forwards; }
+@keyframes sai-frog-catch{ 0%,30%{transform:rotate(16deg);} 62%{transform:rotate(-6deg);} 100%{transform:rotate(4deg);} }
+/* the shadow is what makes the arc height believable, so it does not ride
+   up with him — it shrinks and slides forward on the ground he left */
+.sai-sprite[data-burst="1"] .sai-crit--frog .sai-crit-shadow{
+  animation:sai-frog-leapshadow var(--sai-leap,.3s) cubic-bezier(.22,.9,.3,1) forwards; }
+@keyframes sai-frog-leapshadow{
+  0%  {transform:scale(1.1,1); opacity:.42;}
+  52% {transform:translateX(6px) scale(.6,.55); opacity:.16;}
+  100%{transform:translateX(10px) scale(1.06,.95); opacity:.4;}
+}
+/* water factor 1.60: the same extended pose, but a kick-and-glide rather
+   than an arc — there is nothing to leave the surface of */
+.sai-sprite[data-burst="1"][data-swimming="1"] .sai-crit--frog .sai-crit-leappose{
+  animation:sai-frog-kickglide var(--sai-leap,.3s) ease-out forwards; }
+@keyframes sai-frog-kickglide{
+  0%  {transform:translate(0,0) scale(1.06,.90);}
+  30% {transform:translate(4px,-2px) scale(1.08,.94);}
+  100%{transform:translate(9px,0) scale(1.02,.98);}
+}
+
+/* ---- GOOSE: awkward on land (wob .26), carried on water (factor 1.25) ---- */
+/* He had no gait entry at all and was running the 24deg/.5s default, which is
+   a trot — the one thing a goose has never done. */
+.sai-crit--goose{ --sai-swing:22deg; --sai-gait:.34s; }
+
+/* The rock is a quarter-cycle behind the legs, not in step with them. That
+   offset is the whole waddle: the body comes over the loaded foot at MID
+   stance, after the weight has transferred, so he is always leaning into a
+   support he has already committed to and correcting late. In phase it just
+   reads as a bouncing bird. */
+.sai-sprite[data-walking="1"] .sai-crit--goose .sai-crit-body{
+  animation:sai-goose-rock var(--sai-gait,.34s) ease-in-out infinite; }
+.sai-sprite[data-walking="1"] .sai-crit--goose .sai-crit-body{
+  animation-delay:calc(var(--sai-gait,.34s) * -0.25); }
+@keyframes sai-goose-rock{ 0%,100%{transform:rotate(-6deg) translateY(0);} 50%{transform:rotate(6deg) translateY(-2.2px);} }
+/* the neck runs at HALF the leg tempo, so the head describes a long lazy
+   figure over a set of feet going twice as fast — the comedy is the mismatch */
+.sai-sprite[data-walking="1"] .sai-crit--goose .sai-crit-head{
+  animation:sai-goose-neckswing calc(var(--sai-gait,.34s) * 2) ease-in-out infinite; }
+@keyframes sai-goose-neckswing{
+  0%,100%{transform:rotate(4deg) translate(-1px,0);}
+  50%    {transform:rotate(-4.5deg) translate(1.6px,-1px);}
+}
+/* the folded wing lifts off the flank as a balance pole, on the rock's phase */
+.sai-sprite[data-walking="1"] .sai-crit--goose .sai-crit-wing{
+  animation:sai-goose-balance var(--sai-gait,.34s) ease-in-out infinite; }
+.sai-sprite[data-walking="1"] .sai-crit--goose .sai-crit-wing{
+  animation-delay:calc(var(--sai-gait,.34s) * -0.25); }
+@keyframes sai-goose-balance{ 0%,100%{transform:rotate(-4deg);} 50%{transform:rotate(-17deg);} }
+.sai-sprite[data-walking="1"] .sai-crit--goose .sai-crit-tail{
+  animation:sai-goose-sterntip var(--sai-gait,.34s) ease-in-out infinite; }
+@keyframes sai-goose-sterntip{ 0%,100%{transform:rotate(-5deg);} 50%{transform:rotate(6deg);} }
+
+/* On the water every one of those corrections stops. Same bird, nothing
+   working: one long serene period on the hull and a wake doing the travelling. */
+.sai-crit-wake{ display:none; }
+.sai-sprite[data-swimming="1"] .sai-crit--goose .sai-crit-wake{
+  display:inline; transform-box:fill-box; transform-origin:100% 50%;
+  animation:sai-goose-wake 2.2s ease-in-out infinite; }
+@keyframes sai-goose-wake{ 0%,100%{opacity:.32; transform:scaleX(1);} 50%{opacity:.62; transform:scaleX(1.12);} }
+.sai-sprite[data-swimming="1"] .sai-crit--goose .sai-crit-body{
+  animation:sai-goose-glide 4.2s ease-in-out infinite; }
+@keyframes sai-goose-glide{ 0%,100%{transform:rotate(-1deg) translateY(0);} 50%{transform:rotate(1deg) translateY(-.8px);} }
+.sai-sprite[data-swimming="1"] .sai-crit--goose .sai-crit-head{
+  animation:sai-goose-serene 5.6s ease-in-out infinite; }
+@keyframes sai-goose-serene{ 0%,100%{transform:rotate(-1.4deg);} 50%{transform:rotate(1.4deg);} }
+.sai-sprite[data-swimming="1"] .sai-crit--goose .sai-crit-wing{ animation:none; transform:rotate(-2deg); }
+
+/* ---- BEAVER: clumsy dry, factor 1.50 wet ---- */
+/* Slower and shorter than before. Short legs under a heavy trunk do not get
+   reach; they get frequency, and this animal does not even get that. */
+.sai-crit--beaver{ --sai-swing:14deg; --sai-gait:.62s; }
+
+/* The one inversion that does all the work: the generic walk LIFTS the body
+   3px on each footfall, which is a light animal springing off a foot. This
+   drops it. Weight arrives before support does, so the trunk sinks onto the
+   planted leg and has to be heaved off it again. */
+.sai-sprite[data-walking="1"] .sai-crit--beaver .sai-crit-body{
+  animation:sai-beaver-heave var(--sai-gait,.62s) ease-in-out infinite; }
+@keyframes sai-beaver-heave{
+  0%,100%{transform:rotate(-2.6deg) translateY(1.4px) scaleY(.985);}
+  25%    {transform:rotate(-1deg) translateY(-.4px) scaleY(1.01);}
+  50%    {transform:rotate(2.6deg) translateY(1.4px) scaleY(.985);}
+  75%    {transform:rotate(1deg) translateY(-.4px) scaleY(1.01);}
+}
+.sai-sprite[data-walking="1"] .sai-crit-root.sai-crit--beaver{
+  animation:sai-beaver-lumber var(--sai-gait,.62s) ease-in-out infinite; }
+@keyframes sai-beaver-lumber{ 0%,100%{transform:rotate(1.6deg) translateY(.6px);} 50%{transform:rotate(2.6deg) translateY(0);} }
+/* head carried low and nodding at half tempo — effort, not curiosity */
+.sai-sprite[data-walking="1"] .sai-crit--beaver .sai-crit-head{
+  animation:sai-beaver-lug calc(var(--sai-gait,.62s) * 2) ease-in-out infinite; }
+@keyframes sai-beaver-lug{ 0%,100%{transform:translateY(1.6px) rotate(2.2deg);} 50%{transform:translateY(3px) rotate(4deg);} }
+/* the paddle is dead weight on land. It was wagging 9 degrees; now it scrapes */
+.sai-sprite[data-walking="1"] .sai-crit--beaver .sai-crit-tail{
+  transform-origin:96% 40%;
+  animation:sai-beaver-drag var(--sai-gait,.62s) ease-in-out infinite; }
+@keyframes sai-beaver-drag{ 0%,100%{transform:rotate(3deg) translateY(1.4px);} 50%{transform:rotate(-1.5deg) translateY(2.4px);} }
+.sai-crit-tailscuff{ display:none; }
+.sai-sprite[data-walking="1"] .sai-crit--beaver .sai-crit-tailscuff{
+  display:inline; animation:sai-beaver-scuff var(--sai-gait,.62s) ease-in-out infinite; }
+@keyframes sai-beaver-scuff{ 0%,100%{opacity:.30; transform:translateX(0);} 50%{opacity:.62; transform:translateX(-2.4px);} }
+
+/* ...and in the water the same tail is the only thing moving, at four times
+   the tempo of the body it is pushing. Nothing scrapes; the furrow goes. */
+.sai-sprite[data-swimming="1"] .sai-crit--beaver .sai-crit-tailscuff{ display:none; }
+.sai-sprite[data-swimming="1"] .sai-crit--beaver .sai-crit-root{
+  animation:sai-beaver-swimbob 3.6s ease-in-out infinite; }
+@keyframes sai-beaver-swimbob{ 0%,100%{transform:translateY(8px) rotate(-.6deg);} 50%{transform:translateY(9.5px) rotate(.6deg);} }
+.sai-sprite[data-swimming="1"] .sai-crit--beaver .sai-crit-body{
+  animation:sai-beaver-glide 3.6s ease-in-out infinite; }
+@keyframes sai-beaver-glide{ 0%,100%{transform:translateY(0) scaleX(1);} 50%{transform:translateY(-.6px) scaleX(1.012);} }
+.sai-sprite[data-swimming="1"] .sai-crit--beaver .sai-crit-tail{
+  transform-origin:96% 40%; animation:sai-beaver-scull .9s ease-in-out infinite; }
+@keyframes sai-beaver-scull{ 0%,100%{transform:rotate(-13deg) scaleY(.86);} 50%{transform:rotate(13deg) scaleY(1.06);} }
+.sai-sprite[data-swimming="1"] .sai-crit--beaver .sai-crit-head{
+  animation:sai-beaver-swimhead 3.6s ease-in-out infinite; }
+@keyframes sai-beaver-swimhead{ 0%,100%{transform:translateY(0) rotate(-1deg);} 50%{transform:translateY(-.8px) rotate(1deg);} }
+
+/* ---- WOLF: top 1.55, drain 0.10. The endurance runner ---- */
+.sai-crit--wolf{ --sai-swing:19deg; --sai-gait:.5s; }
+
+/* linear, not ease-in-out. An eased swing accelerates out of each extreme
+   and hesitates at it, and that hesitation is the visual signature of effort
+   — it is why every other animal here looks like it is spending something.
+   A trotting wolf's legs sweep at a near-constant rate. This one line is
+   most of the difference between him and the cougar. */
+.sai-sprite[data-walking="1"] .sai-crit--wolf .sai-crit-leg-fr,
+.sai-sprite[data-walking="1"] .sai-crit--wolf .sai-crit-leg-bl{
+  animation:sai-crit-swingA var(--sai-gait,.5s) linear infinite; }
+.sai-sprite[data-walking="1"] .sai-crit--wolf .sai-crit-leg-fl,
+.sai-sprite[data-walking="1"] .sai-crit--wolf .sai-crit-leg-br{
+  animation:sai-crit-swingB var(--sai-gait,.5s) linear infinite; }
+/* 1px of body rise against the generic 3, and a head that runs at half the
+   leg tempo so it can never sync to a footfall — the gait beat disappears
+   from everything above the shoulder, which is what "tireless" looks like */
+.sai-sprite[data-walking="1"] .sai-crit--wolf .sai-crit-body{
+  animation:sai-wolf-carry var(--sai-gait,.5s) linear infinite; }
+@keyframes sai-wolf-carry{ 0%,100%{transform:translateY(0);} 50%{transform:translateY(-1px);} }
+.sai-sprite[data-walking="1"] .sai-crit--wolf .sai-crit-head{
+  animation:sai-wolf-level calc(var(--sai-gait,.5s) * 2) linear infinite; }
+@keyframes sai-wolf-level{ 0%,100%{transform:translateY(0) rotate(0);} 50%{transform:translateY(-.8px) rotate(-.4deg);} }
+/* the trunk holds one constant angle instead of oscillating around it */
+.sai-sprite[data-walking="1"] .sai-crit-root.sai-crit--wolf{ animation:none; transform:rotate(2.4deg); }
+.sai-sprite[data-walking="1"] .sai-crit--wolf .sai-crit-ear{ animation:none; transform:rotate(-2deg); }
+/* the tail is decoupled from the gait entirely — 3.8s against a 0.5s stride
+   is an incommensurate period, so it never lands on the same beat twice */
+.sai-sprite[data-walking="1"] .sai-crit--wolf .sai-crit-tail{
+  animation:sai-wolf-carrytail 3.8s ease-in-out infinite; }
+@keyframes sai-wolf-carrytail{ 0%,100%{transform:rotate(-3deg);} 50%{transform:rotate(2deg);} }
+/* bK 1.20 over bMs 1400 is not a change of gait, it is a longer stride held
+   for a while. Nothing new fires; the same trot simply tightens. */
+.sai-sprite[data-burst="1"] .sai-crit--wolf .sai-crit-root{ --sai-gait:.44s; --sai-swing:23deg; }
+/* drain 0.10 means his ledger effectively never reaches the spent threshold.
+   This makes that a guarantee rather than an accident of tuning. */
+.sai-sprite[data-spent="1"] .sai-crit--wolf .sai-crit-mouth-open{ opacity:0; }
+.sai-sprite[data-spent="1"] .sai-crit--wolf .sai-crit-mouth-rest{ opacity:1; }
+
+/* ---- COUGAR: top 2.65, recov .09. The ambush sprinter ---- */
+/* The prowl is now SLOWER than the wolf's trot even though his cruise is
+   quicker, because a stalking cat covers ground in long low strides and the
+   contrast only exists if the walk is unhurried. */
+.sai-crit--cougar{ --sai-swing:15deg; --sai-gait:.58s; }
+
+/* Spent first, burst after, and the spent rules carry :not([data-burst]) so
+   the order is stated rather than relied on: _ex is integrated from LAST
+   frame's pace, so the back half of an 800ms burst can trip the threshold
+   while the burst is still running. */
+.sai-sprite[data-spent="1"]:not([data-burst="1"]) .sai-crit--cougar .sai-crit-mouth-open{
+  opacity:1; animation:sai-cougar-pant .34s ease-in-out infinite; }
+.sai-sprite[data-spent="1"]:not([data-burst="1"]) .sai-crit--cougar .sai-crit-mouth-rest{ opacity:0; }
+@keyframes sai-cougar-pant{ 0%,100%{transform:scaleY(.55);} 50%{transform:scaleY(1);} }
+.sai-sprite[data-spent="1"]:not([data-burst="1"]) .sai-crit--cougar .sai-crit-body{
+  animation:sai-cougar-heave 1.05s ease-in-out infinite; }
+@keyframes sai-cougar-heave{ 0%,100%{transform:scaleY(1) translateY(0);} 50%{transform:scaleY(1.05) translateY(-1px);} }
+.sai-sprite[data-spent="1"]:not([data-burst="1"]) .sai-crit--cougar .sai-crit-head{
+  animation:sai-cougar-hang 1.05s ease-in-out infinite; }
+@keyframes sai-cougar-hang{ 0%,100%{transform:translateY(2.4px) rotate(3deg);} 50%{transform:translateY(3.4px) rotate(4deg);} }
+
+/* THE BOUND. The generic rig runs a diagonal trot: fr+bl against fl+br. A
+   bound is not that and never has been — the front pair reaches together and
+   the rear pair gathers together, and the spine is a spring between them.
+   Swapping which legs share a keyframe is what turns 2.65x from a fast walk
+   into a different animal. */
+.sai-sprite[data-burst="1"] .sai-crit--cougar .sai-crit-leg-fl,
+.sai-sprite[data-burst="1"] .sai-crit--cougar .sai-crit-leg-fr{
+  animation:sai-cougar-reach .26s cubic-bezier(.3,0,.2,1) infinite; }
+.sai-sprite[data-burst="1"] .sai-crit--cougar .sai-crit-leg-bl,
+.sai-sprite[data-burst="1"] .sai-crit--cougar .sai-crit-leg-br{
+  animation:sai-cougar-drive .26s cubic-bezier(.3,0,.2,1) infinite; }
+/* the rear pair lands after the front pair has pushed, not opposite it */
+.sai-sprite[data-burst="1"] .sai-crit--cougar .sai-crit-leg-bl,
+.sai-sprite[data-burst="1"] .sai-crit--cougar .sai-crit-leg-br{ animation-delay:-.109s; }
+@keyframes sai-cougar-reach{ 0%,100%{transform:rotate(-40deg);} 46%{transform:rotate(26deg);} }
+@keyframes sai-cougar-drive{ 0%,100%{transform:rotate(34deg);} 46%{transform:rotate(-30deg);} }
+/* extension and collection: long and flat at full stretch, short and tall
+   with the back arched. Vertical travel lives here and NOT on the root,
+   because the shadow is a child of the root and a shadow that leaves the
+   ground with him is a cat sliding rather than a cat airborne. */
+.sai-sprite[data-burst="1"] .sai-crit--cougar .sai-crit-body{
+  animation:sai-cougar-bound .26s cubic-bezier(.32,0,.24,1) infinite; }
+@keyframes sai-cougar-bound{
+  0%,100%{transform:translateY(0) scaleX(1.12) scaleY(.88) rotate(-3deg);}
+  38%    {transform:translateY(-5px) scaleX(.92) scaleY(1.12) rotate(4deg);}
+  70%    {transform:translateY(-2px) scaleX(1.04) scaleY(.96) rotate(-1deg);}
+}
+.sai-sprite[data-burst="1"] .sai-crit--cougar .sai-crit-root{
+  animation:sai-cougar-pitch .26s cubic-bezier(.32,0,.24,1) infinite; }
+@keyframes sai-cougar-pitch{ 0%,100%{transform:rotate(-2.5deg);} 42%{transform:rotate(3deg);} }
+.sai-sprite[data-burst="1"] .sai-crit--cougar .sai-crit-shadow{
+  animation:sai-bound-shadow .26s cubic-bezier(.32,0,.24,1) infinite; }
+@keyframes sai-bound-shadow{ 0%,100%{transform:scale(1.05,1); opacity:.4;} 42%{transform:scale(.72,.7); opacity:.2;} }
+/* the head stays level while the spine does the work — a bounding cat's eyes
+   never leave the line they are running down */
+.sai-sprite[data-burst="1"] .sai-crit--cougar .sai-crit-head{
+  animation:sai-cougar-headline .26s ease-in-out infinite; }
+@keyframes sai-cougar-headline{
+  0%,100%{transform:translate(1.6px,1px) rotate(-1.5deg);}
+  42%    {transform:translate(-1px,-1.6px) rotate(2deg);}
+}
+/* the rope tail streams out level as a counterweight, at half tempo */
+.sai-sprite[data-burst="1"] .sai-crit--cougar .sai-crit-tail{
+  animation:sai-cougar-rudder .52s ease-in-out infinite; }
+@keyframes sai-cougar-rudder{ 0%,100%{transform:rotate(-22deg);} 50%{transform:rotate(-6deg);} }
+/* the two rig layers every sprite already carries, spent here rather than
+   drawing new art for a thing that lasts 800ms */
+.sai-sprite[data-burst="1"] .sai-crit--cougar .sai-crit-dust{
+  opacity:1; animation:sai-crit-dust .26s ease-out infinite; }
+.sai-sprite[data-burst="1"] .sai-crit--cougar .sai-crit-streaks{
+  opacity:.8; animation:sai-crit-streak .26s linear infinite; }
+
+/* ---- HEDGEHOG: base .50, wob .20, and no flee in it anywhere ---- */
+/* Faster and shorter than the old .3s/30deg. The joke of a hedgehog is that
+   the legs blur and the body does not: they are under the skirt, so the only
+   thing the eye gets is a dense object gliding along at walking pace. */
+.sai-crit--hedgehog{ --sai-swing:34deg; --sai-gait:.22s; }
+/* twice the leg period and a fraction of the generic amplitude */
+.sai-sprite[data-walking="1"] .sai-crit--hedgehog .sai-crit-body{
+  animation:sai-hog-glide calc(var(--sai-gait,.22s) * 2) ease-in-out infinite; }
+@keyframes sai-hog-glide{ 0%,100%{transform:translateY(0) scaleY(1);} 50%{transform:translateY(-.7px) scaleY(1.01);} }
+.sai-sprite[data-walking="1"] .sai-crit--hedgehog .sai-crit-head{
+  animation:sai-hog-snoutbob var(--sai-gait,.22s) linear infinite; }
+@keyframes sai-hog-snoutbob{ 0%,100%{transform:translate(0,0);} 50%{transform:translate(.8px,.5px);} }
+
+/* THE ROLL-UP. Three states, because the shape of the defence is the timing:
+   a tuck too fast to follow, a hold long enough to be uncomfortable, and an
+   unroll slow enough to read as a decision being made. */
+.sai-crit-ballpose{ display:none; }
+.sai-sprite[data-state="hogcurl"] .sai-crit--hedgehog .sai-crit-ballpose,
+.sai-sprite[data-state="hogball"] .sai-crit--hedgehog .sai-crit-ballpose,
+.sai-sprite[data-state="hoguncurl"] .sai-crit--hedgehog .sai-crit-ballpose{ display:inline; }
+.sai-sprite[data-state="hogcurl"] .sai-crit--hedgehog .sai-crit-body,
+.sai-sprite[data-state="hogcurl"] .sai-crit--hedgehog .sai-crit-head,
+.sai-sprite[data-state="hogcurl"] .sai-crit--hedgehog .sai-crit-leg,
+.sai-sprite[data-state="hogball"] .sai-crit--hedgehog .sai-crit-body,
+.sai-sprite[data-state="hogball"] .sai-crit--hedgehog .sai-crit-head,
+.sai-sprite[data-state="hogball"] .sai-crit--hedgehog .sai-crit-leg,
+.sai-sprite[data-state="hoguncurl"] .sai-crit--hedgehog .sai-crit-body,
+.sai-sprite[data-state="hoguncurl"] .sai-crit--hedgehog .sai-crit-head,
+.sai-sprite[data-state="hoguncurl"] .sai-crit--hedgehog .sai-crit-leg{ display:none; }
+.sai-crit-ballpose .ball-face{ opacity:0; }
+
+/* the tuck: he arrives at the sprawled width he was standing at and snaps
+   round through it, overshooting past a circle before settling */
+.sai-sprite[data-state="hogcurl"] .sai-crit--hedgehog .sai-crit-ballpose{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-hog-tuck .38s cubic-bezier(.3,1.5,.4,1) forwards; }
+@keyframes sai-hog-tuck{
+  0%  {transform:scale(1.30,.62) translateY(9px);}
+  40% {transform:scale(1.06,1.10) translateY(-2px);}
+  70% {transform:scale(1.02,.96) translateY(1px);}
+  100%{transform:scale(1,1) translateY(0);}
+}
+/* the hold. Two periods that do not divide into each other, so the ball
+   never settles into a loop — a thing waiting it out, not a thing idling. */
+.sai-sprite[data-state="hogball"] .sai-crit--hedgehog .sai-crit-ballpose{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-hog-ballhold 1.1s ease-in-out infinite; }
+@keyframes sai-hog-ballhold{ 0%,100%{transform:translate(0,0) rotate(-.8deg);} 50%{transform:translate(.6px,-.5px) rotate(.9deg);} }
+.sai-sprite[data-state="hogball"] .sai-crit--hedgehog .ball-spines{
+  transform-box:fill-box; transform-origin:50% 55%;
+  animation:sai-hog-bristle .9s ease-in-out infinite; }
+@keyframes sai-hog-bristle{ 0%,100%{transform:scale(1);} 50%{transform:scale(1.045);} }
+/* the unroll: a swell, a change of mind, then he flattens out of it. The
+   nose is out before the shape has finished opening, which is the order it
+   happens in — he checks with his face before he commits his back. */
+.sai-sprite[data-state="hoguncurl"] .sai-crit--hedgehog .sai-crit-ballpose{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-hog-unroll .9s ease-in-out forwards; }
+@keyframes sai-hog-unroll{
+  0%  {transform:scale(1,1) translateY(0);}
+  30% {transform:scale(1.02,1.02) translateY(-1px);}
+  55% {transform:scale(.99,.99) translateY(0);}
+  100%{transform:scale(1.18,.80) translateY(5px);}
+}
+.sai-sprite[data-state="hoguncurl"] .sai-crit--hedgehog .ball-face{
+  transform-box:fill-box; animation:sai-hog-peek .9s ease-out forwards; }
+@keyframes sai-hog-peek{
+  0%  {opacity:0; transform:translate(-4px,-2px);}
+  45% {opacity:1; transform:translate(0,0);}
+  100%{opacity:1; transform:translate(1.5px,.5px);}
+}
+
+/* ---- reduced motion ---- */
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-walking="1"] .sai-crit--frog .sai-crit-body,
+  .sai-sprite[data-walking="1"] .sai-crit--frog .sai-crit-head,
+  .sai-sprite[data-walking="1"] .sai-crit--goose .sai-crit-body,
+  .sai-sprite[data-walking="1"] .sai-crit--goose .sai-crit-head,
+  .sai-sprite[data-walking="1"] .sai-crit--goose .sai-crit-wing,
+  .sai-sprite[data-walking="1"] .sai-crit--goose .sai-crit-tail,
+  .sai-sprite[data-swimming="1"] .sai-crit--goose .sai-crit-wake,
+  .sai-sprite[data-swimming="1"] .sai-crit--goose .sai-crit-body,
+  .sai-sprite[data-swimming="1"] .sai-crit--goose .sai-crit-head,
+  .sai-sprite[data-walking="1"] .sai-crit--beaver .sai-crit-body,
+  .sai-sprite[data-walking="1"] .sai-crit--beaver .sai-crit-head,
+  .sai-sprite[data-walking="1"] .sai-crit--beaver .sai-crit-tail,
+  .sai-sprite[data-walking="1"] .sai-crit--beaver .sai-crit-tailscuff,
+  .sai-sprite[data-walking="1"] .sai-crit-root.sai-crit--beaver,
+  .sai-sprite[data-swimming="1"] .sai-crit--beaver .sai-crit-root,
+  .sai-sprite[data-swimming="1"] .sai-crit--beaver .sai-crit-body,
+  .sai-sprite[data-swimming="1"] .sai-crit--beaver .sai-crit-tail,
+  .sai-sprite[data-swimming="1"] .sai-crit--beaver .sai-crit-head,
+  .sai-sprite[data-walking="1"] .sai-crit--wolf .sai-crit-body,
+  .sai-sprite[data-walking="1"] .sai-crit--wolf .sai-crit-head,
+  .sai-sprite[data-walking="1"] .sai-crit--wolf .sai-crit-tail,
+  .sai-sprite[data-burst="1"] .sai-crit--cougar .sai-crit-body,
+  .sai-sprite[data-burst="1"] .sai-crit--cougar .sai-crit-head,
+  .sai-sprite[data-burst="1"] .sai-crit--cougar .sai-crit-tail,
+  .sai-sprite[data-burst="1"] .sai-crit--cougar .sai-crit-root,
+  .sai-sprite[data-burst="1"] .sai-crit--cougar .sai-crit-shadow,
+  .sai-sprite[data-spent="1"] .sai-crit--cougar .sai-crit-body,
+  .sai-sprite[data-spent="1"] .sai-crit--cougar .sai-crit-head,
+  .sai-sprite[data-spent="1"] .sai-crit--cougar .sai-crit-mouth-open,
+  .sai-sprite[data-walking="1"] .sai-crit--hedgehog .sai-crit-body,
+  .sai-sprite[data-walking="1"] .sai-crit--hedgehog .sai-crit-head,
+  .sai-sprite[data-state="hogcurl"] .sai-crit--hedgehog .sai-crit-ballpose,
+  .sai-sprite[data-state="hogball"] .sai-crit--hedgehog .sai-crit-ballpose,
+  .sai-sprite[data-state="hogball"] .sai-crit--hedgehog .ball-spines,
+  .sai-sprite[data-state="hoguncurl"] .sai-crit--hedgehog .sai-crit-ballpose,
+  .sai-sprite[data-state="hoguncurl"] .sai-crit--hedgehog .ball-face{ animation:none; }
+
+  /* The frog's leap is a whole-pose swap that lands and clears inside 300ms
+     and repeats every second or two. Frozen it is not a still frog, it is a
+     strobe between two drawings — which is the exact thing this query exists
+     to prevent — so the burst is not shown at all rather than shown static. */
+  .sai-sprite[data-burst="1"] .sai-crit--frog .sai-crit-leappose{ display:none; }
+  .sai-sprite[data-burst="1"] .sai-crit--frog .sai-crit-body,
+  .sai-sprite[data-burst="1"] .sai-crit--frog .sai-crit-head,
+  .sai-sprite[data-burst="1"] .sai-crit--frog .sai-crit-leg{ display:inline; }
+  /* the cougar's dust and streaks are opacity, not animation, so the global
+     kill leaves them stuck on as a permanent cloud */
+  .sai-sprite[data-burst="1"] .sai-crit--cougar .sai-crit-dust,
+  .sai-sprite[data-burst="1"] .sai-crit--cougar .sai-crit-streaks{ opacity:0; animation:none; }
+  /* the ball is a behavioral STATE, not a motion, and it lasts seconds — it
+     stays. Only the quiver and the bristle stop. The nose is shown outright
+     so an unrolling hedgehog still has a face. */
+  .sai-sprite[data-state="hoguncurl"] .sai-crit--hedgehog .ball-face{ opacity:1; }
+}

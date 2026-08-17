@@ -3,7 +3,7 @@ import { Critter, SPECIES, ALL_SPECIES } from "./Critters.jsx";
 import { PET_SPECIES } from "./CrittersPets.jsx";
 import { speciesSize } from "./SpeciesProfile.js";
 import { gait, gaitIn, speedCap, rescueReach, SPEED, GAIT_DEF } from "./Gait.js";
-import { stepEthogram, ethoSwimP, ethoShare, ETHOGRAM, ETHO_STATES, ETHO_Z_STATES, ETHO_OWNWATER_STATES, setTreeMetrics, setForageMetrics, ethoOffstage } from "./Ethogram.js";
+import { stepEthogram, ethoSwimP, ethoShare, ETHOGRAM, ETHO_STATES, ETHO_Z_STATES, ETHO_OWNWATER_STATES, setTreeMetrics, setForageMetrics, ethoOffstage, hogCurl } from "./Ethogram.js";
 
 /**
  * Social Animal Icons v0.11 — Lakeside world
@@ -3229,6 +3229,17 @@ function separatePair(world, a, b, worldRefLike, force) {
 }
 
 function forceFlee(agent, cfg) {
+  // The hedgehog is the exception the speed table implies but never states:
+  // base .50 against a cougar's .70 and a wolf's .86 means a flee it cannot
+  // win, and a small animal losing a race it chose to enter reads as a bug.
+  // It has no flee, so the scare is handed to its ethogram and it balls up
+  // where it stands. hogCurl is shared with the approach trigger so the two
+  // entry points cannot drift into producing two different-length balls.
+  if (agent.species === "hedgehog" && ETHOGRAM.hedgehog) {
+    hogCurl(agent, performance.now(), rand);
+    agent.noEventUntil = performance.now() + rand(NOEVENT_MIN_MS, NOEVENT_MAX_MS);
+    return;
+  }
   agent.state = 'flee'; agent.fleeEnd = performance.now() + FLEE_MS; agent.targetId = null;
   // run to a random spot away from current location
   const ang = Math.atan2(agent.y, agent.x) + rand(-0.8, 0.8);
@@ -3299,6 +3310,17 @@ function renderWorld(world, iconsRef, padsRef, damRefs) {
       sprite.dataset.carry = a._carry || '';
       // the cat's pre-jump pause at a fence (little crouch via CSS)
       sprite.dataset.prep = nowMs < (a.hopPrepUntil || 0) ? '1' : '';
+      // The burst window Gait.js opens. This is the one fact about pace the
+      // CSS cannot recover from displacement: a frog's 300ms leap and a
+      // cougar's bound and an ordinary fast walk are all just px/s on the
+      // way past, and by the time any filter could separate them the leap is
+      // over. a._burstUntil already knows, so hand it over.
+      sprite.dataset.burst = nowMs < (a._burstUntil || 0) ? '1' : '';
+      // ...and the bill. The stamina half of the SPEED table has been
+      // invisible: only the species that cannot hold their top ever get
+      // here, and a wolf at drain 0.10 never does, which is the whole point
+      // of putting the cougar next to him.
+      sprite.dataset.spent = (a._ex || 0) > 0.6 ? '1' : '';
       let dir = Number(sprite.dataset.dir || '1');
       if (a.vx < -8) dir = -1; else if (a.vx > 8) dir = 1;
       if (a._faceDir) dir = a._faceDir; // e.g. the dog turning to face a fence it sniffs
