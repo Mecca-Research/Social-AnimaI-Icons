@@ -3,7 +3,7 @@ import { Critter, SPECIES, ALL_SPECIES } from "./Critters.jsx";
 import { PET_SPECIES } from "./CrittersPets.jsx";
 import { speciesSize } from "./SpeciesProfile.js";
 import { gait, gaitIn, speedCap, rescueReach, SPEED, GAIT_DEF } from "./Gait.js";
-import { stepEthogram, ethoSwimP, ethoShare, ETHOGRAM, ETHO_STATES, ETHO_Z_STATES, ETHO_OWNWATER_STATES, setTreeMetrics, ethoOffstage } from "./Ethogram.js";
+import { stepEthogram, ethoSwimP, ethoShare, ETHOGRAM, ETHO_STATES, ETHO_Z_STATES, ETHO_OWNWATER_STATES, setTreeMetrics, setForageMetrics, ethoOffstage } from "./Ethogram.js";
 
 /**
  * Social Animal Icons v0.11 — Lakeside world
@@ -300,20 +300,6 @@ function ForageLayer({ bounds, sites }) {
                 <path d="M -5 10 C -4 -8 -3 -24 -3 -40 L 6 -40 C 6 -24 7 -8 9 10 C 4 12 0 12 -5 10 Z" fill="#5b3f26" />
                 <path d="M -5 10 C -4 -8 -3 -24 -3 -40 L 0 -40 C -1 -22 -2 -6 -1 10 Z" fill="#6f4f30" />
                 <path d="M -3 -36 C -12 -42 -19 -44 -26 -43 M 6 -37 C 14 -43 21 -45 28 -44" stroke="#5b3f26" strokeWidth="3.2" fill="none" strokeLinecap="round" />
-                <g className="sai-bg-sway" style={{ animationDuration: `${5.8 + i * 0.5}s`, animationDelay: `${i * 0.9}s`, transformOrigin: "50% 100%" }}>
-                  <ellipse cx="-16" cy="-48" rx="20" ry="15" fill="#2f6b3f" />
-                  <ellipse cx="17" cy="-50" rx="21" ry="16" fill="#2a6138" />
-                  <ellipse cx="0" cy="-60" rx="25" ry="18" fill="#3a7d49" />
-                  <ellipse cx="-10" cy="-70" rx="16" ry="12" fill="#469356" />
-                  <ellipse cx="11" cy="-72" rx="13" ry="10" fill="#54a763" opacity=".8" />
-                  {/* the mast crop, in husked clusters */}
-                  <g className="forage-nuts">
-                    <ellipse cx="-20" cy="-44" rx="3.6" ry="4.2" fill="#7a5227" /><ellipse cx="-20" cy="-45.4" rx="1.7" ry="1.5" fill="#a9793f" />
-                    <ellipse cx="-4" cy="-40" rx="3.4" ry="4" fill="#6d491f" /><ellipse cx="-4" cy="-41.3" rx="1.6" ry="1.4" fill="#9c6d38" />
-                    <ellipse cx="14" cy="-42" rx="3.6" ry="4.2" fill="#7a5227" /><ellipse cx="14" cy="-43.4" rx="1.7" ry="1.5" fill="#a9793f" />
-                    <ellipse cx="24" cy="-52" rx="3.2" ry="3.8" fill="#6d491f" />
-                  </g>
-                </g>
               </>
             )}
             {f.kind === "shrub" && (
@@ -400,6 +386,177 @@ function ForageLayer({ bounds, sites }) {
           </svg>
         </div>
       ))}
+    </>
+  );
+}
+
+// ---------------- The squirrel's larder ----------------
+/**
+ * A hole in the ground is a cache; four in a row at the foot of one stump
+ * is a LARDER, and that is the difference. He has exactly one, here, for
+ * the life of the world — everything he takes out of a nut tree comes
+ * back to this spot and everything he eats comes out of it — which is the
+ * only version of hoarding a player can actually watch. A remembered map
+ * of scattered caches was the old behavior and it read as a squirrel
+ * digging in a random patch of soil.
+ *
+ * Placed in the gap between the two western forest trees: 150px clear of
+ * both trunks so it never sits inside the bear's 96px approach ring,
+ * ~90px west of the nearest berry bush so it is off the thicket's
+ * traffic, and at lake rho 2.5 it is nowhere near the water. It reads as
+ * his corner of the map rather than a fixture everybody shares.
+ */
+const LARDER = {
+  x: .155, y: .445,
+  // The four scrapes, as px offsets from the anchor. Shared with the
+  // ethogram — geometry-as-physics, same contract as the trees and the
+  // forage sites: the mound he crouches over IS the mound that changes.
+  slots: [{ x: -30, y: 1 }, { x: -10, y: 7 }, { x: 10, y: 7 }, { x: 30, y: 1 }],
+};
+
+// What the squirrel's ethogram needs to know about the map, handed over
+// rather than imported so that module stays free of the layout — the same
+// arrangement the bear's tree metrics use.
+setForageMetrics({
+  larder: LARDER,
+  // Read off the nut art in ForageLayer above. That svg maps a local y to
+  // (16 - y) * s stage px above the site's anchor:
+  //   trunk foot            local y 10                        ->  6
+  //   lowest leaf over the trunk's centre line (x 1.5): the bottom of the
+  //     cx 17 / cy -50 / rx 21 / ry 16 bough, -39.2            -> 55
+  //   highest leaf over that line: the top of the cy -72 crown, -78.8
+  //                                                            -> 95
+  // Forty px of leaf directly over the trunk, and he stops with his own
+  // middle in the middle of it.
+  nut: { basePx: 6, leafPx: 55, crownPx: 95, trunkDX: 1.5 },
+  // Critter() draws the 120-unit sprite box at r * 2.7 px. (NOT r * 3.1 —
+  // that is the container div; see the note in the squirrel's ethogram.)
+  spritePx: 2.7,
+});
+
+/**
+ * The larder itself. Drawn under the animals, like every other piece of
+ * ground: he crouches in FRONT of the stump to work it.
+ *
+ * The stock is one integer that moves about twice a minute, so this reads
+ * it off a slow interval instead of joining the frame loop — a rAF for
+ * that would be waste, and threading a fifth ref through renderWorld for
+ * it would be worse.
+ */
+function LarderLayer({ bounds, worldRef }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const t = setInterval(() => {
+      const el = ref.current; if (!el) return;
+      el.dataset.n = String(worldRef.current.larder?.n || 0);
+    }, 200);
+    return () => clearInterval(t);
+  }, [worldRef]);
+  const { w, h } = bounds;
+  if (!w || !h) return null;
+  return (
+    <div ref={ref} className="sai-larder" data-n="0"
+      style={{ position: "absolute", left: LARDER.x * w, top: LARDER.y * h, zIndex: 2,
+        pointerEvents: "none", transform: "translate(-50%,-50%)" }}>
+      {/* viewBox centred on 0,0 so a slot offset IS a local coordinate */}
+      <svg width="120" height="120" viewBox="-60 -60 120 120" style={{ display: "block", overflow: "visible" }}>
+        {/* the ground round a working larder is bare and trodden — the
+            first thing that tells you this place gets used */}
+        <ellipse cx="0" cy="7" rx="47" ry="15" fill="#0d2415" opacity=".34" />
+        <ellipse cx="0" cy="5" rx="43" ry="13" fill="#4a3520" />
+        <ellipse cx="-3" cy="3" rx="34" ry="9" fill="#5d4327" />
+        <path d="M -22 3 C -31 1 -37 4 -41 9 M 23 3 C 32 2 38 5 42 10" stroke="#4e3521"
+          strokeWidth="4.5" fill="none" strokeLinecap="round" />
+        {/* the broken stump he keeps it under: heartwood showing, moss on
+            the shaded side. A stump rather than a live tree so it reads as
+            a store and not another thing to climb */}
+        <path d="M -22 5 C -21 -11 -20 -25 -19 -34 L 19 -34 C 20 -25 21 -11 23 5 C 12 9 -11 9 -22 5 Z" fill="#5b3f26" />
+        <path d="M -22 5 C -21 -11 -20 -25 -19 -34 L -8 -34 C -10 -19 -11 -7 -10 7 Z" fill="#6f4f30" />
+        <path d="M -14 -2 C -13 -14 -12 -24 -12 -31 M 4 -6 C 4 -17 3 -26 3 -31" stroke="#452f1c"
+          strokeWidth="1.8" fill="none" strokeLinecap="round" opacity=".6" />
+        <ellipse cx="0" cy="-34" rx="19" ry="6.5" fill="#8a6236" />
+        <ellipse cx="0" cy="-34.6" rx="13" ry="4.3" fill="#a37a48" />
+        <ellipse cx="0" cy="-34.6" rx="6.5" ry="2.1" fill="#7a5227" opacity=".65" />
+        {/* splintered rim where the top came off in some old gale */}
+        <path d="M -19 -34 l 5 -6 l 4 5 l 5 -8 l 4 7 l 6 -6 l 4 6 l 5 -4 l 5 6"
+          fill="none" stroke="#8a6236" strokeWidth="2.6" strokeLinejoin="round" />
+        <path d="M -22 -1 C -18 -6 -12 -6 -8 -2 C -13 0 -18 0 -22 -1 Z" fill="#3f7c4a" opacity=".8" />
+        <ellipse cx="18" cy="-7" rx="6" ry="3.2" fill="#3f7c4a" opacity=".5" />
+        {/* ---- the four scrapes. Order is load-bearing: he fills left to
+            right, and the CSS caps the first n of these ---- */}
+        <g className="sai-larder-slots">
+          {LARDER.slots.map((s, k) => (
+            <g className="sai-larder-slot" key={k}>
+              <ellipse cx={s.x} cy={s.y} rx="8.6" ry="4.5" fill="#2e1f10" />
+              <ellipse cx={s.x} cy={s.y - .7} rx="6.4" ry="3.2" fill="#19100a" />
+              <g className="sai-larder-cap">
+                <ellipse cx={s.x} cy={s.y - 1} rx="8.9" ry="5" fill="#5d4327" />
+                <ellipse cx={s.x - 1.6} cy={s.y - 2.6} rx="5" ry="2.8" fill="#6d5030" />
+                <ellipse cx={s.x - 5} cy={s.y - 4.2} rx="2.4" ry="2.9" fill="#7a5227" />
+                <path className="cap-leaf"
+                  d={`M ${s.x + 3.6} ${s.y - 2.8} C ${s.x + 8.6} ${s.y - 8} ${s.x + 12} ${s.y - 6} ${s.x + 11} ${s.y - 1.6} C ${s.x + 8} ${s.y + .4} ${s.x + 4.6} ${s.y - .8} ${s.x + 3.6} ${s.y - 2.8} Z`}
+                  fill="#8a6a34" />
+              </g>
+            </g>
+          ))}
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+/**
+ * The nut trees' FOLIAGE, painted after the animals — exactly what
+ * TreeLayer does with the big trees' boughs, and for the same reason: a
+ * squirrel who climbs into the leaves has to go behind them, not over
+ * them. The trunks stay in ForageLayer at zIndex 2 so he hugs the near
+ * face of the bark on the way up.
+ *
+ * `data-shake` is the one thing about him that cannot be seen while it is
+ * true: he is inside the canopy and there is nothing of him on screen, so
+ * the tree does the acting. Polled, not per-frame — it is on for two
+ * seconds about once a minute.
+ */
+function ForageCanopyLayer({ bounds, sites, worldRef }) {
+  const refs = useRef(new Map());
+  useEffect(() => {
+    const t = setInterval(() => {
+      const now = performance.now(), live = worldRef.current.forage;
+      for (const [i, el] of refs.current) {
+        const f = live && live[i];
+        el.dataset.shake = f && f.shake > now ? "1" : "";
+      }
+    }, 120);
+    return () => clearInterval(t);
+  }, [worldRef]);
+  const { w, h } = bounds;
+  if (!w || !h) return null;
+  return (
+    <>
+      {sites.map((f, i) => (f.kind !== "nut" ? null : (
+        <div key={i} className="forage-canopy" data-shake=""
+          ref={(el) => { if (el) refs.current.set(i, el); else refs.current.delete(i); }}
+          style={{ position: "absolute", left: f.x * w, top: f.y * h, zIndex: 12,
+            pointerEvents: "none", transform: `translate(-50%,-100%) scale(${f.s})`,
+            transformOrigin: "50% 100%" }}>
+          <svg width="96" height="104" viewBox="-48 -88 96 104" style={{ display: "block", overflow: "visible" }}>
+            <g className="sai-bg-sway" style={{ animationDuration: `${5.8 + i * 0.5}s`, animationDelay: `${i * 0.9}s`, transformOrigin: "50% 100%" }}>
+              <ellipse cx="-16" cy="-48" rx="20" ry="15" fill="#2f6b3f" />
+              <ellipse cx="17" cy="-50" rx="21" ry="16" fill="#2a6138" />
+              <ellipse cx="0" cy="-60" rx="25" ry="18" fill="#3a7d49" />
+              <ellipse cx="-10" cy="-70" rx="16" ry="12" fill="#469356" />
+              <ellipse cx="11" cy="-72" rx="13" ry="10" fill="#54a763" opacity=".8" />
+              {/* the mast crop, in husked clusters */}
+              <g className="forage-nuts">
+                <ellipse cx="-20" cy="-44" rx="3.6" ry="4.2" fill="#7a5227" /><ellipse cx="-20" cy="-45.4" rx="1.7" ry="1.5" fill="#a9793f" />
+                <ellipse cx="-4" cy="-40" rx="3.4" ry="4" fill="#6d491f" /><ellipse cx="-4" cy="-41.3" rx="1.6" ry="1.4" fill="#9c6d38" />
+                <ellipse cx="14" cy="-42" rx="3.6" ry="4.2" fill="#7a5227" /><ellipse cx="14" cy="-43.4" rx="1.7" ry="1.5" fill="#a9793f" />
+                <ellipse cx="24" cy="-52" rx="3.2" ry="3.8" fill="#6d491f" />
+              </g>
+            </g>
+          </svg>
+        </div>
+      )))}
     </>
   );
 }
@@ -913,6 +1070,7 @@ export default function SocialAnimalsRPG() {
         {worldKey === "forest" && snapshot.bounds.w > 0 && <Lake bounds={snapshot.bounds} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <TreeLayer bounds={snapshot.bounds} part="trunk" />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <ForageLayer bounds={snapshot.bounds} sites={FORAGE_SITES} />}
+        {worldKey === "forest" && snapshot.bounds.w > 0 && <LarderLayer bounds={snapshot.bounds} worldRef={worldRef} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <PadLayer padsRef={padsRef} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <DamLayer damRefs={damRefs} />}
         {worldKey === "neighborhood" && snapshot.bounds.w > 0 && <NeighborhoodScene bounds={snapshot.bounds} />}
@@ -925,6 +1083,7 @@ export default function SocialAnimalsRPG() {
         {/* the boughs paint last, over the animals: anything up in the
             branches is hidden by the leaves the way it would be for real */}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <TreeLayer bounds={snapshot.bounds} part="canopy" />}
+        {worldKey === "forest" && snapshot.bounds.w > 0 && <ForageCanopyLayer bounds={snapshot.bounds} sites={FORAGE_SITES} worldRef={worldRef} />}
       </div>
     </div>
   );

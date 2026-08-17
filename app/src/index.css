@@ -2486,3 +2486,154 @@ body {
   .sai-sprite[data-state="logchew"] .sai-crit--hedgehog .lp-shead,
   .sai-sprite[data-carry="grub"][data-state="logchew"] .sai-crit--hedgehog .lp-grub{ animation:none; }
 }
+
+/* ============ v0.33 squirrel: the nut tree and the larder ============ */
+/* Scoped to the squirrel throughout: state names are namespaced inside
+   the ethogram, not in the DOM, and "nutup" is not a promise. */
+
+/* ---- the trunk cling: one drawing for the way up, the beat out of
+   sight in the leaves, and the way back down ---- */
+.sai-crit-clingpose{ display:none; }
+.sai-sprite[data-state="nutup"] .sai-crit--squirrel .sai-crit-clingpose,
+.sai-sprite[data-state="takenut"] .sai-crit--squirrel .sai-crit-clingpose,
+.sai-sprite[data-state="nutdown"] .sai-crit--squirrel .sai-crit-clingpose{ display:inline; }
+/* the horizontal rig goes entirely, cheek pouch included — the cling
+   drawing carries its own nut, and two would be one too many */
+.sai-sprite[data-state="nutup"] .sai-crit--squirrel .sai-crit-body,
+.sai-sprite[data-state="nutup"] .sai-crit--squirrel .sai-crit-head,
+.sai-sprite[data-state="nutup"] .sai-crit--squirrel .sai-crit-tail,
+.sai-sprite[data-state="nutup"] .sai-crit--squirrel .sai-crit-leg,
+.sai-sprite[data-state="nutup"] .sai-crit--squirrel .sai-crit-cheeknut,
+.sai-sprite[data-state="takenut"] .sai-crit--squirrel .sai-crit-body,
+.sai-sprite[data-state="takenut"] .sai-crit--squirrel .sai-crit-head,
+.sai-sprite[data-state="takenut"] .sai-crit--squirrel .sai-crit-tail,
+.sai-sprite[data-state="takenut"] .sai-crit--squirrel .sai-crit-leg,
+.sai-sprite[data-state="takenut"] .sai-crit--squirrel .sai-crit-cheeknut,
+.sai-sprite[data-state="nutdown"] .sai-crit--squirrel .sai-crit-body,
+.sai-sprite[data-state="nutdown"] .sai-crit--squirrel .sai-crit-head,
+.sai-sprite[data-state="nutdown"] .sai-crit--squirrel .sai-crit-tail,
+.sai-sprite[data-state="nutdown"] .sai-crit--squirrel .sai-crit-leg,
+.sai-sprite[data-state="nutdown"] .sai-crit--squirrel .sai-crit-cheeknut{ display:none; }
+/* he is off the ground so data-air is set, but bark is not sky */
+.sai-sprite[data-state="nutup"] .sai-crit-root.sai-crit--squirrel,
+.sai-sprite[data-state="takenut"] .sai-crit-root.sai-crit--squirrel,
+.sai-sprite[data-state="nutdown"] .sai-crit-root.sai-crit--squirrel{ animation:none; }
+/* the nut only exists on the way down */
+.cling-nut{ display:none; }
+.sai-sprite[data-carry="nut"] .sai-crit--squirrel .cling-nut{ display:inline; }
+
+/* going up: short fast hitches. The height itself is the sim's z — this
+   is only the body language on top of it */
+.sai-sprite[data-state="nutup"] .sai-crit--squirrel .sai-crit-clingpose{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-sq-haul .32s ease-in-out infinite; }
+@keyframes sai-sq-haul{
+  0%,100%{transform:translateY(1.4px) scaleY(.985);}
+  50%{transform:translateY(-1.4px) scaleY(1.015);}
+}
+/* diagonal pairs, the same gait the bear climbs on — near hand with far
+   foot, then swap. Pure translates, so no transform-box is needed */
+.sai-sprite[data-state="nutup"] .sai-crit--squirrel .cling-arm-near,
+.sai-sprite[data-state="nutup"] .sai-crit--squirrel .cling-leg-far{
+  animation:sai-sq-hitchA .32s ease-in-out infinite; }
+.sai-sprite[data-state="nutup"] .sai-crit--squirrel .cling-arm-far,
+.sai-sprite[data-state="nutup"] .sai-crit--squirrel .cling-leg-near{
+  animation:sai-sq-hitchB .32s ease-in-out infinite; }
+@keyframes sai-sq-hitchA{ 0%,100%{transform:translateY(2.6px);} 50%{transform:translateY(-2.8px);} }
+@keyframes sai-sq-hitchB{ 0%,100%{transform:translateY(-2.8px);} 50%{transform:translateY(2.6px);} }
+.sai-sprite[data-state="nutup"] .sai-crit--squirrel .cling-tail,
+.sai-sprite[data-state="nutdown"] .sai-crit--squirrel .cling-tail{
+  transform-box:fill-box; transform-origin:88% 92%;
+  animation:sai-sq-clingtail .64s ease-in-out infinite; }
+@keyframes sai-sq-clingtail{ 0%,100%{transform:rotate(-3.5deg);} 50%{transform:rotate(4deg);} }
+
+/* in the leaves: both hands working fast at something over his head, and
+   the tail flicking. Almost none of this is visible through the canopy —
+   it is here for the frame he enters on and the frame he leaves on */
+.sai-sprite[data-state="takenut"] .sai-crit--squirrel .cling-arm-near{
+  transform-box:fill-box; transform-origin:5% 85%;
+  animation:sai-sq-canopyreach .26s ease-in-out infinite; }
+.sai-sprite[data-state="takenut"] .sai-crit--squirrel .cling-arm-far{
+  transform-box:fill-box; transform-origin:95% 85%;
+  animation:sai-sq-canopyreach .26s ease-in-out infinite; animation-delay:.13s; }
+@keyframes sai-sq-canopyreach{
+  0%,100%{transform:rotate(-6deg) translateY(1.6px);}
+  50%{transform:rotate(9deg) translateY(-2.6px);}
+}
+.sai-sprite[data-state="takenut"] .sai-crit--squirrel .cling-tail{
+  transform-box:fill-box; transform-origin:88% 92%;
+  animation:sai-sq-clingflick .3s ease-in-out infinite; }
+@keyframes sai-sq-clingflick{ 0%,100%{transform:rotate(-6deg);} 50%{transform:rotate(6.5deg);} }
+
+/* coming down: slower, and pivoting about the SHOULDERS rather than the
+   hips — the weight is on his front end now, which is the whole
+   difference between descending and climbing backwards */
+.sai-sprite[data-state="nutdown"] .sai-crit--squirrel .sai-crit-clingpose{
+  transform-box:fill-box; transform-origin:50% 0%;
+  animation:sai-sq-creep .46s ease-in-out infinite; }
+@keyframes sai-sq-creep{
+  0%,100%{transform:translateY(-1.2px) rotate(-1.4deg);}
+  50%{transform:translateY(1.6px) rotate(1.4deg);}
+}
+.sai-sprite[data-state="nutdown"] .sai-crit--squirrel .cling-arm-near,
+.sai-sprite[data-state="nutdown"] .sai-crit--squirrel .cling-leg-far{
+  animation:sai-sq-hitchB .46s ease-in-out infinite; }
+.sai-sprite[data-state="nutdown"] .sai-crit--squirrel .cling-arm-far,
+.sai-sprite[data-state="nutdown"] .sai-crit--squirrel .cling-leg-near{
+  animation:sai-sq-hitchA .46s ease-in-out infinite; }
+
+/* ---- pre-existing: the cheek pouch is part of the NORMAL head, and the
+   sitting drawing has a nut of its own. Nothing was hiding it, so for the
+   three seconds he sits eating there was a second pouch floating clear of
+   his shoulder. (In the crouch it happened to fall behind the dig body,
+   which is why it never showed there.) ---- */
+.sai-sprite[data-state="nutmunch"] .sai-crit--squirrel .sai-crit-cheeknut{ display:none; }
+
+/* ---- the nut tree, while he is inside it ----
+   The boughs paint over him, so for two seconds there is nothing of him
+   on screen at all. This is what says he is still in there. */
+.forage-canopy[data-shake="1"] .sai-bg-sway{
+  animation:sai-nut-rustle .24s ease-in-out infinite; }
+@keyframes sai-nut-rustle{
+  0%,100%{transform:rotate(-3.4deg) translateY(0);}
+  50%{transform:rotate(3.4deg) translateY(-1.4px);}
+}
+
+/* ---- the larder: four scrapes, capped as they fill ----
+   He fills left to right, so capping the FIRST n of them is the whole of
+   the drawn state and the stock stays one integer. */
+.sai-larder-cap{ display:none; }
+.sai-larder[data-n="1"] .sai-larder-slot:nth-child(-n+1) .sai-larder-cap,
+.sai-larder[data-n="2"] .sai-larder-slot:nth-child(-n+2) .sai-larder-cap,
+.sai-larder[data-n="3"] .sai-larder-slot:nth-child(-n+3) .sai-larder-cap,
+.sai-larder[data-n="4"] .sai-larder-slot:nth-child(-n+4) .sai-larder-cap{ display:inline; }
+/* the dry leaf he weights each cap with, lifting in the draught */
+.sai-larder-cap .cap-leaf{
+  transform-box:fill-box; transform-origin:20% 90%;
+  animation:sai-larder-leaf 4.6s ease-in-out infinite; }
+.sai-larder-slot:nth-child(2) .cap-leaf{ animation-delay:.9s; }
+.sai-larder-slot:nth-child(3) .cap-leaf{ animation-delay:1.9s; }
+.sai-larder-slot:nth-child(4) .cap-leaf{ animation-delay:2.8s; }
+@keyframes sai-larder-leaf{
+  0%,100%{transform:rotate(-4deg);} 50%{transform:rotate(5deg) translateY(-.6px);}
+}
+
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-state="nutup"] .sai-crit--squirrel .sai-crit-clingpose,
+  .sai-sprite[data-state="nutup"] .sai-crit--squirrel .cling-arm-near,
+  .sai-sprite[data-state="nutup"] .sai-crit--squirrel .cling-arm-far,
+  .sai-sprite[data-state="nutup"] .sai-crit--squirrel .cling-leg-near,
+  .sai-sprite[data-state="nutup"] .sai-crit--squirrel .cling-leg-far,
+  .sai-sprite[data-state="nutup"] .sai-crit--squirrel .cling-tail,
+  .sai-sprite[data-state="takenut"] .sai-crit--squirrel .cling-arm-near,
+  .sai-sprite[data-state="takenut"] .sai-crit--squirrel .cling-arm-far,
+  .sai-sprite[data-state="takenut"] .sai-crit--squirrel .cling-tail,
+  .sai-sprite[data-state="nutdown"] .sai-crit--squirrel .sai-crit-clingpose,
+  .sai-sprite[data-state="nutdown"] .sai-crit--squirrel .cling-arm-near,
+  .sai-sprite[data-state="nutdown"] .sai-crit--squirrel .cling-arm-far,
+  .sai-sprite[data-state="nutdown"] .sai-crit--squirrel .cling-leg-near,
+  .sai-sprite[data-state="nutdown"] .sai-crit--squirrel .cling-leg-far,
+  .sai-sprite[data-state="nutdown"] .sai-crit--squirrel .cling-tail,
+  .forage-canopy[data-shake="1"] .sai-bg-sway,
+  .sai-larder-cap .cap-leaf{ animation:none; }
+}

@@ -1308,6 +1308,82 @@ function SquirrelDraw({ uid }) {
           <path d="M 80.4 52 l -.8 -2.2 M 83.2 51.8 l -.2 -2.4" stroke={F[2]} strokeWidth="1.1" strokeLinecap="round" fill="none" />
         </g>
       </g>
+      {/* ---- TRUNK-CLING POSE (nutup, takenut, nutdown) ----
+          Going up the nut tree, seen from behind and a little to the
+          right: a narrow back squared to the bark, all four feet splayed
+          round it, the plume held UP along the trunk. That last is not a
+          stylization — a tail hanging down off a rump at y 92 runs sixty
+          units past the ground line and there is nowhere in the box to
+          put it, and a climbing squirrel carries it up over his back
+          anyway. The horizontal rig cannot be stood on end (rotating it
+          reads as a squirrel lying on his side in mid-air), so the climb
+          is drawn out in full — the bear's trunk-hug trick.
+
+          TWO NUMBERS HERE ARE LOAD-BEARING: the ear tips top out at y 30
+          and the hind grip bottoms at y 100. The ethogram measures the
+          height he stops at from exactly those, so that his ears finish
+          just under the crown and his feet just inside the leaf line.
+          Move either and he stops in the wrong place. */}
+      <g className="sai-crit-clingpose">
+        {/* the plume, dropped and rolled in so it lies along the bark
+            instead of standing off it. Inner static transform re-aims the
+            tail he already has; the animated group carries none */}
+        <g className="cling-tail"><g transform="translate(-1 7) rotate(-9 50 86)">
+          <path d="M 48 88 C 30 90 14 80 12 60 C 10 41 22 26 40 25 C 52 24 60 33 58 43 C 56 51 47 54 41 49 C 36 45 36 38 41 35 C 34 37 30 44 32 52 C 34 62 42 68 50 71 C 54 73 55 80 52 84 Z" fill={`url(#${uid}f)`} />
+          <path d="M 12 60 C 10 42 22 27 39 25.5 C 50 25 57 32 56 41 L 51 38.5 C 50 33 46 29 39.5 29.5 C 26 30.5 15 44 16.5 60 Z" fill={frost} opacity=".85" />
+        </g></g>
+        {/* far side first, in the deep shade — forepaw high on the bark,
+            hind foot cocked out under the hip. Pale claws: on a trunk the
+            grip is the whole story, so it is the one thing picked out */}
+        <g className="cling-arm-far">
+          <path d="M 56 55 C 49 53 43 49 40 43 C 36.5 48 37 56 41 60 C 45 64 51 63 56 61 Z" fill={F[2]} />
+          <path d="M 40.4 42.4 l -3.2 -2.4 M 38 46.6 l -3.6 -1.2 M 37.4 51 l -3.6 0" stroke={belly} strokeWidth="1.5" fill="none" strokeLinecap="round" opacity=".85" />
+        </g>
+        <g className="cling-leg-far">
+          <path d="M 57 82 C 49 84 42 88 39 94 C 45 97.5 53 95.5 58 90 Z" fill={F[2]} />
+          <path d="M 39.4 94.6 l -3.2 2 M 43 96.8 l -2.6 2.4 M 47.4 97.8 l -1.8 2.2" stroke={belly} strokeWidth="1.5" fill="none" strokeLinecap="round" opacity=".85" />
+        </g>
+        {/* the back: wide at the shoulders, tucked at the waist, the
+            spine a soft dark line straight up the middle */}
+        <g className="sai-crit-clingback">
+          <path d="M 50 92 C 46 78 47 58 53 47 C 57 40 68 40 72 47 C 78 58 79 78 75 92 C 67 96 58 96 50 92 Z" fill={`url(#${uid}f)`} />
+          <path d="M 62 44 C 65 60 65.5 78 63.5 94" stroke="#5f5952" strokeWidth="3.4" fill="none" opacity=".18" strokeLinecap="round" />
+          <ellipse cx="55" cy="60" rx="6" ry="14" fill={frost} opacity=".16" />
+        </g>
+        {/* near side, in the light */}
+        <g className="cling-leg-near">
+          <path d="M 63 82 C 71 84 78 88 81 94 C 75 97.5 67 95.5 62 90 Z" fill={F[1]} />
+          <path d="M 80.6 94.6 l 3.2 2 M 77 96.8 l 2.6 2.4 M 72.6 97.8 l 1.8 2.2" stroke={belly} strokeWidth="1.5" fill="none" strokeLinecap="round" opacity=".9" />
+        </g>
+        <g className="cling-arm-near">
+          <path d="M 64 55 C 71 53 77 49 80 43 C 83.5 48 83 56 79 60 C 75 64 69 63 64 61 Z" fill={F[1]} />
+          <path d="M 79.6 42.4 l 3.2 -2.4 M 82 46.6 l 3.6 -1.2 M 82.6 51 l 3.6 0" stroke={belly} strokeWidth="1.5" fill="none" strokeLinecap="round" opacity=".9" />
+        </g>
+        {/* head tipped up the trunk, one cheek showing. Ears drawn before
+            the skull so they rise out from behind it */}
+        <g className="cling-head">
+          <g className="sai-crit-ear sai-crit-ear-l">
+            <path d="M 56 46 C 52.5 39 52.5 32.5 55.5 30 C 58.5 33 59.5 39 58.5 46 Z" fill={F[1]} />
+            <path d="M 56.6 43 C 55.2 38 55.6 34.2 57.2 32.6 C 58.6 34.8 58.8 39 58 43 Z" fill="#b8a89c" opacity=".8" />
+          </g>
+          <g className="sai-crit-ear sai-crit-ear-r">
+            <path d="M 66 46 C 64 38.5 65.5 32 68.6 30 C 71 33.4 70.8 39.4 69 46 Z" fill={F[0]} />
+            <path d="M 66.8 43 C 65.6 38.4 66.6 34.4 68.4 33 C 69.6 35.2 69.4 39.2 68.6 43 Z" fill="#c9b8ab" opacity=".8" />
+          </g>
+          <circle cx="62.5" cy="52" r="12.5" fill={`url(#${uid}f)`} />
+          <ellipse cx="72" cy="49" rx="6.4" ry="5.2" fill={belly} />
+          <path d="M 75.6 45.4 l 3.4 2.2 -3 2.4 -3 -2.2 Z" fill="#8c6a5a" />
+          <path d="M 78.4 48 l 9.6 -2 M 78.4 50.2 l 9.6 .6" stroke="#d8d2ca" strokeWidth="1" strokeLinecap="round" />
+          <FaceKit lid={F[1]} e1={[56.5, 50]} e2={[68, 47.5]} er={2.9} iris={ink} mouths={false} />
+        </g>
+        {/* the nut he is bringing down. The normal rig's cheek pouch is
+            hidden with the rest of that rig, so this is the only one on
+            screen while he is on the bark */}
+        <g className="cling-nut">
+          <ellipse cx="77.6" cy="52.6" rx="4.2" ry="5" fill="#7a5227" transform="rotate(14 77.6 52.6)" />
+          <ellipse cx="77.4" cy="50.6" rx="1.9" ry="1.6" fill="#a9793f" />
+        </g>
+      </g>
     </g>
   );
 }

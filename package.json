@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test:bear": "node tests/ethogram.mjs",
     "test:forage": "node tests/forage.mjs",
-    "test:gait": "node tests/gait.mjs"
+    "test:gait": "node tests/gait.mjs",
+    "test:cadence": "node tests/cadence.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

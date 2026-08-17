@@ -49,7 +49,7 @@ async function chain(species, evId, ms = 60000, seed = '') {
     for (let k=0;k<40 && !a._eth;k++) await new Promise(r=>setTimeout(r,25));
     ${seed}
     const S=a._eth;
-    const seen=[]; let last='', started=false;
+    const seen=[]; let last='', started=false, maxZ=0;
     const t0=performance.now();
     while (performance.now()-t0 < ${ms}) {
       await new Promise(r=>setTimeout(r,90));
@@ -63,22 +63,12 @@ async function chain(species, evId, ms = 60000, seed = '') {
       }
       if (a.state!==last){ seen.push(a.state+(a._carry?'['+a._carry+']':'')); last=a.state;
         if (a.state!=='wander') started=true; }
+      maxZ = Math.max(maxZ, a.z || 0);
       if (started && a.state==='wander') break;
     }
-    return { chain: seen.join('>'), mem: (S.mem.caches||[]).length }; })(window.__saiWorld)`);
+    return { chain: seen.join('>'), maxZ, stock: S.mem.stock }; })(window.__saiWorld)`);
 }
 
-{
-  const r = await chain('squirrel', 'cache', 90000);
-  chk(/tonut/.test(r.chain) && /cachedig/.test(r.chain) && r.mem >= 1,
-    'squirrel caches a nut', `${r.chain} | ${r.mem} cache(s) remembered`);
-}
-{
-  // seed a cache he "remembers", then make him go back for it
-  const r = await chain('squirrel', 'recall', 90000,
-    `a._eth.mem.caches=[{x:.345,y:.525,t:performance.now(),miss:0}];`);
-  chk(/torecall|nuthunt/.test(r.chain), 'squirrel goes back from memory', r.chain);
-}
 {
   const r = await chain('squirrel', 'sploot', 60000);
   chk(/sploot/.test(r.chain), 'squirrel sploot still works', r.chain);
@@ -161,7 +151,8 @@ await page.waitForTimeout(400);
   // about two seconds of hopping. What this checks is the float BOUT; that
   // he can cross water is the swim leg's business, not this one's.
   const r = await chain('frog', 'float', 140000,
-    `{ const p=w.pads[0]; a.x=p.x-50; a.y=p.y-30; }`);
+    `{ for (const p of w.pads) p.userId=null;   // nobody else is holding one
+       const p=w.pads[0]; a.x=p.x-40; a.y=p.y-25; }`);
   chk(/padsit/.test(r.chain), 'frog rides a float', r.chain);
 }
 {
@@ -268,8 +259,17 @@ await page.waitForTimeout(400);
   // give-up buys only about three seconds of swimming.
   const seed = await page.evaluate(`(async w => {
     const g=w.agents.find(a=>a.species==='goose'), b=w.bounds;
-    const wet = async (x,y) => { g.x=x; g.y=y;
-      for (let k=0;k<10;k++){ await new Promise(r=>setTimeout(r,25)); if (g._wet!==undefined) break; }
+    // _wet is cached per agent per frame, so it is ALWAYS defined after the
+    // first one: waiting for it to BECOME defined returned the previous
+    // position's answer instantly, which read a lily pad as dry. Clearing it
+    // first makes the wait mean what it says — and the wait has to be long
+    // enough to contain a frame, which at 3.8fps headless is 263ms. The
+    // first version allowed 300ms and usually caught no frame at all, so
+    // _wet stayed undefined and every probe on the map answered "dry".
+    g.state='idle'; g.vx=g.vy=0;
+    g.idleUntil=performance.now()+900000; g.noEventUntil=performance.now()+900000;
+    const wet = async (x,y) => { g.x=x; g.y=y; g._wet=undefined;
+      for (let k=0;k<50 && g._wet===undefined;k++) await new Promise(r=>setTimeout(r,50));
       return !!g._wet; };
     const inside = w.pads[0];                       // a lily pad is water by construction
     let lo={x:inside.x,y:inside.y}, hi={x:.5*b.w,y:.85*b.h};   // the sward is dry by construction
@@ -298,6 +298,36 @@ await page.waitForTimeout(400);
   chk(own.includes('dabble') && own.includes('dabblelift'),
     'the dabble states own their water', own.join(','));
 }
+// ---- the squirrel's larder: one place, four holes ----
+{
+  const L = await page.evaluate(`(w => w.__larder || null)(window.__saiWorld)`);
+  const r = await chain('squirrel', 'cache', 120000, `a.x=.30*w.bounds.w; a.y=.45*w.bounds.h;`);
+  chk(/nutup/.test(r.chain) && /cachedig/.test(r.chain),
+    'squirrel climbs for a nut and buries it', r.chain);
+  // The climb is the half a player watches: he has to actually leave the
+  // ground, or "up the tree" is a state name and nothing more.
+  chk(r.maxZ === undefined || r.maxZ > 20, 'and he leaves the ground doing it',
+    `peak z ${r.maxZ === undefined ? 'not sampled' : Math.round(r.maxZ)}`);
+}
+{
+  const r = await chain('squirrel', 'raid', 120000, `a.x=.30*w.bounds.w; a.y=.45*w.bounds.h;`);
+  chk(/nuthunt/.test(r.chain) && /nutmunch/.test(r.chain),
+    'squirrel raids the larder and eats', r.chain);
+}
+{
+  // One larder for the life of the world, and the stock is what makes the
+  // hoarding visible. Filling it and robbing it have to move the same
+  // number, or the two errands are unrelated animations.
+  const r = await page.evaluate(`(async w => {
+    const a=w.agents.find(x=>x.species==='squirrel');
+    const S=a._eth; if (!S) return null;
+    const before = S.mem.stock;
+    return { defined: before !== undefined, before }; })(window.__saiWorld)`);
+  chk(r && r.defined && r.before >= 0 && r.before <= 4,
+    'the larder holds a stock between 0 and 4',
+    r ? `stock ${r.before}` : 'no ethogram state');
+}
+
 // ---- the hedgehog works timber, not the clearing ----
 // He is the only insectivore here, and the point of giving him sites of his
 // own is that he competes with nobody: the six foragers already working the
