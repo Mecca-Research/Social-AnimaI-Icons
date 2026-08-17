@@ -2754,7 +2754,7 @@ function stepWorld(world, cfg, dt) {
         const cx = (def.hasWater ? LAKE.cx : def.pool.x + def.pool.w / 2) * bounds.w;
         const cy = (def.hasWater ? LAKE.cy : def.pool.y + def.pool.h / 2) * bounds.h;
         const ux = a.x - cx, uy = a.y - cy; const d = Math.hypot(ux, uy) || 1;
-        const sp = cfg.speed * 0.6;
+        const sp = gait(a, ethoCtx, 0.45);   // heading somewhere on purpose
         a.vx = (ux / d) * sp; a.vy = (uy / d) * sp;
       } else {
         // the dog runs around: an occasional short sprint (~7% of wander time)
@@ -2774,13 +2774,22 @@ function stepWorld(world, cfg, dt) {
             }
           }
         }
-        // plain wandering: minimum cruise + the odd pause to sniff around
+        // Plain wandering: the jitter still does the STEERING, but the speed
+        // is the species' own. This used to floor every animal at 22 px/s and
+        // leave the clamp to set the top, which made a turtle and a wolf amble
+        // at exactly the same pace — and wandering is where animals spend most
+        // of their time, so it was the one state the gait core never reached.
+        //
+        // The magnitude is assigned rather than eased toward, for the same
+        // reason gait applies its bursts after its own low-pass: a hop run
+        // through a second filter here comes out as a slide.
         if (Math.random() < 0.02) { a.vx += rand(-15, 15); a.vy += rand(-15, 15); }
         if (Math.random() < 0.0008) { a.state = "idle"; a.vx = a.vy = 0; a.idleUntil = now + rand(900, 2200); }
-        const wsp = Math.hypot(a.vx, a.vy);
-        if (wsp < 18) {
+        if (now >= (a._sprintUntil || 0)) {          // the dog's sprint owns its own speed
+          const cruise = gait(a, ethoCtx, 0.30);
+          const wsp = Math.hypot(a.vx, a.vy);
           const ang = wsp > 0.5 ? Math.atan2(a.vy, a.vx) : Math.random() * Math.PI * 2;
-          a.vx = Math.cos(ang) * 22; a.vy = Math.sin(ang) * 22;
+          a.vx = Math.cos(ang) * cruise; a.vy = Math.sin(ang) * cruise;
         }
       }
     }

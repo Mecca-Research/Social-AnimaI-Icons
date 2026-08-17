@@ -46,7 +46,11 @@
  *      on arrival hand over to `begin`. Give up after `giveUp` ms.
  *
  *        goto: { state: "toberry", pick: (a,c) => nearestSite(a,c,"berry"),
- *                within: 20, giveUp: 22000, speed: 1 }
+ *                within: 20, giveUp: 22000, urgency: 0.45 }
+ *
+ *      State the URGENCY, not a speed. How fast 0.45 actually is belongs to
+ *      the animal — see the ladder in Gait.js. A flat multiplier here is
+ *      what used to send a turtle across the map at a wolf's pace.
  *
  * ---------------------------------------------------------------------
  * ADDING A BEHAVIOR to a species that already has an ethogram: append one
@@ -552,7 +556,7 @@ const bushWest = (f) => (f ? { x: f.px - 30, y: f.py + 6, site: f } : null);
 // Both postures walk to the same place. They need separate walk states only
 // because the engine claims one goto state per variant — by the time he sets
 // off he has already decided whether he is after the low fruit or the high.
-const STRIP_GOTO = { within: 22, giveUp: 26000, speed: 0.82, none: 14000, lost: 14000,
+const STRIP_GOTO = { within: 22, giveUp: 26000, urgency: 0.40, none: 14000, lost: 14000,
   pick: (a, c) => bushWest(nearestSite(a, c, "berry")) };
 
 function beginStrip(a, c, g, state, branches) {
@@ -691,7 +695,7 @@ defineEthogram("bear", {
             a.swimTarget = c.lakePoint(c.bounds, c.rand(0, Math.PI * 2), Math.sqrt(Math.random()) * 0.7);
           }
           const dx = a.swimTarget.x - a.x, dy = a.swimTarget.y - a.y, d = Math.hypot(dx, dy) || 1;
-          const sp = c.cfg.speed * 0.5;
+          const sp = gait(a, c, 0.30);          // an unhurried cruise of the shallows
           a.vx = (dx / d) * sp; a.vy = (dy / d) * sp;
           if (c.now >= a.stateUntil) { a.state = "fishdive"; a._diveN = 1; a.stateUntil = c.now + 1100; a.vx = 0; a.vy = 0; }
         } else if (a.state === "fishdive" || a.state === "fishwait") {
@@ -716,7 +720,10 @@ defineEthogram("bear", {
           const t = a._fishTarget;
           if (!t) { endEvent(a, c); return; }
           const dx = t.x - a.x, dy = t.y - a.y, d = Math.hypot(dx, dy) || 1;
-          const sp = c.cfg.speed * (wet ? 0.6 : 0.9);
+          // A bear with a fish in his mouth is on an errand, not a stroll. The
+          // wet/dry factor that used to be written here is the gait core's
+          // job now — it already knows a bear swims at 0.62 of his walk.
+          const sp = gait(a, c, 0.45);
           a.vx = (dx / d) * sp; a.vy = (dy / d) * sp;
           if (d < 16) { a.state = "fisheat"; a.stateUntil = c.now + 2600; a.vx = 0; a.vy = 0; }
         } else if (a.state === "fisheat") {
@@ -872,7 +879,7 @@ defineEthogram("squirrel", {
       every: [30000, 55000], chance: 0.60, cool: 19000,
       states: ["nuthunt", "unearth", "nutmunch"],
       goto: {
-        state: "torecall", within: 16, giveUp: 20000, speed: 1,
+        state: "torecall", within: 16, giveUp: 20000, urgency: 0.45,
         none: 9000,        // nothing buried yet — there is nothing to go back for
         pick: (a, c) => recallCache(a, c),
       },
@@ -928,7 +935,7 @@ defineEthogram("squirrel", {
       every: [40000, 70000], chance: 0.55, cool: 24000,
       states: ["takenut", "tocache", "cachedig", "cachepat"],
       goto: {
-        state: "tonut", within: 20, giveUp: 20000, speed: 1, none: 8000,
+        state: "tonut", within: 20, giveUp: 20000, urgency: 0.45, none: 8000,
         pick: (a, c) => siteGoal(nearestSite(a, c, "nut")),
       },
       begin(a, c) {
@@ -1095,7 +1102,7 @@ function driveRaccoon(a, c, S) {
 // Both approaches want the same bush; only the state they walk in differs,
 // and they need separate ones because the engine claims a goto state per
 // variant.
-const RAC_TOBERRY = { within: 24, giveUp: 20000, speed: 1, none: 9000, lost: 9000,
+const RAC_TOBERRY = { within: 24, giveUp: 20000, urgency: 0.45, none: 9000, lost: 9000,
   pick: (a, c) => nearestForage(a, c, "berry") };
 
 /**
@@ -1251,7 +1258,7 @@ defineEthogram("deer", {
       states: ["browsepick", "browsereach", "browsechew", "browsealert"],
       goto: {
         state: "browsewalk", pick: deerShrub, within: 24,
-        giveUp: 22000, speed: 0.95, none: 9000, lost: 12000,
+        giveUp: 22000, urgency: 0.45, none: 9000, lost: 12000,
       },
       begin(a, c, S, g) {
         a.vx = 0; a.vy = 0;
@@ -1374,7 +1381,7 @@ defineEthogram("skunk", {
       goto: {
         // 30 stops him at the drip line rather than at the stem: fallen
         // fruit lies in a ring around a bush, not underneath its middle
-        state: "tofloor", within: 30, giveUp: 22000, speed: 1, none: 9000,
+        state: "tofloor", within: 30, giveUp: 22000, urgency: 0.45, none: 9000,
         pick: (a, c) => siteGoal(nearestOfKinds(a, c, ["berry", "nut"])),
       },
       begin(a, c, S, g) {
@@ -1426,7 +1433,7 @@ defineEthogram("skunk", {
       every: [38000, 66000], chance: 0.35, miss: 16000, cool: 34000,
       states: ["clawscrape"],
       goto: {
-        state: "toscrape", within: 20, giveUp: 20000, speed: 1, none: 10000,
+        state: "toscrape", within: 20, giveUp: 20000, urgency: 0.45, none: 10000,
         pick: (a, c) => siteGoal(nearestOfKinds(a, c, ["soil", "nut"])),
       },
       begin(a, c) {
@@ -1471,7 +1478,7 @@ function foxWindfall(a, c) {
 
 // Both variants walk to the same bush and only the state they walk in
 // differs, because the engine claims a goto state per variant.
-const FOX_TOBERRY = { within: 22, giveUp: 16000, speed: 1, none: 11000, lost: 8000,
+const FOX_TOBERRY = { within: 22, giveUp: 16000, urgency: 0.45, none: 11000, lost: 8000,
   pick: (a, c) => foxWindfall(a, c) };
 
 /**
@@ -1604,8 +1611,9 @@ function driveFloat(a, c, S) {
   endEvent(a, c, { reroll: true, quiet: 800 });
   // a push off the float rather than a leap — he slides back into the water
   const ang = c.rand(0, Math.PI * 2);
-  a.vx = Math.cos(ang) * c.cfg.speed * 0.5;
-  a.vy = Math.sin(ang) * c.cfg.speed * 0.5;
+  const sp = gait(a, c, 0.15);                  // a push, not a leap
+  a.vx = Math.cos(ang) * sp;
+  a.vy = Math.sin(ang) * sp;
 }
 
 /**

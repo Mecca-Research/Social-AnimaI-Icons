@@ -164,5 +164,12 @@ export const rescueReach = (a) => (SPEED[a.species] || GAIT_DEF).reach;
 // Species-aware replacement for the vmul ladder's ceiling.
 export function speedCap(a, cfg) {
   const g = SPEED[a.species] || GAIT_DEF;
-  return cfg.speed * g.base * Math.max(g.top, g.bK) * (a._wet ? g.water : 1) * 1.30;
+  // top and bK MULTIPLY — a burst is a factor on the flat-out pace, not an
+  // alternative to it. Taking the larger of the two put the ceiling below
+  // what gait() itself emits, so the clamp downstream quietly clipped the
+  // burst back off every species that had one: the cougar lost a third of
+  // its kick, the squirrel a third of its dart. The band rides on top of
+  // both, hence the (1 + wob).
+  return cfg.speed * g.base * g.top * g.bK * (1 + g.wob) * 1.10 *
+    (a._wet ? g.water : 1);
 }

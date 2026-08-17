@@ -143,6 +143,26 @@ chk(wet.turtle.wet > wet.turtle.dry && wet.beaver.wet > wet.beaver.dry,
 chk(wet.bear.wet < wet.bear.dry && wet.fox.wet < wet.fox.dry,
   'land animals are slower in the water', `bear ${wet.bear.dry}->${wet.bear.wet}, fox ${wet.fox.dry}->${wet.fox.wet}`);
 
+// The velocity clamp downstream must not undo the gait core. It used to take
+// max(top, bK) where the two multiply, so the ceiling sat BELOW what gait()
+// itself emits and the clamp quietly clipped the burst back off six of the
+// fourteen — the cougar lost a third of its kick. Nothing caught it, because
+// every check upstream asked gait() and gait() was right.
+const cap = await page.evaluate(`(() => { const {gait,SPEED,speedCap}=window.__saiGait;
+  const cfg={speed:80}; const bad=[];
+  for (const sp of Object.keys(SPEED)) {
+    const a={species:sp,x:0,y:0,_wet:false,_gph:1};
+    const ctx={now:performance.now(),dt:1/60,cfg,isWet:()=>false};
+    let peak=0;
+    for(let i=0;i<300;i++){ ctx.now+=16.7; a._ex=0; a._pace=1;
+      a._burstUntil=ctx.now+SPEED[sp].bMs; peak=Math.max(peak,gait(a,ctx,1.0)); }
+    const c=speedCap(a,cfg);
+    if (peak > c) bad.push(sp+' emits '+Math.round(peak)+' but is capped at '+Math.round(c));
+  }
+  return bad; })()`);
+chk(cap.length === 0, 'the velocity clamp lets full tilt through',
+  cap.length ? cap.slice(0, 3).join('; ') : 'no species is clipped by its own cap');
+
 // exertion: a sustained sprint has to cost something
 const ex = await page.evaluate(`(() => { const {gait}=window.__saiGait, w=window.__saiWorld;
   const cfg=w.cfg||{speed:80};
