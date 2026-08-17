@@ -2047,3 +2047,177 @@ defineEthogram("beaver", {
     },
   ],
 });
+
+// ---------------------------------------------------------------------
+//  THE HEDGEHOG — the only one here who eats animals.
+//
+//  Every other forager in this world is working a crop: the fruit, the
+//  mast, the browse, and the soft ground under them. He is after beetles,
+//  worms and snails, and none of those are in the clearing — they are in
+//  the wet rot of fallen timber and in the packed earth around a tree's
+//  surface roots. So he gets two site kinds of his own at the margin of
+//  the map and competes with nobody: the six foragers already here have
+//  no reason ever to look at a log.
+//
+//  He hunts by nose and ear rather than by sight, and that is the whole
+//  shape of his behavior. Every bout opens standing still with his head
+//  down, because a hedgehog does not spot food and walk to it — he walks
+//  until he smells it. And every bout ends with his head somewhere you
+//  cannot see it, which is why all three of his poses are drawn around a
+//  hidden face rather than around an expression.
+// ---------------------------------------------------------------------
+
+/**
+ * Where he STANDS to work a site, which is never the site itself. A root
+ * has to be dug at from one side and a log gone into from above, and
+ * walking to the marker would leave him standing in the middle of the
+ * timber with his own drawn wood on top of the drawn wood underneath.
+ * The offset rides in the goal so the engine still claims the real site.
+ */
+function hogAim(a, c, kind, dx, dy) {
+  const f = nearestSite(a, c, kind);
+  return f ? { x: f.px + dx, y: f.py + dy, site: f } : null;
+}
+
+/**
+ * The opening beat of every root bout: planted, nose down, ears working.
+ * It is short — under two and a half seconds — because its job is to say
+ * "he found this by smell" before the digging starts, not to be a pause.
+ */
+function hogCast(a, c, dig) {
+  a.vx = 0; a.vy = 0;
+  a._faceDir = 1;          // he works INTO the root; the poses face right
+  a._hogDig = dig;
+  a.state = "hhsnuff";
+  a.stateUntil = c.now + c.rand(1500, 2400);
+}
+
+/**
+ * Both root variants run this. The cast-about state belongs to the first
+ * variant and the second sets it anyway: dispatch is by state name, so
+ * the engine hands the frame to whichever variant owns "hhsnuff" and this
+ * function reads `_hogDig` to find out which dig it is running. Neither
+ * variant has to know the other exists — the raccoon's climb does the
+ * same thing to reach the states below it.
+ */
+function driveHogRoot(a, c) {
+  a.vx = 0; a.vy = 0;
+  if (a.state === "hhsnuff") {
+    if (c.now < a.stateUntil) return;
+    a.state = a._hogDig;
+    a.stateUntil = c.now + c.rand(4600, 7000);
+    return;
+  }
+  // The dig IS the meal — his face is in the ground for the whole of it,
+  // so unlike the log there is nothing to come back out holding. Ending
+  // on the dig is what keeps the two bouts from reading as the same one.
+  if (c.now < a.stateUntil) return;
+  a._faceDir = 0;
+  endEvent(a, c, { reroll: true, quiet: 1000, stop: true });
+}
+
+// Both root variants want the same site and differ only in where they
+// stand at it, so everything except the aim and the goto state is shared.
+const HOG_TOROOT = { within: 15, giveUp: 22000, none: 9000, lost: 9000,
+  // Purposeful, not hurried: he has smelled something and he means to get
+  // there, but this is the one animal in the world with no predator worth
+  // running from and no rival for what he eats.
+  urgency: 0.38 };
+
+defineEthogram("hedgehog", {
+  // He is not in this world's swim table at all, so the shoreline is a
+  // wall and tier 1 has one answer. The dwell window still earns its
+  // keep: it is what paces the quiet trundling between bouts.
+  domainOf: () => "land",
+  domains: { land: { share: 1, dwell: [16000, 30000] } },
+
+  // A drag or a fight can lift him out of a bout with his head still
+  // notionally in a log. The claim, the mouthful and the forced facing
+  // all have to be handed back here or that log stays booked against him
+  // and he spends the rest of the session unable to turn around.
+  tick(a, c, S) {
+    if (S.claim) releaseClaim(a, S);
+    if (a._faceDir) a._faceDir = 0;
+    if (a._carry) a._carry = null;
+  },
+
+  events: [
+    // ---- THE ROOTS: two ways at the same root ------------------------
+    // An urge every 30-52s taken a bit over half the time works out at a
+    // bout every ninety seconds or so, of which about eight seconds is
+    // spent stationary. That is deliberately just under the skunk, who is
+    // this world's most frequent forager and should stay so.
+    {
+      id: "roots", domain: "land", trigger: "seek",
+      every: [30000, 52000], chance: 0.55, miss: 11000, cool: 26000,
+      variants: [
+        {
+          // UNDER IT — the classic: side on, rump up, snout jammed into
+          // the gap where the root goes back into the soil.
+          id: "hogunder", w: 1,
+          // the cast-about is claimed here and shared with the bore below
+          states: ["hhsnuff", "rootdig"],
+          goto: { state: "hhtoroot", ...HOG_TOROOT,
+            // west of the root and a touch below it, so he ends the walk
+            // already on the side he digs from and facing the right way
+            pick: (a, c) => hogAim(a, c, "root", -34, 4) },
+          begin(a, c) { hogCast(a, c, "rootdig"); },
+          drive: driveHogRoot,
+        },
+        {
+          // INTO IT — head first into the root's underside from the near
+          // face, which puts the camera behind him for the whole bout.
+          // Evenly weighted with the other: which one he does is decided
+          // by where the beetles are, and he cannot know that in advance.
+          id: "hogbore", w: 1,
+          states: ["rootbore"],
+          goto: { state: "hhtobore", ...HOG_TOROOT,
+            // a body length in FRONT of the marker — nearer the camera —
+            // so the root is between him and the rest of the map and his
+            // own drawn root lands over the site's, not beside it
+            pick: (a, c) => hogAim(a, c, "root", -2, 8) },
+          begin(a, c) { hogCast(a, c, "rootbore"); },
+          drive: driveHogRoot,
+        },
+      ],
+    },
+
+    // ---- THE LOG: in at the top, and something to show for it --------
+    // Rarer and longer than the root work, because it is the bout with a
+    // payoff at the end and a payoff every ninety seconds is a habit
+    // rather than a find. He keeps the log claimed through the chew: he
+    // is still sitting on it, and a second animal walking into him there
+    // would be the one place in this world where two sprites overlap.
+    {
+      id: "logs", domain: "land", trigger: "seek",
+      every: [40000, 68000], chance: 0.45, miss: 14000, cool: 30000,
+      states: ["logdive", "logchew"],
+      goto: {
+        state: "hhtolog", within: 13, giveUp: 24000, none: 10000, lost: 10000,
+        urgency: 0.30,     // a longer walk, and nothing at the end of it is running away
+        // 25px NORTH of the marker. That is not a stylistic offset: it is
+        // what lands the top face of the log he carries in his own pose on
+        // the top face of the log drawn at the site, so the two read as one
+        // piece of wood. See the note in the pose art.
+        pick: (a, c) => hogAim(a, c, "log", 0, -25),
+      },
+      begin(a, c) {
+        a.vx = 0; a.vy = 0;
+        a._faceDir = 1;
+        a.state = "logdive"; a.stateUntil = c.now + c.rand(4400, 6200);
+      },
+      drive(a, c, S) {
+        a.vx = 0; a.vy = 0;
+        if (a.state === "logdive") {
+          if (c.now < a.stateUntil) return;
+          a._carry = "grub";                 // he backs out with it in his jaws
+          a.state = "logchew"; a.stateUntil = c.now + c.rand(2600, 3600);
+          return;
+        }
+        if (c.now < a.stateUntil) return;
+        a._faceDir = 0;
+        endEvent(a, c, { reroll: true, quiet: 1200, stop: true });
+      },
+    },
+  ],
+});

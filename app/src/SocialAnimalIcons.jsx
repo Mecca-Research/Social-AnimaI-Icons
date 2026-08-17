@@ -239,6 +239,28 @@ const FORAGE_SITES = [
   // bare soft ground: caches and rooting
   { x: .345, y: .525, s: 1.00, kind: "soil" },
   { x: .385, y: .335, s: 0.95, kind: "soil" },
+
+  // ---- the hedgehog's ground: fallen timber and surface roots ---------
+  // Deliberately OUT of the clearing. He eats beetles, worms and snails,
+  // which live in rotten wood and in the packed earth a root heaves up —
+  // so putting him on the berry ground would be a seventh forager on the
+  // same sixteen sites eating something none of the other six can see.
+  //   log   a big rotten trunk: he goes in through the hole in the top
+  //   root  a surface root: he digs under it, or into its bottom edge
+  // `dir` mirrors the art (-1 flips it), so each root can point its high
+  // end at the trunk it plausibly belongs to.
+  //
+  // Every position was checked against the lake, the four trees, the
+  // sixteen existing sites and the screen edges at 1280x720, 1440x900,
+  // 1024x640, 1600x820, 1000x800 and 1920x1000. Worst case across all
+  // six: 106px to a trunk, 116px to an existing site, 185px between two
+  // of these, 96px to an edge, and a 70px approach ring that never gets
+  // nearer the lake than rho 1.78 (the spawn guard bites at 1.12).
+  { x: .400, y: .845, s: 1.00, kind: "log",  dir:  1 },
+  { x: .600, y: .775, s: 0.92, kind: "log",  dir: -1 },
+  { x: .185, y: .690, s: 1.00, kind: "root", dir: -1 },
+  { x: .170, y: .150, s: 0.90, kind: "root", dir: -1 },
+  { x: .775, y: .700, s: 1.05, kind: "root", dir:  1 },
 ];
 const FORAGE_REACH = 26;   // how close counts as "at" a site
 function ForageLayer({ bounds, sites }) {
@@ -251,7 +273,8 @@ function ForageLayer({ bounds, sites }) {
           pointerEvents: "none", transform: `translate(-50%,-100%) scale(${f.s})`,
           transformOrigin: "50% 100%" }}>
           <svg width="96" height="104" viewBox="-48 -88 96 104" style={{ display: "block", overflow: "visible" }}>
-            <ellipse cx="2" cy="9" rx={f.kind === "soil" ? 30 : 26} ry="7" fill="#0d2415" opacity=".38" />
+            <ellipse cx="2" cy="9" ry="7" fill="#0d2415" opacity=".38"
+              rx={f.kind === "log" ? 84 : f.kind === "root" ? 48 : f.kind === "soil" ? 30 : 26} />
             {f.kind === "berry" && (
               <g className="sai-bg-sway" style={{ animationDuration: `${5.2 + i * 0.4}s`, animationDelay: `${i * 0.7}s`, transformOrigin: "50% 100%" }}>
                 <path d="M -6 8 C -8 -6 -6 -18 -2 -26 M 4 8 C 7 -4 8 -16 6 -24" stroke="#5a4a2c" strokeWidth="3" fill="none" strokeLinecap="round" />
@@ -319,6 +342,60 @@ function ForageLayer({ bounds, sites }) {
                 <path d="M -24 1 l -2 -8 M -21 2 l 1 -9 M 22 -1 l 3 -8 M 25 0 l 1 -7"
                   stroke="#3f7c4a" strokeWidth="1.8" fill="none" strokeLinecap="round" opacity=".9" />
               </>
+            )}
+            {f.kind === "log" && (
+              <g transform={`scale(${f.dir || 1} 1)`}>
+                {/* A big fallen trunk, mossed on the weather side and rotten
+                    through the middle. The hole in the top face is the point
+                    of it: it is where the hedgehog goes in, and his own pose
+                    paints a matching section of log over exactly this spot,
+                    so the two drawings have to agree about where the top face
+                    is. Top face at svg y -21 puts it 37px above the site
+                    anchor, which is where the pose's log lands when he stops
+                    25px north of the marker. Move one, move the other. */}
+                <rect x="-84" y="-21" width="168" height="31" rx="15.5" fill="#402c19" />
+                <rect x="-84" y="-21" width="168" height="13" rx="6.5" fill="#5b3f26" />
+                <path d="M -74 -18 C -40 -23 30 -23 74 -18 C 34 -13 -36 -13 -74 -18 Z" fill="#4e9c5f" opacity=".5" />
+                <path d="M -70 -2 C -30 3 30 3 70 -2" stroke="#2a1c10" strokeWidth="1.8" fill="none" strokeLinecap="round" opacity=".5" />
+                <path d="M -64 5 C -26 9 26 9 64 5" stroke="#2a1c10" strokeWidth="1.4" fill="none" strokeLinecap="round" opacity=".4" />
+                {/* the broken end, rings out */}
+                <ellipse cx="84" cy="-5.5" rx="7" ry="15.5" fill="#6b4a2a" />
+                <ellipse cx="84" cy="-5.5" rx="4.4" ry="10" fill="#402c19" opacity=".7" />
+                <ellipse cx="84" cy="-5.5" rx="2" ry="4.6" fill="#6b4a2a" opacity=".6" />
+                {/* the rot hole */}
+                <ellipse cx="7" cy="-15.5" rx="13" ry="6.5" fill="#1b1109" />
+                <ellipse cx="7" cy="-16.6" rx="9" ry="4" fill="#0d0805" opacity=".8" />
+                {/* bracket fungus, which is what a log this far gone actually
+                    grows — and it says "rotten" faster than any bark texture */}
+                <path d="M -40 -7 C -34 -14 -22 -14 -18 -8 C -26 -5 -34 -5 -40 -7 Z" fill="#c8b183" opacity=".85" />
+                <path d="M -40 -7 C -34 -10 -26 -10 -18 -8" stroke="#a08757" strokeWidth="1.2" fill="none" opacity=".7" />
+                <path d="M -56 4 C -52 -2 -46 -2 -44 3" stroke="#3f7c4a" strokeWidth="2" fill="none" strokeLinecap="round" opacity=".8" />
+              </g>
+            )}
+            {f.kind === "root" && (
+              <g transform={`scale(${f.dir || 1} 1)`}>
+                {/* A surface root breaking ground twice on its way back to
+                    the trunk it belongs to — `dir` points its high end at
+                    that tree. Drawn LOW and broad on purpose: the arch the
+                    hedgehog actually works is painted by his own pose on top
+                    of this, and two competing arches in one place would read
+                    as a tangle rather than as a root. */}
+                <ellipse cx="0" cy="2" rx="50" ry="11" fill="#3a2a16" opacity=".5" />
+                <path d="M -54 4 C -40 2 -32 -10 -20 -14 C -8 -18 2 -12 12 -14 C 22 -16 30 -24 42 -22 C 48 -21 52 -16 54 -10"
+                  stroke="#5b3f26" strokeWidth="17" fill="none" strokeLinecap="round" />
+                <path d="M -54 1 C -40 -1 -32 -13 -20 -17 C -8 -21 2 -15 12 -17 C 22 -19 30 -27 42 -25 C 48 -24 52 -19 54 -13"
+                  stroke="#6f4f30" strokeWidth="6.5" fill="none" strokeLinecap="round" opacity=".9" />
+                {/* a rootlet running off under the litter */}
+                <path d="M -22 -8 C -28 -2 -36 2 -46 3" stroke="#4e3521" strokeWidth="6" fill="none" strokeLinecap="round" />
+                {/* the gaps underneath — the only part of this he cares about */}
+                <path d="M -32 5 C -28 -3 -20 -6 -12 -4 C -18 1 -22 5 -24 7 Z" fill="#1b1109" opacity=".75" />
+                <path d="M 18 -1 C 24 -9 32 -12 40 -10 C 33 -5 28 -1 26 3 Z" fill="#1b1109" opacity=".7" />
+                <path d="M -44 -6 C -34 -12 -24 -16 -14 -18 M 6 -18 C 16 -20 26 -25 36 -26"
+                  stroke="#3f7c4a" strokeWidth="2.6" fill="none" strokeLinecap="round" opacity=".55" />
+                {/* leaf litter banked against the upwind side */}
+                <path d="M -50 6 l 7 -5 M -44 7 l 6 -6 M 44 4 l 7 -5 M 50 5 l 5 -6"
+                  stroke="#8a6a3a" strokeWidth="2" fill="none" strokeLinecap="round" opacity=".8" />
+              </g>
             )}
           </svg>
         </div>

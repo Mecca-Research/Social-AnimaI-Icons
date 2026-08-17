@@ -33,7 +33,11 @@ const world = await page.evaluate(`(w => ({ forage: (w.forage||[]).length,
   kinds: [...new Set((w.forage||[]).map(f=>f.kind))].sort().join(','),
   eth: Object.keys(window.__saiEtho.ETHOGRAM).sort().join(','),
   states: [...window.__saiEtho.states].sort().join(',') }))(window.__saiWorld)`);
-chk(world.forage === 16, 'forage sites', `${world.forage} sites, kinds: ${world.kinds}`);
+// 16 in the clearing plus the hedgehog's five pieces of timber. Both the
+// count and the kinds are pinned, so adding a site stays a deliberate edit
+// to this line rather than something a suite quietly absorbs.
+chk(world.forage === 21 && world.kinds === 'berry,log,nut,root,shrub,soil',
+  'forage sites', `${world.forage} sites, kinds: ${world.kinds}`);
 chk(world.eth.includes('squirrel'), 'squirrel has an ethogram', world.eth);
 
 // force a species' event to fire now, and report the state chain it walks
@@ -150,7 +154,14 @@ await page.evaluate(`(() => { const r=document.querySelector('input[type=range]'
   set.call(r, r.max); r.dispatchEvent(new Event('input', { bubbles: true })); })()`);
 await page.waitForTimeout(400);
 {
-  const r = await chain('frog', 'float', 140000, `a.x=.60*w.bounds.w; a.y=.34*w.bounds.h;`);
+  // Dropped beside a float rather than across the clearing from one. The
+  // frog's arrival radius is 12px and on the old seed he reached 19px and
+  // then gave up — the give-up is wall-clock while his progress is
+  // frame-based, and headless rAF runs at 3.8fps, so a 30s window buys
+  // about two seconds of hopping. What this checks is the float BOUT; that
+  // he can cross water is the swim leg's business, not this one's.
+  const r = await chain('frog', 'float', 140000,
+    `{ const p=w.pads[0]; a.x=p.x-50; a.y=p.y-30; }`);
   chk(/padsit/.test(r.chain), 'frog rides a float', r.chain);
 }
 {
@@ -249,8 +260,33 @@ await page.waitForTimeout(400);
     `${r.moved} moving frames, ${r.still} standing, ${r.outside} off the sward`);
 }
 {
+  // Seeded AT the margin rather than out in the lake, and the margin is
+  // found by walking the shoreline down rather than by copying the lake's
+  // ellipse into the test. What is unique to this check is the plunge
+  // cycle; the walk-there leg is already covered four times over by
+  // tosward, hhtolog, tolog and tofloat, and at 3.8fps headless an 18s
+  // give-up buys only about three seconds of swimming.
+  const seed = await page.evaluate(`(async w => {
+    const g=w.agents.find(a=>a.species==='goose'), b=w.bounds;
+    const wet = async (x,y) => { g.x=x; g.y=y;
+      for (let k=0;k<10;k++){ await new Promise(r=>setTimeout(r,25)); if (g._wet!==undefined) break; }
+      return !!g._wet; };
+    const inside = w.pads[0];                       // a lily pad is water by construction
+    let lo={x:inside.x,y:inside.y}, hi={x:.5*b.w,y:.85*b.h};   // the sward is dry by construction
+    if (!(await wet(lo.x,lo.y))) return null;
+    for (let i=0;i<14;i++){
+      const m={x:(lo.x+hi.x)/2, y:(lo.y+hi.y)/2};
+      if (await wet(m.x,m.y)) lo=m; else hi=m;
+    }
+    // ...then step back INSIDE. The search converges to within a pixel of
+    // the boundary, and a water-domain appetite is only eligible while he
+    // reads as being in the lake — parked on the line he drifts ashore and
+    // the event is never offered at all.
+    const dx=inside.x-lo.x, dy=inside.y-lo.y, d=Math.hypot(dx,dy)||1;
+    return { x: lo.x + dx/d*45, y: lo.y + dy/d*45 }; })(window.__saiWorld)`);
+  chk(!!seed, 'the waterline can be found', seed ? `margin at ${Math.round(seed.x)},${Math.round(seed.y)}` : 'pad[0] read dry');
   const r = await chain('goose', 'dabble', 90000,
-    `a.x=.71*w.bounds.w; a.y=.28*w.bounds.h;`);
+    seed ? `a.x=${seed.x}; a.y=${seed.y};` : `a.x=.71*w.bounds.w; a.y=.28*w.bounds.h;`);
   chk(/dabble/.test(r.chain), 'goose dabbles the shallows', r.chain);
 }
 {
@@ -261,6 +297,44 @@ await page.waitForTimeout(400);
   const own = await page.evaluate(`[...window.__saiEtho.ownWater].sort()`);
   chk(own.includes('dabble') && own.includes('dabblelift'),
     'the dabble states own their water', own.join(','));
+}
+// ---- the hedgehog works timber, not the clearing ----
+// He is the only insectivore here, and the point of giving him sites of his
+// own is that he competes with nobody: the six foragers already working the
+// clearing have no reason to look at a log.
+{
+  const g = await page.evaluate(`(w => { const f=(w.forage||[]);
+    const mine=f.filter(s=>s.kind==='log'||s.kind==='root');
+    // nearest clearing site to any of his, so a claim collision is visible
+    let near=1e9;
+    for (const a of mine) for (const b of f) { if (b.kind==='log'||b.kind==='root') continue;
+      near=Math.min(near, Math.hypot((a.x-b.x)*w.bounds.w,(a.y-b.y)*w.bounds.h)); }
+    return { logs:mine.filter(s=>s.kind==='log').length,
+             roots:mine.filter(s=>s.kind==='root').length,
+             near:Math.round(near) }; })(window.__saiWorld)`);
+  chk(g.logs >= 2 && g.roots >= 3, 'the hedgehog has timber of his own',
+    `${g.logs} logs, ${g.roots} roots`);
+  chk(g.near > 90, 'his ground is clear of the clearing',
+    `nearest clearing site ${g.near}px away`);
+}
+for (const [ev, want, label] of [
+  ['roots', /rootdig|rootbore/, 'hedgehog works a surface root'],
+  ['logs', /logdive/, 'hedgehog goes into the log'],
+]) {
+  const r = await chain('hedgehog', ev, 90000, `a.x=.30*w.bounds.w; a.y=.60*w.bounds.h;`);
+  chk(want.test(r.chain), label, r.chain);
+}
+{
+  // The root event has two variants at equal weight and they are different
+  // drawings — digging beside the root, and boring into its underside seen
+  // from behind. One that never comes up is a pose nobody will ever see.
+  const seen = new Set();
+  for (let i = 0; i < 8 && seen.size < 2; i++) {
+    const r = await chain('hedgehog', 'roots', 40000, `a.x=.30*w.bounds.w; a.y=.60*w.bounds.h;`);
+    if (/rootdig/.test(r.chain)) seen.add('rootdig');
+    if (/rootbore/.test(r.chain)) seen.add('rootbore');
+  }
+  chk(seen.size === 2, 'both root variants come up', [...seen].join(' + ') || 'neither');
 }
 chk(errs.length === 0, 'no JS errors', errs.length ? errs[0] : 'clean');
 console.log(`\n${fail.length ? 'FAIL ' + fail.length : 'ALL PASS'} (${pass.length} passed)`);

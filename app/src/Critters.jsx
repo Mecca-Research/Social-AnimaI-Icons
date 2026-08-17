@@ -1379,6 +1379,238 @@ function HedgehogDraw({ uid }) {
         <circle cx="104.5" cy="83.5" r="3.2" fill={ink} />
         <FaceKit lid={F[1]} e1={[85, 79]} e2={[95, 79.5]} er={2.8} iris={ink} mouth={[98, 90]} />
       </g>
+      {/* =================================================================
+          THE THREE FORAGING POSES. All three are drawn whole and swapped
+          in, because the four-legged rig has one level body with the head
+          pasted on the front: it can put his snout neither under a root
+          nor down a hole in a log, and the third pose is a view of him
+          from BEHIND, which no rig anywhere in this file can produce.
+
+          Each pose carries its own timber. That is deliberate and not a
+          duplicate of the site art: the sprite paints at z-index 10 and
+          the forage sites at 2, so anything meant to hide his head has to
+          be inside the sprite or it paints behind him. The palettes are
+          the world's own bark colors so the two read as one piece of wood
+          where they overlap.
+
+          They carry NO scale of their own: HedgehogDraw's whole return
+          already sits inside the 1.52 group, so these are drawn in the
+          same coordinates as the rest of him — ground at y 103, facing
+          right — and a wrapper here would put them at 2.3x.
+          ================================================================= */}
+
+      {/* ---- 1. UNDER THE ROOT (rootdig) ----
+          Rump up, head driven down into the gap where a surface root goes
+          back into the soil. The root is painted last of all so the snout
+          genuinely disappears under it rather than stopping at its edge. */}
+      <g className="sai-crit-rootdig">
+        <g className="rd-mound">
+          <ellipse cx="68" cy="101" rx="21" ry="6" fill="#3f2c17" />
+          <ellipse cx="61" cy="99" rx="11" ry="4.4" fill="#54391d" />
+          <ellipse cx="76" cy="100" rx="8" ry="3.4" fill="#4a331b" />
+        </g>
+        {/* hind legs braced under the raised haunches — all his shove
+            comes from these, so they are the one part drawn planted */}
+        <g className="rd-hind">
+          <rect x="30" y="86" width="9" height="17" rx="4.5" fill={F[2]} />
+          <rect x="41" y="88" width="9" height="15" rx="4.5" fill={F[1]} />
+          <ellipse cx="34.5" cy="102" rx="6.2" ry="3" fill={F[2]} />
+          <ellipse cx="45.5" cy="102.5" rx="6.2" ry="3" fill={F[1]} />
+        </g>
+        <g className="rd-body">
+          <ellipse cx="54" cy="84" rx="26" ry="17.5" fill={`url(#${uid}f)`} transform="rotate(15 54 84)" />
+          <BellyShade cx={50} cy={97} rx={17} />
+          {/* the same spike fan he wears standing up, pitched forward.
+              Reusing it rather than drawing a second one is what keeps
+              the dig recognisably the same animal */}
+          <g className="rd-spines"><g transform="translate(-2 -2) rotate(15 56 84)">{spikes}</g></g>
+        </g>
+        <g className="rd-head">
+          <path d="M 54 76 C 64 74 72 80 78 90 C 72 96 62 96 55 91 Z" fill={`url(#${uid}f)`} />
+          <ellipse cx="72" cy="90" rx="9" ry="7" fill={F[1]} />
+          <circle cx="61" cy="82" r="3.4" fill={F[2]} />
+          <circle cx="67" cy="84" r="2.3" fill={ink} />
+          <circle cx="67.8" cy="83.2" r=".8" fill="#fff" opacity=".85" />
+          <circle cx="79" cy="94" r="2.6" fill={ink} />
+        </g>
+        <g className="rd-fore">
+          <ellipse cx="63" cy="97" rx="6.4" ry="4" fill={F[2]} />
+          <path d="M 67 99 l 3 1.8 M 64 100 l 1.4 2.4 M 60.4 99.6 l .2 2.6"
+            stroke="#7a5a38" strokeWidth="1.3" strokeLinecap="round" fill="none" />
+        </g>
+        {/* the root itself: one thick surface root sloping out of frame
+            at the top right and back into the ground at his nose */}
+        <g className="rd-root">
+          <path d="M 100 50 C 94 62 89 74 85 86 C 83 92 82 98 81.5 103 L 68 103 C 69 96 71 88 75 78 C 79 68 84 58 89 48 Z" fill="#5b3f26" />
+          <path d="M 89 48 C 84 58 79 68 75 78 C 71 88 69 96 68 103 L 73 103 C 74 95 77 87 81 77 C 85 67 89 57 93 47 Z" fill="#6f4f30" />
+          <ellipse cx="80" cy="88" rx="9.5" ry="6" fill="#5b3f26" transform="rotate(-24 80 88)" />
+          <path d="M 86 60 C 83 70 80 80 78 90" stroke="#402c19" strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".7" />
+          <path d="M 92 58 C 89 68 87 78 86 88" stroke="#402c19" strokeWidth="1.2" fill="none" strokeLinecap="round" opacity=".5" />
+          <path d="M 91 52 C 88 60 86 66 84 72" stroke="#3f7c4a" strokeWidth="3" fill="none" strokeLinecap="round" opacity=".6" />
+          {/* the dark under the root — his whole face is in here */}
+          <path d="M 68 103 C 69 96 71 90 74 85 C 77 90 79.5 96 80.5 103 Z" fill="#1b1109" opacity=".92" />
+        </g>
+        {/* earth going back between his legs, laid out along the arc it
+            travels so the CSS only has to run it along */}
+        <g className="rd-dirt" fill="#4a331b">
+          <ellipse cx="58" cy="93" rx="3" ry="2.2" />
+          <ellipse cx="50" cy="87" rx="2.6" ry="2" />
+          <ellipse cx="42" cy="81" rx="3.2" ry="2.4" />
+          <ellipse cx="34" cy="76" rx="2.4" ry="1.8" />
+          <ellipse cx="27" cy="72" rx="2.8" ry="2" />
+        </g>
+      </g>
+
+      {/* ---- 2. INTO THE ROOT'S BOTTOM EDGE (rootbore) ----
+          The one view of him nobody else in this file has: from behind,
+          head already inside the root, so what we watch for six seconds
+          is a spiny backside and two working feet. The fan is generated
+          rather than reused because a hedgehog seen end-on is a disc of
+          spines, not the side crown pointing one way. */}
+      <g className="sai-crit-rootbore">
+        {/* the root mass. Lumpy rather than slabbed: a big surface root
+            is a run of knuckles, and three overlapping ellipses read as
+            that far better than any one outline */}
+        <g className="rb-root">
+          <ellipse cx="34" cy="40" rx="31" ry="17" fill="#5b3f26" />
+          <ellipse cx="82" cy="38" rx="28" ry="16" fill="#5b3f26" />
+          <ellipse cx="58" cy="33" rx="27" ry="15" fill="#6f4f30" />
+          <path d="M 16 30 C 34 22 80 22 100 30" stroke="#3f7c4a" strokeWidth="4.5" fill="none" strokeLinecap="round" opacity=".55" />
+          <path d="M 20 44 C 40 52 76 52 96 44" stroke="#402c19" strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".55" />
+        </g>
+        {/* the cavity he has his head in, painted before him so his
+            shoulders enter it instead of sitting on top of it */}
+        <ellipse className="rb-socket" cx="58" cy="62" rx="14" ry="9" fill="#1b1109" />
+        <g className="rb-rump">
+          <ellipse cx="58" cy="90" rx="24" ry="13" fill={`url(#${uid}f)`} />
+          <g className="rb-spines">
+            {Array.from({ length: 15 }, (_, i) => {
+              const a = Math.PI * (1.02 - i * 0.0743);
+              const cx0 = 58, cy0 = 92, rB = 21, rT = 33;
+              const x0 = cx0 + Math.cos(a + 0.12) * rB, y0 = cy0 - Math.sin(a + 0.12) * (rB * 0.95);
+              const x1 = cx0 + Math.cos(a) * rT, y1 = cy0 - Math.sin(a) * (rT * 0.95);
+              const x2 = cx0 + Math.cos(a - 0.12) * rB, y2 = cy0 - Math.sin(a - 0.12) * (rB * 0.95);
+              return <path key={i} d={`M ${x0} ${y0} L ${x1} ${y1} L ${x2} ${y2} Z`} fill={i % 2 ? spikeA : spikeB} />;
+            })}
+          </g>
+          <ellipse cx="58" cy="97" rx="14" ry="6.5" fill={F[1]} />
+          <ellipse cx="58" cy="99" rx="8" ry="4" fill={F[0]} opacity=".75" />
+          <ellipse cx="58" cy="101.5" rx="3" ry="2.2" fill={F[2]} />
+        </g>
+        <g className="rb-foot-l">
+          <ellipse cx="33" cy="100" rx="7" ry="4" fill={F[2]} transform="rotate(-18 33 100)" />
+          <path d="M 27 102 l -3 2 M 31 103 l -1.4 2.4 M 35.4 103 l .4 2.4"
+            stroke="#7a5a38" strokeWidth="1.3" strokeLinecap="round" fill="none" />
+        </g>
+        <g className="rb-foot-r">
+          <ellipse cx="83" cy="100" rx="7" ry="4" fill={F[1]} transform="rotate(18 83 100)" />
+          <path d="M 89 102 l 3 2 M 85 103 l 1.4 2.4 M 80.6 103 l -.4 2.4"
+            stroke="#7a5a38" strokeWidth="1.3" strokeLinecap="round" fill="none" />
+        </g>
+        {/* the root's lower lip, in two pieces with a gap between them.
+            The gap IS the picture: it is the only place his shoulders
+            are allowed through, so nothing has to be clipped */}
+        <g className="rb-lip">
+          <path d="M 6 42 C 22 58 36 62 48 62 L 48 71 C 30 71 12 60 6 42 Z" fill="#4a3220" />
+          <path d="M 110 42 C 94 58 80 62 68 62 L 68 71 C 86 71 104 60 110 42 Z" fill="#4a3220" />
+        </g>
+        <g className="rb-dirt" fill="#4a331b">
+          <ellipse cx="26" cy="97" rx="3" ry="2.2" />
+          <ellipse cx="18" cy="93" rx="2.4" ry="1.8" />
+          <ellipse cx="90" cy="97" rx="3" ry="2.2" />
+          <ellipse cx="98" cy="93" rx="2.4" ry="1.8" />
+        </g>
+      </g>
+
+      {/* ---- 3. HEAD-FIRST INTO THE LOG (logdive, logchew) ----
+          One drawing of the log serving both beats, which is the whole
+          reason they share a group: the hole he backs out of has to be
+          the hole he went into, and drawing the log twice would let the
+          two halves drift apart. `.lp-diver` and `.lp-sitter` are the
+          only parts that swap. */}
+      <g className="sai-crit-logpose">
+        <g className="lp-log">
+          <ellipse cx="58" cy="99" rx="47" ry="6" fill="#1a0e04" opacity=".22" />
+          <rect x="14" y="62" width="92" height="37" rx="18" fill="#402c19" />
+          <rect x="14" y="62" width="92" height="15" rx="7.5" fill="#5b3f26" />
+          <path d="M 22 66 C 44 62 76 62 98 66 C 78 71 40 71 22 66 Z" fill="#4e9c5f" opacity=".5" />
+          <path d="M 24 84 C 46 88 72 88 94 83" stroke="#2a1c10" strokeWidth="1.8" fill="none" strokeLinecap="round" opacity=".5" />
+          <path d="M 26 92 C 48 95 70 95 92 91" stroke="#2a1c10" strokeWidth="1.4" fill="none" strokeLinecap="round" opacity=".4" />
+          <ellipse cx="104" cy="80" rx="7" ry="17" fill="#6b4a2a" />
+          <ellipse cx="104" cy="80" rx="4.4" ry="11" fill="#402c19" opacity=".7" />
+          <ellipse cx="104" cy="80" rx="2" ry="5" fill="#6b4a2a" opacity=".6" />
+        </g>
+        {/* the rot hole, and its near rim painted again over him below */}
+        <ellipse className="lp-hole" cx="68" cy="68" rx="13.5" ry="7" fill="#1b1109" />
+
+        <g className="lp-diver">
+          {/* shoulders going down the hole. Painted before the rim so
+              the rim is what cuts him off, not a guessed edge */}
+          <path d="M 48 46 C 60 44 68 52 70 66 C 62 70 52 66 48 58 Z" fill={F[2]} />
+          <ellipse cx="42" cy="54" rx="20" ry="12" fill={`url(#${uid}f)`} transform="rotate(9 42 54)" />
+          <g className="lp-dspines">
+            {Array.from({ length: 11 }, (_, i) => {
+              const a = Math.PI * (1.16 - i * 0.104);
+              const cx0 = 42, cy0 = 56, rB = 14, rT = 25;
+              const x0 = cx0 + Math.cos(a + 0.15) * rB, y0 = cy0 - Math.sin(a + 0.15) * (rB * 0.88);
+              const x1 = cx0 + Math.cos(a) * rT, y1 = cy0 - Math.sin(a) * (rT * 0.88);
+              const x2 = cx0 + Math.cos(a - 0.15) * rB, y2 = cy0 - Math.sin(a - 0.15) * (rB * 0.88);
+              return <path key={i} d={`M ${x0} ${y0} L ${x1} ${y1} L ${x2} ${y2} Z`} fill={i % 2 ? spikeA : spikeB} />;
+            })}
+          </g>
+          {/* the legs the brief asks for: one braced on the bark, one
+              kicking clear of it. A hedgehog head-down in a hole does
+              not stand — he treads */}
+          <g className="lp-legbrace">
+            <rect x="30" y="58" width="7" height="13" rx="3.5" fill={F[2]} />
+            <ellipse cx="33.5" cy="71" rx="5.4" ry="2.8" fill={F[2]} />
+          </g>
+          <g className="lp-legkick">
+            <rect x="44" y="58" width="7" height="13" rx="3.5" fill={F[1]} />
+            <ellipse cx="47.5" cy="71" rx="5.4" ry="2.8" fill={F[1]} />
+          </g>
+        </g>
+
+        <g className="lp-sitter">
+          <ellipse cx="46" cy="54" rx="21" ry="13" fill={`url(#${uid}f)`} />
+          <g className="lp-sspines">
+            {Array.from({ length: 11 }, (_, i) => {
+              const a = Math.PI * (1.08 - i * 0.098);
+              const cx0 = 46, cy0 = 56, rB = 15, rT = 26;
+              const x0 = cx0 + Math.cos(a + 0.15) * rB, y0 = cy0 - Math.sin(a + 0.15) * (rB * 0.86);
+              const x1 = cx0 + Math.cos(a) * rT, y1 = cy0 - Math.sin(a) * (rT * 0.86);
+              const x2 = cx0 + Math.cos(a - 0.15) * rB, y2 = cy0 - Math.sin(a - 0.15) * (rB * 0.86);
+              return <path key={i} d={`M ${x0} ${y0} L ${x1} ${y1} L ${x2} ${y2} Z`} fill={i % 2 ? spikeA : spikeB} />;
+            })}
+          </g>
+          <ellipse cx="50" cy="64" rx="15" ry="5" fill="#1a0e04" opacity=".14" />
+          <g className="lp-shead">
+            <circle cx="60" cy="52" r="3.4" fill={F[2]} />
+            <path d="M 58 47 C 68 44 78 48 85 57 C 77 62 66 62 58 58 Z" fill={`url(#${uid}f)`} />
+            <circle cx="84.5" cy="56.5" r="2.8" fill={ink} />
+            <circle cx="70" cy="51" r="2.4" fill={ink} />
+            <circle cx="70.8" cy="50.2" r=".8" fill="#fff" opacity=".85" />
+            <g className="lp-grub">
+              <ellipse cx="80" cy="61" rx="5.4" ry="3" fill="#e8dcc0" transform="rotate(-16 80 61)" />
+              <path d="M 77 62.4 l .6 -2.4 M 80 61.6 l .6 -2.4 M 83 60.6 l .5 -2.2"
+                stroke="#c7b48c" strokeWidth="1" strokeLinecap="round" fill="none" />
+              <circle cx="85" cy="59.4" r="1.5" fill="#8a6a44" />
+            </g>
+          </g>
+          <ellipse cx="54" cy="68" rx="5" ry="2.6" fill={F[2]} />
+          <ellipse cx="46" cy="69" rx="5" ry="2.6" fill={F[1]} />
+        </g>
+
+        {/* the near rim, over whichever of the two is showing */}
+        <path className="lp-rim" d="M 54.5 68 C 56 73 62 76 68 76 C 74 76 80 73 81.5 68 C 80 71.4 74 73.6 68 73.6 C 62 73.6 56 71.4 54.5 68 Z" fill="#6b4a2a" />
+        {/* what he disturbed, leaving by the nearest exit */}
+        <g className="lp-bugs">
+          <ellipse cx="80" cy="72" rx="2.6" ry="1.7" fill="#241a10" />
+          <ellipse cx="88" cy="76" rx="2.2" ry="1.5" fill="#2f2415" />
+          <ellipse cx="93" cy="70" rx="2.4" ry="1.6" fill="#241a10" />
+          <ellipse cx="84" cy="66" rx="2" ry="1.4" fill="#2f2415" />
+        </g>
+      </g>
     </g>
   );
 }
