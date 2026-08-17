@@ -207,6 +207,61 @@ await page.waitForTimeout(400);
     return { chain: seen.join('>'), logs: w.damCount||0 }; })(window.__saiWorld)`);
   chk(r.logs >= 1, 'beaver dam run off the map edge', `${r.chain} | ${r.logs} log(s) placed`);
 }
+// ---- the goose feeds, once on each side of the waterline ----
+// He is seeded on the grass for the graze and in the lake for the dabble,
+// because both events are `seek` on their own domain: dropped on the wrong
+// side of the shoreline the appetite is simply never eligible, and the
+// chain would report a bug that is really a badly placed bird.
+{
+  const sward = await page.evaluate(`(w => w.def && w.def.sward)(window.__saiWorld)`);
+  chk(!!sward, 'the forest has a sward to graze',
+    sward ? `x ${sward.x0}-${sward.x1}, y ${sward.y0}-${sward.y1}` : 'no sward on the forest def');
+  const r = await chain('goose', 'graze', 90000,
+    `a.x=(${sward ? sward.x0 : 0.4}+.13)*w.bounds.w; a.y=(${sward ? sward.y0 : 0.68}+.1)*w.bounds.h;`);
+  chk(/cropgrass/.test(r.chain), 'goose crops the sward', r.chain);
+}
+{
+  // A grazing goose eats, takes two or three steps, and eats again. That
+  // duty cycle IS the slow walk, so what is checked is that he MOVES during
+  // a bout without leaving the grass — a bird that never moves is standing,
+  // and one that walks straight out of the field is not grazing.
+  const r = await page.evaluate(`(async w => { const g=w.agents.find(a=>a.species==='goose');
+    const s=w.def.sward, b=w.bounds;
+    g._eth=null; g.state='wander'; g.intent='wander'; g.z=0;
+    g.x=(s.x0+s.x1)/2*b.w; g.y=(s.y0+s.y1)/2*b.h;
+    g.intentUntil=performance.now()+900000; g.noEventUntil=performance.now()+900000;
+    for (let k=0;k<40 && !g._eth;k++) await new Promise(r=>setTimeout(r,25));
+    const S=g._eth;
+    let moved=0, still=0, outside=0, sawCrop=false;
+    const t0=performance.now();
+    while (performance.now()-t0 < 70000) {
+      await new Promise(r=>setTimeout(r,80));
+      if (!sawCrop) { for (const id of Object.keys(S.seekAt)) S.seekAt[id]=performance.now()+900000;
+        S.seekAt['graze']=0; S.cd['graze']=0; }
+      if (g.state!=='cropgrass') continue;
+      sawCrop=true;
+      if (Math.hypot(g.vx,g.vy) > 1) moved++; else still++;
+      if (g.x < s.x0*b.w-40 || g.x > s.x1*b.w+40 || g.y < s.y0*b.h-40 || g.y > s.y1*b.h+40) outside++;
+    }
+    return { moved, still, outside, sawCrop }; })(window.__saiWorld)`);
+  chk(r.sawCrop && r.moved > 0 && r.still > 0 && r.outside === 0,
+    'grazing is step-and-crop, and stays on the grass',
+    `${r.moved} moving frames, ${r.still} standing, ${r.outside} off the sward`);
+}
+{
+  const r = await chain('goose', 'dabble', 90000,
+    `a.x=.71*w.bounds.w; a.y=.28*w.bounds.h;`);
+  chk(/dabble/.test(r.chain), 'goose dabbles the shallows', r.chain);
+}
+{
+  // Standing on the bottom is the whole pose. If the renderer files him as a
+  // swimmer it tucks away the very legs that say so, and the drawn water
+  // surface then sits over a bird with nothing under it — which is what
+  // ownsWater exists to prevent.
+  const own = await page.evaluate(`[...window.__saiEtho.ownWater].sort()`);
+  chk(own.includes('dabble') && own.includes('dabblelift'),
+    'the dabble states own their water', own.join(','));
+}
 chk(errs.length === 0, 'no JS errors', errs.length ? errs[0] : 'clean');
 console.log(`\n${fail.length ? 'FAIL ' + fail.length : 'ALL PASS'} (${pass.length} passed)`);
 await browser.close();

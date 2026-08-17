@@ -740,7 +740,7 @@ export default function SocialAnimalsRPG() {
     // what each species' ethogram is currently planning
     if (typeof window !== "undefined") {
       window.__saiWorld = worldRef.current;
-      window.__saiEtho = { ETHOGRAM, ethoShare, states: ETHO_STATES };
+      window.__saiEtho = { ETHOGRAM, ethoShare, states: ETHO_STATES, ownWater: ETHO_OWNWATER_STATES };
       // the gait core, so a test can ask an animal how fast it would move at a
       // given urgency instead of inferring it from a smoothed random walk
       window.__saiGait = { gait, SPEED, GAIT_DEF, speedCap };
@@ -1910,6 +1910,18 @@ const DAM_PLAN = (() => {
 // the plan reaches the beaver's ethogram as def.dam. Attached here rather
 // than in the WORLDS literal above, which is evaluated 1300 lines earlier.
 WORLDS.forest.dam = DAM_PLAN;
+
+// ---------------- The sward ----------------
+// Open grass, and nothing else: the goose grazes here. It needs no new
+// geometry because the empty ground was already the point — the lake's
+// southern shore stops at y≈.46, the clearing's lowest bush is at .625,
+// the two south-east trees stand east of .80, and the background already
+// scatters grass tufts, clover and flowers right through this rectangle.
+// Held in fractions and reached through `def`, like the trees and the
+// forage, so another world can hand him a different field or none at all
+// — with no sward the appetite simply never finds anywhere to go.
+const GOOSE_SWARD = { x0: 0.40, x1: 0.66, y0: 0.68, y1: 0.88 };
+WORLDS.forest.sward = GOOSE_SWARD;
 function DamLayer({ damRefs }) {
   return (
     <>

@@ -2121,3 +2121,129 @@ body {
   .sai-sprite[data-state="foxchew"] .sai-crit--fox .sai-crit-head,
   .sai-sprite[data-carry="berry"] .sai-crit--fox .sai-crit-foxberry{ animation:none; }
 }
+
+/* ==================== v0.33 the goose feeds ==================== */
+/* Two feeding behaviors, one on each side of the waterline, and both of
+   them swap in a drawn pose. His neck is a single filled path rooted in
+   the breast: it can be rotated, but it cannot fold, and a rotation big
+   enough to put the bill on the ground carries the head out past his own
+   tail. The preen already made that trade; these two make it twice more. */
+.sai-crit-croppose, .sai-crit-dabblepose{ display:none; }
+
+/* ---- GRAZING: a slow walk carrying a fast bite ----------------------
+   The tempo mismatch is the whole read, so the two clocks are set against
+   each other on purpose: the stride is stretched to 1.15s (more than
+   double the default gait) and the shear runs at .3s. He alternates
+   walking and standing on his own — the renderer reads the walk cycle off
+   his actual displacement — so the legs step when he steps and stop when
+   he stops without either rule knowing about the other. */
+.sai-sprite[data-state="cropgrass"] .sai-crit--goose{ --sai-gait:1.15s; }
+.sai-sprite[data-state="cropgrass"] .sai-crit--goose .sai-crit-croppose{ display:inline; }
+.sai-sprite[data-state="cropgrass"] .sai-crit--goose .sai-crit-head{ display:none; }
+
+/* the bite: a short drive of the bill into the sward. The neck barely
+   travels — a cropping goose does not nod, it scissors, and a big neck
+   swing at this speed would read as pecking seed instead */
+.sai-sprite[data-state="cropgrass"] .sai-crit--goose .crop-neck{
+  transform-box:fill-box; transform-origin:10% 32%;
+  animation:sai-goose-crop .3s ease-in-out infinite; }
+@keyframes sai-goose-crop{
+  0%,100%{transform:rotate(0) translate(0,0);}
+  45%{transform:rotate(3.2deg) translate(.6px,1.8px);}
+}
+/* the shear itself, on the same period so the mandibles close at the
+   bottom of every stroke rather than somewhere along it */
+.sai-sprite[data-state="cropgrass"] .sai-crit--goose .crop-jaw{
+  transform-box:fill-box; transform-origin:3% 5%;
+  animation:sai-goose-shear .3s ease-in-out infinite; }
+@keyframes sai-goose-shear{ 0%,100%{transform:rotate(12deg);} 45%{transform:rotate(0);} }
+/* cut grass leaving the bill on a slower cycle than the bites, because a
+   blade takes several shears to come away and one per bite reads as
+   confetti */
+.sai-sprite[data-state="cropgrass"] .sai-crit--goose .crop-cut path{
+  transform-box:fill-box; transform-origin:0 50%;
+  animation:sai-goose-blade 1.2s ease-out infinite; }
+.sai-sprite[data-state="cropgrass"] .sai-crit--goose .crop-cut path:nth-child(2){ animation-delay:.6s; }
+@keyframes sai-goose-blade{
+  0%{opacity:0; transform:rotate(-14deg) scale(.7);}
+  25%{opacity:1;}
+  100%{opacity:0; transform:rotate(10deg) scale(1.1) translate(3px,-2px);}
+}
+
+/* ---- DABBLING: standing in the shallows, head under ------------------
+   The same division of labour as the graze — a slow neck and a quick bill
+   — because it is the same animal doing the same job through a foot of
+   water. What is different is the surface: `ownsWater` turns off the
+   generic swimming rig, so the lens, the ripples and the shadow are this
+   pose's to get right. */
+.sai-sprite[data-state="dabble"] .sai-crit--goose .sai-crit-dabblepose,
+.sai-sprite[data-state="dabblelift"] .sai-crit--goose .sai-crit-dabblepose{ display:inline; }
+.sai-sprite[data-state="dabble"] .sai-crit--goose .sai-crit-head{ display:none; }
+.sai-sprite[data-state="dabblelift"] .sai-crit--goose .dab-neck{ display:none; }
+/* a bird standing in the lake casts no shadow on the forest floor */
+.sai-sprite[data-state="dabble"] .sai-crit--goose .sai-crit-shadow,
+.sai-sprite[data-state="dabblelift"] .sai-crit--goose .sai-crit-shadow{ opacity:0; animation:none; }
+.dab-weed{ display:none; }
+.sai-sprite[data-carry="weed"] .sai-crit--goose .dab-weed{ display:inline; }
+
+/* the plunge: a push deeper and a sweep across the bottom. This is the
+   part that must NOT be quick — the search is slow, the sifting is not */
+.sai-sprite[data-state="dabble"] .sai-crit--goose .dab-neck{
+  transform-box:fill-box; transform-origin:11% 11%;
+  animation:sai-goose-plunge 1.6s ease-in-out infinite; }
+@keyframes sai-goose-plunge{
+  0%,100%{transform:rotate(0) translate(0,0);}
+  30%{transform:rotate(4deg) translate(1px,2.6px);}
+  62%{transform:rotate(-3deg) translate(-1.4px,1.8px);}
+}
+.sai-sprite[data-state="dabble"] .sai-crit--goose .dab-bill{
+  transform-box:fill-box; transform-origin:3% 4%;
+  animation:sai-goose-sift .28s ease-in-out infinite; }
+@keyframes sai-goose-sift{ 0%,100%{transform:rotate(0);} 50%{transform:rotate(-13deg);} }
+/* rings leaving the point where the neck goes in, staggered so the water
+   looks disturbed continuously rather than pulsed */
+.sai-sprite[data-state="dabble"] .sai-crit--goose .dab-rings ellipse{
+  transform-box:fill-box; transform-origin:50% 50%;
+  animation:sai-goose-dabring 1.6s ease-out infinite; }
+.sai-sprite[data-state="dabble"] .sai-crit--goose .dab-rings ellipse:nth-child(2){ animation-delay:.35s; }
+.sai-sprite[data-state="dabble"] .sai-crit--goose .dab-rings ellipse:nth-child(3){ animation-delay:.7s; }
+@keyframes sai-goose-dabring{ 0%{opacity:.8; transform:scale(.45);} 100%{opacity:0; transform:scale(1.3);} }
+/* the stern comes up as the head goes down — the counterweight is what
+   stops it looking like a goose who has simply lost his head */
+.sai-sprite[data-state="dabble"] .sai-crit--goose .sai-crit-tail{
+  transform-box:fill-box; transform-origin:100% 60%;
+  animation:sai-goose-stern 1.6s ease-in-out infinite; }
+@keyframes sai-goose-stern{ 0%,100%{transform:rotate(0) translateY(0);} 40%{transform:rotate(-9deg) translateY(-2px);} }
+
+/* the lift: quick throws of the head to work the weed back, which is why
+   the neck here is three times faster than it was underwater */
+.sai-sprite[data-state="dabblelift"] .sai-crit--goose .sai-crit-head{
+  transform-box:fill-box; transform-origin:5% 96%;
+  animation:sai-goose-swallow .52s ease-in-out infinite; }
+@keyframes sai-goose-swallow{ 0%,100%{transform:rotate(0) translateY(0);} 50%{transform:rotate(-3.4deg) translateY(-2.2px);} }
+.sai-sprite[data-state="dabblelift"] .sai-crit--goose .dab-weed{
+  transform-box:fill-box; transform-origin:56% 0;
+  animation:sai-goose-weedsway .52s ease-in-out infinite; }
+@keyframes sai-goose-weedsway{ 0%,100%{transform:rotate(0) translateY(0);} 50%{transform:rotate(6deg) translateY(-2px);} }
+/* the lake keeps moving whether or not his head is in it */
+.sai-sprite[data-state="dabble"] .sai-crit--goose .dab-water,
+.sai-sprite[data-state="dabblelift"] .sai-crit--goose .dab-water{
+  animation:sai-goose-lap 2.6s ease-in-out infinite; }
+@keyframes sai-goose-lap{ 0%,100%{transform:translateY(0) scaleX(1);} 50%{transform:translateY(1.1px) scaleX(1.02);} }
+
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-state="cropgrass"] .sai-crit--goose .crop-neck,
+  .sai-sprite[data-state="cropgrass"] .sai-crit--goose .crop-jaw,
+  .sai-sprite[data-state="cropgrass"] .sai-crit--goose .crop-cut path,
+  .sai-sprite[data-state="dabble"] .sai-crit--goose .dab-neck,
+  .sai-sprite[data-state="dabble"] .sai-crit--goose .dab-bill,
+  .sai-sprite[data-state="dabble"] .sai-crit--goose .dab-rings ellipse,
+  .sai-sprite[data-state="dabble"] .sai-crit--goose .sai-crit-tail,
+  .sai-sprite[data-state="dabblelift"] .sai-crit--goose .sai-crit-head,
+  .sai-sprite[data-state="dabblelift"] .sai-crit--goose .dab-weed,
+  .sai-sprite[data-state="dabble"] .sai-crit--goose .dab-water,
+  .sai-sprite[data-state="dabblelift"] .sai-crit--goose .dab-water{ animation:none; }
+  /* the cut blades are invisible at rest, so they need a resting state
+     rather than merely a stopped one */
+  .sai-sprite[data-state="cropgrass"] .sai-crit--goose .crop-cut path{ opacity:1; }
+}

@@ -796,6 +796,103 @@ function GooseDraw({ uid }) {
         </g>
         <FaceKit lid={dark} e1={[86, 26]} e2={[93, 25]} er={2.4} drawEyes={false} mouths={false} blushCol="#c9857a" />
       </g>
+      {/* CROPPING POSE: the neck folds forward and down until the bill is
+          in the sward. The rig's neck is one path anchored in the breast —
+          it can rotate but it cannot shorten, and a rotation long enough to
+          reach the grass swings the head out past the tail, so the fold is
+          drawn the same way the preen is. The bill is two separate
+          mandibles because the shear is the behavior: the walk is slow, the
+          bite is not, and only a hinged bill can carry that difference. */}
+      <g className="sai-crit-croppose">
+        {/* what he is working, and the stubble behind it */}
+        <g className="crop-sward">
+          <path d="M 96 103 C 95 96 93 92 90 89 M 102 103 C 102 95 103 90 105 86 M 110 103 C 111 96 114 92 118 89"
+            stroke="#4e9c5f" strokeWidth="2.2" fill="none" strokeLinecap="round" />
+          <path d="M 99 103 C 99 97 100 93 102 90 M 114 103 C 114 97 116 94 119 92"
+            stroke="#79c98a" strokeWidth="1.7" fill="none" strokeLinecap="round" opacity=".85" />
+        </g>
+        <g className="crop-neck">
+          <path d="M 69 74 C 76 68 84 66 91 72 C 98 78 101 82 100 88"
+            stroke={dark} strokeWidth="11.5" fill="none" strokeLinecap="round" />
+          <path d="M 70 73 C 76 68 83 67 89 71" stroke="#2c3036" strokeWidth="4" fill="none"
+            strokeLinecap="round" opacity=".5" />
+          <circle cx="100" cy="90" r="9.2" fill={dark} />
+          {/* the chinstrap, now riding the underside of a head turned down */}
+          <path d="M 94 86 C 91 88.5 90.5 93 93 96 C 97 96.6 100.5 94.6 101.5 91 C 100.6 87 97 85.4 94 86 Z" fill={white} />
+          <g className="sai-crit-eyes-normal">
+            <circle cx="103.2" cy="85.6" r="2.4" fill="#fff" opacity=".9" />
+            <circle cx="103.4" cy="85.9" r="1.6" fill={ink} />
+          </g>
+          {/* upper mandible, fixed to the skull... */}
+          <path d="M 101 95 L 111 99.2 L 101.6 100.4 Q 100.6 97.6 101 95 Z" fill={shank} />
+          <path d="M 103.4 97 l 4.4 1.6" stroke="#4a4f56" strokeWidth=".9" strokeLinecap="round" />
+          {/* ...lower one hinged, and the only fast-moving thing on him */}
+          <g className="crop-jaw">
+            <path d="M 101 99 L 110.4 100.6 L 101 103 Q 100.4 101 101 99 Z" fill="#2c3036" />
+            <path d="M 103 100.8 l 4.6 .4" stroke="#4a4f56" strokeWidth=".9" strokeLinecap="round" />
+          </g>
+          {/* blades coming away sideways in the bill */}
+          <g className="crop-cut">
+            <path d="M 108 98.6 C 112 96.6 115 96.2 118 96.8" stroke="#79c98a" strokeWidth="1.7"
+              fill="none" strokeLinecap="round" />
+            <path d="M 107 101 C 111 101.6 114 102.2 116 103.4" stroke="#4e9c5f" strokeWidth="1.5"
+              fill="none" strokeLinecap="round" />
+          </g>
+        </g>
+      </g>
+
+      {/* DABBLING POSE: head and neck driven straight down through the
+          surface, bill working the roots. Drawn rather than posed for the
+          same reason as the crop, and for one more — everything under the
+          waterline has to be painted BEFORE the water so the surface passes
+          over it. `ownsWater` on the event keeps the generic swimming rig
+          off, which leaves the legs showing through the lens: that is the
+          whole point of the pose, since standing on the bottom is exactly
+          what separates a dabbling goose from a swimming one. */}
+      <g className="sai-crit-dabblepose">
+        <g className="dab-neck">
+          <path d="M 70 74 C 76 70 86 74 92 82 C 97 89 99 95 99 100"
+            stroke={dark} strokeWidth="11.5" fill="none" strokeLinecap="round" />
+          <path d="M 71 73 C 77 70 85 74 90 81" stroke="#2c3036" strokeWidth="4" fill="none"
+            strokeLinecap="round" opacity=".5" />
+          <circle cx="99" cy="101" r="9" fill={dark} />
+          <path d="M 93 97 C 90 99.5 89.5 104 92 107 C 96 107.6 99.5 105.6 100.5 102 C 99.6 98 96 96.4 93 97 Z"
+            fill={white} opacity=".82" />
+          <g className="dab-bill">
+            <path d="M 100 106 L 108.4 111.6 L 100.6 111.4 Q 99.6 108.6 100 106 Z" fill={shank} />
+          </g>
+          {/* roots and tubers tearing loose around the bill */}
+          <g className="dab-roots">
+            <path d="M 104 110 C 109 108 113 109 116.5 112 M 103 113 C 107 114 110 116 112 119"
+              stroke="#8fb06a" strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".8" />
+            <ellipse cx="113" cy="110" rx="2.6" ry="1.8" fill="#cbb98a" opacity=".8" transform="rotate(-18 113 110)" />
+          </g>
+        </g>
+        {/* THE SURFACE, over everything beneath it. The lens is translucent
+            so the submerged neck and the shanks read as submerged rather
+            than as missing, and the meniscus is the bright line where the
+            water actually cuts the feathers. */}
+        <g className="dab-water">
+          <ellipse cx="58" cy="97" rx="58" ry="12.5" fill="#2f7c9b" opacity=".42" />
+          <path d="M 2 94 C 22 88 92 88 114 95" stroke="#dff3fb" strokeWidth="2" fill="none"
+            strokeLinecap="round" opacity=".55" />
+          <g className="dab-rings">
+            <ellipse cx="97" cy="95" rx="12" ry="4.4" fill="none" stroke="#dff3fb" strokeWidth="1.8" opacity=".75" />
+            <ellipse cx="97" cy="95" rx="20" ry="7" fill="none" stroke="#dff3fb" strokeWidth="1.4" opacity=".5" />
+            <ellipse cx="97" cy="95" rx="28" ry="9.6" fill="none" stroke="#dff3fb" strokeWidth="1.1" opacity=".3" />
+          </g>
+        </g>
+        {/* the strand he brings up, hung off the upright bill. Shown by
+            data-carry, so it is on screen for exactly as long as he holds
+            it and gone the instant the event lets go. */}
+        <g className="dab-weed">
+          <path d="M 106.5 30 C 110 36 108 43 104 48 C 101 52 101 57 103 61"
+            stroke="#6f9c52" strokeWidth="2.2" fill="none" strokeLinecap="round" />
+          <path d="M 108 35 C 112 37 114 41 113 45 M 105 46 C 101 47 98 50 98 54"
+            stroke="#8fb06a" strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".9" />
+          <ellipse cx="103" cy="62" rx="2.8" ry="2" fill="#cbb98a" opacity=".85" />
+        </g>
+      </g>
       {/* PREENING POSE: the neck curls back over the shoulder and the bill
           works down INTO the back feathers (oiling from the gland at the
           tail base). CSS swaps this in for the upright head while preening */}

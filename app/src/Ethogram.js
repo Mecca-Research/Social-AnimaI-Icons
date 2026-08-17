@@ -1708,6 +1708,161 @@ defineEthogram("turtle", {
  * cue to oil the feathers; stepping into it is the cue that a bath may
  * follow, once he has swum far enough out to be worth watching.
  */
+// ---------------------------------------------------------------------
+// GOOSE — the two ways he feeds, one on each side of the waterline.
+// Everything from here down to (but not including) `defineEthogram("goose"`
+// goes immediately ABOVE that call, after the beaver/frog/turtle helpers
+// and below the `// ------` rule that introduces him.
+// ---------------------------------------------------------------------
+
+/**
+ * A grazing goose does not walk and eat; he eats, takes two or three steps,
+ * and eats again. That duty cycle IS the slow walk — half a second of
+ * stride against a second and a half with the bill down puts him over the
+ * ground at about 12 px/s while every moving frame is still an honest
+ * gait() call at an urgency he could justify. Scaling gait's output down
+ * to a "graze speed" would have been the same number arrived at by lying
+ * about how fast he is capable of moving.
+ */
+const CROP_STRIDE = [380, 700];
+const CROP_HEAD_DOWN = [1000, 1900];
+
+/**
+ * A point in the sward, weighted to its middle. Landing on the rim means
+ * his first turn is a turn back the way he came, and a bout that opens by
+ * reversing reads as a goose who has changed his mind about lunch.
+ */
+function swardPoint(c) {
+  const s = c.def.sward;
+  if (!s) return null;                    // a world with no open field simply has no grazing
+  const t = () => 0.5 + (Math.random() + Math.random() - 1) * 0.34;
+  return { x: (s.x0 + (s.x1 - s.x0) * t()) * c.bounds.w,
+           y: (s.y0 + (s.y1 - s.y0) * t()) * c.bounds.h };
+}
+
+/**
+ * Where the next stride points. A grazing bird wanders because the patch
+ * in front of him runs out, not because he is going anywhere, so the
+ * heading is the last one nudged — until he nears the edge of the grass,
+ * where it becomes a heading back into it. Without that second half he
+ * grazes his way into the lake in under a minute.
+ */
+function swardHeading(a, c) {
+  const s = c.def.sward, b = c.bounds, m = 26;   // one stride of margin
+  const cx = ((s.x0 + s.x1) / 2) * b.w, cy = ((s.y0 + s.y1) / 2) * b.h;
+  if (a.x < s.x0 * b.w + m || a.x > s.x1 * b.w - m ||
+      a.y < s.y0 * b.h + m || a.y > s.y1 * b.h - m) {
+    return Math.atan2(cy - a.y, cx - a.x) + c.rand(-0.4, 0.4);
+  }
+  return a._cropAim + c.rand(-0.55, 0.55);
+}
+
+function beginCrop(a, c) {
+  a.vx = 0; a.vy = 0;
+  a._cropAim = c.rand(0, Math.PI * 2);
+  a._cropN = Math.round(c.rand(10, 16));   // ~26s of grass, which is a meal, not a nibble
+  a._cropStep = false;                     // the head goes down the moment he arrives
+  a._cropUntil = c.now + c.rand(CROP_HEAD_DOWN[0], CROP_HEAD_DOWN[1]);
+  a.state = "cropgrass";
+}
+
+/**
+ * One state covers both halves of the cycle on purpose: the pose is
+ * head-down whether he is stepping or standing, and the renderer already
+ * tells the two apart from his actual displacement — so the legs walk
+ * when he walks and stop when he stops without this having to say so.
+ */
+function driveCrop(a, c) {
+  if (c.now < a._cropUntil) {
+    if (a._cropStep) {
+      // not travelling — repositioning between mouthfuls, which is the
+      // slowest thing in the urgency table that still counts as moving
+      const sp = gait(a, c, 0.10);
+      a.vx = Math.cos(a._cropAim) * sp; a.vy = Math.sin(a._cropAim) * sp;
+    } else { a.vx = 0; a.vy = 0; }
+    return;
+  }
+  a.vx = 0; a.vy = 0;
+  if (a._cropStep) { a._cropStep = false; a._cropUntil = c.now + c.rand(CROP_HEAD_DOWN[0], CROP_HEAD_DOWN[1]); return; }
+  if (--a._cropN <= 0) { endEvent(a, c, { reroll: true, quiet: 1400, stop: true }); return; }
+  a._cropAim = swardHeading(a, c);
+  a._cropStep = true;
+  a._cropUntil = c.now + c.rand(CROP_STRIDE[0], CROP_STRIDE[1]);
+}
+
+/**
+ * SHALLOW, in lakeRho, is 0.86 to 0.93 — call it 0.90.
+ *
+ * The shoreline is 1.0 and the water only starts at 0.97, so the whole
+ * question is which seven hundredths beyond that he stands in. On this
+ * stage a hundredth of rho is 1.8-2.6 px, so 0.90 is 12-19 px inside the
+ * waterline: a third to a half of his own body length, one step. Inside it
+ * his belly is wet, which is what makes the sprite read as being IN the
+ * lake and what credits the water side of his ledger; outside it he is on
+ * the mud miming a dabble at a lake he has not reached — the failure the
+ * raccoon's wash line already records at 0.93, which is why 0.93 is the
+ * shallow edge of this band rather than the middle of it.
+ *
+ * The far limit is the more interesting one. It is not depth that stops
+ * him at 0.86, it is what the world does with the space: the floats drift
+ * the body of the lake between 0.38 and 0.62, and the sim's own swim
+ * targets fill sqrt(rand)*0.72. Everything inside ~0.8 is water the world
+ * expects a swimmer in, and a bird standing up in it reads as a bird
+ * standing on nothing.
+ */
+const DABBLE_RHO = [0.86, 0.93];
+/**
+ * ...with the west end left alone. The dam's outer row sits at rho 0.89 —
+ * squarely in the band — and the floats already keep out of the same
+ * sector. Dabbling among the beaver's logs is not shallows, it is a
+ * building site.
+ */
+const DAM_SECTOR = [2.45, 3.95];
+
+const DABBLE_DOWN = [2200, 3400];
+const DABBLE_UP = [1300, 2100];
+
+function shallowPoint(a, c) {
+  const b = c.bounds;
+  let ang = Math.atan2((a.y - c.LAKE.cy * b.h) / (c.LAKE.ry * b.h),
+                       (a.x - c.LAKE.cx * b.w) / (c.LAKE.rx * b.w));
+  ang += c.rand(-0.3, 0.3);              // the nearest margin, not the same spot each time
+  let pa = ang < 0 ? ang + Math.PI * 2 : ang;
+  if (pa > DAM_SECTOR[0] && pa < DAM_SECTOR[1]) {
+    pa = pa - DAM_SECTOR[0] < DAM_SECTOR[1] - pa ? DAM_SECTOR[0] - 0.12 : DAM_SECTOR[1] + 0.12;
+  }
+  return c.lakePoint(b, pa, c.rand(DABBLE_RHO[0], DABBLE_RHO[1]));
+}
+
+function beginDabble(a, c, S, g) {
+  a.vx = 0; a.vy = 0;
+  a._dabX = g ? g.x : a.x; a._dabY = g ? g.y : a.y;
+  a._faceDir = c.LAKE.cx * c.bounds.w > a.x ? 1 : -1;   // head under over the deep side
+  a._dabN = Math.round(c.rand(3, 5));
+  a.state = "dabble"; a.stateUntil = c.now + c.rand(DABBLE_DOWN[0], DABBLE_DOWN[1]);
+}
+
+/**
+ * He is standing, so he holds the spot he chose. The band is only a dozen
+ * px wide and the separation push moves animals further than that in a
+ * second — a dabble left to drift ends up in open water, where standing is
+ * the wrong verb.
+ */
+function driveDabble(a, c) {
+  a.vx = 0; a.vy = 0;
+  const k = Math.min(1, c.dt * 3);
+  a.x += (a._dabX - a.x) * k; a.y += (a._dabY - a.y) * k;
+  if (c.now < a.stateUntil) return;
+  if (a.state === "dabble") {
+    a._carry = "weed";                                  // up it comes
+    a.state = "dabblelift"; a.stateUntil = c.now + c.rand(DABBLE_UP[0], DABBLE_UP[1]);
+    return;
+  }
+  a._carry = null;
+  if (--a._dabN <= 0) { a._faceDir = 0; endEvent(a, c, { reroll: true, quiet: 1200, stop: true }); return; }
+  a.state = "dabble"; a.stateUntil = c.now + c.rand(DABBLE_DOWN[0], DABBLE_DOWN[1]);
+}
+
 defineEthogram("goose", {
   domainOf: (a, c) => (c.def.hasWater && c.isWet(a.x, a.y) ? "water" : "land"),
 
@@ -1720,6 +1875,12 @@ defineEthogram("goose", {
     land:  { share: 0.40, dwell: [9000, 18000], travel: 10000 },
     water: { share: 0.60, dwell: [11000, 20000], travel: 26000, pull: 0.90 },
   },
+
+  // A drag or an encounter can lift him out of a bout mid-pose, and the
+  // state that leaves him in is not one this ethogram will ever end — so
+  // the forced facing and the weed in his bill are handed back here
+  // rather than left on him for the rest of the session.
+  tick(a) { if (a._faceDir) a._faceDir = 0; if (a._carry) a._carry = null; },
 
   events: [
     // ---- oiling, the moment he steps out ------------------------------
@@ -1755,6 +1916,52 @@ defineEthogram("goose", {
         a.vx = 0; a.vy = 0;
         if (c.now >= a.stateUntil) endEvent(a, c, { reroll: true, quiet: 800, stop: true });
       },
+    },
+
+    // ---- LAND: cropping the sward -------------------------------------
+    // The reason a goose is ever ashore at all. His land dwell is nine to
+    // eighteen seconds because his whole repertoire used to be at the
+    // waterline; this is the one thing worth walking inland for, so it is
+    // allowed to outlast the window that sent him there — the plan stands
+    // down while an event owns him, and the ledger's debt pull puts the
+    // time back on the water side afterwards. An urge every 78-132s taken
+    // slightly better than half the time is a bout every three minutes or
+    // so, and a bout with its walk either side is forty seconds: half his
+    // time ashore spent doing the thing geese ashore do, and about a fifth
+    // of his day. He claims nothing — the sward is not a forage site and
+    // any number of birds can crop it at once.
+    {
+      id: "graze", domain: "land", trigger: "seek",
+      every: [78000, 132000], chance: 0.55, cool: 30000,
+      states: ["cropgrass"],
+      goto: {
+        state: "tosward", within: 20, giveUp: 26000, urgency: 0.45,
+        none: 14000, lost: 14000,
+        pick: (a, c) => swardPoint(c),
+      },
+      begin: beginCrop,
+      drive: driveCrop,
+    },
+
+    // ---- WATER: dabbling the shallows ---------------------------------
+    // A water appetite acted on in the water: he is already swimming when
+    // it arrives and paddles to the margin, which is the honest order of
+    // events for a bird who feeds at the edge of the lake he lives on.
+    // Three to five plunges is fifteen to twenty seconds, inside his 11-20s
+    // water dwell, so unlike the graze this one costs the plan nothing.
+    // `ownsWater` is the important flag: he is standing on the bottom, and
+    // the generic swimming rig would tuck away the very legs that say so.
+    {
+      id: "dabble", domain: "water", trigger: "seek",
+      every: [40000, 76000], chance: 0.55, cool: 26000,
+      states: ["dabble", "dabblelift"], ownsWater: true,
+      goto: {
+        state: "toshallow", within: 10, giveUp: 18000, urgency: 0.30,
+        none: 9000, lost: 9000,
+        pick: (a, c) => shallowPoint(a, c),
+      },
+      begin: beginDabble,
+      drive: driveDabble,
     },
   ],
 });
