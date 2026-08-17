@@ -702,6 +702,16 @@ function BeaverDraw({ uid }) {
   return (
     <g transform="translate(60 106) scale(.98) translate(-60 -106)">
       <defs><Fur id={`${uid}f`} c={F} /></defs>
+      {/* He does not carry the paddle on land, he drags it. The furrow is the
+          cheapest way to say so and the only one that survives the sprite
+          being 90px wide — a tail held at the right angle reads as a tail
+          held at some angle, but a mark left behind it reads as weight. */}
+      <g className="sai-crit-tailscuff">
+        <path d="M 3 99 q 18 -3 34 -1" stroke="#6a5236" strokeWidth="2.6" fill="none" strokeLinecap="round" opacity=".55" />
+        <path d="M 6 103 q 16 -2 28 -.5" stroke="#5a4529" strokeWidth="1.8" fill="none" strokeLinecap="round" opacity=".4" />
+        <ellipse cx="12" cy="101" rx="4.6" ry="1.9" fill="#7d6244" opacity=".45" />
+        <ellipse cx="24" cy="99.5" rx="3.4" ry="1.5" fill="#7d6244" opacity=".35" />
+      </g>
       <g className="sai-crit-tail">
         <ellipse cx="25" cy="91" rx="20" ry="9.5" fill={tailC} transform="rotate(-14 25 91)" />
         <ellipse cx="25" cy="91" rx="20" ry="9.5" fill="none" stroke={tailD} strokeWidth="1.4" transform="rotate(-14 25 91)" />
@@ -753,6 +763,15 @@ function GooseDraw({ uid }) {
   return (
     <g transform="translate(60 106) scale(1.05) translate(-60 -106)">
       <defs><Fur id={`${uid}f`} c={F} /></defs>
+      {/* The wake is the whole argument for water factor 1.25: on land he is
+          a set of moving parts and on the water he is one shape being carried,
+          and a shape with no moving parts needs something else to say it is
+          travelling. CSS shows it only while swimming. */}
+      <g className="sai-crit-wake">
+        <path d="M 34 92 C 20 95 8 99 -3 104" stroke="#dff3fb" strokeWidth="2.6" fill="none" strokeLinecap="round" opacity=".55" />
+        <path d="M 34 91 C 22 88 10 86 -3 85" stroke="#dff3fb" strokeWidth="2.2" fill="none" strokeLinecap="round" opacity=".4" />
+        <ellipse cx="29" cy="92" rx="10" ry="3" fill="#dff3fb" opacity=".26" />
+      </g>
       {/* black tail feathers over the white stern */}
       <g className="sai-crit-tail">
         <path d="M 38 68 C 30 62 22 58 14 57 C 16 62 20 66 25 69 C 21 70 17 72 15 75 C 22 77 30 77 36 74 Z" fill={dark} />
@@ -795,6 +814,103 @@ function GooseDraw({ uid }) {
           <circle cx="93" cy="25" r="2.4" fill="#fff" opacity=".9" /><circle cx="93.4" cy="25.2" r="1.6" fill={ink} />
         </g>
         <FaceKit lid={dark} e1={[86, 26]} e2={[93, 25]} er={2.4} drawEyes={false} mouths={false} blushCol="#c9857a" />
+      </g>
+      {/* CROPPING POSE: the neck folds forward and down until the bill is
+          in the sward. The rig's neck is one path anchored in the breast —
+          it can rotate but it cannot shorten, and a rotation long enough to
+          reach the grass swings the head out past the tail, so the fold is
+          drawn the same way the preen is. The bill is two separate
+          mandibles because the shear is the behavior: the walk is slow, the
+          bite is not, and only a hinged bill can carry that difference. */}
+      <g className="sai-crit-croppose">
+        {/* what he is working, and the stubble behind it */}
+        <g className="crop-sward">
+          <path d="M 96 103 C 95 96 93 92 90 89 M 102 103 C 102 95 103 90 105 86 M 110 103 C 111 96 114 92 118 89"
+            stroke="#4e9c5f" strokeWidth="2.2" fill="none" strokeLinecap="round" />
+          <path d="M 99 103 C 99 97 100 93 102 90 M 114 103 C 114 97 116 94 119 92"
+            stroke="#79c98a" strokeWidth="1.7" fill="none" strokeLinecap="round" opacity=".85" />
+        </g>
+        <g className="crop-neck">
+          <path d="M 69 74 C 76 68 84 66 91 72 C 98 78 101 82 100 88"
+            stroke={dark} strokeWidth="11.5" fill="none" strokeLinecap="round" />
+          <path d="M 70 73 C 76 68 83 67 89 71" stroke="#2c3036" strokeWidth="4" fill="none"
+            strokeLinecap="round" opacity=".5" />
+          <circle cx="100" cy="90" r="9.2" fill={dark} />
+          {/* the chinstrap, now riding the underside of a head turned down */}
+          <path d="M 94 86 C 91 88.5 90.5 93 93 96 C 97 96.6 100.5 94.6 101.5 91 C 100.6 87 97 85.4 94 86 Z" fill={white} />
+          <g className="sai-crit-eyes-normal">
+            <circle cx="103.2" cy="85.6" r="2.4" fill="#fff" opacity=".9" />
+            <circle cx="103.4" cy="85.9" r="1.6" fill={ink} />
+          </g>
+          {/* upper mandible, fixed to the skull... */}
+          <path d="M 101 95 L 111 99.2 L 101.6 100.4 Q 100.6 97.6 101 95 Z" fill={shank} />
+          <path d="M 103.4 97 l 4.4 1.6" stroke="#4a4f56" strokeWidth=".9" strokeLinecap="round" />
+          {/* ...lower one hinged, and the only fast-moving thing on him */}
+          <g className="crop-jaw">
+            <path d="M 101 99 L 110.4 100.6 L 101 103 Q 100.4 101 101 99 Z" fill="#2c3036" />
+            <path d="M 103 100.8 l 4.6 .4" stroke="#4a4f56" strokeWidth=".9" strokeLinecap="round" />
+          </g>
+          {/* blades coming away sideways in the bill */}
+          <g className="crop-cut">
+            <path d="M 108 98.6 C 112 96.6 115 96.2 118 96.8" stroke="#79c98a" strokeWidth="1.7"
+              fill="none" strokeLinecap="round" />
+            <path d="M 107 101 C 111 101.6 114 102.2 116 103.4" stroke="#4e9c5f" strokeWidth="1.5"
+              fill="none" strokeLinecap="round" />
+          </g>
+        </g>
+      </g>
+
+      {/* DABBLING POSE: head and neck driven straight down through the
+          surface, bill working the roots. Drawn rather than posed for the
+          same reason as the crop, and for one more — everything under the
+          waterline has to be painted BEFORE the water so the surface passes
+          over it. `ownsWater` on the event keeps the generic swimming rig
+          off, which leaves the legs showing through the lens: that is the
+          whole point of the pose, since standing on the bottom is exactly
+          what separates a dabbling goose from a swimming one. */}
+      <g className="sai-crit-dabblepose">
+        <g className="dab-neck">
+          <path d="M 70 74 C 76 70 86 74 92 82 C 97 89 99 95 99 100"
+            stroke={dark} strokeWidth="11.5" fill="none" strokeLinecap="round" />
+          <path d="M 71 73 C 77 70 85 74 90 81" stroke="#2c3036" strokeWidth="4" fill="none"
+            strokeLinecap="round" opacity=".5" />
+          <circle cx="99" cy="101" r="9" fill={dark} />
+          <path d="M 93 97 C 90 99.5 89.5 104 92 107 C 96 107.6 99.5 105.6 100.5 102 C 99.6 98 96 96.4 93 97 Z"
+            fill={white} opacity=".82" />
+          <g className="dab-bill">
+            <path d="M 100 106 L 108.4 111.6 L 100.6 111.4 Q 99.6 108.6 100 106 Z" fill={shank} />
+          </g>
+          {/* roots and tubers tearing loose around the bill */}
+          <g className="dab-roots">
+            <path d="M 104 110 C 109 108 113 109 116.5 112 M 103 113 C 107 114 110 116 112 119"
+              stroke="#8fb06a" strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".8" />
+            <ellipse cx="113" cy="110" rx="2.6" ry="1.8" fill="#cbb98a" opacity=".8" transform="rotate(-18 113 110)" />
+          </g>
+        </g>
+        {/* THE SURFACE, over everything beneath it. The lens is translucent
+            so the submerged neck and the shanks read as submerged rather
+            than as missing, and the meniscus is the bright line where the
+            water actually cuts the feathers. */}
+        <g className="dab-water">
+          <ellipse cx="58" cy="97" rx="58" ry="12.5" fill="#2f7c9b" opacity=".42" />
+          <path d="M 2 94 C 22 88 92 88 114 95" stroke="#dff3fb" strokeWidth="2" fill="none"
+            strokeLinecap="round" opacity=".55" />
+          <g className="dab-rings">
+            <ellipse cx="97" cy="95" rx="12" ry="4.4" fill="none" stroke="#dff3fb" strokeWidth="1.8" opacity=".75" />
+            <ellipse cx="97" cy="95" rx="20" ry="7" fill="none" stroke="#dff3fb" strokeWidth="1.4" opacity=".5" />
+            <ellipse cx="97" cy="95" rx="28" ry="9.6" fill="none" stroke="#dff3fb" strokeWidth="1.1" opacity=".3" />
+          </g>
+        </g>
+        {/* the strand he brings up, hung off the upright bill. Shown by
+            data-carry, so it is on screen for exactly as long as he holds
+            it and gone the instant the event lets go. */}
+        <g className="dab-weed">
+          <path d="M 106.5 30 C 110 36 108 43 104 48 C 101 52 101 57 103 61"
+            stroke="#6f9c52" strokeWidth="2.2" fill="none" strokeLinecap="round" />
+          <path d="M 108 35 C 112 37 114 41 113 45 M 105 46 C 101 47 98 50 98 54"
+            stroke="#8fb06a" strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".9" />
+          <ellipse cx="103" cy="62" rx="2.8" ry="2" fill="#cbb98a" opacity=".85" />
+        </g>
       </g>
       {/* PREENING POSE: the neck curls back over the shoulder and the bill
           works down INTO the back feathers (oiling from the gland at the
@@ -888,78 +1004,156 @@ function SkunkDraw({ uid }) {
         </g>
         <FaceKit lid={K[1]} e1={[79, 44]} e2={[94, 43]} er={3.4} drawEyes={false} mouth={[94, 59]} browCol="#0c0b10" />
       </g>
-      {/* ---- NOSE-DOWN HEAD (floorsnuff, windfalleat, clawscrape) ----
+      {/* ---- NOSE-DOWN HEAD (floorsnuff, windfalleat) ----
           The standing head is no use to an animal whose food is all on the
           floor, so this one hangs off the shoulders with the nose in the
           litter. Only the head is swapped — the goose's preen trick — which
           leaves body and all four legs on the normal rig, and he has to go
-          on walking while he does this. */}
+          on walking while he does this.
+          Two groups, not one: the outer takes the stride bob and nothing
+          else, so the neck rides the torso instead of floating clear of it
+          every step, and the nod lives on the inner one. clawscrape no
+          longer borrows this head — see the crouch below. */}
       <g className="sai-crit-snuffhead">
-        <path d="M 74 63 C 84 65 91 72 94 81" stroke={K[1]} strokeWidth="17" fill="none" strokeLinecap="round" />
-        <g className="sai-crit-ear"><circle cx="78" cy="72" r="4.8" fill={K[2]} /></g>
-        <circle cx="91" cy="85" r="15" fill={`url(#${uid}f)`} />
-        {/* the blaze, running now from a nose in the dirt back up the
-            muzzle and over the crown */}
-        <path d="M 103.5 91 C 99 83.5 94 76.5 86.5 71.5 C 83 73 81.2 76.4 82.4 79.8 C 89 83 94.6 88.6 98.6 95 Z" fill={white} />
-        <g className="sai-crit-eyes-normal">
-          <circle cx="94" cy="80" r="3.2" fill="#fff" /><circle cx="94.8" cy="80.2" r="1.9" fill={ink} />
-        </g>
-        {/* nose and whiskers move together: the whiskers are what makes a
-            twitch of two pixels legible at sprite size */}
-        <g className="snuff-nose">
-          <ellipse cx="104" cy="96" rx="3.1" ry="2.7" fill={ink} />
-          <path d="M 106 91.5 l 9.5 -2.6 M 106.5 94.5 l 9 .6 M 105.5 97.5 l 7.5 4.5"
-            stroke={white} strokeWidth="1" fill="none" strokeLinecap="round" opacity=".55" />
-        </g>
-        {/* What he has picked up. Both items are kept inside the whiskers'
-            reach on purpose: they come and go with data-carry, and anything
-            sticking out past them would move the group's own bounding box
-            and drag the head's pivot with it. */}
-        <g className="snuff-berry">
-          <circle cx="107.5" cy="97.5" r="3.2" fill="#8e1f46" />
-          <circle cx="106.6" cy="96.5" r="1.1" fill="#d46b95" opacity=".7" />
-          <circle cx="111" cy="99" r="2.4" fill="#7d1b3e" />
-        </g>
-        <g className="snuff-nut">
-          <ellipse cx="108.5" cy="98" rx="3.4" ry="4" fill="#7a5227" />
-          <ellipse cx="108.5" cy="96.6" rx="1.6" ry="1.4" fill="#a9793f" />
-        </g>
-        {/* leaf litter shouldered aside as the nose ploughs through it */}
-        <g className="snuff-litter">
-          <ellipse cx="110" cy="98.4" rx="1.5" ry="1.2" fill="#6d5030" />
-          <ellipse cx="114" cy="99.2" rx="1.2" ry="1" fill="#4a3520" />
-          <ellipse cx="107" cy="99.6" rx="1.3" ry="1.1" fill="#5d4327" />
+        <g className="snuff-swing">
+          {/* Neck root pulled back to (71,70). Its round cap is a disc of
+              radius 8, and started further forward that disc stood proud of
+              his own topline — a black half-moon floating above the white
+              dorsal stripe, which reads as a lump and not as a neck. Here
+              the cap's crown lands at y 62 against a back that is at 61.8,
+              so it finishes inside the silhouette. */}
+          <path d="M 71 70 C 80 71 88 76 93 83" stroke={K[1]} strokeWidth="16" fill="none" strokeLinecap="round" />
+          {/* Plain circle, deliberately NOT .sai-crit-ear: the shared ear
+              bounce rotates about the middle of the viewBox, and on a head
+              that has itself moved down and forward that throws the ear four
+              pixels off the skull — and floorsnuff is a walking state, so it
+              would run the entire bout. */}
+          <circle cx="78" cy="73" r="4.8" fill={K[2]} />
+          <circle cx="91" cy="85" r="15" fill={`url(#${uid}f)`} />
+          {/* the blaze, running now from a nose in the dirt back up the
+              muzzle and over the crown */}
+          <path d="M 103.5 91 C 99 83.5 94 76.5 86.5 71.5 C 83 73 81.2 76.4 82.4 79.8 C 89 83 94.6 88.6 98.6 95 Z" fill={white} />
+          <g className="sai-crit-eyes-normal">
+            <circle cx="94" cy="80" r="3.2" fill="#fff" /><circle cx="94.8" cy="80.2" r="1.9" fill={ink} />
+          </g>
+          {/* nose and whiskers move together: the whiskers are what makes a
+              twitch of two pixels legible at sprite size. The lower one is
+              cut short — at its old length the bottom of the sweep dragged
+              its tip four units through the floor and out past the far edge
+              of his own shadow. */}
+          <g className="snuff-nose">
+            <ellipse cx="104" cy="96" rx="3.1" ry="2.7" fill={ink} />
+            <path d="M 106 91.5 l 8 -2.2 M 106.5 94.5 l 7.5 .5 M 105.5 97.5 l 5 2"
+              stroke={white} strokeWidth="1" fill="none" strokeLinecap="round" opacity=".55" />
+          </g>
+          {/* What he has picked up. Both items are kept inside the whiskers'
+              reach on purpose: they come and go with data-carry, and anything
+              sticking out past them would move the group's own bounding box
+              and drag the head's pivot with it. */}
+          <g className="snuff-berry">
+            <circle cx="107.5" cy="97.5" r="3.2" fill="#8e1f46" />
+            <circle cx="106.6" cy="96.5" r="1.1" fill="#d46b95" opacity=".7" />
+            <circle cx="111" cy="99" r="2.4" fill="#7d1b3e" />
+          </g>
+          <g className="snuff-nut">
+            <ellipse cx="108.5" cy="98" rx="3.4" ry="3.6" fill="#7a5227" />
+            <ellipse cx="108.5" cy="96.8" rx="1.6" ry="1.4" fill="#a9793f" />
+          </g>
+          {/* leaf litter shouldered aside as the nose ploughs through it */}
+          <g className="snuff-litter">
+            <ellipse cx="110" cy="98.4" rx="1.5" ry="1.2" fill="#6d5030" />
+            <ellipse cx="114" cy="99.2" rx="1.2" ry="1" fill="#4a3520" />
+            <ellipse cx="107" cy="99.6" rx="1.3" ry="1.1" fill="#5d4327" />
+          </g>
         </g>
       </g>
 
-      {/* ---- LIGHT CLAW SCRAPE (clawscrape) ----
-          Only the near foreleg is redrawn. The rig's front shank is a plain
-          rounded rect and this action is entirely about the claws, which a
-          skunk carries long and pale. Everything else — body, hind legs,
-          the nose-down head above — stays on the normal rig, and that is
-          what keeps this reading as a scratch taken in passing rather than
-          a hole he has committed to. */}
+      {/* ---- SURFACE SCRATCH (clawscrape) ----
+          Drawn whole rather than posed on the rig. The rig's torso is a
+          single level ellipse and its forelegs are full-length shanks, so
+          nothing in CSS could drop his chest without stretching a leg
+          through the floor — the same reason the squirrel's dig is a
+          separate drawing. Posing it on the rig is what produced a foreleg
+          that reached across his own face: the only place the shoulder
+          could put a paw was inside the skull.
+          What separates this from that dig is depth. The squirrel is in a
+          hole with both forepaws and a rim of thrown earth. This one keeps
+          his rump up over extended hocks, his chest low but off the ground,
+          one paw working the top half-inch, and leaves streaks rather than
+          a pit. */}
       <g className="sai-crit-scrapepose">
-        <g className="scrape-arm">
-          <path d="M 68 71 C 73 80 79 89 86 96 L 93 92 C 87 84 81 76 77 68 Z" fill={K[1]} />
-          <ellipse cx="89" cy="96" rx="6" ry="3.8" fill={K[2]} />
-          <path d="M 93 97.6 l 5.4 3.4 M 89.6 99 l 3 4.2 M 85.6 99 l 1 4.4"
-            stroke={white} strokeWidth="1.7" fill="none" strokeLinecap="round" opacity=".85" />
-        </g>
-        {/* loose surface soil lifted and dropped more or less where it was.
-            Nothing is thrown clear and nothing is heaped: what he leaves
-            behind is a scuff, not a scrape with a rim */}
-        <g className="scrape-puff">
-          <ellipse cx="96" cy="100" rx="2.4" ry="1.9" fill="#5d4327" />
-          <ellipse cx="101" cy="99" rx="1.9" ry="1.5" fill="#6d5030" />
-          <ellipse cx="92" cy="99.4" rx="1.7" ry="1.4" fill="#4a3520" />
-          <ellipse cx="105" cy="100.6" rx="1.5" ry="1.2" fill="#5d4327" />
-        </g>
-        {/* the marks themselves — parallel surface streaks, the whole
-            evidence that he was ever here */}
+        {/* laid down first so the paw works on top of its own marks */}
         <g className="scrape-marks">
-          <path d="M 92 101.6 q 7 -1.6 13 -.4 M 90 104.2 q 8 -1.8 15 -.6"
+          <path d="M 66 101.8 q 7 -1.5 13 -.3 M 63 104.4 q 8 -1.7 15 -.6"
             stroke="#4a3520" strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".7" />
+        </g>
+        {/* The plume is the one thing a skunk never lowers, so it is the
+            part of him that still reads at a glance while the rest is down.
+            Static inner transform re-aims the tail he already has; the
+            animated group itself carries no transform attribute. */}
+        <g className="scrape-tail"><g transform="translate(0 -5) rotate(-12 44 76)">
+          <path d="M 44 80 C 24 84 8 72 10 52 C 12 34 26 24 40 28 C 36 40 38 54 46 64 C 50 70 50 76 44 80 Z" fill={K[1]} />
+          <path d="M 12 56 C 11 41 21 29 35 29.5 C 32 38 32.5 48 37 57 C 28 62 17 62 12 56 Z" fill={white} />
+        </g></g>
+        {/* hocks still under him at nearly full stretch: the rump never came
+            down, and that alone is the difference between a scratch and a
+            dig at this size */}
+        <g className="scrape-hind">
+          <rect x="32" y="79" width="8.5" height="24" rx="4.25" fill={K[2]} />
+          <ellipse cx="36.5" cy="101.4" rx="5.2" ry="3" fill="#101015" />
+          <rect x="42" y="81" width="8.5" height="22" rx="4.25" fill={K[1]} />
+          <ellipse cx="46.5" cy="101.4" rx="5.6" ry="3.2" fill={K[2]} />
+        </g>
+        {/* off-side foreleg propping the low end. It is static on purpose —
+            it gives the eye a fixed vertical to read the raking one against,
+            without which two dark shanks in the same band just flicker */}
+        <g className="scrape-far">
+          <rect x="82" y="90" width="8" height="13" rx="4" fill={K[2]} />
+          <ellipse cx="86.3" cy="101.6" rx="5" ry="3" fill="#101015" />
+        </g>
+        <g className="scrape-body">
+          <path d="M 28 80 C 27 66 38 58 54 59 C 68 60 79 67 86 78 C 89 83 88 91 81 94 C 66 99 42 98 33 92 C 29 89 28 85 28 80 Z"
+            fill={`url(#${uid}f)`} />
+          <path d="M 32 76 C 34 65 44 60 56 61 C 68 62 77 68 83 77 L 78 79 C 72 71 65 66 55 65 C 45 64 38 68 36 77 Z" fill={white} />
+          <Under cx={57} cy={80} rx={24} ry={14} color="#4d4d59" k={.5} opacity={.85} />
+          <BellyShade cx={56} cy={94} rx={18} />
+        </g>
+        {/* The working foreleg, and its whole visible run is the daylight
+            between belly and ground. The upper arm stays buried in the
+            chest: a shank drawn across the torso is a bar of the same colour
+            as the torso, so all it does is add a seam. */}
+        <g className="scrape-arm">
+          <path d="M 76 87 C 74.5 92 75 97 76.5 99.5" stroke={K[1]} strokeWidth="9.5" fill="none" strokeLinecap="round" />
+          <ellipse cx="78" cy="100.4" rx="6.4" ry="3.6" fill={K[2]} />
+          {/* Claws live below y=102 and are coloured off the soil, not off
+              the blaze. Pale strokes anywhere near the muzzle merge with the
+              face stripe at sprite size and read as a second nose — which is
+              exactly what the old white claws did. */}
+          <path d="M 82.4 102 l 2.8 .9 M 78.6 102.8 l 1.3 1.8 M 74.6 102.6 l -.7 1.8"
+            stroke="#c9bda6" strokeWidth="1.5" fill="none" strokeLinecap="round" opacity=".8" />
+        </g>
+        {/* Nose already in the soil at rest, so the nod only has to work the
+            last two pixels. Nothing has to swing far to sell a pose that is
+            already committed in the drawing. */}
+        <g className="scrape-head">
+          <circle cx="83" cy="71" r="4.4" fill={K[2]} />
+          <circle cx="92" cy="84" r="14.5" fill={`url(#${uid}f)`} />
+          <path d="M 91 95.5 C 96 96.8 101 98.6 104.8 100.4 C 106.2 101 106 102.6 104.4 102.6 C 99 102.6 92 100.6 88 97.4 Z" fill={K[1]} />
+          {/* the blaze stops short of the nose. Run all the way in, it and
+              the whiskers and the nose pad collapse into one pale smudge */}
+          <path d="M 85 77 C 87 84 91 92 97 97" stroke={white} strokeWidth="7" fill="none" strokeLinecap="round" />
+          <circle cx="95" cy="81" r="3.2" fill="#fff" /><circle cx="95.8" cy="81.3" r="1.9" fill={ink} />
+          <ellipse cx="104" cy="100.6" rx="3" ry="2.6" fill={ink} />
+          <path d="M 106 98 l 5 -2.2 M 106.4 100.8 l 5 2" stroke={white} strokeWidth="1" fill="none" strokeLinecap="round" opacity=".5" />
+        </g>
+        {/* Surface litter flicked back under him: it travels a few pixels and
+            settles. Nothing is thrown clear and nothing is heaped — what he
+            leaves behind is a scuff, not a scrape with a rim. */}
+        <g className="scrape-puff">
+          <ellipse cx="72" cy="101" rx="2.4" ry="1.9" fill="#5d4327" />
+          <ellipse cx="67" cy="100.4" rx="1.9" ry="1.5" fill="#6d5030" />
+          <ellipse cx="76" cy="101.4" rx="1.7" ry="1.4" fill="#4a3520" />
+          <ellipse cx="63" cy="101.8" rx="1.5" ry="1.2" fill="#5d4327" />
         </g>
       </g>
     </g>
@@ -1133,6 +1327,82 @@ function SquirrelDraw({ uid }) {
           <path d="M 80.4 52 l -.8 -2.2 M 83.2 51.8 l -.2 -2.4" stroke={F[2]} strokeWidth="1.1" strokeLinecap="round" fill="none" />
         </g>
       </g>
+      {/* ---- TRUNK-CLING POSE (nutup, takenut, nutdown) ----
+          Going up the nut tree, seen from behind and a little to the
+          right: a narrow back squared to the bark, all four feet splayed
+          round it, the plume held UP along the trunk. That last is not a
+          stylization — a tail hanging down off a rump at y 92 runs sixty
+          units past the ground line and there is nowhere in the box to
+          put it, and a climbing squirrel carries it up over his back
+          anyway. The horizontal rig cannot be stood on end (rotating it
+          reads as a squirrel lying on his side in mid-air), so the climb
+          is drawn out in full — the bear's trunk-hug trick.
+
+          TWO NUMBERS HERE ARE LOAD-BEARING: the ear tips top out at y 30
+          and the hind grip bottoms at y 100. The ethogram measures the
+          height he stops at from exactly those, so that his ears finish
+          just under the crown and his feet just inside the leaf line.
+          Move either and he stops in the wrong place. */}
+      <g className="sai-crit-clingpose">
+        {/* the plume, dropped and rolled in so it lies along the bark
+            instead of standing off it. Inner static transform re-aims the
+            tail he already has; the animated group carries none */}
+        <g className="cling-tail"><g transform="translate(-1 7) rotate(-9 50 86)">
+          <path d="M 48 88 C 30 90 14 80 12 60 C 10 41 22 26 40 25 C 52 24 60 33 58 43 C 56 51 47 54 41 49 C 36 45 36 38 41 35 C 34 37 30 44 32 52 C 34 62 42 68 50 71 C 54 73 55 80 52 84 Z" fill={`url(#${uid}f)`} />
+          <path d="M 12 60 C 10 42 22 27 39 25.5 C 50 25 57 32 56 41 L 51 38.5 C 50 33 46 29 39.5 29.5 C 26 30.5 15 44 16.5 60 Z" fill={frost} opacity=".85" />
+        </g></g>
+        {/* far side first, in the deep shade — forepaw high on the bark,
+            hind foot cocked out under the hip. Pale claws: on a trunk the
+            grip is the whole story, so it is the one thing picked out */}
+        <g className="cling-arm-far">
+          <path d="M 56 55 C 49 53 43 49 40 43 C 36.5 48 37 56 41 60 C 45 64 51 63 56 61 Z" fill={F[2]} />
+          <path d="M 40.4 42.4 l -3.2 -2.4 M 38 46.6 l -3.6 -1.2 M 37.4 51 l -3.6 0" stroke={belly} strokeWidth="1.5" fill="none" strokeLinecap="round" opacity=".85" />
+        </g>
+        <g className="cling-leg-far">
+          <path d="M 57 82 C 49 84 42 88 39 94 C 45 97.5 53 95.5 58 90 Z" fill={F[2]} />
+          <path d="M 39.4 94.6 l -3.2 2 M 43 96.8 l -2.6 2.4 M 47.4 97.8 l -1.8 2.2" stroke={belly} strokeWidth="1.5" fill="none" strokeLinecap="round" opacity=".85" />
+        </g>
+        {/* the back: wide at the shoulders, tucked at the waist, the
+            spine a soft dark line straight up the middle */}
+        <g className="sai-crit-clingback">
+          <path d="M 50 92 C 46 78 47 58 53 47 C 57 40 68 40 72 47 C 78 58 79 78 75 92 C 67 96 58 96 50 92 Z" fill={`url(#${uid}f)`} />
+          <path d="M 62 44 C 65 60 65.5 78 63.5 94" stroke="#5f5952" strokeWidth="3.4" fill="none" opacity=".18" strokeLinecap="round" />
+          <ellipse cx="55" cy="60" rx="6" ry="14" fill={frost} opacity=".16" />
+        </g>
+        {/* near side, in the light */}
+        <g className="cling-leg-near">
+          <path d="M 63 82 C 71 84 78 88 81 94 C 75 97.5 67 95.5 62 90 Z" fill={F[1]} />
+          <path d="M 80.6 94.6 l 3.2 2 M 77 96.8 l 2.6 2.4 M 72.6 97.8 l 1.8 2.2" stroke={belly} strokeWidth="1.5" fill="none" strokeLinecap="round" opacity=".9" />
+        </g>
+        <g className="cling-arm-near">
+          <path d="M 64 55 C 71 53 77 49 80 43 C 83.5 48 83 56 79 60 C 75 64 69 63 64 61 Z" fill={F[1]} />
+          <path d="M 79.6 42.4 l 3.2 -2.4 M 82 46.6 l 3.6 -1.2 M 82.6 51 l 3.6 0" stroke={belly} strokeWidth="1.5" fill="none" strokeLinecap="round" opacity=".9" />
+        </g>
+        {/* head tipped up the trunk, one cheek showing. Ears drawn before
+            the skull so they rise out from behind it */}
+        <g className="cling-head">
+          <g className="sai-crit-ear sai-crit-ear-l">
+            <path d="M 56 46 C 52.5 39 52.5 32.5 55.5 30 C 58.5 33 59.5 39 58.5 46 Z" fill={F[1]} />
+            <path d="M 56.6 43 C 55.2 38 55.6 34.2 57.2 32.6 C 58.6 34.8 58.8 39 58 43 Z" fill="#b8a89c" opacity=".8" />
+          </g>
+          <g className="sai-crit-ear sai-crit-ear-r">
+            <path d="M 66 46 C 64 38.5 65.5 32 68.6 30 C 71 33.4 70.8 39.4 69 46 Z" fill={F[0]} />
+            <path d="M 66.8 43 C 65.6 38.4 66.6 34.4 68.4 33 C 69.6 35.2 69.4 39.2 68.6 43 Z" fill="#c9b8ab" opacity=".8" />
+          </g>
+          <circle cx="62.5" cy="52" r="12.5" fill={`url(#${uid}f)`} />
+          <ellipse cx="72" cy="49" rx="6.4" ry="5.2" fill={belly} />
+          <path d="M 75.6 45.4 l 3.4 2.2 -3 2.4 -3 -2.2 Z" fill="#8c6a5a" />
+          <path d="M 78.4 48 l 9.6 -2 M 78.4 50.2 l 9.6 .6" stroke="#d8d2ca" strokeWidth="1" strokeLinecap="round" />
+          <FaceKit lid={F[1]} e1={[56.5, 50]} e2={[68, 47.5]} er={2.9} iris={ink} mouths={false} />
+        </g>
+        {/* the nut he is bringing down. The normal rig's cheek pouch is
+            hidden with the rest of that rig, so this is the only one on
+            screen while he is on the bark */}
+        <g className="cling-nut">
+          <ellipse cx="77.6" cy="52.6" rx="4.2" ry="5" fill="#7a5227" transform="rotate(14 77.6 52.6)" />
+          <ellipse cx="77.4" cy="50.6" rx="1.9" ry="1.6" fill="#a9793f" />
+        </g>
+      </g>
     </g>
   );
 }
@@ -1174,14 +1444,18 @@ function HedgehogDraw({ uid }) {
   const spikes = [];
   for (let i = 0; i < 11; i++) {
     const a = Math.PI * (1.06 - i * 0.082);
-    const cx0 = 56, cy0 = 84, rBase = 26, rTip = 44;
+    const cx0 = 56, cy0 = 84, rBase = 28, rTip = 47;
     const x0 = cx0 + Math.cos(a + 0.16) * rBase, y0 = cy0 - Math.sin(a + 0.16) * (rBase * 0.78);
     const x1 = cx0 + Math.cos(a) * rTip, y1 = cy0 - Math.sin(a) * (rTip * 0.82);
     const x2 = cx0 + Math.cos(a - 0.16) * rBase, y2 = cy0 - Math.sin(a - 0.16) * (rBase * 0.78);
     spikes.push(<path key={i} d={`M ${x0} ${y0} L ${x1} ${y1} L ${x2} ${y2} Z`} fill={i % 2 ? spikeA : spikeB} />);
   }
   return (
-    <g transform="translate(60 106) scale(.86) translate(-60 -106)">
+    // Drawn to 1.52 rather than the 0.86 it had. Every other species fills
+    // most of its 120 box; this one filled about a third of it, so however
+    // its radius was set it came out roughly a quarter the squirrel's on
+    // screen — an animal that is heavier and rounder than a squirrel in life.
+    <g transform="translate(60 106) scale(1.52) translate(-60 -106)">
       <defs><Fur id={`${uid}f`} c={F} /></defs>
       <Leg x={44} top={90} len={13} w={6} color={F[2]} cls="bl" />
       <Leg x={72} top={90} len={13} w={6} color={F[2]} cls="fl" />
@@ -1189,7 +1463,7 @@ function HedgehogDraw({ uid }) {
       <Leg x={80} top={91} len={13} w={6} color={F[1]} cls="fr" />
       <g className="sai-crit-body">
         <g>{spikes}</g>
-        <ellipse cx="58" cy="86" rx="27" ry="16" fill={`url(#${uid}f)`} />
+        <ellipse cx="58" cy="85" rx="28" ry="18.5" fill={`url(#${uid}f)`} />
         <path d="M 58 70 C 44 70 33 77 32 86 C 40 74 52 72 58 72 Z" fill={spikeA} opacity=".65" />
         <BellyShade cx={60} cy={99} rx={18} />
       </g>
@@ -1199,6 +1473,266 @@ function HedgehogDraw({ uid }) {
         <path d="M 72 74 C 84 70 96 74 105 84 C 96 90 84 92 74 90 Z" fill={`url(#${uid}f)`} />
         <circle cx="104.5" cy="83.5" r="3.2" fill={ink} />
         <FaceKit lid={F[1]} e1={[85, 79]} e2={[95, 79.5]} er={2.8} iris={ink} mouth={[98, 90]} />
+      </g>
+      {/* ---- THE BALL (hogcurl / hogball / hoguncurl) ----
+          There is no rig deformation that gets here. The spike crown is a
+          fixed fan over the back, the snout is a wedge off the front of the
+          skull, and the four legs are stubs — squash the lot and you get a
+          flatter hedgehog, not a sphere. So the sphere is drawn: a serrated
+          ring in the same two spike tones as the crown, which is what makes
+          the ball obviously the same animal as the one that just walked in.
+          Two paths rather than one so the teeth still alternate. */}
+      <g className="sai-crit-ballpose">
+        <circle cx="60" cy="78.2" r="18.4" fill={`url(#${uid}f)`} />
+        <g className="ball-spines">
+          <path d="M 76 72.6 L 82.2 65.8 L 73 67.6 Z M 68.5 63.9 L 68.8 54.9 L 63 62 Z M 57 62 L 51.2 54.9 L 51.5 63.9 Z M 47 67.6 L 37.8 65.8 L 44 72.6 Z M 43 78.2 L 34.8 82.5 L 44 83.8 Z M 47 88.8 L 43.5 97.2 L 51.5 92.5 Z M 57 94.4 L 60 103 L 63 94.4 Z M 68.5 92.5 L 76.5 97.2 L 73 88.8 Z M 76 83.8 L 85.2 82.5 L 77 78.2 Z" fill={spikeA} />
+          <path d="M 77 78.2 L 85.2 73.9 L 76 72.6 Z M 73 67.6 L 76.5 59.2 L 68.5 63.9 Z M 63 62 L 60 53.4 L 57 62 Z M 51.5 63.9 L 43.5 59.2 L 47 67.6 Z M 44 72.6 L 34.8 73.9 L 43 78.2 Z M 44 83.8 L 37.8 90.6 L 47 88.8 Z M 51.5 92.5 L 51.2 101.5 L 57 94.4 Z M 63 94.4 L 68.8 101.5 L 68.5 92.5 Z M 73 88.8 L 82.2 90.6 L 76 83.8 Z" fill={spikeB} />
+        </g>
+        {/* the spines that meet the ground are crushed flat under him, which
+            is also what stops the bottom teeth poking through the floor */}
+        <ellipse cx="60" cy="102.4" rx="17" ry="3.4" fill={spikeB} />
+        <BellyShade cx={60} cy={103} rx={15} />
+        {/* the pale skirt of belly fur the tuck leaves showing at the seam */}
+        <path d="M 44 84 C 47 92 53 97 61 99 C 51 99 44 94 41 86 Z" fill={F[0]} opacity=".5" />
+        {/* the snout, out only on the way back down — this group is the
+            difference between a ball and an animal deciding it is over */}
+        <g className="ball-face">
+          <path d="M 66 96 C 72 92.6 79 92.4 84 94.6 C 79 98 71 99.2 66 98 Z" fill={F[0]} />
+          <circle cx="84" cy="94.4" r="2.4" fill={ink} />
+          <path d="M 70 92.4 q 3 2.2 6 .4" stroke={ink} strokeWidth="1.5" fill="none" strokeLinecap="round" opacity=".75" />
+        </g>
+      </g>
+      {/* =================================================================
+          THE THREE FORAGING POSES. All three are drawn whole and swapped
+          in, because the four-legged rig has one level body with the head
+          pasted on the front: it can put his snout neither under a root
+          nor down a hole in a log, and the third pose is a view of him
+          from BEHIND, which no rig anywhere in this file can produce.
+
+          Each pose carries its own timber. That is deliberate and not a
+          duplicate of the site art: the sprite paints at z-index 10 and
+          the forage sites at 2, so anything meant to hide his head has to
+          be inside the sprite or it paints behind him. The palettes are
+          the world's own bark colors so the two read as one piece of wood
+          where they overlap.
+
+          They carry NO scale of their own: HedgehogDraw's whole return
+          already sits inside the 1.52 group, so these are drawn in the
+          same coordinates as the rest of him — ground at y 103, facing
+          right — and a wrapper here would put them at 2.3x.
+          ================================================================= */}
+
+      {/* ---- 1. UNDER THE ROOT (rootdig) ----
+          Rump up, head driven down into the gap where a surface root goes
+          back into the soil. The root is painted last of all so the snout
+          genuinely disappears under it rather than stopping at its edge. */}
+      <g className="sai-crit-rootdig">
+        <g className="rd-mound">
+          <ellipse cx="68" cy="101" rx="21" ry="6" fill="#3f2c17" />
+          <ellipse cx="61" cy="99" rx="11" ry="4.4" fill="#54391d" />
+          <ellipse cx="76" cy="100" rx="8" ry="3.4" fill="#4a331b" />
+        </g>
+        {/* hind legs braced under the raised haunches — all his shove
+            comes from these, so they are the one part drawn planted */}
+        <g className="rd-hind">
+          <rect x="30" y="86" width="9" height="17" rx="4.5" fill={F[2]} />
+          <rect x="41" y="88" width="9" height="15" rx="4.5" fill={F[1]} />
+          <ellipse cx="34.5" cy="102" rx="6.2" ry="3" fill={F[2]} />
+          <ellipse cx="45.5" cy="102.5" rx="6.2" ry="3" fill={F[1]} />
+        </g>
+        <g className="rd-body">
+          <ellipse cx="54" cy="84" rx="26" ry="17.5" fill={`url(#${uid}f)`} transform="rotate(15 54 84)" />
+          <BellyShade cx={50} cy={97} rx={17} />
+          {/* the same spike fan he wears standing up, pitched forward.
+              Reusing it rather than drawing a second one is what keeps
+              the dig recognisably the same animal */}
+          <g className="rd-spines"><g transform="translate(-2 -2) rotate(15 56 84)">{spikes}</g></g>
+        </g>
+        <g className="rd-head">
+          <path d="M 54 76 C 64 74 72 80 78 90 C 72 96 62 96 55 91 Z" fill={`url(#${uid}f)`} />
+          <ellipse cx="72" cy="90" rx="9" ry="7" fill={F[1]} />
+          <circle cx="61" cy="82" r="3.4" fill={F[2]} />
+          <circle cx="67" cy="84" r="2.3" fill={ink} />
+          <circle cx="67.8" cy="83.2" r=".8" fill="#fff" opacity=".85" />
+          <circle cx="79" cy="94" r="2.6" fill={ink} />
+        </g>
+        <g className="rd-fore">
+          <ellipse cx="63" cy="97" rx="6.4" ry="4" fill={F[2]} />
+          <path d="M 67 99 l 3 1.8 M 64 100 l 1.4 2.4 M 60.4 99.6 l .2 2.6"
+            stroke="#7a5a38" strokeWidth="1.3" strokeLinecap="round" fill="none" />
+        </g>
+        {/* the root itself: one thick surface root sloping out of frame
+            at the top right and back into the ground at his nose */}
+        <g className="rd-root">
+          <path d="M 100 50 C 94 62 89 74 85 86 C 83 92 82 98 81.5 103 L 68 103 C 69 96 71 88 75 78 C 79 68 84 58 89 48 Z" fill="#5b3f26" />
+          <path d="M 89 48 C 84 58 79 68 75 78 C 71 88 69 96 68 103 L 73 103 C 74 95 77 87 81 77 C 85 67 89 57 93 47 Z" fill="#6f4f30" />
+          <ellipse cx="80" cy="88" rx="9.5" ry="6" fill="#5b3f26" transform="rotate(-24 80 88)" />
+          <path d="M 86 60 C 83 70 80 80 78 90" stroke="#402c19" strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".7" />
+          <path d="M 92 58 C 89 68 87 78 86 88" stroke="#402c19" strokeWidth="1.2" fill="none" strokeLinecap="round" opacity=".5" />
+          <path d="M 91 52 C 88 60 86 66 84 72" stroke="#3f7c4a" strokeWidth="3" fill="none" strokeLinecap="round" opacity=".6" />
+          {/* the dark under the root — his whole face is in here */}
+          <path d="M 68 103 C 69 96 71 90 74 85 C 77 90 79.5 96 80.5 103 Z" fill="#1b1109" opacity=".92" />
+        </g>
+        {/* earth going back between his legs, laid out along the arc it
+            travels so the CSS only has to run it along */}
+        <g className="rd-dirt" fill="#4a331b">
+          <ellipse cx="58" cy="93" rx="3" ry="2.2" />
+          <ellipse cx="50" cy="87" rx="2.6" ry="2" />
+          <ellipse cx="42" cy="81" rx="3.2" ry="2.4" />
+          <ellipse cx="34" cy="76" rx="2.4" ry="1.8" />
+          <ellipse cx="27" cy="72" rx="2.8" ry="2" />
+        </g>
+      </g>
+
+      {/* ---- 2. INTO THE ROOT'S BOTTOM EDGE (rootbore) ----
+          The one view of him nobody else in this file has: from behind,
+          head already inside the root, so what we watch for six seconds
+          is a spiny backside and two working feet. The fan is generated
+          rather than reused because a hedgehog seen end-on is a disc of
+          spines, not the side crown pointing one way. */}
+      <g className="sai-crit-rootbore">
+        {/* the root mass. Lumpy rather than slabbed: a big surface root
+            is a run of knuckles, and three overlapping ellipses read as
+            that far better than any one outline */}
+        <g className="rb-root">
+          <ellipse cx="34" cy="40" rx="31" ry="17" fill="#5b3f26" />
+          <ellipse cx="82" cy="38" rx="28" ry="16" fill="#5b3f26" />
+          <ellipse cx="58" cy="33" rx="27" ry="15" fill="#6f4f30" />
+          <path d="M 16 30 C 34 22 80 22 100 30" stroke="#3f7c4a" strokeWidth="4.5" fill="none" strokeLinecap="round" opacity=".55" />
+          <path d="M 20 44 C 40 52 76 52 96 44" stroke="#402c19" strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".55" />
+        </g>
+        {/* the cavity he has his head in, painted before him so his
+            shoulders enter it instead of sitting on top of it */}
+        <ellipse className="rb-socket" cx="58" cy="62" rx="14" ry="9" fill="#1b1109" />
+        <g className="rb-rump">
+          <ellipse cx="58" cy="90" rx="24" ry="13" fill={`url(#${uid}f)`} />
+          <g className="rb-spines">
+            {Array.from({ length: 15 }, (_, i) => {
+              const a = Math.PI * (1.02 - i * 0.0743);
+              const cx0 = 58, cy0 = 92, rB = 21, rT = 33;
+              const x0 = cx0 + Math.cos(a + 0.12) * rB, y0 = cy0 - Math.sin(a + 0.12) * (rB * 0.95);
+              const x1 = cx0 + Math.cos(a) * rT, y1 = cy0 - Math.sin(a) * (rT * 0.95);
+              const x2 = cx0 + Math.cos(a - 0.12) * rB, y2 = cy0 - Math.sin(a - 0.12) * (rB * 0.95);
+              return <path key={i} d={`M ${x0} ${y0} L ${x1} ${y1} L ${x2} ${y2} Z`} fill={i % 2 ? spikeA : spikeB} />;
+            })}
+          </g>
+          <ellipse cx="58" cy="97" rx="14" ry="6.5" fill={F[1]} />
+          <ellipse cx="58" cy="99" rx="8" ry="4" fill={F[0]} opacity=".75" />
+          <ellipse cx="58" cy="101.5" rx="3" ry="2.2" fill={F[2]} />
+        </g>
+        <g className="rb-foot-l">
+          <ellipse cx="33" cy="100" rx="7" ry="4" fill={F[2]} transform="rotate(-18 33 100)" />
+          <path d="M 27 102 l -3 2 M 31 103 l -1.4 2.4 M 35.4 103 l .4 2.4"
+            stroke="#7a5a38" strokeWidth="1.3" strokeLinecap="round" fill="none" />
+        </g>
+        <g className="rb-foot-r">
+          <ellipse cx="83" cy="100" rx="7" ry="4" fill={F[1]} transform="rotate(18 83 100)" />
+          <path d="M 89 102 l 3 2 M 85 103 l 1.4 2.4 M 80.6 103 l -.4 2.4"
+            stroke="#7a5a38" strokeWidth="1.3" strokeLinecap="round" fill="none" />
+        </g>
+        {/* the root's lower lip, in two pieces with a gap between them.
+            The gap IS the picture: it is the only place his shoulders
+            are allowed through, so nothing has to be clipped */}
+        <g className="rb-lip">
+          <path d="M 6 42 C 22 58 36 62 48 62 L 48 71 C 30 71 12 60 6 42 Z" fill="#4a3220" />
+          <path d="M 110 42 C 94 58 80 62 68 62 L 68 71 C 86 71 104 60 110 42 Z" fill="#4a3220" />
+        </g>
+        <g className="rb-dirt" fill="#4a331b">
+          <ellipse cx="26" cy="97" rx="3" ry="2.2" />
+          <ellipse cx="18" cy="93" rx="2.4" ry="1.8" />
+          <ellipse cx="90" cy="97" rx="3" ry="2.2" />
+          <ellipse cx="98" cy="93" rx="2.4" ry="1.8" />
+        </g>
+      </g>
+
+      {/* ---- 3. HEAD-FIRST INTO THE LOG (logdive, logchew) ----
+          One drawing of the log serving both beats, which is the whole
+          reason they share a group: the hole he backs out of has to be
+          the hole he went into, and drawing the log twice would let the
+          two halves drift apart. `.lp-diver` and `.lp-sitter` are the
+          only parts that swap. */}
+      <g className="sai-crit-logpose">
+        <g className="lp-log">
+          <ellipse cx="58" cy="99" rx="47" ry="6" fill="#1a0e04" opacity=".22" />
+          <rect x="14" y="62" width="92" height="37" rx="18" fill="#402c19" />
+          <rect x="14" y="62" width="92" height="15" rx="7.5" fill="#5b3f26" />
+          <path d="M 22 66 C 44 62 76 62 98 66 C 78 71 40 71 22 66 Z" fill="#4e9c5f" opacity=".5" />
+          <path d="M 24 84 C 46 88 72 88 94 83" stroke="#2a1c10" strokeWidth="1.8" fill="none" strokeLinecap="round" opacity=".5" />
+          <path d="M 26 92 C 48 95 70 95 92 91" stroke="#2a1c10" strokeWidth="1.4" fill="none" strokeLinecap="round" opacity=".4" />
+          <ellipse cx="104" cy="80" rx="7" ry="17" fill="#6b4a2a" />
+          <ellipse cx="104" cy="80" rx="4.4" ry="11" fill="#402c19" opacity=".7" />
+          <ellipse cx="104" cy="80" rx="2" ry="5" fill="#6b4a2a" opacity=".6" />
+        </g>
+        {/* the rot hole, and its near rim painted again over him below */}
+        <ellipse className="lp-hole" cx="68" cy="68" rx="13.5" ry="7" fill="#1b1109" />
+
+        <g className="lp-diver">
+          {/* shoulders going down the hole. Painted before the rim so
+              the rim is what cuts him off, not a guessed edge */}
+          <path d="M 48 46 C 60 44 68 52 70 66 C 62 70 52 66 48 58 Z" fill={F[2]} />
+          <ellipse cx="42" cy="54" rx="20" ry="12" fill={`url(#${uid}f)`} transform="rotate(9 42 54)" />
+          <g className="lp-dspines">
+            {Array.from({ length: 11 }, (_, i) => {
+              const a = Math.PI * (1.16 - i * 0.104);
+              const cx0 = 42, cy0 = 56, rB = 14, rT = 25;
+              const x0 = cx0 + Math.cos(a + 0.15) * rB, y0 = cy0 - Math.sin(a + 0.15) * (rB * 0.88);
+              const x1 = cx0 + Math.cos(a) * rT, y1 = cy0 - Math.sin(a) * (rT * 0.88);
+              const x2 = cx0 + Math.cos(a - 0.15) * rB, y2 = cy0 - Math.sin(a - 0.15) * (rB * 0.88);
+              return <path key={i} d={`M ${x0} ${y0} L ${x1} ${y1} L ${x2} ${y2} Z`} fill={i % 2 ? spikeA : spikeB} />;
+            })}
+          </g>
+          {/* the legs the brief asks for: one braced on the bark, one
+              kicking clear of it. A hedgehog head-down in a hole does
+              not stand — he treads */}
+          <g className="lp-legbrace">
+            <rect x="30" y="58" width="7" height="13" rx="3.5" fill={F[2]} />
+            <ellipse cx="33.5" cy="71" rx="5.4" ry="2.8" fill={F[2]} />
+          </g>
+          <g className="lp-legkick">
+            <rect x="44" y="58" width="7" height="13" rx="3.5" fill={F[1]} />
+            <ellipse cx="47.5" cy="71" rx="5.4" ry="2.8" fill={F[1]} />
+          </g>
+        </g>
+
+        <g className="lp-sitter">
+          <ellipse cx="46" cy="54" rx="21" ry="13" fill={`url(#${uid}f)`} />
+          <g className="lp-sspines">
+            {Array.from({ length: 11 }, (_, i) => {
+              const a = Math.PI * (1.08 - i * 0.098);
+              const cx0 = 46, cy0 = 56, rB = 15, rT = 26;
+              const x0 = cx0 + Math.cos(a + 0.15) * rB, y0 = cy0 - Math.sin(a + 0.15) * (rB * 0.86);
+              const x1 = cx0 + Math.cos(a) * rT, y1 = cy0 - Math.sin(a) * (rT * 0.86);
+              const x2 = cx0 + Math.cos(a - 0.15) * rB, y2 = cy0 - Math.sin(a - 0.15) * (rB * 0.86);
+              return <path key={i} d={`M ${x0} ${y0} L ${x1} ${y1} L ${x2} ${y2} Z`} fill={i % 2 ? spikeA : spikeB} />;
+            })}
+          </g>
+          <ellipse cx="50" cy="64" rx="15" ry="5" fill="#1a0e04" opacity=".14" />
+          <g className="lp-shead">
+            <circle cx="60" cy="52" r="3.4" fill={F[2]} />
+            <path d="M 58 47 C 68 44 78 48 85 57 C 77 62 66 62 58 58 Z" fill={`url(#${uid}f)`} />
+            <circle cx="84.5" cy="56.5" r="2.8" fill={ink} />
+            <circle cx="70" cy="51" r="2.4" fill={ink} />
+            <circle cx="70.8" cy="50.2" r=".8" fill="#fff" opacity=".85" />
+            <g className="lp-grub">
+              <ellipse cx="80" cy="61" rx="5.4" ry="3" fill="#e8dcc0" transform="rotate(-16 80 61)" />
+              <path d="M 77 62.4 l .6 -2.4 M 80 61.6 l .6 -2.4 M 83 60.6 l .5 -2.2"
+                stroke="#c7b48c" strokeWidth="1" strokeLinecap="round" fill="none" />
+              <circle cx="85" cy="59.4" r="1.5" fill="#8a6a44" />
+            </g>
+          </g>
+          <ellipse cx="54" cy="68" rx="5" ry="2.6" fill={F[2]} />
+          <ellipse cx="46" cy="69" rx="5" ry="2.6" fill={F[1]} />
+        </g>
+
+        {/* the near rim, over whichever of the two is showing */}
+        <path className="lp-rim" d="M 54.5 68 C 56 73 62 76 68 76 C 74 76 80 73 81.5 68 C 80 71.4 74 73.6 68 73.6 C 62 73.6 56 71.4 54.5 68 Z" fill="#6b4a2a" />
+        {/* what he disturbed, leaving by the nearest exit */}
+        <g className="lp-bugs">
+          <ellipse cx="80" cy="72" rx="2.6" ry="1.7" fill="#241a10" />
+          <ellipse cx="88" cy="76" rx="2.2" ry="1.5" fill="#2f2415" />
+          <ellipse cx="93" cy="70" rx="2.4" ry="1.6" fill="#241a10" />
+          <ellipse cx="84" cy="66" rx="2" ry="1.4" fill="#2f2415" />
+        </g>
       </g>
     </g>
   );
@@ -1478,6 +2012,56 @@ function FrogDraw({ uid }) {
         <path d="M 101 52 q 6 6 0 12" stroke="#eaffd6" strokeWidth="2.4" fill="none" strokeLinecap="round" />
         <path d="M 108 47 q 9 11 0 22" stroke="#eaffd6" strokeWidth="2.1" fill="none" strokeLinecap="round" />
         <path d="M 115 42 q 12 16 0 32" stroke="#eaffd6" strokeWidth="1.8" fill="none" strokeLinecap="round" />
+      </g>
+      {/* ---- THE LEAP (data-burst) ----
+          The rig has two stub legs under the chest and a haunch drawn as a
+          bulge on the body: it can be squashed and it can be lifted, but it
+          cannot extend, and extension is the entire silhouette of a frog in
+          the air. Drawn whole and swapped in for the 300ms the burst window
+          is open — the same trick as the bear's stand and the goose's preen,
+          but on a tenth of their timescale, which is why the pose is drawn
+          GATHERED rather than mid-flight: reduced motion leaves a frog
+          crouched on the ground instead of one hanging in the sky. */}
+      <g className="sai-crit-leappose">
+        {/* both hind legs before the trunk, so they emerge from inside the
+            silhouette the way every quadruped here is built */}
+        <g className="leap-hind leap-hind-far">
+          <path d="M 46 80 C 37 84 26 88 17 92" stroke={F[2]} strokeWidth="7" fill="none" strokeLinecap="round" />
+          <path d="M 17 92 L 4 88 L 3 95 L 13 98 Z" fill={F[2]} />
+          <path d="M 17 92 l -13 -4 M 17 92 l -14 3 M 17 92 l -5 6" stroke={F[2]} strokeWidth="1.5" fill="none" strokeLinecap="round" />
+        </g>
+        <g className="leap-hind leap-hind-near">
+          <path d="M 52 84 C 43 90 33 95 23 98" stroke={F[1]} strokeWidth="7.6" fill="none" strokeLinecap="round" />
+          <path d="M 23 98 L 10 94 L 9 101 L 19 102 Z" fill={F[1]} />
+          <path d="M 23 98 l -13 -5 M 23 98 l -14 3 M 23 98 l -5 5" stroke={F[1]} strokeWidth="1.6" fill="none" strokeLinecap="round" />
+        </g>
+        {/* the trunk: one nose-up teardrop, no neck. A frog in flight has no
+            joint between body and head and drawing one would cost the pose
+            the thing that makes it read at 40px */}
+        <path d="M 40 91 C 34 80 40 68 58 63 C 74 59 88 62 93 69 C 97 75 92 83 78 88 C 64 93 47 96 40 91 Z" fill={`url(#${uid}f)`} />
+        <path d="M 47 89 C 57 95 72 93 85 84 C 84 90 70 97 55 95 C 51 94 48 92 47 89 Z" fill={belly} opacity=".9" />
+        <circle cx="56" cy="72" r="2" fill={F[2]} opacity=".7" />
+        <circle cx="66" cy="68" r="1.7" fill={F[2]} opacity=".7" />
+        <circle cx="48" cy="80" r="1.6" fill={F[2]} opacity=".7" />
+        {/* forelimbs thrown forward to take the landing — the half of the
+            cycle that tells you it is coming DOWN and not still going up */}
+        <g className="leap-fore">
+          <path d="M 78 80 C 84 84 90 86 96 86" stroke={F[2]} strokeWidth="4.4" fill="none" strokeLinecap="round" />
+          <circle cx="97" cy="86.4" r="2.6" fill={F[2]} />
+          <path d="M 80 84 C 86 89 93 91 99 91" stroke={F[1]} strokeWidth="4.8" fill="none" strokeLinecap="round" />
+          <circle cx="100" cy="91.4" r="2.8" fill={F[1]} />
+        </g>
+        {/* eye domes ride on top and forward; the dome fill is what keeps
+            them reading as part of the skull rather than as pasted-on eyes */}
+        <circle cx="83" cy="61" r="8.6" fill={F[1]} />
+        <circle cx="97" cy="64" r="8" fill={F[1]} />
+        <circle cx="84" cy="59.6" r="5" fill="#fdfef4" />
+        <circle cx="85.4" cy="59.6" r="2.8" fill={ink} />
+        <circle cx="85.9" cy="58.6" r="1" fill="#fff" />
+        <circle cx="98" cy="62.6" r="4.6" fill="#fdfef4" />
+        <circle cx="99.3" cy="62.6" r="2.6" fill={ink} />
+        <circle cx="99.8" cy="61.7" r=".9" fill="#fff" />
+        <path d="M 82 74 q 10 6 19 -2" stroke={ink} strokeWidth="2.6" fill="none" strokeLinecap="round" />
       </g>
     </g>
   );

@@ -119,11 +119,22 @@ chk(reg.domains.land.share === 0.70 && reg.domains.water.share === 0.30,
     b.stateUntil=performance.now()+1100; b.intent='wander';
     b.intentUntil=performance.now()+900000; b.noEventUntil=performance.now()+900000;
     const seen=[]; let last='';
-    for (let k=0;k<400;k++){ await new Promise(r2=>setTimeout(r2,110));
+    // Budget note: three dives at ~1.1s with waits between, then a carry the
+    // width of the lake, then a 2.6s meal. That is 12-15s of SIM time, and
+    // headless rAF runs several times slower than the wall — 44s of wall was
+    // cutting the chain off mid-carry and reporting it as a broken chain.
+    for (let k=0;k<1100;k++){ await new Promise(r2=>setTimeout(r2,110));
       if (b.state!==last){ seen.push(b.state); last=b.state; }
       if (b.state==='wander' && seen.length>1) return seen.join('>'); }
     return seen.join('>'); })(window.__saiWorld)`);
-  chk(/fish/.test(r) && /wander$/.test(r), 'fishing chain end to end', r);
+  // Two endings are legitimate: a catch carried ashore and eaten, or three
+  // misses and he gives it up. What must never happen is a carry that never
+  // arrives — that is the leg where a speed change would strand him.
+  const ended = /wander$/.test(r);
+  const carryLands = !/fishcarry/.test(r) || /fishcarry>fisheat/.test(r);
+  chk(/fish/.test(r) && ended && carryLands, 'fishing chain end to end',
+    !ended ? `never returned to wander: ${r}`
+    : !carryLands ? `carried a fish that never landed: ${r}` : r);
 }
 
 // ---- tier 1: the domain planner. Exercise the picker directly instead of

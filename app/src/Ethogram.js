@@ -46,7 +46,11 @@
  *      on arrival hand over to `begin`. Give up after `giveUp` ms.
  *
  *        goto: { state: "toberry", pick: (a,c) => nearestSite(a,c,"berry"),
- *                within: 20, giveUp: 22000, speed: 1 }
+ *                within: 20, giveUp: 22000, urgency: 0.45 }
+ *
+ *      State the URGENCY, not a speed. How fast 0.45 actually is belongs to
+ *      the animal — see the ladder in Gait.js. A flat multiplier here is
+ *      what used to send a turtle across the map at a wolf's pace.
  *
  * ---------------------------------------------------------------------
  * ADDING A BEHAVIOR to a species that already has an ethogram: append one
@@ -92,6 +96,9 @@
 //                              ENGINE
 // ---------------------------------------------------------------------
 
+import { gait } from "./Gait.js";
+import { SPECIES_PROFILE } from "./SpeciesProfile.js";
+
 /** species key -> compiled ethogram */
 export const ETHOGRAM = {};
 /** every state owned by any ethogram — the sim treats these as "busy" */
@@ -120,6 +127,15 @@ const LEDGER_HALF_LIFE = 90000;
 const DEBT_PULL = 2.5;
 
 export function defineEthogram(species, spec) {
+  // A second call for the same species used to overwrite the first without a
+  // word, and the failure is worse than it sounds: the hedgehog's foraging
+  // vanished the moment his roll-up was added in a separate block, and
+  // everything still built, still ran, and still had a hedgehog in it. Add a
+  // behavior by appending a descriptor to the existing `events` array — that
+  // is the whole extension point.
+  if (ETHOGRAM[species]) {
+    throw new Error(`ethogram(${species}): already defined — append to its events array instead of redefining it`);
+  }
   const byState = new Map();
   // Dispatch is per species, so two species may own the same state name —
   // the frog and the turtle both sit on floats. Only a clash WITHIN one
@@ -176,8 +192,11 @@ function freshState(now) {
  * downstream; this only sets the velocity.
  */
 export function stepToward(a, ctx, t, mul = 1) {
+  return stepTowardAt(a, ctx, t, ctx.cfg.speed * mul);
+}
+/** ...and the same thing given an absolute px/s, which is what gait returns */
+export function stepTowardAt(a, ctx, t, sp) {
   const dx = t.x - a.x, dy = t.y - a.y, d = Math.hypot(dx, dy) || 1;
-  const sp = ctx.cfg.speed * mul;
   a.vx = (dx / d) * sp; a.vy = (dy / d) * sp;
   return d;
 }
@@ -199,8 +218,11 @@ function driveGoto(a, ctx, S) {
   if (g.track) { const p = g.track(a, ctx, S.goal.ref); if (p) { S.goal.x = p.x; S.goal.y = p.y; } }
   // a leg that crosses the shoreline wants two speeds, the way every other
   // swim in this world does, so `speed` may also be read each frame
-  const sp = typeof g.speed === "function" ? g.speed(a, ctx) : (g.speed ?? 1);
-  const d = stepToward(a, ctx, S.goal, sp);
+  // A goto states its URGENCY; how fast that actually is belongs to the
+  // animal. A leg at a flat multiplier is what let a turtle cross the map.
+  const d = g.urgency !== undefined
+    ? stepTowardAt(a, ctx, S.goal, gait(a, ctx, g.urgency))
+    : stepToward(a, ctx, S.goal, typeof g.speed === "function" ? g.speed(a, ctx) : (g.speed ?? 1));
   if (d <= (g.within ?? 18)) {
     a.vx = 0; a.vy = 0;
     v.begin(a, ctx, S, S.goal.ref);
@@ -544,7 +566,7 @@ const bushWest = (f) => (f ? { x: f.px - 30, y: f.py + 6, site: f } : null);
 // Both postures walk to the same place. They need separate walk states only
 // because the engine claims one goto state per variant — by the time he sets
 // off he has already decided whether he is after the low fruit or the high.
-const STRIP_GOTO = { within: 22, giveUp: 26000, speed: 0.82, none: 14000, lost: 14000,
+const STRIP_GOTO = { within: 22, giveUp: 26000, urgency: 0.40, none: 14000, lost: 14000,
   pick: (a, c) => bushWest(nearestSite(a, c, "berry")) };
 
 function beginStrip(a, c, g, state, branches) {
@@ -606,7 +628,7 @@ defineEthogram("bear", {
     // wandered back out of reach.
     {
       id: "tree", domain: "land", trigger: "approach",
-      chance: 0.60, miss: 9000, cool: 12000,
+      chance: 0.50, miss: 14000, cool: 12000,
       near: (a, c) => {
         if (!c.def.trees) return null;
         for (const t of c.def.trees) {
@@ -683,7 +705,7 @@ defineEthogram("bear", {
             a.swimTarget = c.lakePoint(c.bounds, c.rand(0, Math.PI * 2), Math.sqrt(Math.random()) * 0.7);
           }
           const dx = a.swimTarget.x - a.x, dy = a.swimTarget.y - a.y, d = Math.hypot(dx, dy) || 1;
-          const sp = c.cfg.speed * 0.5;
+          const sp = gait(a, c, 0.30);          // an unhurried cruise of the shallows
           a.vx = (dx / d) * sp; a.vy = (dy / d) * sp;
           if (c.now >= a.stateUntil) { a.state = "fishdive"; a._diveN = 1; a.stateUntil = c.now + 1100; a.vx = 0; a.vy = 0; }
         } else if (a.state === "fishdive" || a.state === "fishwait") {
@@ -708,7 +730,10 @@ defineEthogram("bear", {
           const t = a._fishTarget;
           if (!t) { endEvent(a, c); return; }
           const dx = t.x - a.x, dy = t.y - a.y, d = Math.hypot(dx, dy) || 1;
-          const sp = c.cfg.speed * (wet ? 0.6 : 0.9);
+          // A bear with a fish in his mouth is on an errand, not a stroll. The
+          // wet/dry factor that used to be written here is the gait core's
+          // job now — it already knows a bear swims at 0.62 of his walk.
+          const sp = gait(a, c, 0.45);
           a.vx = (dx / d) * sp; a.vy = (dy / d) * sp;
           if (d < 16) { a.state = "fisheat"; a.stateUntil = c.now + 2600; a.vx = 0; a.vy = 0; }
         } else if (a.state === "fisheat") {
@@ -732,7 +757,7 @@ defineEthogram("bear", {
     // holds one: heaviest user of the clearing, never its owner.
     {
       id: "strip", domain: "land", trigger: "seek",
-      every: [82000, 146000],
+      every: [50000, 78000],
       // three appetites in four are acted on: the timer already makes this
       // rare, and the roll is only here to keep the rhythm off a metronome
       chance: 0.75,
@@ -797,45 +822,122 @@ export const siteGoal = (f) => (f ? { x: f.px, y: f.py, site: f } : null);
 //  that error made visible — not decoration on top of a lookup.
 // ---------------------------------------------------------------------
 
-// Five caches held in mind, forgotten after five minutes. Both numbers are
-// the behavior rather than housekeeping: an unbounded list would make him
-// infallible, and one that never expired would have him digging at ground
-// he emptied ten minutes ago.
-const CACHE_CAP = 5;
-const CACHE_TTL = 300000;
+// ---------------------------------------------------------------------
+//  THE GREY SQUIRREL — one larder, four holes, and a tree to climb.
+//
+//  Everything else in the clearing eats where it finds. He is the only
+//  one who puts food away, and the whole species now turns on ONE place:
+//  a stump at the western edge with four scrapes at its foot. Nuts come
+//  out of a tree — up the trunk, into the leaves, back down with one in
+//  the cheek — and go into the larder; meals come back out of it. Two
+//  errands, one stock between them, and the stock is on screen.
+//
+//  The old behavior was a remembered MAP: five scattered caches, each
+//  aimed at with a growing error, some never found again. It was good
+//  code and it was invisible — a squirrel digging in one of two soil
+//  patches looks exactly like a squirrel digging, and nothing told the
+//  player it was the same hole twice. The error has not been thrown
+//  away, it has been moved to where it can be read: he knows the larder
+//  perfectly and still cannot tell four identical scrapes apart, so he
+//  noses over them for a few seconds before he commits. Imperfect
+//  recall of WHICH, at arm's length, instead of imperfect recall of
+//  WHERE, across the clearing. recallCache/remember/dropCache and
+//  CACHE_CAP/CACHE_TTL all go with it.
+// ---------------------------------------------------------------------
 
 /**
- * Caches are stored as FRACTIONS of the stage, like every other fixed
- * point in this world. A resize moves every pixel on the map, and a
- * memory that a window drag invalidates is not worth keeping.
+ * The map, handed in by the world the way the bear's tree metrics are, so
+ * this module stays free of the layout:
+ *   nut.basePx/.leafPx/.crownPx  the drawn nut tree, in stage px above its
+ *                                own anchor at scale 1
+ *   nut.trunkDX                  its trunk's centre line, px right of it
+ *   larder.x/.y                  stage fractions
+ *   larder.slots                 px offsets of the four scrapes
+ *   spritePx                     Critter() draws the 120-unit sprite box
+ *                                at r * this many px
  */
-function remember(a, c, x, y) {
-  const list = a._eth.mem.caches || (a._eth.mem.caches = []);
-  list.push({ x: x / c.bounds.w, y: y / c.bounds.h, t: c.now, miss: 0 });
-  if (list.length > CACHE_CAP) list.shift();      // the oldest slides off the map
-}
+let SQ = null;
+export function setForageMetrics(m) { SQ = m; }
 
 /**
- * Pick a cache he still believes in and aim at where he thinks it is.
- * A fresh one he has to within a body length; a stale one only to a patch
- * of ground. So the old caches are the ones he ends up hunting for, and
- * occasionally never finds — which is exactly the right way round.
+ * HOW HIGH HE CLIMBS, read off the nut art rather than picked.
+ *
+ * The ForageLayer nut svg is `viewBox="-48 -88 96 104"` in a div anchored
+ * `translate(-50%,-100%)`, so its bottom edge (local y 16) sits on the
+ * site and a local y is (16 - y) * s stage px above it. Off that drawing:
+ *
+ *   trunk foot        local y 10                    ->   6 px up
+ *   lowest leaf over the trunk's centre line (x 1.5): the bottom edge of
+ *     the cx 17 / cy -50 / rx 21 / ry 16 bough,
+ *     -50 + 16*sqrt(1-(15.5/21)^2)      = -39.2     ->  55 px up
+ *   highest leaf over that same line: the top of the cy -72 / ry 10
+ *     crown, -78.8                                  ->  95 px up
+ *
+ * So there is a forty-px column of leaf directly over the trunk, from 55
+ * to 95, and its middle is 75. He stops with his OWN middle at 75: ears
+ * four px shy of the crown, hind feet four px inside the leaf line, and
+ * every part of him inside the boughs at all three heights (checked
+ * against the horizontal spread of the five ellipses, which is 48-64 px
+ * wide across that whole band — he is 34 px wide there).
+ *
+ * The sway does not disturb this: `.sai-bg-sway` rotates +-2.6 deg about
+ * the foliage's own bottom-centre, which moves the leaf line 0.06 px
+ * vertically and 2.5 px sideways.
  */
-function recallCache(a, c) {
-  const list = a._eth.mem.caches;
-  if (!list) return null;
-  for (let i = list.length - 1; i >= 0; i--) if (c.now - list[i].t > CACHE_TTL) list.splice(i, 1);
-  if (!list.length) return null;
-  const m = list[Math.floor(Math.random() * list.length)];
-  const err = 8 + 10 * ((c.now - m.t) / CACHE_TTL);          // 8px fresh → 18px stale
-  const ang = Math.random() * Math.PI * 2;
-  return { x: m.x * c.bounds.w + Math.cos(ang) * err,
-           y: m.y * c.bounds.h + Math.sin(ang) * err, mem: m };
-}
+const NUT_UP_MS = 1400;      // he goes up a trunk like a squirrel, not a bear
+const NUT_DOWN_MS = 1100;    // and comes down quicker than he went up
 
-function dropCache(a, m) {
-  const list = a._eth.mem.caches; if (!list) return;
-  const i = list.indexOf(m); if (i >= 0) list.splice(i, 1);
+/**
+ * The cling drawing measured against the sprite. Critter() renders the
+ * 120-unit box at r * 2.7 px, and SquirrelDraw wraps everything in
+ * scale(.84) about (60,106), so an art y lands at 106 + (y-106)*.84 and
+ * the sprite's centre line is y 60. Ear tips are drawn at y 30 -> 42.2,
+ * the hind grip at y 100 -> 101.0.
+ *
+ * NOTE the bear's equivalents (STAND_FEET, CLIMB_HEAD) are multiplied by
+ * `a.r * 3.1` in his climb, but 3.1 is the CONTAINER div; the svg inside
+ * it is r * 2.7. His constants were measured on the 2.7 basis, so he
+ * climbs about 15% deeper into the boughs than his own arithmetic says.
+ * Harmless for him — deeper is still hidden — but not repeated here.
+ */
+const CLING_HEAD = (60 - 42.16) / 120;   // ear tips above the sprite centre
+const CLING_FEET = (100.96 - 60) / 120;  // hind grip below it
+
+/**
+ * Where the crouch drawing puts its hole. The dig pose's scrape is centred
+ * at (99,101) in the 120 box, which the .84 wrapper moves to (92.8,101.8)
+ * — 32.8 right of and 41.8 below the sprite's centre. He has to stand that
+ * far up-left of a scrape for the hole he mimes to land on the hole that
+ * is drawn, which never mattered while the ground was anonymous soil and
+ * matters now that there are four numbered holes.
+ */
+const DIG_HOLE_X = 32.8 / 120, DIG_HOLE_Y = 41.8 / 120;
+
+const larder = (c) => c.world.larder || (c.world.larder = { n: 0 });
+/** the next empty scrape, or -1 when the larder is full */
+const fillSlot = (c) => (larder(c).n < SQ.larder.slots.length ? larder(c).n : -1);
+/** the last one he filled, or -1 when it is bare */
+const topSlot = (c) => larder(c).n - 1;
+const larderPt = (c) => ({ x: SQ.larder.x * c.bounds.w, y: SQ.larder.y * c.bounds.h });
+function slotPt(c, k) {
+  const o = SQ.larder.slots[Math.max(0, Math.min(SQ.larder.slots.length - 1, k))], p = larderPt(c);
+  return { x: p.x + o.x, y: p.y + o.y };
+}
+function digStand(a, c, k) {
+  const s = slotPt(c, k), box = a.r * SQ.spritePx;
+  return { x: s.x - box * DIG_HOLE_X, y: s.y - box * DIG_HOLE_Y };
+}
+/** the site's own scale is the only variable: a bigger tree is a longer climb */
+function climbTop(a, f) {
+  const mid = (SQ.nut.leafPx + SQ.nut.crownPx) / 2;
+  return Math.max(16, (mid - SQ.nut.basePx) * f.s
+    - a.r * SQ.spritePx * (CLING_HEAD + CLING_FEET) / 2);
+}
+/** hold the spot he is working: the crowd separation walks him off it otherwise */
+function holdSpot(a, c, p) {
+  a.vx = 0; a.vy = 0;
+  const k = Math.min(1, c.dt * 3);
+  a.x += (p.x - a.x) * k; a.y += (p.y - a.y) * k;
 }
 
 defineEthogram("squirrel", {
@@ -845,123 +947,204 @@ defineEthogram("squirrel", {
   domainOf: () => "land",
   domains: { land: { share: 1, dwell: [18000, 36000] } },
 
-  // A drag lifts him out of a bout mid-dig: the world takes the state and
-  // the event never reaches its own tail. Whatever he was holding and
-  // whatever patch he had reserved have to be let go here, or that soil
-  // stays booked against him for the rest of the session.
-  tick(a, c, S) { if (S.claim || a._carry) { releaseClaim(a, S); a._carry = null; } },
+  // A drag lifts him out of a bout mid-dig, or off the bark mid-climb:
+  // the world takes the state and the event never reaches its own tail.
+  // The nut, the tree he had booked and the forced facing all have to be
+  // let go here. (His elevation needs no help — the sim decays z for any
+  // state an ethogram isn't holding, and this only runs when none is.)
+  tick(a, c, S) {
+    if (S.claim || a._carry) { releaseClaim(a, S); a._carry = null; }
+    if (a._faceDir) a._faceDir = 0;
+  },
 
   events: [
-    // ---- MEMORY RECALL: back for a nut he remembers -------------------
-    // The point of the whole species. He does not look for the nearest
-    // soft ground — he reads his own list, walks to a spot that is a
-    // little wrong, and searches. Run oftener than the caching trip
-    // because it costs the clearing nothing: a recall claims no site, so
-    // it can never keep another animal off a bush. (The bear parks at a
-    // tree for ten seconds at a stretch; the fox barely forages at all.)
+    // ---- CACHING: up the tree, and the nut into the larder -------------
+    // The nut is not on the ground and never was — the mast crop is drawn
+    // up in the boughs, and he used to stand under it and mime. Now he
+    // goes and gets it: trunk, leaves, out of sight, back down with it in
+    // the cheek, then the long carry west to the stump.
+    //
+    // 46-78s between the appetites and better than two in three acted on
+    // is a caching trip about every 91s WHILE THERE IS ROOM, and the trip
+    // runs 16-20s door to door. Nothing is claimed but the tree, and only
+    // for the five seconds he is on it: three nut sites, the lightest
+    // touch anyone here puts on the shared ground.
     {
-      id: "recall", domain: "land", trigger: "seek",
-      every: [30000, 55000], chance: 0.60, cool: 19000,
-      states: ["nuthunt", "unearth", "nutmunch"],
+      id: "cache", domain: "land", trigger: "seek",
+      every: [106000, 166000], chance: 0.68, cool: 20000,
+      states: ["nutup", "takenut", "nutdown", "nuthaul", "cachedig", "cachepat"],
+      // only the three climb states need this; the other three never leave
+      // the ground, so exempting them from the z decay costs nothing
+      holdsZ: true,
       goto: {
-        state: "torecall", within: 16, giveUp: 20000, speed: 1,
-        none: 9000,        // nothing buried yet — there is nothing to go back for
-        pick: (a, c) => recallCache(a, c),
+        state: "tonuttree", within: 18, giveUp: 24000, urgency: 0.45,
+        none: 15000, lost: 12000,
+        // a full larder is a reason not to set off at all. He is a hoarder,
+        // not a collector: nowhere to put it means no point fetching it.
+        pick: (a, c) => (fillSlot(c) < 0 ? null : siteGoal(nearestSite(a, c, "nut"))),
       },
-      begin(a, c, S, aim) {
-        a._cache = aim.mem;
-        a._cacheX = aim.mem.x * c.bounds.w;      // where it actually is...
-        a._cacheY = aim.mem.y * c.bounds.h;      // ...which he does not know
-        a._probe = null;
-        a.state = "nuthunt"; a.stateUntil = c.now + 4200;
+      begin(a, c, S, g) {
+        const f = g.site;
         a.vx = 0; a.vy = 0;
+        a._faceDir = 1;                       // turn in to the bark he walked up to
+        a._nutSite = f;
+        a._trunkX = f.px + SQ.nut.trunkDX * f.s;
+        // his hind grip lands on the foot of the drawn trunk at z 0
+        a._trunkY = f.py - SQ.nut.basePx * f.s - a.r * SQ.spritePx * CLING_FEET;
+        a._climbTop = climbTop(a, f);
+        a._climbT0 = c.now;
+        a.state = "nutup";
       },
       drive(a, c, S) {
-        if (a.state === "nuthunt") {
-          // He is searching the ground he remembers, NOT homing on the nut.
-          // He pokes at spot after spot around the aim and finds it only if
-          // one of those pokes happens to land on it, so a badly remembered
-          // cache is genuinely lost rather than fake-lost on a timer.
-          if (Math.hypot(a._cacheX - a.x, a._cacheY - a.y) < 16) {
-            a.state = "unearth"; a.stateUntil = c.now + 2200; a.vx = 0; a.vy = 0;
-            return;
+        const st = a.state;
+
+        if (st === "nutup" || st === "takenut" || st === "nutdown") {
+          // pinned to the bark: he is holding on, not standing near it
+          a.vx = 0; a.vy = 0;
+          const k = Math.min(1, c.dt * 5);
+          a.x += (a._trunkX - a.x) * k; a.y += (a._trunkY - a.y) * k;
+          const el = c.now - a._climbT0, top = a._climbTop;
+
+          if (st === "nutup") {
+            a.z = top * Math.min(1, el / NUT_UP_MS);
+            if (el >= NUT_UP_MS) {
+              a.state = "takenut"; a._climbT0 = c.now;
+              a.stateUntil = c.now + c.rand(1600, 2600);
+            }
+          } else if (st === "takenut") {
+            a.z = top;
+            // The boughs shiver while he is inside them. From the ground
+            // that is the ONLY evidence he hasn't simply stopped existing,
+            // and without it a two-second disappearance reads as a bug.
+            if (a._nutSite) a._nutSite.shake = c.now + 300;
+            if (c.now >= a.stateUntil) {
+              a._carry = "nut";
+              a.state = "nutdown"; a._climbT0 = c.now;
+            }
+          } else {
+            const p = Math.min(1, el / NUT_DOWN_MS);
+            a.z = top * (1 - p);
+            if (p >= 1) {
+              a.z = 0; a._faceDir = 0;
+              releaseClaim(a, S);              // the tree is free the moment he is off it
+              const k2 = fillSlot(c);
+              if (k2 < 0) {                    // the last hole filled while he was up there
+                endEvent(a, c, { reroll: true, quiet: 900, stop: true });
+                return;
+              }
+              a._slot = k2;
+              a._digAt = digStand(a, c, k2);
+              a._haulBy = c.now + 24000;
+              a.state = "nuthaul";
+            }
           }
-          if (c.now >= a.stateUntil) {
-            // one empty hole is bad luck; two is a spot he stops believing in
-            if (++a._cache.miss >= 2) dropCache(a, a._cache);
+          return;
+        }
+
+        if (st === "nuthaul") {
+          // The second walk of the bout, hand-driven: the engine's goto ran
+          // once and it was spent getting him to the tree. An errand pace —
+          // he is carrying, and it is a long way west.
+          if (stepTowardAt(a, c, a._digAt, gait(a, c, 0.45)) < 10) {
+            a.vx = 0; a.vy = 0; a._faceDir = 1;
+            a.state = "cachedig"; a.stateUntil = c.now + 2600;
+          } else if (c.now >= a._haulBy) {
+            // Something is between him and the stump. He gives the errand
+            // up rather than bury it where he stands: one larder is the
+            // whole point, and a nut in the open is a nut he cannot find.
             endEvent(a, c, { reroll: true, quiet: 900, stop: true });
-            return;
           }
-          if (!a._probe || stepToward(a, c, a._probe, 0.55) < 8) {
-            const ang = Math.random() * Math.PI * 2, rad = 10 + Math.random() * 22;
-            a._probe = { x: S.goal.x + Math.cos(ang) * rad, y: S.goal.y + Math.sin(ang) * rad };
-          }
-        } else if (a.state === "unearth") {
-          a.vx = 0; a.vy = 0;
+          return;
+        }
+
+        if (st === "cachedig") {
+          holdSpot(a, c, a._digAt);
           if (c.now >= a.stateUntil) {
-            dropCache(a, a._cache);          // recovered, so it leaves the map
-            a._carry = "nut";
-            a.state = "nutmunch"; a.stateUntil = c.now + 3000;
+            a._carry = null;                   // out of the cheek, into the hole
+            a.state = "cachepat"; a.stateUntil = c.now + 2000;
           }
-        } else if (a.state === "nutmunch") {
-          a.vx = 0; a.vy = 0;
-          if (c.now >= a.stateUntil) endEvent(a, c, { reroll: true, quiet: 1100, stop: true });
+          return;
+        }
+
+        holdSpot(a, c, a._digAt);              // cachepat
+        if (c.now >= a.stateUntil) {
+          // the stock rises when the soil goes back over it, not when the
+          // nut drops in — so the mound appears under his own paws
+          const L = larder(c);
+          if (L.n < SQ.larder.slots.length) L.n++;
+          a._faceDir = 0;
+          endEvent(a, c, { reroll: true, quiet: 1000, stop: true });
         }
       },
     },
 
-    // ---- CACHING: one nut, carried away, put in the ground -------------
-    // Scatter hoarding is the whole trick — the nut never goes in near the
-    // tree it came off. He holds a nut site for under two seconds and a
-    // soil patch for five, which is the lightest touch anyone here puts on
-    // the shared ground, and there are only three nut sites to begin with.
+    // ---- RAIDING: back to the larder for one of his own ----------------
+    // Same appetite window and the same odds as caching, deliberately: two
+    // errands drawing at equal rates against one four-step stock is a
+    // random walk with a wall at each end, so the larder sits part-full
+    // most of the time and both halves of him stay on show. Weighting
+    // either way gives a sawtooth — four caches in a row, then four meals.
     {
-      id: "cache", domain: "land", trigger: "seek",
-      every: [40000, 70000], chance: 0.55, cool: 24000,
-      states: ["takenut", "tocache", "cachedig", "cachepat"],
+      id: "raid", domain: "land", trigger: "seek",
+      every: [106000, 166000], chance: 0.68, cool: 20000,
+      states: ["nuthunt", "unearth", "nutmunch"],
       goto: {
-        state: "tonut", within: 20, giveUp: 20000, speed: 1, none: 8000,
-        pick: (a, c) => siteGoal(nearestSite(a, c, "nut")),
+        state: "tolarder", within: 30, giveUp: 24000, urgency: 0.45,
+        none: 15000, lost: 12000,
+        // an empty larder is nothing to come back for. No claim: the
+        // larder is his alone and nobody else can be kept off it.
+        pick: (a, c) => {
+          if (topSlot(c) < 0) return null;
+          const p = larderPt(c);
+          return { x: p.x, y: p.y + 16 };      // arrive at the front of the stump
+        },
       },
-      begin(a, c) {
-        a.state = "takenut"; a.stateUntil = c.now + 1400;
-        a._carry = "nut";                  // in the cheek the moment he has it
+      begin(a, c, S) {
         a.vx = 0; a.vy = 0;
+        a._slot = topSlot(c);
+        a._digAt = digStand(a, c, a._slot);
+        a._probe = null;
+        a.state = "nuthunt"; a.stateUntil = c.now + c.rand(2600, 4400);
       },
       drive(a, c, S) {
-        if (a.state === "takenut") {
-          a.vx = 0; a.vy = 0;
-          if (c.now < a.stateUntil) return;
-          releaseClaim(a, S);              // done with the tree before he leaves it
-          // He wants soft ground, but a scatter hoarder is not fussy: with
-          // the clearing's two soil patches both taken he puts it under the
-          // litter where he stands rather than carry it about all day.
-          const soil = nearestSite(a, c, "soil");
-          if (soil && claimSite(a, S, soil)) {
-            a._soil = { x: soil.px, y: soil.py };
-            a.state = "tocache"; a.stateUntil = c.now + 16000;
-          } else {
-            a.state = "cachedig"; a.stateUntil = c.now + 2600;
+        if (a.state === "nuthunt") {
+          if (c.now < a.stateUntil) {
+            // All that is left of the old imperfect map. He knows the
+            // larder to the inch and cannot tell four identical scrapes
+            // apart, so he works along them nose down. The error costs him
+            // three seconds now instead of a nut — which is the right
+            // trade once there is only one place it can be.
+            if (!a._probe || stepTowardAt(a, c, a._probe, gait(a, c, 0.15)) < 7) {
+              const p = slotPt(c, Math.floor(Math.random() * SQ.larder.slots.length));
+              a._probe = { x: p.x + c.rand(-9, 9), y: p.y + c.rand(-6, 6) };
+            }
+            return;
           }
-        } else if (a.state === "tocache") {
-          // carrying: a shade slower, and he gives up on a patch he cannot
-          // reach rather than trot at it until the giveUp timer saves him
-          if (stepToward(a, c, a._soil, 0.8) < 18 || c.now >= a.stateUntil) {
-            a.vx = 0; a.vy = 0;
-            a.state = "cachedig"; a.stateUntil = c.now + 2600;
+          // he has it — settle over the one he actually filled last
+          if (stepTowardAt(a, c, a._digAt, gait(a, c, 0.30)) < 9) {
+            a.vx = 0; a.vy = 0; a._faceDir = 1;
+            a.state = "unearth"; a.stateUntil = c.now + 2200;
           }
-        } else if (a.state === "cachedig") {
-          a.vx = 0; a.vy = 0;
+          return;
+        }
+
+        if (a.state === "unearth") {
+          holdSpot(a, c, a._digAt);
           if (c.now >= a.stateUntil) {
-            // the nut goes in HERE, wherever he actually stopped — so his
-            // caches scatter around a patch instead of stacking on its centre
-            remember(a, c, a.x, a.y);
-            a._carry = null;
-            a.state = "cachepat"; a.stateUntil = c.now + 2000;
+            const L = larder(c);
+            // guarded rather than assumed: if the hole came up dry he has
+            // still had his dig, and a dry hole is a fine thing to watch
+            if (L.n > 0) L.n--;
+            a._carry = "nut";
+            a.state = "nutmunch"; a.stateUntil = c.now + c.rand(3000, 4200);
           }
-        } else if (a.state === "cachepat") {
-          a.vx = 0; a.vy = 0;
-          if (c.now >= a.stateUntil) endEvent(a, c, { reroll: true, quiet: 1000, stop: true });
+          return;
+        }
+
+        a.vx = 0; a.vy = 0;                    // nutmunch
+        if (c.now >= a.stateUntil) {
+          a._faceDir = 0;
+          endEvent(a, c, { reroll: true, quiet: 1100, stop: true });
         }
       },
     },
@@ -970,8 +1153,7 @@ defineEthogram("squirrel", {
     // Migrated off the sim's intent roll, where it was a 20% band plus a
     // latch to survive being interrupted. As a seek it needs neither: an
     // ethogram state is busy, so nothing can reset the plan out from under
-    // him and the latch has nothing left to do. Deliberately rarer than
-    // the old band — he has two foraging bouts to fit into the same day.
+    // him and the latch has nothing left to do.
     {
       id: "sploot", domain: "land", trigger: "seek",
       every: [42000, 78000], chance: 0.45, cool: 30000,
@@ -1087,7 +1269,7 @@ function driveRaccoon(a, c, S) {
 // Both approaches want the same bush; only the state they walk in differs,
 // and they need separate ones because the engine claims a goto state per
 // variant.
-const RAC_TOBERRY = { within: 24, giveUp: 20000, speed: 1, none: 9000, lost: 9000,
+const RAC_TOBERRY = { within: 24, giveUp: 20000, urgency: 0.45, none: 9000, lost: 9000,
   pick: (a, c) => nearestForage(a, c, "berry") };
 
 /**
@@ -1128,7 +1310,7 @@ defineEthogram("raccoon", {
     // he is cheap to share the clearing with.
     {
       id: "berry", domain: "land", trigger: "seek",
-      every: [42000, 78000], chance: 0.55, cool: 24000,
+      every: [92000, 154000], chance: 0.55, cool: 24000,
       variants: [
         {
           // GROUND PICK — the common case. He works the low fruit over in
@@ -1238,12 +1420,12 @@ defineEthogram("deer", {
     // else in the clearing eats, so his site pressure on the others is nil.
     {
       id: "browse", domain: "land", trigger: "seek",
-      every: [30000, 52000], chance: 0.50,
-      miss: 11000, cool: 16000,
+      every: [30000, 50000], chance: 0.50,
+      miss: 11000, cool: 15000,
       states: ["browsepick", "browsereach", "browsechew", "browsealert"],
       goto: {
         state: "browsewalk", pick: deerShrub, within: 24,
-        giveUp: 22000, speed: 0.95, none: 9000, lost: 12000,
+        giveUp: 22000, urgency: 0.45, none: 9000, lost: 12000,
       },
       begin(a, c, S, g) {
         a.vx = 0; a.vy = 0;
@@ -1282,7 +1464,7 @@ defineEthogram("deer", {
     // he takes another stride or two, and only then drops his head.
     {
       id: "graze", domain: "land", trigger: "seek",
-      every: [15000, 26000], chance: 0.42,
+      every: [50000, 76000], chance: 0.42,
       miss: 6000, cool: 10000,
       delay: [500, 1600],
       hold: (a, c) => !c.isWet(a.x, a.y),   // a mouthful is not worth turning round for
@@ -1361,12 +1543,12 @@ defineEthogram("skunk", {
     // to nose; the moment he arrives he gives it back.
     {
       id: "windfall", domain: "land", trigger: "seek",
-      every: [32000, 58000], chance: 0.55, miss: 12000, cool: 24000,
+      every: [30000, 51000], chance: 0.60, miss: 12000, cool: 14000,
       states: ["floorsnuff", "windfalleat"],
       goto: {
         // 30 stops him at the drip line rather than at the stem: fallen
         // fruit lies in a ring around a bush, not underneath its middle
-        state: "tofloor", within: 30, giveUp: 22000, speed: 1, none: 9000,
+        state: "tofloor", within: 30, giveUp: 22000, urgency: 0.45, none: 9000,
         pick: (a, c) => siteGoal(nearestOfKinds(a, c, ["berry", "nut"])),
       },
       begin(a, c, S, g) {
@@ -1415,10 +1597,10 @@ defineEthogram("skunk", {
     // squirrel needs for burying.
     {
       id: "scrape", domain: "land", trigger: "seek",
-      every: [38000, 66000], chance: 0.35, miss: 16000, cool: 34000,
+      every: [35000, 58000], chance: 0.40, miss: 16000, cool: 22000,
       states: ["clawscrape"],
       goto: {
-        state: "toscrape", within: 20, giveUp: 20000, speed: 1, none: 10000,
+        state: "toscrape", within: 20, giveUp: 20000, urgency: 0.45, none: 10000,
         pick: (a, c) => siteGoal(nearestOfKinds(a, c, ["soil", "nut"])),
       },
       begin(a, c) {
@@ -1463,7 +1645,7 @@ function foxWindfall(a, c) {
 
 // Both variants walk to the same bush and only the state they walk in
 // differs, because the engine claims a goto state per variant.
-const FOX_TOBERRY = { within: 22, giveUp: 16000, speed: 1, none: 11000, lost: 8000,
+const FOX_TOBERRY = { within: 22, giveUp: 16000, urgency: 0.45, none: 11000, lost: 8000,
   pick: (a, c) => foxWindfall(a, c) };
 
 /**
@@ -1504,7 +1686,7 @@ defineEthogram("fox", {
     // either, which is the point of him.
     {
       id: "scrump", domain: "land", trigger: "seek",
-      every: [40000, 72000],
+      every: [78000, 122000],
       // A third of the urges taken. Half would put him level with the deer's
       // graze, and he is meant to be the one you notice feeding least.
       chance: 0.35,
@@ -1576,7 +1758,7 @@ function nearestFloat(a, c, logs) {
 const FLOAT_GOTO = {
   within: 12, giveUp: 30000, none: 10000, lost: 10000,
   // slower in the water than out of it, like every other swim here
-  speed: (a, c) => (c.isWet(a.x, a.y) ? 0.55 : 0.9),
+  urgency: 0.35,   // medium is the species' own now — see Gait.js
   // the float drifts: a target fixed at pick time is one he paddles past
   track: (a, c, ref) => ref.site,
 };
@@ -1596,8 +1778,9 @@ function driveFloat(a, c, S) {
   endEvent(a, c, { reroll: true, quiet: 800 });
   // a push off the float rather than a leap — he slides back into the water
   const ang = c.rand(0, Math.PI * 2);
-  a.vx = Math.cos(ang) * c.cfg.speed * 0.5;
-  a.vy = Math.sin(ang) * c.cfg.speed * 0.5;
+  const sp = gait(a, c, 0.15);                  // a push, not a leap
+  a.vx = Math.cos(ang) * sp;
+  a.vy = Math.sin(ang) * sp;
 }
 
 /**
@@ -1692,6 +1875,161 @@ defineEthogram("turtle", {
  * cue to oil the feathers; stepping into it is the cue that a bath may
  * follow, once he has swum far enough out to be worth watching.
  */
+// ---------------------------------------------------------------------
+// GOOSE — the two ways he feeds, one on each side of the waterline.
+// Everything from here down to (but not including) `defineEthogram("goose"`
+// goes immediately ABOVE that call, after the beaver/frog/turtle helpers
+// and below the `// ------` rule that introduces him.
+// ---------------------------------------------------------------------
+
+/**
+ * A grazing goose does not walk and eat; he eats, takes two or three steps,
+ * and eats again. That duty cycle IS the slow walk — half a second of
+ * stride against a second and a half with the bill down puts him over the
+ * ground at about 12 px/s while every moving frame is still an honest
+ * gait() call at an urgency he could justify. Scaling gait's output down
+ * to a "graze speed" would have been the same number arrived at by lying
+ * about how fast he is capable of moving.
+ */
+const CROP_STRIDE = [380, 700];
+const CROP_HEAD_DOWN = [1000, 1900];
+
+/**
+ * A point in the sward, weighted to its middle. Landing on the rim means
+ * his first turn is a turn back the way he came, and a bout that opens by
+ * reversing reads as a goose who has changed his mind about lunch.
+ */
+function swardPoint(c) {
+  const s = c.def.sward;
+  if (!s) return null;                    // a world with no open field simply has no grazing
+  const t = () => 0.5 + (Math.random() + Math.random() - 1) * 0.34;
+  return { x: (s.x0 + (s.x1 - s.x0) * t()) * c.bounds.w,
+           y: (s.y0 + (s.y1 - s.y0) * t()) * c.bounds.h };
+}
+
+/**
+ * Where the next stride points. A grazing bird wanders because the patch
+ * in front of him runs out, not because he is going anywhere, so the
+ * heading is the last one nudged — until he nears the edge of the grass,
+ * where it becomes a heading back into it. Without that second half he
+ * grazes his way into the lake in under a minute.
+ */
+function swardHeading(a, c) {
+  const s = c.def.sward, b = c.bounds, m = 26;   // one stride of margin
+  const cx = ((s.x0 + s.x1) / 2) * b.w, cy = ((s.y0 + s.y1) / 2) * b.h;
+  if (a.x < s.x0 * b.w + m || a.x > s.x1 * b.w - m ||
+      a.y < s.y0 * b.h + m || a.y > s.y1 * b.h - m) {
+    return Math.atan2(cy - a.y, cx - a.x) + c.rand(-0.4, 0.4);
+  }
+  return a._cropAim + c.rand(-0.55, 0.55);
+}
+
+function beginCrop(a, c) {
+  a.vx = 0; a.vy = 0;
+  a._cropAim = c.rand(0, Math.PI * 2);
+  a._cropN = Math.round(c.rand(10, 16));   // ~26s of grass, which is a meal, not a nibble
+  a._cropStep = false;                     // the head goes down the moment he arrives
+  a._cropUntil = c.now + c.rand(CROP_HEAD_DOWN[0], CROP_HEAD_DOWN[1]);
+  a.state = "cropgrass";
+}
+
+/**
+ * One state covers both halves of the cycle on purpose: the pose is
+ * head-down whether he is stepping or standing, and the renderer already
+ * tells the two apart from his actual displacement — so the legs walk
+ * when he walks and stop when he stops without this having to say so.
+ */
+function driveCrop(a, c) {
+  if (c.now < a._cropUntil) {
+    if (a._cropStep) {
+      // not travelling — repositioning between mouthfuls, which is the
+      // slowest thing in the urgency table that still counts as moving
+      const sp = gait(a, c, 0.10);
+      a.vx = Math.cos(a._cropAim) * sp; a.vy = Math.sin(a._cropAim) * sp;
+    } else { a.vx = 0; a.vy = 0; }
+    return;
+  }
+  a.vx = 0; a.vy = 0;
+  if (a._cropStep) { a._cropStep = false; a._cropUntil = c.now + c.rand(CROP_HEAD_DOWN[0], CROP_HEAD_DOWN[1]); return; }
+  if (--a._cropN <= 0) { endEvent(a, c, { reroll: true, quiet: 1400, stop: true }); return; }
+  a._cropAim = swardHeading(a, c);
+  a._cropStep = true;
+  a._cropUntil = c.now + c.rand(CROP_STRIDE[0], CROP_STRIDE[1]);
+}
+
+/**
+ * SHALLOW, in lakeRho, is 0.86 to 0.93 — call it 0.90.
+ *
+ * The shoreline is 1.0 and the water only starts at 0.97, so the whole
+ * question is which seven hundredths beyond that he stands in. On this
+ * stage a hundredth of rho is 1.8-2.6 px, so 0.90 is 12-19 px inside the
+ * waterline: a third to a half of his own body length, one step. Inside it
+ * his belly is wet, which is what makes the sprite read as being IN the
+ * lake and what credits the water side of his ledger; outside it he is on
+ * the mud miming a dabble at a lake he has not reached — the failure the
+ * raccoon's wash line already records at 0.93, which is why 0.93 is the
+ * shallow edge of this band rather than the middle of it.
+ *
+ * The far limit is the more interesting one. It is not depth that stops
+ * him at 0.86, it is what the world does with the space: the floats drift
+ * the body of the lake between 0.38 and 0.62, and the sim's own swim
+ * targets fill sqrt(rand)*0.72. Everything inside ~0.8 is water the world
+ * expects a swimmer in, and a bird standing up in it reads as a bird
+ * standing on nothing.
+ */
+const DABBLE_RHO = [0.86, 0.93];
+/**
+ * ...with the west end left alone. The dam's outer row sits at rho 0.89 —
+ * squarely in the band — and the floats already keep out of the same
+ * sector. Dabbling among the beaver's logs is not shallows, it is a
+ * building site.
+ */
+const DAM_SECTOR = [2.45, 3.95];
+
+const DABBLE_DOWN = [2200, 3400];
+const DABBLE_UP = [1300, 2100];
+
+function shallowPoint(a, c) {
+  const b = c.bounds;
+  let ang = Math.atan2((a.y - c.LAKE.cy * b.h) / (c.LAKE.ry * b.h),
+                       (a.x - c.LAKE.cx * b.w) / (c.LAKE.rx * b.w));
+  ang += c.rand(-0.3, 0.3);              // the nearest margin, not the same spot each time
+  let pa = ang < 0 ? ang + Math.PI * 2 : ang;
+  if (pa > DAM_SECTOR[0] && pa < DAM_SECTOR[1]) {
+    pa = pa - DAM_SECTOR[0] < DAM_SECTOR[1] - pa ? DAM_SECTOR[0] - 0.12 : DAM_SECTOR[1] + 0.12;
+  }
+  return c.lakePoint(b, pa, c.rand(DABBLE_RHO[0], DABBLE_RHO[1]));
+}
+
+function beginDabble(a, c, S, g) {
+  a.vx = 0; a.vy = 0;
+  a._dabX = g ? g.x : a.x; a._dabY = g ? g.y : a.y;
+  a._faceDir = c.LAKE.cx * c.bounds.w > a.x ? 1 : -1;   // head under over the deep side
+  a._dabN = Math.round(c.rand(3, 5));
+  a.state = "dabble"; a.stateUntil = c.now + c.rand(DABBLE_DOWN[0], DABBLE_DOWN[1]);
+}
+
+/**
+ * He is standing, so he holds the spot he chose. The band is only a dozen
+ * px wide and the separation push moves animals further than that in a
+ * second — a dabble left to drift ends up in open water, where standing is
+ * the wrong verb.
+ */
+function driveDabble(a, c) {
+  a.vx = 0; a.vy = 0;
+  const k = Math.min(1, c.dt * 3);
+  a.x += (a._dabX - a.x) * k; a.y += (a._dabY - a.y) * k;
+  if (c.now < a.stateUntil) return;
+  if (a.state === "dabble") {
+    a._carry = "weed";                                  // up it comes
+    a.state = "dabblelift"; a.stateUntil = c.now + c.rand(DABBLE_UP[0], DABBLE_UP[1]);
+    return;
+  }
+  a._carry = null;
+  if (--a._dabN <= 0) { a._faceDir = 0; endEvent(a, c, { reroll: true, quiet: 1200, stop: true }); return; }
+  a.state = "dabble"; a.stateUntil = c.now + c.rand(DABBLE_DOWN[0], DABBLE_DOWN[1]);
+}
+
 defineEthogram("goose", {
   domainOf: (a, c) => (c.def.hasWater && c.isWet(a.x, a.y) ? "water" : "land"),
 
@@ -1704,6 +2042,12 @@ defineEthogram("goose", {
     land:  { share: 0.40, dwell: [9000, 18000], travel: 10000 },
     water: { share: 0.60, dwell: [11000, 20000], travel: 26000, pull: 0.90 },
   },
+
+  // A drag or an encounter can lift him out of a bout mid-pose, and the
+  // state that leaves him in is not one this ethogram will ever end — so
+  // the forced facing and the weed in his bill are handed back here
+  // rather than left on him for the rest of the session.
+  tick(a) { if (a._faceDir) a._faceDir = 0; if (a._carry) a._carry = null; },
 
   events: [
     // ---- oiling, the moment he steps out ------------------------------
@@ -1739,6 +2083,52 @@ defineEthogram("goose", {
         a.vx = 0; a.vy = 0;
         if (c.now >= a.stateUntil) endEvent(a, c, { reroll: true, quiet: 800, stop: true });
       },
+    },
+
+    // ---- LAND: cropping the sward -------------------------------------
+    // The reason a goose is ever ashore at all. His land dwell is nine to
+    // eighteen seconds because his whole repertoire used to be at the
+    // waterline; this is the one thing worth walking inland for, so it is
+    // allowed to outlast the window that sent him there — the plan stands
+    // down while an event owns him, and the ledger's debt pull puts the
+    // time back on the water side afterwards. An urge every 78-132s taken
+    // slightly better than half the time is a bout every three minutes or
+    // so, and a bout with its walk either side is forty seconds: half his
+    // time ashore spent doing the thing geese ashore do, and about a fifth
+    // of his day. He claims nothing — the sward is not a forage site and
+    // any number of birds can crop it at once.
+    {
+      id: "graze", domain: "land", trigger: "seek",
+      every: [78000, 132000], chance: 0.55, cool: 30000,
+      states: ["cropgrass"],
+      goto: {
+        state: "tosward", within: 20, giveUp: 26000, urgency: 0.45,
+        none: 14000, lost: 14000,
+        pick: (a, c) => swardPoint(c),
+      },
+      begin: beginCrop,
+      drive: driveCrop,
+    },
+
+    // ---- WATER: dabbling the shallows ---------------------------------
+    // A water appetite acted on in the water: he is already swimming when
+    // it arrives and paddles to the margin, which is the honest order of
+    // events for a bird who feeds at the edge of the lake he lives on.
+    // Three to five plunges is fifteen to twenty seconds, inside his 11-20s
+    // water dwell, so unlike the graze this one costs the plan nothing.
+    // `ownsWater` is the important flag: he is standing on the bottom, and
+    // the generic swimming rig would tuck away the very legs that say so.
+    {
+      id: "dabble", domain: "water", trigger: "seek",
+      every: [40000, 76000], chance: 0.55, cool: 26000,
+      states: ["dabble", "dabblelift"], ownsWater: true,
+      goto: {
+        state: "toshallow", within: 10, giveUp: 18000, urgency: 0.30,
+        none: 9000, lost: 9000,
+        pick: (a, c) => shallowPoint(a, c),
+      },
+      begin: beginDabble,
+      drive: driveDabble,
     },
   ],
 });
@@ -1824,3 +2214,269 @@ defineEthogram("beaver", {
     },
   ],
 });
+
+// ---------------------------------------------------------------------
+//  THE HEDGEHOG — the only one here who eats animals.
+//
+//  Every other forager in this world is working a crop: the fruit, the
+//  mast, the browse, and the soft ground under them. He is after beetles,
+//  worms and snails, and none of those are in the clearing — they are in
+//  the wet rot of fallen timber and in the packed earth around a tree's
+//  surface roots. So he gets two site kinds of his own at the margin of
+//  the map and competes with nobody: the six foragers already here have
+//  no reason ever to look at a log.
+//
+//  He hunts by nose and ear rather than by sight, and that is the whole
+//  shape of his behavior. Every bout opens standing still with his head
+//  down, because a hedgehog does not spot food and walk to it — he walks
+//  until he smells it. And every bout ends with his head somewhere you
+//  cannot see it, which is why all three of his poses are drawn around a
+//  hidden face rather than around an expression.
+// ---------------------------------------------------------------------
+
+/**
+ * Where he STANDS to work a site, which is never the site itself. A root
+ * has to be dug at from one side and a log gone into from above, and
+ * walking to the marker would leave him standing in the middle of the
+ * timber with his own drawn wood on top of the drawn wood underneath.
+ * The offset rides in the goal so the engine still claims the real site.
+ */
+function hogAim(a, c, kind, dx, dy) {
+  const f = nearestSite(a, c, kind);
+  return f ? { x: f.px + dx, y: f.py + dy, site: f } : null;
+}
+
+/**
+ * The opening beat of every root bout: planted, nose down, ears working.
+ * It is short — under two and a half seconds — because its job is to say
+ * "he found this by smell" before the digging starts, not to be a pause.
+ */
+function hogCast(a, c, dig) {
+  a.vx = 0; a.vy = 0;
+  a._faceDir = 1;          // he works INTO the root; the poses face right
+  a._hogDig = dig;
+  a.state = "hhsnuff";
+  a.stateUntil = c.now + c.rand(1500, 2400);
+}
+
+/**
+ * Both root variants run this. The cast-about state belongs to the first
+ * variant and the second sets it anyway: dispatch is by state name, so
+ * the engine hands the frame to whichever variant owns "hhsnuff" and this
+ * function reads `_hogDig` to find out which dig it is running. Neither
+ * variant has to know the other exists — the raccoon's climb does the
+ * same thing to reach the states below it.
+ */
+function driveHogRoot(a, c) {
+  a.vx = 0; a.vy = 0;
+  if (a.state === "hhsnuff") {
+    if (c.now < a.stateUntil) return;
+    a.state = a._hogDig;
+    a.stateUntil = c.now + c.rand(4600, 7000);
+    return;
+  }
+  // The dig IS the meal — his face is in the ground for the whole of it,
+  // so unlike the log there is nothing to come back out holding. Ending
+  // on the dig is what keeps the two bouts from reading as the same one.
+  if (c.now < a.stateUntil) return;
+  a._faceDir = 0;
+  endEvent(a, c, { reroll: true, quiet: 1000, stop: true });
+}
+
+// Both root variants want the same site and differ only in where they
+// stand at it, so everything except the aim and the goto state is shared.
+const HOG_TOROOT = { within: 15, giveUp: 22000, none: 9000, lost: 9000,
+  // Purposeful, not hurried: he has smelled something and he means to get
+  // there, but this is the one animal in the world with no predator worth
+  // running from and no rival for what he eats.
+  urgency: 0.38 };
+
+defineEthogram("hedgehog", {
+  // He is not in this world's swim table at all, so the shoreline is a
+  // wall and tier 1 has one answer. The dwell window still earns its
+  // keep: it is what paces the quiet trundling between bouts.
+  domainOf: () => "land",
+  domains: { land: { share: 1, dwell: [16000, 30000] } },
+
+  // A drag or a fight can lift him out of a bout with his head still
+  // notionally in a log. The claim, the mouthful and the forced facing
+  // all have to be handed back here or that log stays booked against him
+  // and he spends the rest of the session unable to turn around.
+  tick(a, c, S) {
+    if (S.claim) releaseClaim(a, S);
+    if (a._faceDir) a._faceDir = 0;
+    if (a._carry) a._carry = null;
+  },
+
+  events: [
+    // ---- THE ROOTS: two ways at the same root ------------------------
+    // An urge every 30-52s taken a bit over half the time works out at a
+    // bout every ninety seconds or so, of which about eight seconds is
+    // spent stationary. That is deliberately just under the skunk, who is
+    // this world's most frequent forager and should stay so.
+    {
+      id: "roots", domain: "land", trigger: "seek",
+      every: [52000, 86000], chance: 0.55, miss: 11000, cool: 26000,
+      variants: [
+        {
+          // UNDER IT — the classic: side on, rump up, snout jammed into
+          // the gap where the root goes back into the soil.
+          id: "hogunder", w: 1,
+          // the cast-about is claimed here and shared with the bore below
+          states: ["hhsnuff", "rootdig"],
+          goto: { state: "hhtoroot", ...HOG_TOROOT,
+            // west of the root and a touch below it, so he ends the walk
+            // already on the side he digs from and facing the right way
+            pick: (a, c) => hogAim(a, c, "root", -34, 4) },
+          begin(a, c) { hogCast(a, c, "rootdig"); },
+          drive: driveHogRoot,
+        },
+        {
+          // INTO IT — head first into the root's underside from the near
+          // face, which puts the camera behind him for the whole bout.
+          // Evenly weighted with the other: which one he does is decided
+          // by where the beetles are, and he cannot know that in advance.
+          id: "hogbore", w: 1,
+          states: ["rootbore"],
+          goto: { state: "hhtobore", ...HOG_TOROOT,
+            // a body length in FRONT of the marker — nearer the camera —
+            // so the root is between him and the rest of the map and his
+            // own drawn root lands over the site's, not beside it
+            pick: (a, c) => hogAim(a, c, "root", -2, 8) },
+          begin(a, c) { hogCast(a, c, "rootbore"); },
+          drive: driveHogRoot,
+        },
+      ],
+    },
+
+    // ---- THE LOG: in at the top, and something to show for it --------
+    // Rarer and longer than the root work, because it is the bout with a
+    // payoff at the end and a payoff every ninety seconds is a habit
+    // rather than a find. He keeps the log claimed through the chew: he
+    // is still sitting on it, and a second animal walking into him there
+    // would be the one place in this world where two sprites overlap.
+    {
+      id: "logs", domain: "land", trigger: "seek",
+      every: [58000, 96000], chance: 0.45, miss: 14000, cool: 30000,
+      states: ["logdive", "logchew"],
+      goto: {
+        state: "hhtolog", within: 13, giveUp: 24000, none: 10000, lost: 10000,
+        urgency: 0.30,     // a longer walk, and nothing at the end of it is running away
+        // 25px NORTH of the marker. That is not a stylistic offset: it is
+        // what lands the top face of the log he carries in his own pose on
+        // the top face of the log drawn at the site, so the two read as one
+        // piece of wood. See the note in the pose art.
+        pick: (a, c) => hogAim(a, c, "log", 0, -25),
+      },
+      begin(a, c) {
+        a.vx = 0; a.vy = 0;
+        a._faceDir = 1;
+        a.state = "logdive"; a.stateUntil = c.now + c.rand(4400, 6200);
+      },
+      drive(a, c, S) {
+        a.vx = 0; a.vy = 0;
+        if (a.state === "logdive") {
+          if (c.now < a.stateUntil) return;
+          a._carry = "grub";                 // he backs out with it in his jaws
+          a.state = "logchew"; a.stateUntil = c.now + c.rand(2600, 3600);
+          return;
+        }
+        if (c.now < a.stateUntil) return;
+        a._faceDir = 0;
+        endEvent(a, c, { reroll: true, quiet: 1200, stop: true });
+      },
+    },
+    {
+      id: "curl", domain: "land", trigger: "approach",
+      // Not 1. A hedgehog that has spent a season next to the same deer
+      // stops paying it much attention, and a defence that fires every
+      // single time reads as a tripwire rather than as nerve.
+      chance: 0.85,
+      miss: 4000, cool: 6000,
+      near: (a, c) => hogThreat(a, c, HOG_ALARM),
+      states: ["hogcurl", "hogball", "hoguncurl"],
+      begin(a, c) {
+        hogCurl(a, c.now, c.rand);
+        a.noEventUntil = c.now + 1200;   // nobody accosts a ball
+      },
+      drive(a, c) {
+        a.vx = 0; a.vy = 0;
+        if (a.state === "hogcurl") {
+          if (c.now >= a.stateUntil) a.state = "hogball";
+          return;
+        }
+        if (a.state === "hogball") {
+          // The hold is RENEWED while anything big is still about rather
+          // than tested once, which is what makes a ball that two animals
+          // walk past in turn stay shut for both of them.
+          if (hogThreat(a, c, HOG_CALM)) { a._hogHold = c.now + c.rand(1400, 2400); return; }
+          if (c.now < a._hogHold) return;
+          a.state = "hoguncurl"; a.stateUntil = c.now + 900;
+          return;
+        }
+        if (c.now >= a.stateUntil) endEvent(a, c, { reroll: true, quiet: 900, stop: true });
+      },
+    },
+  ],
+});
+
+// ---------------------------------------------------------------------
+
+/**
+ * THE HEDGEHOG — the one animal here whose answer to trouble is to stop.
+ *
+ * Every other species resolves a scare by running: forceFlee points them
+ * somewhere else and spends 0.85 urgency getting them there. A hedgehog at
+ * base .50 and top 1.30 is slower than everything that would want to eat it,
+ * so a flee is a lie the numbers do not support — it would be caught, and on
+ * screen it reads as a small animal losing a race it chose to enter.
+ *
+ * That makes the roll-up the one behavior in this file where the animation
+ * IS the event. Every other state produces displacement you could read off
+ * the map with the sprite deleted; this one produces none at all, and if the
+ * ball is not drawn then as far as the world is concerned nothing happened.
+ *
+ * Land only, so tier 1 is a formality — the real gate is the approach edge,
+ * which is exactly the shape this wants: it fires once when something
+ * arrives and re-arms only after that something has gone away again.
+ */
+
+// Bulk, not species. A hedgehog does not identify what is walking toward it;
+// it responds to something bigger than itself closing the distance, and the
+// bulk index in SpeciesProfile is that judgement already made once, for all
+// fourteen. The threshold sits just above the skunk (26.0) — which shares
+// its ground, its hours and its temperament, and is nobody's threat.
+const HOG_LOOMS = 26.5;
+// Wider than pairRange on purpose, so the curl PRE-EMPTS the encounter roll
+// instead of interrupting it. A hedgehog that gets as far as a friendly
+// nuzzle has already failed to be a hedgehog.
+const HOG_ALARM = 84;
+// ...and it does not unroll the instant the visitor takes one step back.
+const HOG_CALM = 118;
+
+/** the nearest thing on the ground with real bulk, inside `r` */
+function hogThreat(a, c, r) {
+  let best = null, bd = Infinity;
+  for (const o of c.world.agents) {
+    if (o === a || o.dragging) continue;
+    if (o.z > 2) continue;                     // anything on a roof is weather
+    if ((SPECIES_PROFILE[o.species]?.size || 0) < HOG_LOOMS) continue;
+    const d = Math.hypot(o.x - a.x, o.y - a.y);
+    if (d < r && d < bd) { bd = d; best = o; }
+  }
+  return best;
+}
+
+/**
+ * Shared with the world's forceFlee, which hands the hedgehog here instead
+ * of setting "flee" on it. Both entry points have to agree on the hold, or a
+ * scare arriving down the rescue path would produce a shorter, cheaper ball
+ * than one arriving down the approach path — the same event, two lengths.
+ */
+export function hogCurl(a, now, rnd) {
+  a.state = "hogcurl";
+  a.stateUntil = now + 380;                    // the tuck
+  a._hogHold = now + rnd(2600, 4200);          // the minimum ball
+  a.vx = 0; a.vy = 0;
+  a.targetId = null;
+}

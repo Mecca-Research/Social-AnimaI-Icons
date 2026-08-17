@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Critter, SPECIES, ALL_SPECIES } from "./Critters.jsx";
 import { PET_SPECIES } from "./CrittersPets.jsx";
-import { stepEthogram, ethoSwimP, ethoShare, ETHOGRAM, ETHO_STATES, ETHO_Z_STATES, ETHO_OWNWATER_STATES, setTreeMetrics, ethoOffstage } from "./Ethogram.js";
+import { speciesSize } from "./SpeciesProfile.js";
+import { gait, gaitIn, speedCap, rescueReach, SPEED, GAIT_DEF } from "./Gait.js";
+import { stepEthogram, ethoSwimP, ethoShare, ETHOGRAM, ETHO_STATES, ETHO_Z_STATES, ETHO_OWNWATER_STATES, setTreeMetrics, setForageMetrics, ethoOffstage, hogCurl } from "./Ethogram.js";
 
 /**
  * Social Animal Icons v0.11 — Lakeside world
@@ -47,7 +49,13 @@ const NOEVENT_MAX_MS = 7000; // max time to forbid new events after an interacti
 const INTENT_MIN_S = 10, INTENT_MAX_S = 18;
 
 // encounters trigger only at true nose-range
-const pairRange = (a, b) => Math.max(70, (a.r + b.r) * 1.6);
+// Nose range. The 1.6 was tuned when every radius was ~23 and the sum was
+// always ~74, so the multiplier and the floor were both nearly inert. With
+// real per-species radii the same formula would have a bear and a deer
+// engaging at 101px — well before their noses meet — so the coefficient
+// comes down and the floor with it, holding the effective range where it
+// has always been while still letting a big pair reach a little further.
+const pairRange = (a, b) => Math.max(60, (a.r + b.r) * 1.25);
 const AVOID_RADIUS = 190;    // bystanders this close to a fight clear out
 const RESCUE_RADIUS = 620;   // a friend this close sprints in to break a fight up
 const RESCUE_REACH = 95;     // ...and succeeds once this close to their friend
@@ -231,6 +239,28 @@ const FORAGE_SITES = [
   // bare soft ground: caches and rooting
   { x: .345, y: .525, s: 1.00, kind: "soil" },
   { x: .385, y: .335, s: 0.95, kind: "soil" },
+
+  // ---- the hedgehog's ground: fallen timber and surface roots ---------
+  // Deliberately OUT of the clearing. He eats beetles, worms and snails,
+  // which live in rotten wood and in the packed earth a root heaves up —
+  // so putting him on the berry ground would be a seventh forager on the
+  // same sixteen sites eating something none of the other six can see.
+  //   log   a big rotten trunk: he goes in through the hole in the top
+  //   root  a surface root: he digs under it, or into its bottom edge
+  // `dir` mirrors the art (-1 flips it), so each root can point its high
+  // end at the trunk it plausibly belongs to.
+  //
+  // Every position was checked against the lake, the four trees, the
+  // sixteen existing sites and the screen edges at 1280x720, 1440x900,
+  // 1024x640, 1600x820, 1000x800 and 1920x1000. Worst case across all
+  // six: 106px to a trunk, 116px to an existing site, 185px between two
+  // of these, 96px to an edge, and a 70px approach ring that never gets
+  // nearer the lake than rho 1.78 (the spawn guard bites at 1.12).
+  { x: .400, y: .845, s: 1.00, kind: "log",  dir:  1 },
+  { x: .600, y: .775, s: 0.92, kind: "log",  dir: -1 },
+  { x: .185, y: .690, s: 1.00, kind: "root", dir: -1 },
+  { x: .170, y: .150, s: 0.90, kind: "root", dir: -1 },
+  { x: .775, y: .700, s: 1.05, kind: "root", dir:  1 },
 ];
 const FORAGE_REACH = 26;   // how close counts as "at" a site
 function ForageLayer({ bounds, sites }) {
@@ -243,7 +273,8 @@ function ForageLayer({ bounds, sites }) {
           pointerEvents: "none", transform: `translate(-50%,-100%) scale(${f.s})`,
           transformOrigin: "50% 100%" }}>
           <svg width="96" height="104" viewBox="-48 -88 96 104" style={{ display: "block", overflow: "visible" }}>
-            <ellipse cx="2" cy="9" rx={f.kind === "soil" ? 30 : 26} ry="7" fill="#0d2415" opacity=".38" />
+            <ellipse cx="2" cy="9" ry="7" fill="#0d2415" opacity=".38"
+              rx={f.kind === "log" ? 84 : f.kind === "root" ? 48 : f.kind === "soil" ? 30 : 26} />
             {f.kind === "berry" && (
               <g className="sai-bg-sway" style={{ animationDuration: `${5.2 + i * 0.4}s`, animationDelay: `${i * 0.7}s`, transformOrigin: "50% 100%" }}>
                 <path d="M -6 8 C -8 -6 -6 -18 -2 -26 M 4 8 C 7 -4 8 -16 6 -24" stroke="#5a4a2c" strokeWidth="3" fill="none" strokeLinecap="round" />
@@ -269,20 +300,6 @@ function ForageLayer({ bounds, sites }) {
                 <path d="M -5 10 C -4 -8 -3 -24 -3 -40 L 6 -40 C 6 -24 7 -8 9 10 C 4 12 0 12 -5 10 Z" fill="#5b3f26" />
                 <path d="M -5 10 C -4 -8 -3 -24 -3 -40 L 0 -40 C -1 -22 -2 -6 -1 10 Z" fill="#6f4f30" />
                 <path d="M -3 -36 C -12 -42 -19 -44 -26 -43 M 6 -37 C 14 -43 21 -45 28 -44" stroke="#5b3f26" strokeWidth="3.2" fill="none" strokeLinecap="round" />
-                <g className="sai-bg-sway" style={{ animationDuration: `${5.8 + i * 0.5}s`, animationDelay: `${i * 0.9}s`, transformOrigin: "50% 100%" }}>
-                  <ellipse cx="-16" cy="-48" rx="20" ry="15" fill="#2f6b3f" />
-                  <ellipse cx="17" cy="-50" rx="21" ry="16" fill="#2a6138" />
-                  <ellipse cx="0" cy="-60" rx="25" ry="18" fill="#3a7d49" />
-                  <ellipse cx="-10" cy="-70" rx="16" ry="12" fill="#469356" />
-                  <ellipse cx="11" cy="-72" rx="13" ry="10" fill="#54a763" opacity=".8" />
-                  {/* the mast crop, in husked clusters */}
-                  <g className="forage-nuts">
-                    <ellipse cx="-20" cy="-44" rx="3.6" ry="4.2" fill="#7a5227" /><ellipse cx="-20" cy="-45.4" rx="1.7" ry="1.5" fill="#a9793f" />
-                    <ellipse cx="-4" cy="-40" rx="3.4" ry="4" fill="#6d491f" /><ellipse cx="-4" cy="-41.3" rx="1.6" ry="1.4" fill="#9c6d38" />
-                    <ellipse cx="14" cy="-42" rx="3.6" ry="4.2" fill="#7a5227" /><ellipse cx="14" cy="-43.4" rx="1.7" ry="1.5" fill="#a9793f" />
-                    <ellipse cx="24" cy="-52" rx="3.2" ry="3.8" fill="#6d491f" />
-                  </g>
-                </g>
               </>
             )}
             {f.kind === "shrub" && (
@@ -312,9 +329,234 @@ function ForageLayer({ bounds, sites }) {
                   stroke="#3f7c4a" strokeWidth="1.8" fill="none" strokeLinecap="round" opacity=".9" />
               </>
             )}
+            {f.kind === "log" && (
+              <g transform={`scale(${f.dir || 1} 1)`}>
+                {/* A big fallen trunk, mossed on the weather side and rotten
+                    through the middle. The hole in the top face is the point
+                    of it: it is where the hedgehog goes in, and his own pose
+                    paints a matching section of log over exactly this spot,
+                    so the two drawings have to agree about where the top face
+                    is. Top face at svg y -21 puts it 37px above the site
+                    anchor, which is where the pose's log lands when he stops
+                    25px north of the marker. Move one, move the other. */}
+                <rect x="-84" y="-21" width="168" height="31" rx="15.5" fill="#402c19" />
+                <rect x="-84" y="-21" width="168" height="13" rx="6.5" fill="#5b3f26" />
+                <path d="M -74 -18 C -40 -23 30 -23 74 -18 C 34 -13 -36 -13 -74 -18 Z" fill="#4e9c5f" opacity=".5" />
+                <path d="M -70 -2 C -30 3 30 3 70 -2" stroke="#2a1c10" strokeWidth="1.8" fill="none" strokeLinecap="round" opacity=".5" />
+                <path d="M -64 5 C -26 9 26 9 64 5" stroke="#2a1c10" strokeWidth="1.4" fill="none" strokeLinecap="round" opacity=".4" />
+                {/* the broken end, rings out */}
+                <ellipse cx="84" cy="-5.5" rx="7" ry="15.5" fill="#6b4a2a" />
+                <ellipse cx="84" cy="-5.5" rx="4.4" ry="10" fill="#402c19" opacity=".7" />
+                <ellipse cx="84" cy="-5.5" rx="2" ry="4.6" fill="#6b4a2a" opacity=".6" />
+                {/* the rot hole */}
+                <ellipse cx="7" cy="-15.5" rx="13" ry="6.5" fill="#1b1109" />
+                <ellipse cx="7" cy="-16.6" rx="9" ry="4" fill="#0d0805" opacity=".8" />
+                {/* bracket fungus, which is what a log this far gone actually
+                    grows — and it says "rotten" faster than any bark texture */}
+                <path d="M -40 -7 C -34 -14 -22 -14 -18 -8 C -26 -5 -34 -5 -40 -7 Z" fill="#c8b183" opacity=".85" />
+                <path d="M -40 -7 C -34 -10 -26 -10 -18 -8" stroke="#a08757" strokeWidth="1.2" fill="none" opacity=".7" />
+                <path d="M -56 4 C -52 -2 -46 -2 -44 3" stroke="#3f7c4a" strokeWidth="2" fill="none" strokeLinecap="round" opacity=".8" />
+              </g>
+            )}
+            {f.kind === "root" && (
+              <g transform={`scale(${f.dir || 1} 1)`}>
+                {/* A surface root breaking ground twice on its way back to
+                    the trunk it belongs to — `dir` points its high end at
+                    that tree. Drawn LOW and broad on purpose: the arch the
+                    hedgehog actually works is painted by his own pose on top
+                    of this, and two competing arches in one place would read
+                    as a tangle rather than as a root. */}
+                <ellipse cx="0" cy="2" rx="50" ry="11" fill="#3a2a16" opacity=".5" />
+                <path d="M -54 4 C -40 2 -32 -10 -20 -14 C -8 -18 2 -12 12 -14 C 22 -16 30 -24 42 -22 C 48 -21 52 -16 54 -10"
+                  stroke="#5b3f26" strokeWidth="17" fill="none" strokeLinecap="round" />
+                <path d="M -54 1 C -40 -1 -32 -13 -20 -17 C -8 -21 2 -15 12 -17 C 22 -19 30 -27 42 -25 C 48 -24 52 -19 54 -13"
+                  stroke="#6f4f30" strokeWidth="6.5" fill="none" strokeLinecap="round" opacity=".9" />
+                {/* a rootlet running off under the litter */}
+                <path d="M -22 -8 C -28 -2 -36 2 -46 3" stroke="#4e3521" strokeWidth="6" fill="none" strokeLinecap="round" />
+                {/* the gaps underneath — the only part of this he cares about */}
+                <path d="M -32 5 C -28 -3 -20 -6 -12 -4 C -18 1 -22 5 -24 7 Z" fill="#1b1109" opacity=".75" />
+                <path d="M 18 -1 C 24 -9 32 -12 40 -10 C 33 -5 28 -1 26 3 Z" fill="#1b1109" opacity=".7" />
+                <path d="M -44 -6 C -34 -12 -24 -16 -14 -18 M 6 -18 C 16 -20 26 -25 36 -26"
+                  stroke="#3f7c4a" strokeWidth="2.6" fill="none" strokeLinecap="round" opacity=".55" />
+                {/* leaf litter banked against the upwind side */}
+                <path d="M -50 6 l 7 -5 M -44 7 l 6 -6 M 44 4 l 7 -5 M 50 5 l 5 -6"
+                  stroke="#8a6a3a" strokeWidth="2" fill="none" strokeLinecap="round" opacity=".8" />
+              </g>
+            )}
           </svg>
         </div>
       ))}
+    </>
+  );
+}
+
+// ---------------- The squirrel's larder ----------------
+/**
+ * A hole in the ground is a cache; four in a row at the foot of one stump
+ * is a LARDER, and that is the difference. He has exactly one, here, for
+ * the life of the world — everything he takes out of a nut tree comes
+ * back to this spot and everything he eats comes out of it — which is the
+ * only version of hoarding a player can actually watch. A remembered map
+ * of scattered caches was the old behavior and it read as a squirrel
+ * digging in a random patch of soil.
+ *
+ * Placed in the gap between the two western forest trees: 150px clear of
+ * both trunks so it never sits inside the bear's 96px approach ring,
+ * ~90px west of the nearest berry bush so it is off the thicket's
+ * traffic, and at lake rho 2.5 it is nowhere near the water. It reads as
+ * his corner of the map rather than a fixture everybody shares.
+ */
+const LARDER = {
+  x: .155, y: .445,
+  // The four scrapes, as px offsets from the anchor. Shared with the
+  // ethogram — geometry-as-physics, same contract as the trees and the
+  // forage sites: the mound he crouches over IS the mound that changes.
+  slots: [{ x: -30, y: 1 }, { x: -10, y: 7 }, { x: 10, y: 7 }, { x: 30, y: 1 }],
+};
+
+// What the squirrel's ethogram needs to know about the map, handed over
+// rather than imported so that module stays free of the layout — the same
+// arrangement the bear's tree metrics use.
+setForageMetrics({
+  larder: LARDER,
+  // Read off the nut art in ForageLayer above. That svg maps a local y to
+  // (16 - y) * s stage px above the site's anchor:
+  //   trunk foot            local y 10                        ->  6
+  //   lowest leaf over the trunk's centre line (x 1.5): the bottom of the
+  //     cx 17 / cy -50 / rx 21 / ry 16 bough, -39.2            -> 55
+  //   highest leaf over that line: the top of the cy -72 crown, -78.8
+  //                                                            -> 95
+  // Forty px of leaf directly over the trunk, and he stops with his own
+  // middle in the middle of it.
+  nut: { basePx: 6, leafPx: 55, crownPx: 95, trunkDX: 1.5 },
+  // Critter() draws the 120-unit sprite box at r * 2.7 px. (NOT r * 3.1 —
+  // that is the container div; see the note in the squirrel's ethogram.)
+  spritePx: 2.7,
+});
+
+/**
+ * The larder itself. Drawn under the animals, like every other piece of
+ * ground: he crouches in FRONT of the stump to work it.
+ *
+ * The stock is one integer that moves about twice a minute, so this reads
+ * it off a slow interval instead of joining the frame loop — a rAF for
+ * that would be waste, and threading a fifth ref through renderWorld for
+ * it would be worse.
+ */
+function LarderLayer({ bounds, worldRef }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const t = setInterval(() => {
+      const el = ref.current; if (!el) return;
+      el.dataset.n = String(worldRef.current.larder?.n || 0);
+    }, 200);
+    return () => clearInterval(t);
+  }, [worldRef]);
+  const { w, h } = bounds;
+  if (!w || !h) return null;
+  return (
+    <div ref={ref} className="sai-larder" data-n="0"
+      style={{ position: "absolute", left: LARDER.x * w, top: LARDER.y * h, zIndex: 2,
+        pointerEvents: "none", transform: "translate(-50%,-50%)" }}>
+      {/* viewBox centred on 0,0 so a slot offset IS a local coordinate */}
+      <svg width="120" height="120" viewBox="-60 -60 120 120" style={{ display: "block", overflow: "visible" }}>
+        {/* the ground round a working larder is bare and trodden — the
+            first thing that tells you this place gets used */}
+        <ellipse cx="0" cy="7" rx="47" ry="15" fill="#0d2415" opacity=".34" />
+        <ellipse cx="0" cy="5" rx="43" ry="13" fill="#4a3520" />
+        <ellipse cx="-3" cy="3" rx="34" ry="9" fill="#5d4327" />
+        <path d="M -22 3 C -31 1 -37 4 -41 9 M 23 3 C 32 2 38 5 42 10" stroke="#4e3521"
+          strokeWidth="4.5" fill="none" strokeLinecap="round" />
+        {/* the broken stump he keeps it under: heartwood showing, moss on
+            the shaded side. A stump rather than a live tree so it reads as
+            a store and not another thing to climb */}
+        <path d="M -22 5 C -21 -11 -20 -25 -19 -34 L 19 -34 C 20 -25 21 -11 23 5 C 12 9 -11 9 -22 5 Z" fill="#5b3f26" />
+        <path d="M -22 5 C -21 -11 -20 -25 -19 -34 L -8 -34 C -10 -19 -11 -7 -10 7 Z" fill="#6f4f30" />
+        <path d="M -14 -2 C -13 -14 -12 -24 -12 -31 M 4 -6 C 4 -17 3 -26 3 -31" stroke="#452f1c"
+          strokeWidth="1.8" fill="none" strokeLinecap="round" opacity=".6" />
+        <ellipse cx="0" cy="-34" rx="19" ry="6.5" fill="#8a6236" />
+        <ellipse cx="0" cy="-34.6" rx="13" ry="4.3" fill="#a37a48" />
+        <ellipse cx="0" cy="-34.6" rx="6.5" ry="2.1" fill="#7a5227" opacity=".65" />
+        {/* splintered rim where the top came off in some old gale */}
+        <path d="M -19 -34 l 5 -6 l 4 5 l 5 -8 l 4 7 l 6 -6 l 4 6 l 5 -4 l 5 6"
+          fill="none" stroke="#8a6236" strokeWidth="2.6" strokeLinejoin="round" />
+        <path d="M -22 -1 C -18 -6 -12 -6 -8 -2 C -13 0 -18 0 -22 -1 Z" fill="#3f7c4a" opacity=".8" />
+        <ellipse cx="18" cy="-7" rx="6" ry="3.2" fill="#3f7c4a" opacity=".5" />
+        {/* ---- the four scrapes. Order is load-bearing: he fills left to
+            right, and the CSS caps the first n of these ---- */}
+        <g className="sai-larder-slots">
+          {LARDER.slots.map((s, k) => (
+            <g className="sai-larder-slot" key={k}>
+              <ellipse cx={s.x} cy={s.y} rx="8.6" ry="4.5" fill="#2e1f10" />
+              <ellipse cx={s.x} cy={s.y - .7} rx="6.4" ry="3.2" fill="#19100a" />
+              <g className="sai-larder-cap">
+                <ellipse cx={s.x} cy={s.y - 1} rx="8.9" ry="5" fill="#5d4327" />
+                <ellipse cx={s.x - 1.6} cy={s.y - 2.6} rx="5" ry="2.8" fill="#6d5030" />
+                <ellipse cx={s.x - 5} cy={s.y - 4.2} rx="2.4" ry="2.9" fill="#7a5227" />
+                <path className="cap-leaf"
+                  d={`M ${s.x + 3.6} ${s.y - 2.8} C ${s.x + 8.6} ${s.y - 8} ${s.x + 12} ${s.y - 6} ${s.x + 11} ${s.y - 1.6} C ${s.x + 8} ${s.y + .4} ${s.x + 4.6} ${s.y - .8} ${s.x + 3.6} ${s.y - 2.8} Z`}
+                  fill="#8a6a34" />
+              </g>
+            </g>
+          ))}
+        </g>
+      </svg>
+    </div>
+  );
+}
+
+/**
+ * The nut trees' FOLIAGE, painted after the animals — exactly what
+ * TreeLayer does with the big trees' boughs, and for the same reason: a
+ * squirrel who climbs into the leaves has to go behind them, not over
+ * them. The trunks stay in ForageLayer at zIndex 2 so he hugs the near
+ * face of the bark on the way up.
+ *
+ * `data-shake` is the one thing about him that cannot be seen while it is
+ * true: he is inside the canopy and there is nothing of him on screen, so
+ * the tree does the acting. Polled, not per-frame — it is on for two
+ * seconds about once a minute.
+ */
+function ForageCanopyLayer({ bounds, sites, worldRef }) {
+  const refs = useRef(new Map());
+  useEffect(() => {
+    const t = setInterval(() => {
+      const now = performance.now(), live = worldRef.current.forage;
+      for (const [i, el] of refs.current) {
+        const f = live && live[i];
+        el.dataset.shake = f && f.shake > now ? "1" : "";
+      }
+    }, 120);
+    return () => clearInterval(t);
+  }, [worldRef]);
+  const { w, h } = bounds;
+  if (!w || !h) return null;
+  return (
+    <>
+      {sites.map((f, i) => (f.kind !== "nut" ? null : (
+        <div key={i} className="forage-canopy" data-shake=""
+          ref={(el) => { if (el) refs.current.set(i, el); else refs.current.delete(i); }}
+          style={{ position: "absolute", left: f.x * w, top: f.y * h, zIndex: 12,
+            pointerEvents: "none", transform: `translate(-50%,-100%) scale(${f.s})`,
+            transformOrigin: "50% 100%" }}>
+          <svg width="96" height="104" viewBox="-48 -88 96 104" style={{ display: "block", overflow: "visible" }}>
+            <g className="sai-bg-sway" style={{ animationDuration: `${5.8 + i * 0.5}s`, animationDelay: `${i * 0.9}s`, transformOrigin: "50% 100%" }}>
+              <ellipse cx="-16" cy="-48" rx="20" ry="15" fill="#2f6b3f" />
+              <ellipse cx="17" cy="-50" rx="21" ry="16" fill="#2a6138" />
+              <ellipse cx="0" cy="-60" rx="25" ry="18" fill="#3a7d49" />
+              <ellipse cx="-10" cy="-70" rx="16" ry="12" fill="#469356" />
+              <ellipse cx="11" cy="-72" rx="13" ry="10" fill="#54a763" opacity=".8" />
+              {/* the mast crop, in husked clusters */}
+              <g className="forage-nuts">
+                <ellipse cx="-20" cy="-44" rx="3.6" ry="4.2" fill="#7a5227" /><ellipse cx="-20" cy="-45.4" rx="1.7" ry="1.5" fill="#a9793f" />
+                <ellipse cx="-4" cy="-40" rx="3.4" ry="4" fill="#6d491f" /><ellipse cx="-4" cy="-41.3" rx="1.6" ry="1.4" fill="#9c6d38" />
+                <ellipse cx="14" cy="-42" rx="3.6" ry="4.2" fill="#7a5227" /><ellipse cx="14" cy="-43.4" rx="1.7" ry="1.5" fill="#a9793f" />
+                <ellipse cx="24" cy="-52" rx="3.2" ry="3.8" fill="#6d491f" />
+              </g>
+            </g>
+          </svg>
+        </div>
+      )))}
     </>
   );
 }
@@ -627,7 +869,11 @@ function enterFromEdge(a, world, sp) {
 
 // ---------------- Agent Factory ----------------
 function makeAgent(world, species) {
-  const r = rand(18, 24) * 1.1; // +10% sprite size
+  // Locked per species, not rolled. It used to be rand(18,24)*1.1 with no
+  // idea what animal it was making, which is why a bear could spawn smaller
+  // than a squirrel — and why it looked wrong as often as right, since a
+  // uniform draw lands at the bottom of the range as readily as the top.
+  const r = speciesSize(species);
   const speed0 = DEFAULTS.speed;
   const p = interiorPoint(world, species);
   return {
@@ -636,8 +882,8 @@ function makeAgent(world, species) {
     emoji: ALL_SPECIES[species].badge,
     x: p.x,
     y: p.y,
-    vx: rand(-speed0 * 0.3, speed0 * 0.3),
-    vy: rand(-speed0 * 0.3, speed0 * 0.3),
+    vx: rand(-speed0 * 0.3, speed0 * 0.3) * (SPEED[species] || GAIT_DEF).base,
+    vy: rand(-speed0 * 0.3, speed0 * 0.3) * (SPEED[species] || GAIT_DEF).base,
     r,
     state: "wander", // idle | wander | friendly | fight | rescue | cooldown | drag | flee | separate
     targetId: null,
@@ -728,7 +974,10 @@ export default function SocialAnimalsRPG() {
     // what each species' ethogram is currently planning
     if (typeof window !== "undefined") {
       window.__saiWorld = worldRef.current;
-      window.__saiEtho = { ETHOGRAM, ethoShare, states: ETHO_STATES };
+      window.__saiEtho = { ETHOGRAM, ethoShare, states: ETHO_STATES, ownWater: ETHO_OWNWATER_STATES };
+      // the gait core, so a test can ask an animal how fast it would move at a
+      // given urgency instead of inferring it from a smoothed random walk
+      window.__saiGait = { gait, SPEED, GAIT_DEF, speedCap };
     }
 
     // main loop
@@ -821,6 +1070,7 @@ export default function SocialAnimalsRPG() {
         {worldKey === "forest" && snapshot.bounds.w > 0 && <Lake bounds={snapshot.bounds} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <TreeLayer bounds={snapshot.bounds} part="trunk" />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <ForageLayer bounds={snapshot.bounds} sites={FORAGE_SITES} />}
+        {worldKey === "forest" && snapshot.bounds.w > 0 && <LarderLayer bounds={snapshot.bounds} worldRef={worldRef} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <PadLayer padsRef={padsRef} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <DamLayer damRefs={damRefs} />}
         {worldKey === "neighborhood" && snapshot.bounds.w > 0 && <NeighborhoodScene bounds={snapshot.bounds} />}
@@ -833,6 +1083,7 @@ export default function SocialAnimalsRPG() {
         {/* the boughs paint last, over the animals: anything up in the
             branches is hidden by the leaves the way it would be for real */}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <TreeLayer bounds={snapshot.bounds} part="canopy" />}
+        {worldKey === "forest" && snapshot.bounds.w > 0 && <ForageCanopyLayer bounds={snapshot.bounds} sites={FORAGE_SITES} worldRef={worldRef} />}
       </div>
     </div>
   );
@@ -1895,6 +2146,18 @@ const DAM_PLAN = (() => {
 // the plan reaches the beaver's ethogram as def.dam. Attached here rather
 // than in the WORLDS literal above, which is evaluated 1300 lines earlier.
 WORLDS.forest.dam = DAM_PLAN;
+
+// ---------------- The sward ----------------
+// Open grass, and nothing else: the goose grazes here. It needs no new
+// geometry because the empty ground was already the point — the lake's
+// southern shore stops at y≈.46, the clearing's lowest bush is at .625,
+// the two south-east trees stand east of .80, and the background already
+// scatters grass tufts, clover and flowers right through this rectangle.
+// Held in fractions and reached through `def`, like the trees and the
+// forage, so another world can hand him a different field or none at all
+// — with no sward the appetite simply never finds anywhere to go.
+const GOOSE_SWARD = { x0: 0.40, x1: 0.66, y0: 0.68, y1: 0.88 };
+WORLDS.forest.sward = GOOSE_SWARD;
 function DamLayer({ damRefs }) {
   return (
     <>
@@ -2253,7 +2516,7 @@ function stepWorld(world, cfg, dt) {
     const hasRescuer = agents.some((c) => c.state === "rescue" && (c.rescueFriendId === fa.id || c.rescueFriendId === fb.id));
     if (!hasRescuer) {
       // nearest free friend of either fighter, in the same medium
-      let best = null, bestD = RESCUE_RADIUS, bestFriend = null;
+      let best = null, bestD = Infinity, bestFriend = null;
       for (const c of agents) {
         if (c === fa || c === fb || c.dragging || !isFreeState(c)) continue;
         if (isWet(c.x, c.y) !== fightWet) continue;
@@ -2261,6 +2524,11 @@ function stepWorld(world, cfg, dt) {
         const friendOfB = getRel(c, fb.id, false)?.last === "friend";
         if (!friendOfA && !friendOfB) continue;
         const d = Math.hypot(c.x - mx, c.y - my);
+        // How far THIS candidate will volunteer to run, not a flat 620 for
+        // everyone: a turtle cannot cross that before the fight is over, so
+        // with one radius for all the rescue quietly stopped resolving for
+        // anything slow — it would commit and then never arrive.
+        if (d > Math.min(RESCUE_RADIUS, rescueReach(c))) continue;
         if (d < bestD) { best = c; bestD = d; bestFriend = friendOfA ? fa.id : fb.id; }
       }
       if (best) { best.state = "rescue"; best.rescueFriendId = bestFriend; }
@@ -2272,8 +2540,9 @@ function stepWorld(world, cfg, dt) {
       if (d < AVOID_RADIUS && d > 0.001) {
         const ux = (c.x - mx) / d, uy = (c.y - my) / d;
         const k = Math.min(1, dt * 4);
-        c.vx += (ux * cfg.speed - c.vx) * k;
-        c.vy += (uy * cfg.speed - c.vy) * k;
+        const wsp = gait(c, ethoCtx, 0.30);
+        c.vx += (ux * wsp - c.vx) * k;
+        c.vy += (uy * wsp - c.vy) * k;
       }
     }
   }
@@ -2281,6 +2550,7 @@ function stepWorld(world, cfg, dt) {
   // state machine + navigation
   for (const a of agents) {
     if (a.dragging) continue;
+    a._wet = isWet(a.x, a.y);   // asked five times a frame; lakeWobble is 3 sines
 
     // Locked engagements: glide into the shared contact point (lockX/Y is
     // set nose-to-nose by lockTogether), then hold; choreography in render
@@ -2315,7 +2585,7 @@ function stepWorld(world, cfg, dt) {
         a.state = "cooldown"; a.rescueFriendId = null;
       } else {
         const dx = friend.x - a.x, dy = friend.y - a.y; const d = Math.hypot(dx, dy) || 1;
-        const sp = cfg.speed * 1.5; // sprint — must arrive before the fight ends
+        const sp = gait(a, ethoCtx, 1.0); // the rescue: the one place top speed belongs
         a.vx = (dx / d) * sp; a.vy = (dy / d) * sp;
         if (d < RESCUE_REACH) {
           const opp = agents.find((x) => x.id === friend.targetId);
@@ -2673,7 +2943,7 @@ function stepWorld(world, cfg, dt) {
     if (a.state === "flee" && now >= a.fleeEnd) { a.state = "cooldown"; a.targetId = null; }
 
     if (a.state === "cooldown") {
-      a.vx *= 0.94; a.vy *= 0.94;
+      const kd = Math.exp(-3.7 * dt); a.vx *= kd; a.vy *= kd; // 0.94^60 ≈ e^-3.71
       if (Math.hypot(a.vx, a.vy) < 6) { a.vx = 0; a.vy = 0; }
       if (Math.random() < 0.02 && now >= a.noEventUntil) a.state = "wander";
     }
@@ -2725,14 +2995,14 @@ function stepWorld(world, cfg, dt) {
             : poolPoint(bounds, def.pool);
         }
         const dx = a.swimTarget.x - a.x, dy = a.swimTarget.y - a.y; const d = Math.hypot(dx, dy) || 1;
-        const sp = cfg.speed * (wet ? 0.55 : 0.9);
+        const sp = gait(a, ethoCtx, 0.30);   // medium is the species' own now
         a.vx = (dx / d) * sp; a.vy = (dy / d) * sp;
       } else if (canSwimIn(def, a.species) && isWet(a.x, a.y)) {
         // dip is over — paddle straight out to the nearest edge
         const cx = (def.hasWater ? LAKE.cx : def.pool.x + def.pool.w / 2) * bounds.w;
         const cy = (def.hasWater ? LAKE.cy : def.pool.y + def.pool.h / 2) * bounds.h;
         const ux = a.x - cx, uy = a.y - cy; const d = Math.hypot(ux, uy) || 1;
-        const sp = cfg.speed * 0.6;
+        const sp = gait(a, ethoCtx, 0.45);   // heading somewhere on purpose
         a.vx = (ux / d) * sp; a.vy = (uy / d) * sp;
       } else {
         // the dog runs around: an occasional short sprint (~7% of wander time)
@@ -2752,13 +3022,22 @@ function stepWorld(world, cfg, dt) {
             }
           }
         }
-        // plain wandering: minimum cruise + the odd pause to sniff around
+        // Plain wandering: the jitter still does the STEERING, but the speed
+        // is the species' own. This used to floor every animal at 22 px/s and
+        // leave the clamp to set the top, which made a turtle and a wolf amble
+        // at exactly the same pace — and wandering is where animals spend most
+        // of their time, so it was the one state the gait core never reached.
+        //
+        // The magnitude is assigned rather than eased toward, for the same
+        // reason gait applies its bursts after its own low-pass: a hop run
+        // through a second filter here comes out as a slide.
         if (Math.random() < 0.02) { a.vx += rand(-15, 15); a.vy += rand(-15, 15); }
         if (Math.random() < 0.0008) { a.state = "idle"; a.vx = a.vy = 0; a.idleUntil = now + rand(900, 2200); }
-        const wsp = Math.hypot(a.vx, a.vy);
-        if (wsp < 18) {
+        if (now >= (a._sprintUntil || 0)) {          // the dog's sprint owns its own speed
+          const cruise = gait(a, ethoCtx, 0.30);
+          const wsp = Math.hypot(a.vx, a.vy);
           const ang = wsp > 0.5 ? Math.atan2(a.vy, a.vx) : Math.random() * Math.PI * 2;
-          a.vx = Math.cos(ang) * 22; a.vy = Math.sin(ang) * 22;
+          a.vx = Math.cos(ang) * cruise; a.vy = Math.sin(ang) * cruise;
         }
       }
     }
@@ -2785,12 +3064,14 @@ function stepWorld(world, cfg, dt) {
   // integrate motion, collisions (shoreline / roofs / fences), edge wrap
   for (const a of agents) {
     if (a.dragging) continue;
-    const sp = cfg.speed;
-    const vmul = a.state === "dash" ? 2.4 : AIR_STATES.has(a.state) ? 1.9
-      : a.state === "rescue" || a.state === "seekroof" ? 1.6
-      : now < (a._sprintUntil || 0) ? 2.0 : 1.2;
-    const vlim = sp * vmul;
-    a.vx = clamp(a.vx, -vlim, vlim); a.vy = clamp(a.vy, -vlim, vlim);
+    // Geometry-driven states keep a fixed ceiling; everything else gets its
+    // own species'. Clamped as a CIRCLE: the old per-axis form let a diagonal
+    // run 1.414x past the limit it was meant to enforce.
+    const vlim = a.state === "dash" ? speedCap(a, cfg) * 1.1
+      : AIR_STATES.has(a.state) ? cfg.speed * 1.9
+      : speedCap(a, cfg);
+    const v2 = a.vx * a.vx + a.vy * a.vy;
+    if (v2 > vlim * vlim) { const sc = vlim / Math.sqrt(v2); a.vx *= sc; a.vy *= sc; }
     a._ix = a.x; a._iy = a.y; // pre-step position (for swept fence checks)
     if (a.state !== "friendly" && a.state !== "fight") { a.x += a.vx * dt; a.y += a.vy * dt; }
 
@@ -2853,7 +3134,7 @@ function stepWorld(world, cfg, dt) {
       a.z = 0; a.roofI = -1;
       // an ethogram may claim the re-entry (the beaver's dam run). Asked
       // before the wrap, because once he is back on stage the fact is gone.
-      if (!ethoOffstage(a, ethoCtx)) enterFromEdge(a, world, sp);
+      if (!ethoOffstage(a, ethoCtx)) enterFromEdge(a, world, gait(a, ethoCtx, 0.35));
     }
   }
 }
@@ -2896,6 +3177,9 @@ function lockTogether(a, b, world) {
     if (min === dl) mx = l; else if (min === dr) mx = r2;
     else if (min === dt2) my = t; else my = b2;
   }
+  // each is pushed clear by its OWN size. While every radius was near enough
+  // identical this was the same thing; now a bear and a frog need different
+  // room and a shared half-offset leaves the frog inside the bear.
   const half = (a.r + b.r) * 0.56;
   a.lockX = mx - nx * half; a.lockY = my - ny * half;
   b.lockX = mx + nx * half; b.lockY = my + ny * half;
@@ -2926,9 +3210,13 @@ function separatePair(world, a, b, worldRefLike, force) {
   // Apply opposite impulses
   let dx = a.x - b.x, dy = a.y - b.y; let d = Math.hypot(dx, dy);
   if (!d) { const ang = Math.random() * Math.PI * 2; dx = Math.cos(ang); dy = Math.sin(ang); d = 1; }
-  const nx = dx / d, ny = dy / d; const sp = worldRefLike.cfg ? worldRefLike.cfg.speed * 1.1 : 90;
+  const nx = dx / d, ny = dy / d;
+  // each recoils at its OWN pace — a turtle and a bear used to spring apart
+  // at exactly the same speed
+  const cfgL = worldRefLike.cfg || { speed: 80 };
+  const spA = gaitIn(a, null, cfgL, 0.55), spB = gaitIn(b, null, cfgL, 0.55);
 
-  a.vx = nx * sp; a.vy = ny * sp; b.vx = -nx * sp; b.vy = -ny * sp;
+  a.vx = nx * spA; a.vy = ny * spA; b.vx = -nx * spB; b.vy = -ny * spB;
   a.state = b.state = 'separate';
   a.separateEnd = b.separateEnd = now + SEP_MS;
   // impose event cooldown + forced wander intent
@@ -2941,10 +3229,23 @@ function separatePair(world, a, b, worldRefLike, force) {
 }
 
 function forceFlee(agent, cfg) {
+  // The hedgehog is the exception the speed table implies but never states:
+  // base .50 against a cougar's .70 and a wolf's .86 means a flee it cannot
+  // win, and a small animal losing a race it chose to enter reads as a bug.
+  // It has no flee, so the scare is handed to its ethogram and it balls up
+  // where it stands. hogCurl is shared with the approach trigger so the two
+  // entry points cannot drift into producing two different-length balls.
+  if (agent.species === "hedgehog" && ETHOGRAM.hedgehog) {
+    hogCurl(agent, performance.now(), rand);
+    agent.noEventUntil = performance.now() + rand(NOEVENT_MIN_MS, NOEVENT_MAX_MS);
+    return;
+  }
   agent.state = 'flee'; agent.fleeEnd = performance.now() + FLEE_MS; agent.targetId = null;
   // run to a random spot away from current location
   const ang = Math.atan2(agent.y, agent.x) + rand(-0.8, 0.8);
-  const sp = Math.max(120, cfg.speed * 1.3);
+  // the max(120, ...) floor WON at the default 80, handing a turtle and a
+  // cougar the same flee speed
+  const sp = gaitIn(agent, null, cfg, 0.85);
   agent.vx = Math.cos(ang) * sp; agent.vy = Math.sin(ang) * sp;
   // also apply noEvent cooldown so they don't instantly re-engage
   agent.noEventUntil = performance.now() + rand(NOEVENT_MIN_MS, NOEVENT_MAX_MS);
@@ -3009,6 +3310,17 @@ function renderWorld(world, iconsRef, padsRef, damRefs) {
       sprite.dataset.carry = a._carry || '';
       // the cat's pre-jump pause at a fence (little crouch via CSS)
       sprite.dataset.prep = nowMs < (a.hopPrepUntil || 0) ? '1' : '';
+      // The burst window Gait.js opens. This is the one fact about pace the
+      // CSS cannot recover from displacement: a frog's 300ms leap and a
+      // cougar's bound and an ordinary fast walk are all just px/s on the
+      // way past, and by the time any filter could separate them the leap is
+      // over. a._burstUntil already knows, so hand it over.
+      sprite.dataset.burst = nowMs < (a._burstUntil || 0) ? '1' : '';
+      // ...and the bill. The stamina half of the SPEED table has been
+      // invisible: only the species that cannot hold their top ever get
+      // here, and a wolf at drain 0.10 never does, which is the whole point
+      // of putting the cougar next to him.
+      sprite.dataset.spent = (a._ex || 0) > 0.6 ? '1' : '';
       let dir = Number(sprite.dataset.dir || '1');
       if (a.vx < -8) dir = -1; else if (a.vx > 8) dir = 1;
       if (a._faceDir) dir = a._faceDir; // e.g. the dog turning to face a fence it sniffs
