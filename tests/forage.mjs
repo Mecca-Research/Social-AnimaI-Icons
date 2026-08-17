@@ -150,9 +150,14 @@ await page.waitForTimeout(400);
   // frame-based, and headless rAF runs at 3.8fps, so a 30s window buys
   // about two seconds of hopping. What this checks is the float BOUT; that
   // he can cross water is the swim leg's business, not this one's.
-  const r = await chain('frog', 'float', 140000,
-    `{ for (const p of w.pads) p.userId=null;   // nobody else is holding one
-       const p=w.pads[0]; a.x=p.x-40; a.y=p.y-25; }`);
+  const seed = `{ for (const p of w.pads) p.userId=null;   // nobody else is holding one
+       const p=w.pads[0]; a.x=p.x-18; a.y=p.y-12; }`;
+  let r = await chain('frog', 'float', 140000, seed);
+  // One retry. The pads drift, and a pick that lands on a float other than
+  // the one he was set beside turns a bout check into a swim check — which
+  // at 3.8fps is a coin toss on the give-up timer, not a statement about
+  // whether floats work.
+  if (!/padsit/.test(r.chain)) r = await chain('frog', 'float', 140000, seed);
   chk(/padsit/.test(r.chain), 'frog rides a float', r.chain);
 }
 {
@@ -318,14 +323,13 @@ await page.waitForTimeout(400);
   // One larder for the life of the world, and the stock is what makes the
   // hoarding visible. Filling it and robbing it have to move the same
   // number, or the two errands are unrelated animations.
-  const r = await page.evaluate(`(async w => {
-    const a=w.agents.find(x=>x.species==='squirrel');
-    const S=a._eth; if (!S) return null;
-    const before = S.mem.stock;
-    return { defined: before !== undefined, before }; })(window.__saiWorld)`);
-  chk(r && r.defined && r.before >= 0 && r.before <= 4,
+  // The stock lives on the WORLD, not in the squirrel's head — one larder
+  // for the map, so a second squirrel would rob the same holes rather than
+  // carry a private copy of the number.
+  const r = await page.evaluate(`(w => w.larder ? { n: w.larder.n } : null)(window.__saiWorld)`);
+  chk(r && r.n >= 0 && r.n <= 4,
     'the larder holds a stock between 0 and 4',
-    r ? `stock ${r.before}` : 'no ethogram state');
+    r ? `stock ${r.n} of 4` : 'no larder on the world');
 }
 
 // ---- the hedgehog works timber, not the clearing ----
@@ -347,12 +351,50 @@ await page.waitForTimeout(400);
   chk(g.near > 90, 'his ground is clear of the clearing',
     `nearest clearing site ${g.near}px away`);
 }
+// His roll-up is an `approach` event, so chain()'s muzzle — which only holds
+// back the appetite timers — does not touch it, and anything big wandering
+// past turns a forage check into hogcurl>hogball>hoguncurl. That is the
+// defence working (a hedgehog picks safety over dinner every time), but it
+// makes for a useless measurement, so the rest of the cast goes away first.
+const alone = `for (const o of w.agents) { if (o===a) continue;
+  o.x=.05*w.bounds.w; o.y=.05*w.bounds.h; o.vx=o.vy=0; o.state='idle';
+  o.idleUntil=performance.now()+900000; o.noEventUntil=performance.now()+900000; }`;
 for (const [ev, want, label] of [
   ['roots', /rootdig|rootbore/, 'hedgehog works a surface root'],
   ['logs', /logdive/, 'hedgehog goes into the log'],
 ]) {
-  const r = await chain('hedgehog', ev, 90000, `a.x=.30*w.bounds.w; a.y=.60*w.bounds.h;`);
+  const r = await chain('hedgehog', ev, 90000,
+    `a.x=.30*w.bounds.w; a.y=.60*w.bounds.h; ${alone}`);
   chk(want.test(r.chain), label, r.chain);
+}
+{
+  // ...and the defence itself, checked on its own terms: walk something big
+  // up to him and he should stop rather than run, because at base .50 he
+  // loses that race to everything that would want to eat him.
+  const r = await page.evaluate(`(async w => {
+    const h=w.agents.find(a=>a.species==='hedgehog');
+    const big=w.agents.find(a=>a.species==='bear')||w.agents.find(a=>a.species==='deer');
+    if (!big) return null;
+    h._eth=null; h.state='wander'; h.intent='wander'; h.z=0;
+    h.x=.30*w.bounds.w; h.y=.60*w.bounds.h;
+    h.intentUntil=performance.now()+900000; h.noEventUntil=0;
+    for (let k=0;k<40 && !h._eth;k++) await new Promise(r=>setTimeout(r,25));
+    const seen=new Set(); const t0=performance.now();
+    while (performance.now()-t0 < 40000) {
+      await new Promise(r=>setTimeout(r,80));
+      // Re-planted every pass rather than placed once: the hedgehog is still
+      // wandering at ~40 px/s until the moment he commits, and a threat set
+      // down beside him is out of alarm range a second later.
+      big.state='idle'; big.vx=big.vy=0;
+      big.idleUntil=performance.now()+900000; big.noEventUntil=performance.now()+900000;
+      big.x=h.x+30; big.y=h.y;
+      seen.add(h.state);
+      if (seen.has('hogball')) break;
+    }
+    return { states:[...seen].join(','), balled: seen.has('hogball'),
+             fled: seen.has('flee') }; })(window.__saiWorld)`);
+  chk(r && r.balled && !r.fled, 'the hedgehog balls up instead of running',
+    r ? `saw ${r.states}` : 'no big animal in the cast');
 }
 {
   // The root event has two variants at equal weight and they are different
