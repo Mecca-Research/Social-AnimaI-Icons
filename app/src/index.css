@@ -613,6 +613,16 @@ body {
 /* flee: sprint tempo */
 .sai-sprite[data-state="flee"] .sai-crit-root{ --sai-gait:.26s; }
 
+/* break-up dash: a short burst of pace, so the legs read as a bolt rather
+   than a brisk walk. Same mechanism as the flee tempo — one custom property
+   on the root, inherited by every part that already reads var(--sai-gait).
+   The walk-off deliberately has no rule: it IS the species' own gait. */
+.sai-sprite[data-sep="dash"] .sai-crit-root{ --sai-gait:.3s; }
+
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-sep="dash"] .sai-crit-root{ --sai-gait:.5s; }
+}
+
 @media (prefers-reduced-motion: reduce){
   .sai-sprite[data-walking="1"] .sai-crit-wing,
   .sai-sprite[data-walking="1"] .sai-crit--penguin .sai-crit-body,

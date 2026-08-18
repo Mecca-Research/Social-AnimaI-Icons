@@ -1895,33 +1895,90 @@ const CROP_STRIDE = [380, 700];
 const CROP_HEAD_DOWN = [1000, 1900];
 
 /**
+ * The sward is a rectangle; the ground inside it is not all grass. The
+ * background paints four mud ellipses across the lower map and two of them
+ * — (820,600) and (560,730) in its own viewBox — reach well inside the
+ * rectangle, so a bout that only respects the rectangle grazes bare earth.
+ *
+ * The art and the mapping onto it belong to the world (the background is
+ * `preserveAspectRatio="slice"`, so its coords are not stage fractions);
+ * all that arrives here is the predicate, the same way `sward` itself does.
+ *
+ * The pad is his own drawn footprint, not a guess: the shadow under him is
+ * rx 29 of a 120-unit sprite box at 0.6435 px/unit — about 19px — and the
+ * crop pose paints the blades he is shearing another ~19px out past the
+ * bill (`crop-sward`, svg x 90-119). r * 0.8 covers the bird and his mouthful.
+ */
+const GRAZE_PAD = 0.8;   // of his own radius
+const grassAt = (a, c, x, y) => !(c.onBareEarth && c.onBareEarth(x, y, a.r * GRAZE_PAD));
+
+/**
  * A point in the sward, weighted to its middle. Landing on the rim means
  * his first turn is a turn back the way he came, and a bout that opens by
  * reversing reads as a goose who has changed his mind about lunch.
+ *
+ * ...and it must be grass. On some window shapes the middle of the
+ * rectangle IS the mud patch, so the weighted draw is allowed to fail and
+ * a sweep of the rectangle picks up whatever green is left. Returning null
+ * is a legitimate answer — `goto.none` simply re-rolls the appetite later.
  */
-function swardPoint(c) {
+function swardPoint(a, c) {
   const s = c.def.sward;
   if (!s) return null;                    // a world with no open field simply has no grazing
+  const b = c.bounds;
+  const at = (fx, fy) => ({ x: (s.x0 + (s.x1 - s.x0) * fx) * b.w,
+                            y: (s.y0 + (s.y1 - s.y0) * fy) * b.h });
   const t = () => 0.5 + (Math.random() + Math.random() - 1) * 0.34;
-  return { x: (s.x0 + (s.x1 - s.x0) * t()) * c.bounds.w,
-           y: (s.y0 + (s.y1 - s.y0) * t()) * c.bounds.h };
+  for (let i = 0; i < 24; i++) {
+    const p = at(t(), t());
+    if (grassAt(a, c, p.x, p.y)) return p;
+  }
+  // the middle is bare on this window shape: sweep the rectangle rather
+  // than give up on lunch, and take a random one of whatever is still green
+  const open = [];
+  for (let j = 0; j < 7; j++) for (let i = 0; i < 9; i++) {
+    const p = at((i + 0.5) / 9, (j + 0.5) / 7);
+    if (grassAt(a, c, p.x, p.y)) open.push(p);
+  }
+  return open.length ? open[Math.floor(Math.random() * open.length)] : null;
 }
 
 /**
  * Where the next stride points. A grazing bird wanders because the patch
  * in front of him runs out, not because he is going anywhere, so the
- * heading is the last one nudged — until he nears the edge of the grass,
- * where it becomes a heading back into it. Without that second half he
- * grazes his way into the lake in under a minute.
+ * heading is the last one nudged — until the stride would end somewhere he
+ * should not be, where it becomes a heading that does not. Two things
+ * count as "should not be": outside the grass rectangle (without that half
+ * he grazes his way into the lake in under a minute) and on the bare earth
+ * inside it (without THAT half he grazes his way onto the mud in about the
+ * same time, which is the same bug wearing a different coat).
+ *
+ * The look-ahead is one stride: 380-700ms at ~46 px/s is at most 32px, and
+ * his own footprint is ~19px, so r * 1.6 is exactly as far as he can get
+ * before the next call — no further, or he starts refusing grass he could
+ * safely stand on.
  */
 function swardHeading(a, c) {
   const s = c.def.sward, b = c.bounds, m = 26;   // one stride of margin
   const cx = ((s.x0 + s.x1) / 2) * b.w, cy = ((s.y0 + s.y1) / 2) * b.h;
-  if (a.x < s.x0 * b.w + m || a.x > s.x1 * b.w - m ||
-      a.y < s.y0 * b.h + m || a.y > s.y1 * b.h - m) {
-    return Math.atan2(cy - a.y, cx - a.x) + c.rand(-0.4, 0.4);
+  const home = Math.atan2(cy - a.y, cx - a.x);
+  const rimmed = a.x < s.x0 * b.w + m || a.x > s.x1 * b.w - m ||
+                 a.y < s.y0 * b.h + m || a.y > s.y1 * b.h - m;
+  const reach = a.r * 1.6;
+  const open = (ang) => {
+    const nx = a.x + Math.cos(ang) * reach, ny = a.y + Math.sin(ang) * reach;
+    return nx > s.x0 * b.w + m && nx < s.x1 * b.w - m &&
+           ny > s.y0 * b.h + m && ny < s.y1 * b.h - m && grassAt(a, c, nx, ny);
+  };
+  const want = rimmed ? home + c.rand(-0.4, 0.4) : a._cropAim + c.rand(-0.55, 0.55);
+  if (open(want)) return want;
+  // the stride he wanted ends on mud, or off the grass: fan out from it,
+  // alternating sides, and take the first heading that does not
+  for (let k = 1; k <= 11; k++) {
+    const ang = want + (k & 1 ? 1 : -1) * Math.ceil(k / 2) * (Math.PI / 6);
+    if (open(ang)) return ang;
   }
-  return a._cropAim + c.rand(-0.55, 0.55);
+  return home;   // ringed in — walk at the middle and let the next stride retry
 }
 
 function beginCrop(a, c) {
@@ -1958,31 +2015,26 @@ function driveCrop(a, c) {
 }
 
 /**
- * SHALLOW, in lakeRho, is 0.86 to 0.93 — call it 0.90.
+ * SHALLOW is not a constant, and the old [0.86, 0.93] was the right idea
+ * measured against the wrong thing.
  *
- * The shoreline is 1.0 and the water only starts at 0.97, so the whole
- * question is which seven hundredths beyond that he stands in. On this
- * stage a hundredth of rho is 1.8-2.6 px, so 0.90 is 12-19 px inside the
- * waterline: a third to a half of his own body length, one step. Inside it
- * his belly is wet, which is what makes the sprite read as being IN the
- * lake and what credits the water side of his ledger; outside it he is on
- * the mud miming a dabble at a lake he has not reached — the failure the
- * raccoon's wash line already records at 0.93, which is why 0.93 is the
- * shallow edge of this band rather than the middle of it.
+ * `Lake()` paints the bank at ring(1.08) and ring(1.03) and then covers
+ * both with opaque water at ring(1.00), so every grain of drawn brown lives
+ * OUTSIDE rho 1.00 — the rim does not eat into the blue at all. What eats
+ * into it is the bird. The sprite is centred on its anchor and the dabble
+ * pose paints its water lens 41px to the side and 32px below that anchor,
+ * while a hundredth of rho is worth only 1.4px on the lake's short axis.
+ * At 0.93 the anchor is ten pixels inside the waterline and the pose hangs
+ * thirty-two: he stood in the middle of the mud liner and the number said
+ * he was in the lake.
  *
- * The far limit is the more interesting one. It is not depth that stops
- * him at 0.86, it is what the world does with the space: the floats drift
- * the body of the lake between 0.38 and 0.62, and the sim's own swim
- * targets fill sqrt(rand)*0.72. Everything inside ~0.8 is water the world
- * expects a swimmer in, and a bird standing up in it reads as a bird
- * standing on nothing.
- */
-const DABBLE_RHO = [0.86, 0.93];
-/**
- * ...with the west end left alone. The dam's outer row sits at rho 0.89 —
- * squarely in the band — and the floats already keep out of the same
- * sector. Dabbling among the beaver's logs is not shallows, it is a
- * building site.
+ * So the band depends on which way the shore runs and how wide the lake is
+ * there — arithmetic about the ART, which is the world's to do. It arrives
+ * as c.shallowBand(angle) -> [far, near] in rho, already clear of the swim
+ * disc (sqrt(rand) * 0.72), of the floats' outer rim, and of the beaver's
+ * build sector, or null where no band wide enough exists at that angle.
+ * Here we only choose the angle, and try others when the margin he happens
+ * to be nearest is one of the ones with no room for him.
  */
 const DAM_SECTOR = [2.45, 3.95];
 
@@ -1990,15 +2042,18 @@ const DABBLE_DOWN = [2200, 3400];
 const DABBLE_UP = [1300, 2100];
 
 function shallowPoint(a, c) {
+  if (!c.shallowBand) return null;      // a water world that owns no shoreline art
   const b = c.bounds;
   let ang = Math.atan2((a.y - c.LAKE.cy * b.h) / (c.LAKE.ry * b.h),
                        (a.x - c.LAKE.cx * b.w) / (c.LAKE.rx * b.w));
   ang += c.rand(-0.3, 0.3);              // the nearest margin, not the same spot each time
-  let pa = ang < 0 ? ang + Math.PI * 2 : ang;
-  if (pa > DAM_SECTOR[0] && pa < DAM_SECTOR[1]) {
-    pa = pa - DAM_SECTOR[0] < DAM_SECTOR[1] - pa ? DAM_SECTOR[0] - 0.12 : DAM_SECTOR[1] + 0.12;
+  // walk outward from that margin, both ways, until a shore has room for him
+  for (let k = 0; k < 24; k++) {
+    const t = ang + (k === 0 ? 0 : (k & 1 ? 1 : -1) * Math.ceil(k / 2) * 0.26);
+    const band = c.shallowBand(t);
+    if (band) return c.lakePoint(b, t, c.rand(band[0], band[1]));
   }
-  return c.lakePoint(b, pa, c.rand(DABBLE_RHO[0], DABBLE_RHO[1]));
+  return null;    // no shore on this stage is both shallow and wide enough
 }
 
 function beginDabble(a, c, S, g) {
@@ -2104,7 +2159,7 @@ defineEthogram("goose", {
       goto: {
         state: "tosward", within: 20, giveUp: 26000, urgency: 0.45,
         none: 14000, lost: 14000,
-        pick: (a, c) => swardPoint(c),
+        pick: (a, c) => swardPoint(a, c),
       },
       begin: beginCrop,
       drive: driveCrop,
