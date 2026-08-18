@@ -1622,9 +1622,11 @@ defineEthogram("raccoon", {
           drive: driveRaccoon,
         },
         {
-          // CLIMB — a quarter of the time the fruit he wants is at the crown
-          // and he simply goes up after it. The picking happens up there, so
-          // he drops straight into the carry when he comes down.
+          // BUSH CLIMB — one bout in seven the fruit he wants is at the
+          // crown of the bush and he simply goes up after it. The picking
+          // happens up there, so he drops straight into the carry when he
+          // comes down. (It was a quarter before the fruit tree below took
+          // a share of the same appetite.)
           id: "racbush", w: 1, holdsZ: true,
           states: ["racbushup"],
           goto: { state: "tobush", ...RAC_TOBERRY },
