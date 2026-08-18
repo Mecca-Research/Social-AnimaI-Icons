@@ -224,7 +224,10 @@ const FOREST_TREES = [
   { x: .898, y: .480, s: 1.44,  kind: "oak"  }, // east flank, above the forage
   { x: .910, y: .700, s: 1.26,  kind: "oak"  }, // east flank, below it
   { x: .262, y: .835, s: 1.26,  kind: "oak"  }, // bottom-left, off the log's high end
-  { x: .500, y: .940, s: 1.56,  kind: "pine" }, // the lone spruce
+  // `fruit: false` retires a tree from bearing: no crop is drawn in its
+  // crown, and the raccoon's trunk picker skips it rather than climbing a
+  // conifer after berries that are not there.
+  { x: .500, y: .940, s: 1.56,  kind: "pine", fruit: false }, // the lone spruce
 ];
 const TREE_REACH = 96; // how close the bear must be to take an interest
 // Where the bear meets the tree, all in stage px above the anchor at
@@ -253,12 +256,63 @@ const TREE_HEAD_DEEP = 50;
 const STAND_FEET = 0.348;   // upright pose: paws below the sprite centre
 const STAND_BACK = 0.232;   // upright pose: spine right of the sprite centre
 const CLIMB_HEAD = 0.768;   // hug pose: ear tips above the sprite centre
+// Half the drawn trunk, in stage px either side of the tree's own anchor at
+// scale 1: the oak's TreeLayer path runs x -13..15, so the bark's west face
+// is 13 out, and the spruce's bole is drawn -14..16 for exactly that reason —
+// both species carry the same face. The bear writes this number inline; the
+// deer needs the same face for three different jobs, so it is a metric now.
+// THIS IS A FACT ABOUT THE TRUNK PATHS — if a resize changes the trunk's
+// width, this moves with it, and nothing else does.
+const TREE_TRUNK_R = 13;
+// The deer's three drawn poses, measured against the sprite box exactly the
+// way STAND_FEET / STAND_BACK / CLIMB_HEAD are, and for the same reason: the
+// ethogram has to know how far a POSE reaches before it can decide where the
+// ANIMAL stands. Each is how far east of his own centre the drawing gets, as
+// a fraction of the r*3.1 box, after DeerDraw's own scale(1.05).
+//   brow  antler tips (x 112) — where the bark has to be for a rub to land
+//   hoof  the working forehoof, set back far enough that it opens dirt and
+//         not bark, with the scrape sitting at the trunk's foot
+//   bed   the lying pose's muzzle, plus clearance, so he beds beside the
+//         trunk rather than inside it
+//   feet  the ground line all three poses share (y ~103.4) below his centre
+// See .sai-crit-rubpose / -hoofpose / -bedpose in Critters.jsx.
+const DEER_BROW = 0.396, DEER_HOOF = 0.400, DEER_BED = 0.430, DEER_FEET = 0.314;
 // the bear's tree work lives in his ethogram, which stays free of the
-// world's layout — hand it the numbers rather than have it import them
+// world's layout — hand it the numbers rather than have it import them.
+// The deer's rut and his bed are the second and third users of the same
+// route, so this now carries a per-species sub-object the way
+// setForageMetrics carries `nut`.
 setTreeMetrics({
   reach: TREE_REACH, basePx: TREE_BASE_PX, canopyPx: TREE_CANOPY_PX,
   headDeep: TREE_HEAD_DEEP, standFeet: STAND_FEET, standBack: STAND_BACK,
-  climbHead: CLIMB_HEAD,
+  // The raccoon's two errands on the same trunk, in the same units as
+  // basePx/canopyPx above: stage px over the anchor at scale 1, read off the
+  // art in TreeLayer. Handed over rather than derived, so that resizing the
+  // forest moves them with everything else.
+  //   trunkDX   the trunk's centre line, px right of the anchor. The oak's
+  //             bark path runs -13..15 at the foot and -8..9 under the
+  //             boughs, so the centre sits one px right of the anchor the
+  //             whole way up; the spruce's bole is drawn -14..16 for the
+  //             same reason, so one number covers both.
+  //   cavityPx  his day den. Mid-trunk: clear of the buttress at 18, well
+  //             under the boughs at 117, and there is about 22px of bark
+  //             across at that height at scale 1 — which is what the drawn
+  //             cavity in .sai-crit-racdenpose is sized against. A tree
+  //             added at a scale much under 0.9 wants this number moved
+  //             DOWN, where the trunk is wider, not the drawing made
+  //             smaller.
+  //   fruitPx   the wild fruit. ABOVE canopyPx on purpose: the crop hangs
+  //             inside the foliage, and stopping with his ears here puts his
+  //             head in the leaves and leaves his back and tail hanging
+  //             below the leaf line — which is the entire read of a raccoon
+  //             in the fork of a tree rather than an animal that vanished.
+  //             It is canopyPx + 17 and it MOVES WITH IT: the crown was
+  //             lifted 9.4 local units when the trunk grew 10%, and the
+  //             drawn crop in `forest-fruit` below sits at 120-142 with this
+  //             in the middle of it.
+  trunkDX: 1, cavityPx: 64, fruitPx: TREE_CANOPY_PX + 17,
+  climbHead: CLIMB_HEAD, trunkR: TREE_TRUNK_R,
+  deer: { brow: DEER_BROW, hoof: DEER_HOOF, bed: DEER_BED, feet: DEER_FEET },
 });
 
 // Per-species svg box. The one thing that may NOT vary is the bottom
@@ -350,6 +404,26 @@ function TreeLayer({ bounds, part }) {
                     <ellipse cx="-16" cy="-159.4" rx="14" ry="11" fill="#69bf76" opacity=".75" />
                     <ellipse cx="12" cy="-129.4" rx="16" ry="12" fill="#1f4d2c" opacity=".5" />
                     <ellipse cx="-34" cy="-125.4" rx="13" ry="10" fill="#1f4d2c" opacity=".45" />
+                    {/* wild fruit, low in the canopy where a climbing animal
+                        can reach it and where his head arrives. Local y is
+                        (20 - y) px above the anchor, so this band is 120-142
+                        up — the `fruitPx` handed to setTreeMetrics
+                        (canopyPx + 17 = 134) sits in the middle of it.
+                        Inside the sway group, so the crop moves with the
+                        boughs it hangs off, and last so it paints over the
+                        leaves. Painted over HIM by the zIndex-12 canopy
+                        pass, which is right: he reaches INTO it.
+                        Oaks only — the spruce carries `fruit: false` in
+                        FOREST_TREES and the raccoon's picker honours it, so
+                        he never climbs a conifer looking for berries. */}
+                    <g className="forest-fruit">
+                      <circle cx="-24" cy="-100" r="3.4" fill="#7d1b3e" /><circle cx="-25" cy="-101" r="1.2" fill="#c96289" opacity=".7" />
+                      <circle cx="-9" cy="-108" r="3.1" fill="#8e1f46" /><circle cx="-10" cy="-109" r="1.1" fill="#d46b95" opacity=".7" />
+                      <circle cx="8" cy="-102" r="3.5" fill="#a8244f" /><circle cx="7" cy="-103" r="1.2" fill="#e08bad" opacity=".7" />
+                      <circle cx="23" cy="-110" r="3.2" fill="#7d1b3e" />
+                      <circle cx="-2" cy="-118" r="2.9" fill="#9c2149" />
+                      <circle cx="16" cy="-122" r="2.7" fill="#8e1f46" />
+                    </g>
                   </>
                 )}
               </g>
@@ -651,6 +725,16 @@ setForageMetrics({
   // Forty px of leaf directly over the trunk, and he stops with his own
   // middle in the middle of it.
   nut: { basePx: 6, leafPx: 55, crownPx: 95, trunkDX: 1.5 },
+  // The fallen log, for anything that wants to be INSIDE one. The hedgehog
+  // goes in the rot hole in the top face; a raccoon does not fit through a
+  // hedgehog's hole, so he goes in the broken end and the two of them share
+  // the timber without ever sharing a doorway. Both read off the `log` art
+  // in ForageLayer, stage px at scale 1:
+  //   endDX  the open end, along the trunk from the anchor. The site's `dir`
+  //          mirrors the whole drawing, so multiply by it.
+  //   endPx  the middle of that end face, above the anchor: the end ellipse
+  //          is cy -5.5 and a local y is (16 - y) px up.
+  log: { endDX: 84, endPx: 21.5 },
   // Critter() draws the 120-unit sprite box at r * 2.7 px. (NOT r * 3.1 —
   // that is the container div; see the note in the squirrel's ethogram.)
   spritePx: 2.7,

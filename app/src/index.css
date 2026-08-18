@@ -1514,20 +1514,29 @@ body {
 .sai-sprite[data-state="racwash"] .sai-crit-head,
 .sai-sprite[data-state="racwash"] .sai-crit-tail,
 .sai-sprite[data-state="racwash"] .sai-crit-leg{ display:none; }
-/* the two hands work out of phase — that counter-rhythm is what makes it
-   read as kneading something rather than as one flat scrub */
+/* the two hands still work out of phase, but SLOWER and shorter than they
+   did. At .46s this was a scrub. Reading an object by fingertip is a
+   deliberate, unhurried thing, and the tempo is most of what carries that */
 .sai-sprite[data-state="racwash"] .wash-arm-near{
   transform-box:fill-box; transform-origin:50% 4%;
-  animation:sai-rac-washnear .46s ease-in-out infinite; }
+  animation:sai-rac-washnear .86s ease-in-out infinite; }
 .sai-sprite[data-state="racwash"] .wash-arm-far{
   transform-box:fill-box; transform-origin:50% 4%;
-  animation:sai-rac-washfar .46s ease-in-out infinite; }
-@keyframes sai-rac-washnear{ 0%,100%{transform:rotate(-6deg) translateY(0);} 50%{transform:rotate(5deg) translateY(1.6px);} }
-@keyframes sai-rac-washfar{ 0%,100%{transform:rotate(6deg) translateY(1.6px);} 50%{transform:rotate(-5deg) translateY(0);} }
+  animation:sai-rac-washfar .86s ease-in-out infinite; }
+@keyframes sai-rac-washnear{ 0%,100%{transform:rotate(-3.5deg) translateY(0);} 50%{transform:rotate(3deg) translateY(1px);} }
+@keyframes sai-rac-washfar{ 0%,100%{transform:rotate(3.5deg) translateY(1px);} 50%{transform:rotate(-3deg) translateY(0);} }
+/* the fruit is TURNED, not tumbled: a slow quarter-roll in the fingers with
+   a pause at each face, which is what feeling something over looks like.
+   (`sai-rac-tumble` is retired — this was its only reference.) */
 .sai-sprite[data-state="racwash"] .wash-food{
   transform-box:fill-box; transform-origin:50% 50%;
-  animation:sai-rac-tumble .92s linear infinite; }
-@keyframes sai-rac-tumble{ 0%{transform:rotate(0) translateX(0);} 50%{transform:rotate(180deg) translateX(2px);} 100%{transform:rotate(360deg) translateX(0);} }
+  animation:sai-rac-fingerturn 2.6s ease-in-out infinite; }
+@keyframes sai-rac-fingerturn{
+  0%,14%{transform:rotate(0) translateX(0);}
+  36%,50%{transform:rotate(96deg) translateX(1px);}
+  72%,86%{transform:rotate(190deg) translateX(-1px);}
+  100%{transform:rotate(360deg) translateX(0);}
+}
 /* a ring leaving his wrists every third of a beat */
 .sai-sprite[data-state="racwash"] .wash-rings ellipse{
   transform-box:fill-box; transform-origin:50% 50%; opacity:0;
@@ -1560,6 +1569,318 @@ body {
   animation:sai-rac-washtail 2.8s ease-in-out infinite; }
 @keyframes sai-rac-washtail{ 0%,100%{transform:rotate(-3deg);} 50%{transform:rotate(4deg);} }
 
+/* ---- v0.34 the hands, corrected: this is not washing ----
+   The old block read as rinsing — a berry tumbling between two scrubbing
+   paws, rings going out. What he is actually doing is wetting his own pads:
+   water softens the horny layer over the mechanoreceptors and roughly
+   doubles what those forepaws can feel. The water beat and the food beat
+   are therefore two different things now, in that order, and the water beat
+   comes FIRST and has nothing in it.
+     racpaws  the whole behavior standing alone, hands empty, long
+     racwet   the same beat inside a feeding bout, short
+   Both borrow the wash pose whole. Nothing about the pose changed except
+   what is in his hands and how fast they move. */
+.sai-sprite[data-state="racwet"] .sai-crit-washpose,
+.sai-sprite[data-state="racpaws"] .sai-crit-washpose{ display:inline; }
+.sai-sprite[data-state="racwet"] .sai-crit-body,
+.sai-sprite[data-state="racwet"] .sai-crit-head,
+.sai-sprite[data-state="racwet"] .sai-crit-tail,
+.sai-sprite[data-state="racwet"] .sai-crit-leg,
+.sai-sprite[data-state="racpaws"] .sai-crit-body,
+.sai-sprite[data-state="racpaws"] .sai-crit-head,
+.sai-sprite[data-state="racpaws"] .sai-crit-tail,
+.sai-sprite[data-state="racpaws"] .sai-crit-leg{ display:none; }
+/* nothing between the hands, because there is nothing between the hands */
+.sai-sprite[data-state="racwet"] .wash-food,
+.sai-sprite[data-state="racpaws"] .wash-food{ display:none; }
+/* palms MEETING. The forearms travel toward each other as well as rolling
+   against one another — that inward travel is the entire difference between
+   rubbing your hands together and scrubbing a plate, and it is why the two
+   states cannot share the wash keyframes above */
+.sai-sprite[data-state="racwet"] .wash-arm-near,
+.sai-sprite[data-state="racpaws"] .wash-arm-near{
+  transform-box:fill-box; transform-origin:50% 4%;
+  animation:sai-rac-rubnear .62s ease-in-out infinite; }
+.sai-sprite[data-state="racwet"] .wash-arm-far,
+.sai-sprite[data-state="racpaws"] .wash-arm-far{
+  transform-box:fill-box; transform-origin:50% 4%;
+  animation:sai-rac-rubfar .62s ease-in-out infinite; }
+@keyframes sai-rac-rubnear{ 0%,100%{transform:rotate(-7deg) translate(0,0);} 50%{transform:rotate(3deg) translate(-3.4px,1.2px);} }
+@keyframes sai-rac-rubfar{ 0%,100%{transform:rotate(6deg) translate(0,1.2px);} 50%{transform:rotate(-3deg) translate(3.2px,0);} }
+/* the pads themselves, where the two hands meet */
+.wash-rub{ display:none; }
+.sai-sprite[data-state="racwet"] .wash-rub,
+.sai-sprite[data-state="racpaws"] .wash-rub{
+  display:inline; transform-box:fill-box; transform-origin:50% 50%;
+  animation:sai-rac-knead .62s ease-in-out infinite; }
+@keyframes sai-rac-knead{
+  0%,100%{transform:scaleX(1) translateY(0); opacity:.6;}
+  50%{transform:scaleX(.84) translateY(-.8px); opacity:1;}
+}
+/* the rest of the pose carries over by extending the selectors it already
+   has, so there is exactly one drawing of a raccoon in shallow water */
+.sai-sprite[data-state="racwet"] .wash-rings ellipse,
+.sai-sprite[data-state="racpaws"] .wash-rings ellipse{
+  transform-box:fill-box; transform-origin:50% 50%; opacity:0;
+  animation:sai-rac-ripple 1.38s ease-out infinite; }
+.sai-sprite[data-state="racwet"] .wash-rings ellipse:nth-child(2),
+.sai-sprite[data-state="racpaws"] .wash-rings ellipse:nth-child(2){ animation-delay:.46s; }
+.sai-sprite[data-state="racwet"] .wash-rings ellipse:nth-child(3),
+.sai-sprite[data-state="racpaws"] .wash-rings ellipse:nth-child(3){ animation-delay:.92s; }
+.sai-sprite[data-state="racwet"] .wash-drops,
+.sai-sprite[data-state="racpaws"] .wash-drops{ animation:sai-rac-drops .62s ease-out infinite; }
+.sai-sprite[data-state="racwet"] .sai-crit-washbody,
+.sai-sprite[data-state="racpaws"] .sai-crit-washbody{
+  transform-box:fill-box; transform-origin:14% 100%;
+  animation:sai-rac-washbody 1.24s ease-in-out infinite; }
+.sai-sprite[data-state="racwet"] .wash-tail,
+.sai-sprite[data-state="racpaws"] .wash-tail{
+  transform-box:fill-box; transform-origin:94% 92%;
+  animation:sai-rac-washtail 2.8s ease-in-out infinite; }
+/* and the famous part, which the correction only makes MORE true: he does
+   not watch his own hands, because his hands are what is doing the looking */
+.sai-sprite[data-state="racwet"] .sai-crit-washhead,
+.sai-sprite[data-state="racpaws"] .sai-crit-washhead{
+  transform-box:fill-box; transform-origin:20% 95%;
+  animation:sai-rac-lookaway 4.2s ease-in-out infinite; }
+
+/* ==================== v0.34 raccoon: bark, fruit and the day den ========== */
+/* State names are namespaced inside an ethogram and NOT in the DOM, so both
+   pose groups here carry the species in the class itself: "denpose" and
+   "climbpose" are exactly the names the next species will want, and
+   .sai-crit-climbpose is already the bear's. Same reason the two sub-groups
+   are .sai-crit-racclingback / -racclinghead and the tail is .rac-cling-tail:
+   the squirrel's own nut-tree pose already owns the unprefixed names. */
+.sai-crit-racclingpose, .sai-crit-racdenpose{ display:none; }
+
+.sai-sprite[data-state="ractreeup"] .sai-crit-racclingpose,
+.sai-sprite[data-state="ractreepick"] .sai-crit-racclingpose,
+.sai-sprite[data-state="ractreedown"] .sai-crit-racclingpose,
+.sai-sprite[data-state="raccavup"] .sai-crit-racclingpose,
+.sai-sprite[data-state="raccavdown"] .sai-crit-racclingpose{ display:inline; }
+.sai-sprite[data-state="ractreeup"] .sai-crit-body,
+.sai-sprite[data-state="ractreeup"] .sai-crit-head,
+.sai-sprite[data-state="ractreeup"] .sai-crit-tail,
+.sai-sprite[data-state="ractreeup"] .sai-crit-leg,
+.sai-sprite[data-state="ractreepick"] .sai-crit-body,
+.sai-sprite[data-state="ractreepick"] .sai-crit-head,
+.sai-sprite[data-state="ractreepick"] .sai-crit-tail,
+.sai-sprite[data-state="ractreepick"] .sai-crit-leg,
+.sai-sprite[data-state="ractreedown"] .sai-crit-body,
+.sai-sprite[data-state="ractreedown"] .sai-crit-head,
+.sai-sprite[data-state="ractreedown"] .sai-crit-tail,
+.sai-sprite[data-state="ractreedown"] .sai-crit-leg,
+.sai-sprite[data-state="raccavup"] .sai-crit-body,
+.sai-sprite[data-state="raccavup"] .sai-crit-head,
+.sai-sprite[data-state="raccavup"] .sai-crit-tail,
+.sai-sprite[data-state="raccavup"] .sai-crit-leg,
+.sai-sprite[data-state="raccavdown"] .sai-crit-body,
+.sai-sprite[data-state="raccavdown"] .sai-crit-head,
+.sai-sprite[data-state="raccavdown"] .sai-crit-tail,
+.sai-sprite[data-state="raccavdown"] .sai-crit-leg{ display:none; }
+/* he is off the ground so data-air is set — but bark is not sky, and the
+   generic airborne lean has no business on any of these */
+.sai-sprite[data-state="ractreeup"] .sai-crit-root,
+.sai-sprite[data-state="ractreepick"] .sai-crit-root,
+.sai-sprite[data-state="ractreedown"] .sai-crit-root,
+.sai-sprite[data-state="raccavup"] .sai-crit-root,
+.sai-sprite[data-state="raccavdown"] .sai-crit-root,
+.sai-sprite[data-state="raccavsleep"] .sai-crit-root,
+.sai-sprite[data-state="raccavstir"] .sai-crit-root{ animation:none; }
+
+/* the whole body pressed to the bark and easing on it */
+.sai-sprite[data-state="ractreeup"] .sai-crit-racclingpose,
+.sai-sprite[data-state="ractreepick"] .sai-crit-racclingpose,
+.sai-sprite[data-state="ractreedown"] .sai-crit-racclingpose,
+.sai-sprite[data-state="raccavup"] .sai-crit-racclingpose,
+.sai-sprite[data-state="raccavdown"] .sai-crit-racclingpose{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-rac-clinghug .58s ease-in-out infinite; }
+@keyframes sai-rac-clinghug{
+  0%,100%{transform:rotate(-1.6deg) scaleY(1.01);}
+  50%{transform:rotate(1.6deg) scaleY(1.04);}
+}
+/* diagonal pairs, the only gait a climbing animal has: near hand and far
+   foot reach together, then swap */
+.sai-sprite[data-state="ractreeup"] .cling-arm-l,
+.sai-sprite[data-state="ractreeup"] .cling-foot-r,
+.sai-sprite[data-state="raccavup"] .cling-arm-l,
+.sai-sprite[data-state="raccavup"] .cling-foot-r{ animation:sai-rac-hitchA .58s ease-in-out infinite; }
+.sai-sprite[data-state="ractreeup"] .cling-arm-r,
+.sai-sprite[data-state="ractreeup"] .cling-foot-l,
+.sai-sprite[data-state="raccavup"] .cling-arm-r,
+.sai-sprite[data-state="raccavup"] .cling-foot-l{ animation:sai-rac-hitchB .58s ease-in-out infinite; }
+@keyframes sai-rac-hitchA{ 0%,100%{transform:translateY(3.2px);} 50%{transform:translateY(-3.6px);} }
+@keyframes sai-rac-hitchB{ 0%,100%{transform:translateY(-3.6px);} 50%{transform:translateY(3.2px);} }
+/* COMING DOWN is not the climb reversed, it is a different action: a pair
+   is unweighted, lowered, and set, while the other pair holds. Slower, and
+   asymmetric on purpose — that shape is the whole read of a raccoon backing
+   down a trunk head-up rather than a bear sliding off one. */
+.sai-sprite[data-state="ractreedown"] .cling-arm-l,
+.sai-sprite[data-state="ractreedown"] .cling-foot-r,
+.sai-sprite[data-state="raccavdown"] .cling-arm-l,
+.sai-sprite[data-state="raccavdown"] .cling-foot-r{ animation:sai-rac-lowerA .82s ease-in-out infinite; }
+.sai-sprite[data-state="ractreedown"] .cling-arm-r,
+.sai-sprite[data-state="ractreedown"] .cling-foot-l,
+.sai-sprite[data-state="raccavdown"] .cling-arm-r,
+.sai-sprite[data-state="raccavdown"] .cling-foot-l{ animation:sai-rac-lowerB .82s ease-in-out infinite; }
+@keyframes sai-rac-lowerA{
+  0%{transform:translateY(-3.4px);}
+  34%{transform:translateY(-3.2px);}
+  46%{transform:translateY(3.4px);}
+  100%{transform:translateY(-3.4px);}
+}
+@keyframes sai-rac-lowerB{
+  0%{transform:translateY(3.4px);}
+  50%{transform:translateY(3.2px);}
+  62%{transform:translateY(-3.4px);}
+  100%{transform:translateY(3.4px);}
+}
+/* IN THE FORK: the climb stops and one hand goes out into the crop over and
+   over. Most of him is behind the canopy layer here — his back and tail are
+   what is left below the leaf line, so the reach is deliberately big */
+.sai-sprite[data-state="ractreepick"] .cling-arm-r{
+  transform-box:fill-box; transform-origin:14% 70%;
+  animation:sai-rac-fruitreach 2.2s ease-in-out infinite; }
+@keyframes sai-rac-fruitreach{
+  0%,100%{transform:rotate(0) translate(0,0);}
+  40%{transform:rotate(-26deg) translate(2px,-6px);}
+  62%{transform:rotate(-14deg) translate(1px,-2px);}
+}
+.sai-sprite[data-state="ractreepick"] .sai-crit-racclingpose{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-rac-clinghug 2.2s ease-in-out infinite; }
+.sai-sprite[data-state="ractreepick"] .sai-crit-racclinghead{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-rac-clinghead 2.2s ease-in-out infinite; }
+@keyframes sai-rac-clinghead{ 0%,100%{transform:rotate(-3deg);} 45%{transform:rotate(5deg) translateY(-1.4px);} }
+.sai-sprite[data-state="ractreeup"] .rac-cling-tail,
+.sai-sprite[data-state="ractreepick"] .rac-cling-tail,
+.sai-sprite[data-state="ractreedown"] .rac-cling-tail,
+.sai-sprite[data-state="raccavup"] .rac-cling-tail,
+.sai-sprite[data-state="raccavdown"] .rac-cling-tail{
+  transform-box:fill-box; transform-origin:50% 4%;
+  animation:sai-rac-clingtail 3.4s ease-in-out infinite; }
+@keyframes sai-rac-clingtail{ 0%,100%{transform:rotate(-4deg);} 50%{transform:rotate(4.5deg);} }
+
+/* ---- the day den: a hollow log, or a cavity up a trunk ----
+   Which surround shows is the only difference between the two roosts. */
+.sai-sprite[data-state="raclogin"] .sai-crit-racdenpose,
+.sai-sprite[data-state="raclogsleep"] .sai-crit-racdenpose,
+.sai-sprite[data-state="raclogstir"] .sai-crit-racdenpose,
+.sai-sprite[data-state="raccavsleep"] .sai-crit-racdenpose,
+.sai-sprite[data-state="raccavstir"] .sai-crit-racdenpose{ display:inline; }
+.sai-sprite[data-state="raclogin"] .sai-crit-body,
+.sai-sprite[data-state="raclogin"] .sai-crit-head,
+.sai-sprite[data-state="raclogin"] .sai-crit-tail,
+.sai-sprite[data-state="raclogin"] .sai-crit-leg,
+.sai-sprite[data-state="raclogsleep"] .sai-crit-body,
+.sai-sprite[data-state="raclogsleep"] .sai-crit-head,
+.sai-sprite[data-state="raclogsleep"] .sai-crit-tail,
+.sai-sprite[data-state="raclogsleep"] .sai-crit-leg,
+.sai-sprite[data-state="raclogstir"] .sai-crit-body,
+.sai-sprite[data-state="raclogstir"] .sai-crit-head,
+.sai-sprite[data-state="raclogstir"] .sai-crit-tail,
+.sai-sprite[data-state="raclogstir"] .sai-crit-leg,
+.sai-sprite[data-state="raccavsleep"] .sai-crit-body,
+.sai-sprite[data-state="raccavsleep"] .sai-crit-head,
+.sai-sprite[data-state="raccavsleep"] .sai-crit-tail,
+.sai-sprite[data-state="raccavsleep"] .sai-crit-leg,
+.sai-sprite[data-state="raccavstir"] .sai-crit-body,
+.sai-sprite[data-state="raccavstir"] .sai-crit-head,
+.sai-sprite[data-state="raccavstir"] .sai-crit-tail,
+.sai-sprite[data-state="raccavstir"] .sai-crit-leg{ display:none; }
+/* which wood */
+.den-log, .den-bark, .den-eyes-open, .den-yawn{ display:none; }
+.sai-sprite[data-state="raclogin"] .den-log,
+.sai-sprite[data-state="raclogsleep"] .den-log,
+.sai-sprite[data-state="raclogstir"] .den-log{ display:inline; }
+.sai-sprite[data-state="raccavsleep"] .den-bark,
+.sai-sprite[data-state="raccavstir"] .den-bark{ display:inline; }
+/* he is inside timber at ground level: the pooled shadow is wrong there */
+.sai-sprite[data-state="raclogin"] .sai-crit-shadow,
+.sai-sprite[data-state="raclogsleep"] .sai-crit-shadow,
+.sai-sprite[data-state="raclogstir"] .sai-crit-shadow{ opacity:.1; animation:none; }
+
+/* GOING IN — shoulders working down the opening, once, and it stays put */
+.sai-sprite[data-state="raclogin"] .den-coon{
+  transform-box:fill-box; transform-origin:50% 50%;
+  animation:sai-rac-denin 2.2s ease-in-out forwards; }
+@keyframes sai-rac-denin{
+  0%{transform:translate(15px,-7px) scale(1.07);}
+  35%{transform:translate(9px,-3px) scale(1.05);}
+  55%{transform:translate(11px,-4px) scale(1.06);}   /* one shove short */
+  100%{transform:translate(0,0) scale(1);}
+}
+.sai-sprite[data-state="raclogin"] .den-paw{
+  transform-box:fill-box; transform-origin:80% 50%;
+  animation:sai-rac-denpaw .34s ease-in-out infinite; }
+@keyframes sai-rac-denpaw{ 0%,100%{transform:rotate(-7deg) translate(0,0);} 50%{transform:rotate(6deg) translate(-1.6px,1.4px);} }
+
+/* DEEP SLEEP — and this is the part that must not be readable as a rest.
+   Exactly ONE thing moves, and it moves at a fifth of the tempo of anything
+   else in this world: a 5.6s breath. No tail sway, no ear flick, no head. He
+   is three quarters out of sight in wood, his eyes are drawn shut rather
+   than lidded, and he does not react to anything walking past. Set that
+   against the sploot — flat in the open, four splayed legs, tail swinging,
+   a 3.2s breath and a face — and there is no frame of one that could be
+   mistaken for the other. The thirty-second ceiling is enforced in
+   Ethogram.js; what makes it read as SLEEP rather than as a short lie-down
+   is this stillness, not its length. */
+.sai-sprite[data-state="raclogsleep"] .den-coon,
+.sai-sprite[data-state="raccavsleep"] .den-coon{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-rac-denbreath 5.6s ease-in-out infinite; }
+@keyframes sai-rac-denbreath{
+  0%,100%{transform:scaleY(1) translateY(0);}
+  50%{transform:scaleY(1.035) translateY(-1.1px);}
+}
+.sai-sprite[data-state="raclogsleep"] .den-tail,
+.sai-sprite[data-state="raccavsleep"] .den-tail{
+  transform-box:fill-box; transform-origin:50% 2%;
+  animation:sai-rac-dentail 7.4s ease-in-out infinite; }
+@keyframes sai-rac-dentail{ 0%,100%{transform:rotate(-1.2deg);} 50%{transform:rotate(1.4deg);} }
+
+/* SURFACING — eyes crack, ears start working, one jaw-cracking yawn, and he
+   hauls out. The 3.4s here is cut to the state's own 3.4-4.2s window, and
+   `forwards` holds the last frame if the state runs the long end. */
+.sai-sprite[data-state="raclogstir"] .den-eyes-open,
+.sai-sprite[data-state="raccavstir"] .den-eyes-open,
+.sai-sprite[data-state="raclogstir"] .den-yawn,
+.sai-sprite[data-state="raccavstir"] .den-yawn{ display:inline; }
+.sai-sprite[data-state="raclogstir"] .den-eyes-shut,
+.sai-sprite[data-state="raccavstir"] .den-eyes-shut{ display:none; }
+.sai-sprite[data-state="raclogstir"] .den-coon,
+.sai-sprite[data-state="raccavstir"] .den-coon{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-rac-denout 3.4s ease-in-out forwards; }
+@keyframes sai-rac-denout{
+  0%{transform:translate(0,0) scale(1);}
+  22%{transform:translate(0,-2.4px) scale(1.02);}     /* head comes up */
+  55%{transform:translate(3px,-3.4px) scale(1.04);}
+  100%{transform:translate(9px,-5px) scale(1.06);}    /* shoulders clear */
+}
+.sai-sprite[data-state="raclogstir"] .den-yawn,
+.sai-sprite[data-state="raccavstir"] .den-yawn{
+  transform-box:fill-box; transform-origin:20% 20%;
+  animation:sai-rac-denyawn 3.4s ease-in-out forwards; }
+@keyframes sai-rac-denyawn{
+  0%,26%{transform:scale(.05); opacity:0;}
+  46%{transform:scale(1.15); opacity:1;}
+  62%{transform:scale(.9); opacity:1;}
+  74%,100%{transform:scale(.05); opacity:0;}
+}
+.sai-sprite[data-state="raclogstir"] .sai-crit-ear,
+.sai-sprite[data-state="raccavstir"] .sai-crit-ear{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-rac-denears .74s ease-in-out infinite; }
+@keyframes sai-rac-denears{ 0%,100%{transform:rotate(-6deg);} 50%{transform:rotate(7deg);} }
+.sai-sprite[data-state="raclogstir"] .den-tail,
+.sai-sprite[data-state="raccavstir"] .den-tail{
+  transform-box:fill-box; transform-origin:50% 2%;
+  animation:sai-rac-dentail 2.6s ease-in-out infinite; }
+
+
 @media (prefers-reduced-motion: reduce){
   .sai-sprite[data-state="rachandle"] .hand-paw-near,
   .sai-sprite[data-state="rachandle"] .hand-paw-far,
@@ -1585,7 +1906,69 @@ body {
   .sai-sprite[data-state="racwash"] .wash-drops,
   .sai-sprite[data-state="racwash"] .wash-tail,
   .sai-sprite[data-state="racwash"] .sai-crit-washbody,
-  .sai-sprite[data-state="racwash"] .sai-crit-washhead{ animation:none; }
+  .sai-sprite[data-state="racwash"] .sai-crit-washhead,
+  /* ---- v0.34 ---- */
+  .sai-sprite[data-state="racwet"] .wash-arm-near,
+  .sai-sprite[data-state="racwet"] .wash-arm-far,
+  .sai-sprite[data-state="racwet"] .wash-rub,
+  .sai-sprite[data-state="racwet"] .wash-rings ellipse,
+  .sai-sprite[data-state="racwet"] .wash-drops,
+  .sai-sprite[data-state="racwet"] .wash-tail,
+  .sai-sprite[data-state="racwet"] .sai-crit-washbody,
+  .sai-sprite[data-state="racwet"] .sai-crit-washhead,
+  .sai-sprite[data-state="racpaws"] .wash-arm-near,
+  .sai-sprite[data-state="racpaws"] .wash-arm-far,
+  .sai-sprite[data-state="racpaws"] .wash-rub,
+  .sai-sprite[data-state="racpaws"] .wash-rings ellipse,
+  .sai-sprite[data-state="racpaws"] .wash-drops,
+  .sai-sprite[data-state="racpaws"] .wash-tail,
+  .sai-sprite[data-state="racpaws"] .sai-crit-washbody,
+  .sai-sprite[data-state="racpaws"] .sai-crit-washhead,
+  .sai-sprite[data-state="ractreeup"] .sai-crit-racclingpose,
+  .sai-sprite[data-state="ractreeup"] .cling-arm-l,
+  .sai-sprite[data-state="ractreeup"] .cling-arm-r,
+  .sai-sprite[data-state="ractreeup"] .cling-foot-l,
+  .sai-sprite[data-state="ractreeup"] .cling-foot-r,
+  .sai-sprite[data-state="ractreeup"] .rac-cling-tail,
+  .sai-sprite[data-state="ractreepick"] .sai-crit-racclingpose,
+  .sai-sprite[data-state="ractreepick"] .cling-arm-r,
+  .sai-sprite[data-state="ractreepick"] .rac-cling-tail,
+  .sai-sprite[data-state="ractreepick"] .sai-crit-racclinghead,
+  .sai-sprite[data-state="ractreedown"] .sai-crit-racclingpose,
+  .sai-sprite[data-state="ractreedown"] .cling-arm-l,
+  .sai-sprite[data-state="ractreedown"] .cling-arm-r,
+  .sai-sprite[data-state="ractreedown"] .cling-foot-l,
+  .sai-sprite[data-state="ractreedown"] .cling-foot-r,
+  .sai-sprite[data-state="ractreedown"] .rac-cling-tail,
+  .sai-sprite[data-state="raccavup"] .sai-crit-racclingpose,
+  .sai-sprite[data-state="raccavup"] .cling-arm-l,
+  .sai-sprite[data-state="raccavup"] .cling-arm-r,
+  .sai-sprite[data-state="raccavup"] .cling-foot-l,
+  .sai-sprite[data-state="raccavup"] .cling-foot-r,
+  .sai-sprite[data-state="raccavup"] .rac-cling-tail,
+  .sai-sprite[data-state="raccavdown"] .sai-crit-racclingpose,
+  .sai-sprite[data-state="raccavdown"] .cling-arm-l,
+  .sai-sprite[data-state="raccavdown"] .cling-arm-r,
+  .sai-sprite[data-state="raccavdown"] .cling-foot-l,
+  .sai-sprite[data-state="raccavdown"] .cling-foot-r,
+  .sai-sprite[data-state="raccavdown"] .rac-cling-tail,
+  .sai-sprite[data-state="raclogin"] .den-paw,
+  .sai-sprite[data-state="raclogsleep"] .den-coon,
+  .sai-sprite[data-state="raclogsleep"] .den-tail,
+  .sai-sprite[data-state="raccavsleep"] .den-coon,
+  .sai-sprite[data-state="raccavsleep"] .den-tail,
+  .sai-sprite[data-state="raclogstir"] .sai-crit-ear,
+  .sai-sprite[data-state="raclogstir"] .den-tail,
+  .sai-sprite[data-state="raccavstir"] .sai-crit-ear,
+  .sai-sprite[data-state="raccavstir"] .den-tail{ animation:none; }
+  /* the three that must still RESOLVE rather than stop: an entry frozen
+     half in, a yawn frozen shut and an exit frozen inside would each leave
+     him permanently wrong. Keep the endpoint, drop the motion. */
+  .sai-sprite[data-state="raclogin"] .den-coon{ animation-duration:1ms; }
+  .sai-sprite[data-state="raclogstir"] .den-coon,
+  .sai-sprite[data-state="raccavstir"] .den-coon,
+  .sai-sprite[data-state="raclogstir"] .den-yawn,
+  .sai-sprite[data-state="raccavstir"] .den-yawn{ animation-duration:1ms; }
 }
 
 /* ==================== v0.31 the deer feeds ==================== */
@@ -3072,4 +3455,276 @@ body {
      stays. Only the quiver and the bristle stop. The nose is shown outright
      so an unrolling hedgehog still has a face. */
   .sai-sprite[data-state="hoguncurl"] .sai-crit--hedgehog .ball-face{ opacity:1; }
+}
+
+/* ============= v0.35 the deer's rut, and where it lies up ============= */
+/* Three poses and five states, and every rule here is scoped to
+   .sai-crit--deer — the display:none defaults included. State names are
+   namespaced inside an ethogram and nowhere else, so an unscoped default
+   is a landmine for whichever species claims the same word next. */
+.sai-crit--deer .sai-crit-rubpose,
+.sai-crit--deer .sai-crit-hoofpose,
+.sai-crit--deer .sai-crit-bedpose{ display:none; }
+
+/* The walk lean is a rotate on .sai-crit-root, and it survives arrival by
+   half a second because [data-walking] is computed from real displacement
+   and the drives lerp the last few pixels in. Against the fold — a one-shot
+   transform on the pose group — that reads as a deer lying down crooked, so
+   these five states put the root back level. Beats the alternative, which is
+   tuning the arrival lerp until the flag happens to clear in time.
+   (.sai-crit-root and .sai-crit--deer are the SAME <svg>, so this is one
+   compound selector, not a descendant one — the turtle's lean rule next
+   door is written the same way.) */
+.sai-sprite[data-state="velvetrub"] .sai-crit-root.sai-crit--deer,
+.sai-sprite[data-state="hoofpaw"]   .sai-crit-root.sai-crit--deer,
+.sai-sprite[data-state="bedfold"]   .sai-crit-root.sai-crit--deer,
+.sai-sprite[data-state="bedcud"]    .sai-crit-root.sai-crit--deer,
+.sai-sprite[data-state="bedrise"]   .sai-crit-root.sai-crit--deer{ animation:none; }
+
+/* ---- RUBBING THE VELVET (velvetrub) ---- */
+.sai-sprite[data-state="velvetrub"] .sai-crit--deer .sai-crit-rubpose{ display:inline; }
+.sai-sprite[data-state="velvetrub"] .sai-crit--deer .sai-crit-body,
+.sai-sprite[data-state="velvetrub"] .sai-crit--deer .sai-crit-head,
+.sai-sprite[data-state="velvetrub"] .sai-crit--deer .sai-crit-tail,
+.sai-sprite[data-state="velvetrub"] .sai-crit--deer .sai-crit-leg{ display:none; }
+/* He is up on two legs, so the ground contact is half what it was and it is
+   behind him. Static, because a reared animal's shadow does not breathe. */
+.sai-sprite[data-state="velvetrub"] .sai-crit--deer .sai-crit-shadow{
+  animation:none; transform:translateX(-7px) scale(.7,.86); }
+
+/* The whole animal rocks under the effort — a pure translate plus half a
+   degree, so the braced hooves shift by a fraction of a screen pixel and
+   read as weight rather than as sliding. Pivot at the planted hind feet. */
+.sai-sprite[data-state="velvetrub"] .sai-crit--deer .sai-crit-rubpose{
+  transform-box:fill-box; transform-origin:22% 99%;
+  animation:sai-deer-rub 1.1s ease-in-out infinite; }
+@keyframes sai-deer-rub{
+  0%,100%{transform:rotate(0) translate(0,0);}
+  40%{transform:rotate(-1.6deg) translate(1.1px,-.8px);}  /* drive up the bark */
+  68%{transform:rotate(.5deg) translate(-.5px,.4px);}     /* and let the weight down */
+}
+/* The neck does the actual work, so it carries the big number: pivot at the
+   neck ROOT (bottom-left of the group's fill box), six degrees, which moves
+   the beam tips sixty units out from the pivot by about three screen pixels.
+   Same 1.1s as the body and cut to the same length as one RUB_PASS, so a
+   bout that ends between passes ends with the antlers back where they
+   started rather than mid-stroke. */
+.sai-sprite[data-state="velvetrub"] .sai-crit--deer .rub-head{
+  transform-box:fill-box; transform-origin:5% 96%;
+  animation:sai-deer-saw 1.1s ease-in-out infinite; }
+@keyframes sai-deer-saw{
+  0%,100%{transform:rotate(0);}
+  40%{transform:rotate(-6deg);}
+  72%{transform:rotate(2deg);}
+}
+/* the tatters whip at three times the tempo of the neck dragging them —
+   the mismatch is what makes them read as loose and not as painted on */
+.sai-sprite[data-state="velvetrub"] .sai-crit--deer .rub-velvet{
+  transform-box:fill-box; transform-origin:50% 10%;
+  animation:sai-deer-velvet .37s ease-in-out infinite; }
+@keyframes sai-deer-velvet{
+  0%,100%{transform:rotate(-8deg);}
+  50%{transform:rotate(10deg) translateX(-.6px);}
+}
+/* velvet and bark coming away. Hidden outright when nothing is animating
+   them: four shreds parked in mid-air is worse than no shreds at all. */
+.sai-crit--deer .rub-shreds{ opacity:0; }
+.sai-sprite[data-state="velvetrub"] .sai-crit--deer .rub-shreds{ opacity:1; }
+.sai-sprite[data-state="velvetrub"] .sai-crit--deer .rub-shreds > *{
+  transform-box:fill-box; transform-origin:50% 0%;
+  animation:sai-deer-shred 1.1s ease-in infinite; }
+.sai-sprite[data-state="velvetrub"] .sai-crit--deer .rub-shreds > *:nth-child(2){ animation-delay:.26s; }
+.sai-sprite[data-state="velvetrub"] .sai-crit--deer .rub-shreds > *:nth-child(3){ animation-delay:.5s; }
+.sai-sprite[data-state="velvetrub"] .sai-crit--deer .rub-shreds > *:nth-child(4){ animation-delay:.78s; }
+@keyframes sai-deer-shred{
+  0%{opacity:0; transform:translate(0,0) rotate(0);}
+  20%{opacity:.95;}
+  100%{opacity:0; transform:translate(-5px,14px) rotate(38deg);}
+}
+
+/* ---- PAWING A SCRAPE (hoofpaw) ---- */
+.sai-sprite[data-state="hoofpaw"] .sai-crit--deer .sai-crit-hoofpose{ display:inline; }
+.sai-sprite[data-state="hoofpaw"] .sai-crit--deer .sai-crit-body,
+.sai-sprite[data-state="hoofpaw"] .sai-crit--deer .sai-crit-head,
+.sai-sprite[data-state="hoofpaw"] .sai-crit--deer .sai-crit-tail,
+.sai-sprite[data-state="hoofpaw"] .sai-crit--deer .sai-crit-leg{ display:none; }
+/* weight rocking over the three legs that are still down */
+.sai-sprite[data-state="hoofpaw"] .sai-crit--deer .sai-crit-hoofpose{
+  animation:sai-deer-plant .52s ease-in-out infinite; }
+@keyframes sai-deer-plant{ 0%,100%{transform:translate(0,0);} 50%{transform:translate(-.7px,.6px);} }
+/* The rake, and it is the skunk's stroke slowed and lengthened: a hoof is a
+   blunter tool than a claw, so it travels further, presses harder and comes
+   round less often. Pivot at the shoulder, top-left of the group's box.
+   Rotation alone off a shoulder swings a foot through an arc that lifts as
+   much as it drags, so the stroke is mostly translate with the rotation only
+   shaping it. Power inside the first 36%, recovery over the rest. */
+.sai-sprite[data-state="hoofpaw"] .sai-crit--deer .hoof-paw{
+  transform-box:fill-box; transform-origin:17% 8%;
+  animation:sai-deer-rake .52s cubic-bezier(.35,0,.25,1) infinite; }
+@keyframes sai-deer-rake{
+  0%{transform:translate(3px,-1.4px) rotate(-11deg);}    /* set down, forward */
+  36%{transform:translate(-3.4px,.6px) rotate(9deg);}    /* dragged back, pressed in */
+  50%{transform:translate(-2.4px,-3px) rotate(5deg);}    /* picked up */
+  100%{transform:translate(3px,-1.4px) rotate(-11deg);}  /* carried forward */
+}
+/* he watches the scrape, at half the stroke tempo so two rakes land per nod */
+.sai-sprite[data-state="hoofpaw"] .sai-crit--deer .hoof-head{
+  transform-box:fill-box; transform-origin:3% 58%;
+  animation:sai-deer-rakehead 1.04s ease-in-out infinite; }
+@keyframes sai-deer-rakehead{
+  0%,100%{transform:rotate(0) translate(0,0);}
+  50%{transform:rotate(2.2deg) translate(-.5px,1px);}
+}
+.sai-crit--deer .hoof-litter{ opacity:0; }
+.sai-sprite[data-state="hoofpaw"] .sai-crit--deer .hoof-litter{ opacity:1; }
+.sai-sprite[data-state="hoofpaw"] .sai-crit--deer .hoof-litter ellipse{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-deer-litter .52s ease-out infinite; }
+.sai-sprite[data-state="hoofpaw"] .sai-crit--deer .hoof-litter ellipse:nth-child(2){ animation-delay:.05s; }
+.sai-sprite[data-state="hoofpaw"] .sai-crit--deer .hoof-litter ellipse:nth-child(3){ animation-delay:.09s; }
+.sai-sprite[data-state="hoofpaw"] .sai-crit--deer .hoof-litter ellipse:nth-child(4){ animation-delay:.14s; }
+@keyframes sai-deer-litter{
+  0%,25%{opacity:0; transform:translate(0,0) scale(.5);}
+  50%{opacity:.9; transform:translate(-3px,-2.6px) scale(1);}
+  100%{opacity:0; transform:translate(-6px,-.4px) scale(.85);}
+}
+/* the scrape itself comes in over the first second and then STAYS: it is the
+   record of the action, so it must not blink with the stroke that makes it */
+.sai-crit--deer .hoof-marks{ opacity:0; }
+.sai-sprite[data-state="hoofpaw"] .sai-crit--deer .hoof-marks{
+  animation:sai-deer-scuffs 1.1s ease-out forwards; }
+@keyframes sai-deer-scuffs{ 0%{opacity:0;} 100%{opacity:1;} }
+
+/* ---- LYING UP (bedfold / bedcud / bedrise) ---- */
+/* One drawing, three states, and the state is what decides whether it is
+   arriving, resting or leaving. */
+.sai-sprite[data-state="bedfold"] .sai-crit--deer .sai-crit-bedpose,
+.sai-sprite[data-state="bedcud"]  .sai-crit--deer .sai-crit-bedpose,
+.sai-sprite[data-state="bedrise"] .sai-crit--deer .sai-crit-bedpose{ display:inline; }
+.sai-sprite[data-state="bedfold"] .sai-crit--deer .sai-crit-body,
+.sai-sprite[data-state="bedfold"] .sai-crit--deer .sai-crit-head,
+.sai-sprite[data-state="bedfold"] .sai-crit--deer .sai-crit-tail,
+.sai-sprite[data-state="bedfold"] .sai-crit--deer .sai-crit-leg,
+.sai-sprite[data-state="bedcud"]  .sai-crit--deer .sai-crit-body,
+.sai-sprite[data-state="bedcud"]  .sai-crit--deer .sai-crit-head,
+.sai-sprite[data-state="bedcud"]  .sai-crit--deer .sai-crit-tail,
+.sai-sprite[data-state="bedcud"]  .sai-crit--deer .sai-crit-leg,
+.sai-sprite[data-state="bedrise"] .sai-crit--deer .sai-crit-body,
+.sai-sprite[data-state="bedrise"] .sai-crit--deer .sai-crit-head,
+.sai-sprite[data-state="bedrise"] .sai-crit--deer .sai-crit-tail,
+.sai-sprite[data-state="bedrise"] .sai-crit--deer .sai-crit-leg{ display:none; }
+/* down on the ground: the contact spreads and stops pulsing */
+.sai-sprite[data-state="bedfold"] .sai-crit--deer .sai-crit-shadow,
+.sai-sprite[data-state="bedcud"]  .sai-crit--deer .sai-crit-shadow,
+.sai-sprite[data-state="bedrise"] .sai-crit--deer .sai-crit-shadow{
+  animation:none; transform:translateY(1px) scale(1.14,.6); }
+
+/* Going down. Starts tall and a touch nose-high — a standing deer's mass in
+   the lying deer's outline — drops past the resting height and settles back
+   up into it, which is the overshoot every animal that folds its legs has.
+   1s, and that IS BED_FOLD in the ethogram: move one, move the other. */
+.sai-sprite[data-state="bedfold"] .sai-crit--deer .sai-crit-bedpose{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-deer-fold 1s cubic-bezier(.4,0,.3,1) forwards; }
+@keyframes sai-deer-fold{
+  0%{transform:translateY(-13px) scale(.97,1.18);}
+  62%{transform:translateY(1.5px) scale(1.03,.95);}
+  100%{transform:translateY(0) scale(1,1);}
+}
+/* ...and getting up is the same move played out. .9s = BED_RISE. */
+.sai-sprite[data-state="bedrise"] .sai-crit--deer .sai-crit-bedpose{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-deer-rise .9s cubic-bezier(.5,0,.4,1) forwards; }
+@keyframes sai-deer-rise{
+  0%{transform:translateY(0) scale(1,1);}
+  38%{transform:translateY(1.5px) scale(1.03,.95);}   /* gather under himself */
+  100%{transform:translateY(-13px) scale(.97,1.18);}
+}
+/* Resting. The slowest thing in the world by design — four and a half
+   seconds a breath, against three-six for the idle rig — because the whole
+   read of the state is that he has stopped needing to hurry. */
+.sai-sprite[data-state="bedcud"] .sai-crit--deer .sai-crit-bedpose{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-deer-settle 4.4s ease-in-out infinite; }
+@keyframes sai-deer-settle{
+  0%,100%{transform:scaleY(1) translateY(0);}
+  50%{transform:scaleY(1.028) translateY(-.5px);}
+}
+/* THE JAW, and it is the point of the pose. A grind, not a nod: the power
+   stroke goes down AND across, and the return only half undoes it, which is
+   what separates a ruminant working a cud from an animal chewing food.
+   Pivot at the hinge — the left edge of the jaw group's own box. */
+.sai-sprite[data-state="bedcud"] .sai-crit--deer .bed-jaw{
+  transform-box:fill-box; transform-origin:0% 30%;
+  animation:sai-deer-cudchew .52s ease-in-out infinite; }
+@keyframes sai-deer-cudchew{
+  0%,100%{transform:rotate(0) translate(0,0);}
+  28%{transform:rotate(4.6deg) translate(-.5px,.5px);}
+  56%{transform:rotate(-1.4deg) translate(.3px,-.2px);}
+}
+/* The head sways on 3.1s against a jaw on 0.52s. The two never divide, so
+   half a minute of lying still never comes back round to the same frame —
+   the same reason Gait.js beats two incommensurate sines against each other
+   instead of using one. Without it a long rest reads as a looping GIF. */
+.sai-sprite[data-state="bedcud"] .sai-crit--deer .bed-head{
+  transform-box:fill-box; transform-origin:5% 97%;
+  animation:sai-deer-bedhead 3.1s ease-in-out infinite; }
+@keyframes sai-deer-bedhead{
+  0%,100%{transform:rotate(0);}
+  38%{transform:rotate(-1.8deg);}
+  74%{transform:rotate(1.1deg);}
+}
+/* ears loose and independent: one flick each, well out of step */
+.sai-sprite[data-state="bedcud"] .sai-crit--deer .bed-ear-l,
+.sai-sprite[data-state="bedcud"] .sai-crit--deer .bed-ear-r{
+  transform-box:fill-box; transform-origin:30% 88%;
+  animation:sai-deer-bedear 7.4s ease-in-out infinite; }
+.sai-sprite[data-state="bedcud"] .sai-crit--deer .bed-ear-r{ animation-delay:-3.3s; }
+@keyframes sai-deer-bedear{
+  0%,72%,100%{transform:rotate(0);}
+  78%{transform:rotate(-13deg);}
+  84%{transform:rotate(7deg);}
+  90%{transform:rotate(0);}
+}
+/* one bolus up the throat every eight seconds, which is sixteen chews apart
+   — visible if you watch him, invisible if you don't, which is right */
+.sai-crit--deer .bed-cud{ opacity:0; }
+.sai-sprite[data-state="bedcud"] .sai-crit--deer .bed-cud{
+  opacity:1; animation:sai-deer-cudup 8.2s ease-in-out infinite; }
+@keyframes sai-deer-cudup{
+  0%,58%{opacity:0; transform:translate(0,0) scale(.8);}
+  64%{opacity:.6; transform:translate(2px,-6px) scale(1);}
+  84%{opacity:.5; transform:translate(8px,-22px) scale(.92);}
+  92%,100%{opacity:0; transform:translate(10px,-27px) scale(.8);}
+}
+
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-state="velvetrub"] .sai-crit--deer .sai-crit-rubpose,
+  .sai-sprite[data-state="velvetrub"] .sai-crit--deer .rub-head,
+  .sai-sprite[data-state="velvetrub"] .sai-crit--deer .rub-velvet,
+  .sai-sprite[data-state="velvetrub"] .sai-crit--deer .rub-shreds > *,
+  .sai-sprite[data-state="hoofpaw"] .sai-crit--deer .sai-crit-hoofpose,
+  .sai-sprite[data-state="hoofpaw"] .sai-crit--deer .hoof-paw,
+  .sai-sprite[data-state="hoofpaw"] .sai-crit--deer .hoof-head,
+  .sai-sprite[data-state="hoofpaw"] .sai-crit--deer .hoof-litter ellipse,
+  .sai-sprite[data-state="hoofpaw"] .sai-crit--deer .hoof-marks,
+  .sai-sprite[data-state="bedfold"] .sai-crit--deer .sai-crit-bedpose,
+  .sai-sprite[data-state="bedrise"] .sai-crit--deer .sai-crit-bedpose,
+  .sai-sprite[data-state="bedcud"]  .sai-crit--deer .sai-crit-bedpose,
+  .sai-sprite[data-state="bedcud"]  .sai-crit--deer .bed-jaw,
+  .sai-sprite[data-state="bedcud"]  .sai-crit--deer .bed-head,
+  .sai-sprite[data-state="bedcud"]  .sai-crit--deer .bed-ear-l,
+  .sai-sprite[data-state="bedcud"]  .sai-crit--deer .bed-ear-r,
+  .sai-sprite[data-state="bedcud"]  .sai-crit--deer .bed-cud{ animation:none; }
+  /* Every pose here is a behavioral STATE lasting seconds, so all three stay
+     shown — only their motion stops. The particles are the exception and
+     they go the other way: shreds and litter are mid-flight opacity, and a
+     killed animation leaves them hanging in the air as a permanent cloud,
+     which is the trap the cougar's dust fell into. Hidden outright. The
+     scrape marks are the opposite again — they are the RECORD, so they are
+     shown outright rather than faded in. */
+  .sai-sprite[data-state="velvetrub"] .sai-crit--deer .rub-shreds{ opacity:0; }
+  .sai-sprite[data-state="hoofpaw"] .sai-crit--deer .hoof-litter{ opacity:0; }
+  .sai-sprite[data-state="hoofpaw"] .sai-crit--deer .hoof-marks{ opacity:1; }
+  .sai-sprite[data-state="bedcud"] .sai-crit--deer .bed-cud{ opacity:0; }
 }

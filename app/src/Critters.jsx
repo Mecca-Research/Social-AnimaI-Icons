@@ -692,6 +692,236 @@ function DeerDraw({ uid }) {
               stroke="#4f9a5c" strokeWidth="1.8" fill="none" strokeLinecap="round" opacity=".9" />
           </g>
         </g>
+
+        {/* ---- (5), (6) and (7): the rut and the bed. Three more drawn
+             poses, and for a harder reason than the feeding two. Those
+             only had to move a muzzle the rig keeps welded into the body
+             group; these have to put the forequarters up against a trunk
+             and fold four full-length shanks under a torso that is one
+             level ellipse. Nothing in CSS reaches either shape.
+             None of the three draws any bark. The world's trunk is real,
+             it is right there, and the animals paint over it (zIndex 10
+             against the trunk pass at 2) — which is also what keeps these
+             drawings safe from a tree resize: only the anchor formula in
+             the ethogram moves, never the art. */}
+
+        {/* RUBBING THE VELVET OFF (velvetrub): up on the hind legs with
+            both forehooves braced high on the bark, neck driving the beams
+            up and down the trunk. Antlers drawn in bare bone rather than
+            the rig's bark-brown, because what is coming off him is the
+            velvet and what is under it is pale — the colour change IS the
+            behavior, and it has to be legible in one glance. */}
+        <g className="sai-crit-rubpose">
+          <g className="rub-leg-far">
+            <path d="M 44 74 C 41 84 40 94 41 102 L 49 102 C 48 93 49 83 52 75 Z" fill={F[2]} />
+            <path d="M 41 97 h 8 v 3.4 q 0 3.2 -4 3.2 q -4 0 -4 -3.2 Z" fill="#2b1c0d" />
+          </g>
+          {/* the off-side foreleg, braced and static. It gives the eye a
+              fixed line to read the driving neck against — without one, two
+              limbs in the same band just flicker */}
+          <g className="rub-arm-far">
+            <path d="M 66 58 C 74 51 82 46 90 44 L 93 52 C 86 55 79 60 74 66 Z" fill={F[2]} />
+            <ellipse cx="92" cy="47" rx="4.4" ry="3.2" fill="#2b1c0d" transform="rotate(-24 92 47)" />
+          </g>
+          <g className="rub-tail">
+            <path d="M 33 74 L 27 79 L 33 81 Z" fill={cream} />
+            <path d="M 33 74 L 29.5 78 L 33 79.5 Z" fill={F[2]} />
+          </g>
+          {/* the torso tilted thirty degrees: rump still down on the ground
+              line, withers up under the bark. A rotate ATTRIBUTE on the
+              leaf ellipse, not on the group — the group is what CSS drives */}
+          <g className="rub-body">
+            <ellipse cx="56" cy="66" rx="25" ry="15.5" fill={`url(#${uid}f)`} transform="rotate(-30 56 66)" />
+            <ellipse cx="37" cy="77" rx="8.5" ry="9.5" fill={cream} opacity=".85" transform="rotate(-30 37 77)" />
+            <circle cx="50" cy="62" r="1.8" fill={cream} /><circle cx="58" cy="56" r="1.8" fill={cream} />
+            <circle cx="64" cy="51" r="1.7" fill={cream} /><circle cx="54" cy="68" r="1.6" fill={cream} />
+            <circle cx="62" cy="62" r="1.5" fill={cream} />
+            <BellyShade cx={58} cy={82} rx={15} />
+          </g>
+          <g className="rub-leg-near">
+            <path d="M 54 76 C 51 86 50 95 51 102 L 60 102 C 59 94 60 84 63 77 Z" fill={F[1]} />
+            <path d="M 51 97 h 9 v 3.4 q 0 3.4 -4.5 3.4 q -4.5 0 -4.5 -3.4 Z" fill={hoofC} />
+          </g>
+          <g className="rub-arm-near">
+            <path d="M 70 56 C 78 48 87 42 96 40 L 99 49 C 91 51 83 56 77 63 Z" fill={F[1]} />
+            <ellipse cx="98" cy="44" rx="4.6" ry="3.4" fill={hoofC} transform="rotate(-26 98 44)" />
+          </g>
+          {/* neck, head and antlers together: they are what does the work,
+              so they swing as one piece off the neck root */}
+          <g className="rub-head">
+            <path d="M 66 52 C 70 40 78 30 90 23 L 100 33 C 90 39 82 49 79 60 Z" fill={F[1]} />
+            <path d="M 66 52 C 70 41 77 32 88 25 L 91 27 C 81 34 74 43 71 54 Z" fill={F[2]} opacity=".25" />
+            {/* ear pinned back along the neck — a buck working a trunk is
+                not listening to you */}
+            <ellipse cx="86" cy="20" rx="8" ry="4.4" fill={F[1]} transform="rotate(24 86 20)" />
+            <ellipse cx="86" cy="20" rx="4.4" ry="2" fill={cream} transform="rotate(24 86 20)" />
+            <circle cx="97" cy="24" r="12.5" fill={`url(#${uid}f)`} />
+            <path d="M 101 28 C 106 27 110 29 112 32 C 109 35 104 36 101 33 Z" fill={cream} />
+            <ellipse cx="110.5" cy="31" rx="2.7" ry="2.2" fill={ink} />
+            <circle cx="94" cy="22" r="2.7" fill={ink} />
+            <circle cx="94.9" cy="21.1" r=".8" fill="#fff" opacity=".9" />
+            {/* bared beam, pale; and the velvet still hanging off it in
+                strips. The beams reach x 112 and that number is the whole
+                of what TREE.deer.brow measures — where the antlers stop is
+                where the bark has to be */}
+            <path d="M 90 14 C 91 6 96 1 103 -1 M 92 7 L 85 3 M 99 1 L 100 -7"
+              stroke="#b09a72" strokeWidth="3" fill="none" strokeLinecap="round" />
+            <path d="M 98 12 C 101 5 106 1 112 0 M 100 5 L 106 1 M 107 1 L 109 -7"
+              stroke="#cbb389" strokeWidth="3.2" fill="none" strokeLinecap="round" />
+            <g className="rub-velvet">
+              <path d="M 103 -1 C 105 3 104 8 101 11" stroke="#8f7a5c" strokeWidth="2.4" fill="none" strokeLinecap="round" />
+              <path d="M 112 0 C 114 4 113 9 110 12" stroke="#8f7a5c" strokeWidth="2.6" fill="none" strokeLinecap="round" />
+              <path d="M 100 -7 C 102 -4 102 -1 100 2" stroke="#7d6a4e" strokeWidth="2" fill="none" strokeLinecap="round" />
+            </g>
+          </g>
+          {/* shreds of velvet and bark coming away and falling past his
+              shoulder. Deliberately free of transform attributes: CSS puts
+              transform-box:fill-box on these children, and an attribute
+              rotate(a cx cy) under a fill-box paints displaced */}
+          <g className="rub-shreds">
+            <path d="M 106 16 l 2.6 4" stroke="#8f7a5c" strokeWidth="2" fill="none" strokeLinecap="round" />
+            <path d="M 112 20 l 1.6 4.4" stroke="#7d6a4e" strokeWidth="1.8" fill="none" strokeLinecap="round" />
+            <ellipse cx="109" cy="26" rx="2.2" ry="1.3" fill="#6b4a2a" />
+            <ellipse cx="114" cy="32" rx="1.8" ry="1.1" fill="#5b3f26" />
+          </g>
+        </g>
+
+        {/* PAWING A SCRAPE (hoofpaw): back on all fours at the foot of the
+            same trunk, weight on three legs, the near forehoof raking the
+            litter back. The muzzle stays a head's height off the ground and
+            that is on purpose — it is the one thing that stops this reading
+            as the graze. He is looking at what he is opening, not eating
+            it. The bare oval he leaves is drawn first so the hoof works on
+            top of its own marks, the way the skunk's rake does. */}
+        <g className="sai-crit-hoofpose">
+          <g className="hoof-marks">
+            <ellipse cx="96" cy="101" rx="15" ry="4.6" fill="#5d4327" opacity=".85" />
+            <ellipse cx="94" cy="100.2" rx="10" ry="2.8" fill="#4a3520" opacity=".8" />
+            <path d="M 84 103 q 9 -2 17 -.6 M 86 105.2 q 10 -2.2 19 -.8"
+              stroke="#3f2c1a" strokeWidth="1.5" fill="none" strokeLinecap="round" opacity=".7" />
+          </g>
+          <g className="hoof-leg-far">
+            <path d="M 42 72 C 40 82 39 92 40 102 L 48 102 C 48 92 49 82 50 73 Z" fill={F[2]} />
+            <path d="M 40 97 h 8 v 3.4 q 0 3.2 -4 3.2 q -4 0 -4 -3.2 Z" fill="#2b1c0d" />
+            <path d="M 68 68 C 68 78 68 90 69 102 L 77 102 C 76 90 76 78 76 69 Z" fill={F[2]} />
+            <path d="M 69 97 h 8 v 3.4 q 0 3.2 -4 3.2 q -4 0 -4 -3.2 Z" fill="#2b1c0d" />
+          </g>
+          <g className="hoof-tail">
+            <path d="M 32 66 L 26 71 L 32 73 Z" fill={cream} />
+            <path d="M 32 66 L 28.5 70 L 32 71.5 Z" fill={F[2]} />
+          </g>
+          <g className="hoof-body">
+            <ellipse cx="55" cy="68" rx="24.5" ry="15" fill={`url(#${uid}f)`} transform="rotate(7 55 68)" />
+            <ellipse cx="37" cy="64" rx="9" ry="10" fill={cream} opacity=".85" />
+            <circle cx="48" cy="59" r="1.8" fill={cream} /><circle cx="56" cy="58" r="1.8" fill={cream} />
+            <circle cx="64" cy="60" r="1.8" fill={cream} /><circle cx="52" cy="64" r="1.6" fill={cream} />
+            <circle cx="60" cy="64" r="1.6" fill={cream} />
+            <BellyShade cx={56} cy={82} rx={17} />
+          </g>
+          <g className="hoof-leg-near">
+            <path d="M 50 74 C 48 84 48 94 49 102 L 58 102 C 57 94 58 84 59 75 Z" fill={F[1]} />
+            <path d="M 49 97 h 9 v 3.4 q 0 3.4 -4.5 3.4 q -4.5 0 -4.5 -3.4 Z" fill={hoofC} />
+          </g>
+          <g className="hoof-head">
+            <path d="M 68 58 C 76 55 85 57 93 63 L 89 74 C 82 68 75 65 68 65 Z" fill={F[1]} />
+            <path d="M 68 58 C 76 56 84 58 91 64 L 90 67 C 83 62 76 60 68 61 Z" fill={F[2]} opacity=".22" />
+            <path d="M 91 55 C 88 47 90 39 96 35 M 91 48 L 84 45" stroke="#8a5f38" strokeWidth="3" fill="none" strokeLinecap="round" />
+            <path d="M 101 56 C 101 48 105 41 112 39 M 102 48 L 108 45" stroke="#8a5f38" strokeWidth="3" fill="none" strokeLinecap="round" />
+            <ellipse cx="87" cy="59" rx="8" ry="4.6" fill={F[1]} transform="rotate(-8 87 59)" />
+            <ellipse cx="87" cy="59" rx="4.6" ry="2.2" fill={cream} transform="rotate(-8 87 59)" />
+            <circle cx="97" cy="66" r="12.5" fill={`url(#${uid}f)`} />
+            <path d="M 100 72 C 105 72 109 74 110 77 C 107 80 102 80 99 77 Z" fill={cream} />
+            <ellipse cx="109" cy="76" rx="2.7" ry="2.3" fill={ink} />
+            <circle cx="94" cy="63" r="2.6" fill={ink} />
+            <circle cx="94.8" cy="62.1" r=".8" fill="#fff" opacity=".9" />
+          </g>
+          {/* THE WORKING FORELEG. Only the daylight between chest and ground
+              is drawn: the upper arm stays inside the chest, because a shank
+              laid across the torso is a bar of torso-coloured pixels and all
+              it adds is a seam. Same lesson the skunk's rake learned. */}
+          <g className="hoof-paw">
+            <path d="M 82 74 C 85 82 89 90 93 96" stroke={F[1]} strokeWidth="8.5" fill="none" strokeLinecap="round" />
+            <path d="M 89 95 h 9 v 3.6 q 0 3.6 -4.5 3.6 q -4.5 0 -4.5 -3.6 Z" fill={hoofC} transform="rotate(16 93.5 98)" />
+          </g>
+          <g className="hoof-litter">
+            <ellipse cx="86" cy="99" rx="2.6" ry="1.9" fill="#6d5030" />
+            <ellipse cx="80" cy="98.4" rx="2.1" ry="1.5" fill="#5d4327" />
+            <ellipse cx="90" cy="100.2" rx="1.9" ry="1.4" fill="#4a3520" />
+            <ellipse cx="75" cy="100" rx="1.6" ry="1.2" fill="#6d5030" />
+          </g>
+        </g>
+
+        {/* LYING UP (bedfold / bedcud / bedrise): one drawing for all three,
+            the way the hedgehog's ball serves his curl, his hold and his
+            unroll — going down and getting up are the same deer played
+            forwards and backwards, and drawing them separately would be
+            three silhouettes to keep in agreement instead of one.
+            The neck goes UP. That single decision is what makes this read
+            as settled rather than asleep, and it is also why the rig cannot
+            fake it: the deer's neck is drawn inside the body group, so
+            there is no joint anywhere between a folded body and a raised
+            head. The rump rides higher than the brisket and two hoof tips
+            show at the front — folded, not collapsed. */}
+        <g className="sai-crit-bedpose">
+          <g className="bed-litter">
+            <ellipse cx="52" cy="103" rx="30" ry="4.4" fill="#4a3520" opacity=".45" />
+            <path d="M 26 101 l 5 -3.6 M 32 102.4 l 4.4 -4 M 76 101.6 l 5 -3.4 M 82 102.6 l 4 -3.8"
+              stroke="#7a5c34" strokeWidth="1.8" fill="none" strokeLinecap="round" opacity=".7" />
+          </g>
+          <g className="bed-leg-far">
+            <path d="M 30 88 C 37 84 47 84 55 89 C 59 92 57 98 51 99 C 41 100 32 97 29 93 Z" fill={F[2]} />
+            <path d="M 64 92 C 72 90 80 92 86 97 C 88 99 86 101 83 101 L 68 101 C 64 100 62 95 64 92 Z" fill={F[2]} />
+          </g>
+          <g className="bed-body">
+            <ellipse cx="54" cy="86" rx="28" ry="15" fill={`url(#${uid}f)`} />
+            <ellipse cx="36" cy="82" rx="15" ry="14" fill={`url(#${uid}f)`} />
+            <ellipse cx="30" cy="80" rx="8.5" ry="9.5" fill={cream} opacity=".85" />
+            <circle cx="46" cy="76" r="1.8" fill={cream} /><circle cx="55" cy="74" r="1.8" fill={cream} />
+            <circle cx="64" cy="76" r="1.8" fill={cream} /><circle cx="50" cy="81" r="1.6" fill={cream} />
+            <circle cx="60" cy="80" r="1.6" fill={cream} />
+            <BellyShade cx={54} cy={99} rx={24} />
+          </g>
+          <g className="bed-leg-near">
+            <path d="M 34 90 C 42 86 52 86 60 91 C 64 94 62 100 56 101 C 45 102 36 99 33 95 Z" fill={F[1]} />
+            <path d="M 66 90 C 75 88 84 91 90 97 C 92 99 90 102 87 102 L 70 102 C 65 101 64 94 66 90 Z" fill={F[1]} />
+            <path d="M 84 97 h 8 v 3.2 q 0 3.2 -4 3.2 q -4 0 -4 -3.2 Z" fill={hoofC} transform="rotate(10 88 100)" />
+          </g>
+          <g className="bed-head">
+            <path d="M 66 90 C 66 74 71 60 81 50 L 93 57 C 85 65 80 76 78 92 Z" fill={F[1]} />
+            <path d="M 66 90 C 66 75 70 62 80 52 L 83 54 C 74 63 70 76 69 90 Z" fill={F[2]} opacity=".22" />
+            {/* both ears out and loose, each flicking on its own clock */}
+            <g className="bed-ear-l">
+              <ellipse cx="79" cy="38" rx="8" ry="4.6" fill={F[2]} transform="rotate(-38 79 38)" />
+              <ellipse cx="79" cy="38" rx="4.6" ry="2.2" fill={cream} transform="rotate(-38 79 38)" />
+            </g>
+            <g className="bed-ear-r">
+              <ellipse cx="97" cy="34" rx="8" ry="4.6" fill={F[1]} transform="rotate(28 97 34)" />
+              <ellipse cx="97" cy="34" rx="4.6" ry="2.2" fill={cream} transform="rotate(28 97 34)" />
+            </g>
+            <path d="M 84 34 C 82 25 85 17 92 14 M 84 26 L 76 22" stroke="#8a5f38" strokeWidth="3" fill="none" strokeLinecap="round" />
+            <path d="M 96 32 C 97 23 102 16 109 15 M 97 24 L 104 21" stroke="#8a5f38" strokeWidth="3" fill="none" strokeLinecap="round" />
+            <circle cx="90" cy="43" r="13" fill={`url(#${uid}f)`} />
+            {/* the jaw, and the one part of him that has to keep working */}
+            <g className="bed-jaw">
+              <path d="M 94 47 C 100 46 105 48 107 51 C 104 54 98 55 94 53 Z" fill={cream} />
+              <ellipse cx="106" cy="50" rx="2.9" ry="2.4" fill={ink} />
+              <path d="M 95 54 C 99 56 103 56 106 54" stroke={F[2]} strokeWidth="1.2" fill="none" strokeLinecap="round" opacity=".45" />
+            </g>
+            {/* FaceKit rather than a hand-drawn eye, alone among the deer's
+                poses: the reach and the graze last a second and a half and
+                nobody misses a blink, this one holds for half a minute and
+                an unblinking deer at rest looks stuffed. mouths off — the
+                jaw group above draws the mouth line and drives it. */}
+            <FaceKit lid={F[1]} e1={[84, 41]} e2={[96, 39]} er={2.7} iris={ink} mouths={false} />
+          </g>
+          {/* the cud coming back up the throat: one bolus every eight
+              seconds or so, travelling the neck line. Nothing else in the
+              clearing does this, and it is the difference between an animal
+              that has stopped and an animal that is resting. */}
+          <g className="bed-cud">
+            <ellipse cx="72" cy="84" rx="3.6" ry="4.4" fill={F[2]} opacity=".55" transform="rotate(-28 72 84)" />
+          </g>
+        </g>
     </g>
   );
 }
@@ -1923,6 +2153,18 @@ function RaccoonDraw({ uid }) {
             <path d="M 88 72 C 89 80 90 92 89 100 L 80 100 C 80 92 80 80 81 72 Z" fill={K} />
             <ellipse cx="84.5" cy="100" rx="6.2" ry="4.8" fill={K} />
           </g>
+          {/* palm on palm. The two forearms above are already drawn ending
+              in pads at cx 72.5 and 84.5; the CSS walks them together in
+              racwet/racpaws and this is what appears where they meet —
+              meshed fingers and the pale wet skin of the pads. It is the
+              only new mark the correction needs: everything else is timing.
+              Drawn UNDER the water sheet below, like the rest of him. */}
+          <g className="wash-rub">
+            <ellipse cx="78.5" cy="99.5" rx="8.4" ry="4.6" fill="#d7dce0" opacity=".55" />
+            <path d="M 74 97.4 l 9 .8 M 73.6 100 l 9.4 .4 M 74.4 102.4 l 8.6 -.6"
+              stroke="#efeaf2" strokeWidth="1.3" fill="none" strokeLinecap="round" opacity=".8" />
+            <ellipse cx="78.5" cy="98.2" rx="3.4" ry="1.7" fill="#fdffff" opacity=".7" />
+          </g>
           <g className="wash-food"><circle cx="79" cy="99" r="4" fill="#8e1f46" opacity=".92" /></g>
           {/* one soft sheet of shallow water, laid over the lot */}
           <ellipse cx="74" cy="99" rx="43" ry="11" fill="#8fd0ee" opacity=".42" />
@@ -1960,6 +2202,167 @@ function RaccoonDraw({ uid }) {
             <ellipse cx="93" cy="80" rx="1.6" ry="2.2" opacity=".65" />
             <ellipse cx="66" cy="95" rx="2.6" ry="1.8" opacity=".7" />
           </g>
+        </g>
+      </g>
+
+      {/* ---- ON THE BARK (ractreeup / ractreepick / ractreedown,
+           raccavup / raccavdown) ----
+           Back squared to us, all four gripping a trunk the WORLD draws
+           under him — trunks sit at zIndex 2 and animals at 10, so the bark
+           he is holding is the bark you can see. The four-legged rig cannot
+           fold into this (a horizontal barrel with legs hanging off it is
+           exactly wrong), so it is drawn whole: the bear's climbpose trick.
+           Deliberately NOT wrapped in a scale(): the ethogram reads ear tips
+           at y 15 and hind pads at y 102 straight off this drawing, and a
+           wrapper is one more place for those two numbers to go stale.
+           He descends on this same pose, head-up. Plantigrade hind feet that
+           rotate a half turn are the reason a raccoon can back down a trunk
+           and a bear cannot, so the toes below are drawn turned OUT.
+           The group names carry `rac`: the squirrel already owns
+           .cling-tail and .sai-crit-clingback on his own nut-tree pose. */}
+      <g className="sai-crit-racclingpose">
+        <g className="cling-foot-l">
+          <path d="M 52 84 C 44 88 37 94 34 100 C 41 105 50 102 55 95 Z" fill={F[2]} />
+          <path d="M 35 101.6 l -3 2.2 M 39.5 103 l -2.4 2.6 M 44 103.6 l -1.6 2.8"
+            stroke="#efeaf2" strokeWidth="1.5" fill="none" strokeLinecap="round" opacity=".85" />
+        </g>
+        <g className="cling-foot-r">
+          <path d="M 68 84 C 76 88 83 94 86 100 C 79 105 70 102 65 95 Z" fill={glove} />
+          <path d="M 85 101.6 l 3 2.2 M 80.5 103 l 2.4 2.6 M 76 103.6 l 1.6 2.8"
+            stroke={claw} strokeWidth="1.5" fill="none" strokeLinecap="round" />
+        </g>
+        {/* forearms round the trunk at shoulder height — a hug wraps PAST
+            the bark on both sides, which is why these run wider than any
+            trunk in the world */}
+        <g className="cling-arm-l">
+          <path d="M 50 54 C 40 52 30 47 22 39 C 18 46 20 55 27 61 C 34 67 44 67 51 63 Z" fill={F[2]} />
+          <path d="M 22 38 l -3 -2.6 M 20 43 l -3.4 -1.4 M 19.4 48 l -3.6 -.2"
+            stroke="#efeaf2" strokeWidth="1.5" fill="none" strokeLinecap="round" opacity=".85" />
+        </g>
+        <g className="cling-arm-r">
+          <path d="M 70 54 C 80 52 90 47 98 39 C 102 46 100 55 93 61 C 86 67 76 67 69 63 Z" fill={glove} />
+          <path d="M 98 38 l 3 -2.6 M 100 43 l 3.4 -1.4 M 100.6 48 l 3.6 -.2"
+            stroke={claw} strokeWidth="1.5" fill="none" strokeLinecap="round" />
+        </g>
+        {/* the tail hanging straight down the bark. From behind, the rings
+            ARE the silhouette — there is nothing else of him to recognise */}
+        <g className="rac-cling-tail">
+          <path d="M 60 92 C 58 102 57 112 58 120" stroke={F[1]} strokeWidth="12" fill="none" strokeLinecap="round" />
+          <path d="M 60 92 C 58 102 57 112 58 120" stroke={K} strokeWidth="12" fill="none" strokeLinecap="round" strokeDasharray="5.5 7" />
+        </g>
+        <g className="sai-crit-racclingback">
+          <path d="M 42 96 C 37 78 40 56 48 46 C 54 38 66 38 72 46 C 80 56 83 78 78 96 C 68 101 52 101 42 96 Z" fill={`url(#${uid}f)`} />
+          <path d="M 60 42 C 63 60 63 80 61 98" stroke="#3a424c" strokeWidth="3.4" fill="none" opacity=".22" />
+          <path d="M 72 46 C 80 56 83 78 78 96 C 75 97.4 72 98.4 69 99 C 75 78 75 58 68 44 Z" fill="#3a424c" opacity=".2" />
+        </g>
+        <g className="sai-crit-racclinghead">
+          <g className="sai-crit-ear sai-crit-ear-l"><path d="M 46 30 L 44 15 L 58 22 Z" fill={F[1]} /><path d="M 48 27 L 47.6 20 L 54.4 23.4 Z" fill={white} opacity=".85" /></g>
+          <g className="sai-crit-ear sai-crit-ear-r"><path d="M 74 30 L 76 15 L 62 22 Z" fill={F[1]} /><path d="M 72 27 L 72.4 20 L 65.6 23.4 Z" fill={white} opacity=".85" /></g>
+          <circle cx="60" cy="34" r="15" fill={`url(#${uid}f)`} />
+          {/* the mask, from behind: two pale cheek patches either side of a
+              dark band, and one eye rolled back over the shoulder. Anything
+              more is a face, and he does not have his face to us up here */}
+          <ellipse cx="49" cy="32.5" rx="5.6" ry="3.8" fill={white} opacity=".85" />
+          <ellipse cx="71" cy="32.5" rx="5.6" ry="3.8" fill={white} opacity=".85" />
+          <path d="M 47 38 C 52 33 68 33 73 38 C 68 42.5 52 42.5 47 38 Z" fill={K} opacity=".92" />
+          <circle cx="71.5" cy="37" r="2.8" fill={white} /><circle cx="72.4" cy="37" r="1.6" fill={ink} />
+        </g>
+      </g>
+
+      {/* ---- ASLEEP IN THE DARK (raclogin / raclogsleep / raclogstir,
+           raccavsleep / raccavstir) ----
+           One raccoon, two surrounds. He dens in a hollow log and he dens in
+           a tree cavity, and it is the same animal in the same posture — all
+           that changes is the wood, so `.den-log` and `.den-bark` swap and
+           `.den-coon` does not.
+           The hole is drawn ON the sprite's own centre line (60,60), which
+           is what lets the ethogram put it at a height in one line of
+           arithmetic instead of carrying a pose offset around.
+           Everything of him that is OUTSIDE the hole is the point of the
+           drawing: a face filling the opening, one forepaw hooked over the
+           lip, and the tail hanging out below it. A curled animal you cannot
+           see is indistinguishable from an animal that is not there. */}
+      <g className="sai-crit-racdenpose">
+        {/* --- surround A: the broken end of a fallen log, the timber
+            running back west of him. Sized to the `log` art in ForageLayer
+            — a 32-unit end face against its 31px one, a hair fatter so his
+            opening can take a raccoon's head where the drawn one cannot.
+            Mirrored with the site's own `dir` by the sprite's scaleX, so
+            the flank always runs back along the log underneath. */}
+        <g className="den-log">
+          <ellipse cx="16" cy="86" rx="52" ry="7" fill="#1a0e04" opacity=".22" />
+          <rect x="-30" y="34" width="92" height="52" rx="24" fill="#402c19" />
+          <rect x="-30" y="34" width="92" height="21" rx="10" fill="#5b3f26" />
+          <path d="M -22 40 C 0 35 34 35 56 40 C 34 46 0 46 -22 40 Z" fill="#4e9c5f" opacity=".45" />
+          <path d="M -20 66 C 4 71 34 71 58 66" stroke="#2a1c10" strokeWidth="1.8" fill="none" strokeLinecap="round" opacity=".45" />
+          <path d="M -16 76 C 8 80 32 80 54 76" stroke="#2a1c10" strokeWidth="1.4" fill="none" strokeLinecap="round" opacity=".35" />
+          {/* the end, rings out, hollow through the middle of it */}
+          <ellipse cx="60" cy="60" rx="17" ry="27" fill="#6b4a2a" />
+          <ellipse cx="60" cy="60" rx="13.5" ry="22" fill="#5b3f26" />
+          <ellipse cx="60" cy="60" rx="9" ry="14" fill="#402c19" opacity=".55" />
+        </g>
+        {/* --- surround B: a cavity in a standing trunk. NO bark plate: the
+            trunk is drawn under him by the world and is the real thing, and
+            a plate wide enough to look like bark would overhang a trunk that
+            is only about twenty-one stage px across at den height. All this
+            adds is the shadow the hole throws on it. */}
+        <g className="den-bark">
+          <ellipse cx="60" cy="60" rx="16" ry="21" fill="#2a1c10" opacity=".45" />
+          <path d="M 46 44 C 44.6 52 44.6 68 46 76 M 74 44 C 75.4 52 75.4 68 74 76"
+            stroke="#2a1c10" strokeWidth="2" fill="none" opacity=".4" strokeLinecap="round" />
+        </g>
+
+        {/* --- the opening itself, the same in both --- */}
+        <ellipse className="den-mouth" cx="60" cy="60" rx="12.5" ry="18" fill="#120c07" />
+
+        {/* --- him, inside it --- */}
+        <g className="den-coon">
+          <g className="den-head">
+            <g className="sai-crit-ear sai-crit-ear-l"><path d="M 52 48 L 50 38 L 60 43 Z" fill={F[1]} /></g>
+            <g className="sai-crit-ear sai-crit-ear-r"><path d="M 67 46 L 71 36 L 75 46 Z" fill={F[1]} /><path d="M 69.4 44 L 71 39 L 73 44 Z" fill={white} opacity=".8" /></g>
+            <circle cx="61" cy="58" r="12" fill={`url(#${uid}f)`} />
+            <ellipse cx="55.5" cy="51" rx="4.8" ry="3.1" fill={white} opacity=".9" />
+            <ellipse cx="67" cy="50.5" rx="4.8" ry="3.1" fill={white} opacity=".9" />
+            <path d="M 49 56 Q 50.4 52 55.5 52 Q 59.6 52 61 54.4 Q 62.4 52 67 52 Q 72 52 73.4 56 Q 72 60 67 60 Q 62.4 60 61 57.6 Q 59.6 60 55.5 60 Q 50.4 60 49 56 Z" fill={K} />
+            <path d="M 65 62 C 69.6 61 73.4 63 75 66 C 71.4 68.6 67 68.6 64 66.8 Z" fill={white} />
+            <ellipse cx="74.4" cy="65.4" rx="2.5" ry="2.1" fill={ink} />
+            {/* SHUT: two closed seams. A lid rectangle over a drawn eye is
+                the rig's blink and reads as a blink caught mid-frame; asleep
+                has to be drawn, not paused.
+                Drawn in `white`, not in `ink`: these sit ON the black bandit
+                mask, and the open eyes below are legible there for exactly
+                the same reason — an ink seam on a K band is an eye you
+                cannot see, which renders as no face at all. */}
+            <g className="den-eyes-shut">
+              <path d="M 52.4 56 q 3.2 2.5 6.4 0" stroke={white} strokeWidth="1.8" fill="none" strokeLinecap="round" />
+              <path d="M 63.8 55.6 q 3.2 2.5 6.4 0" stroke={white} strokeWidth="1.8" fill="none" strokeLinecap="round" />
+            </g>
+            {/* ...and cracked open on the way back out of it */}
+            <g className="den-eyes-open">
+              <circle cx="55.6" cy="55.4" r="2.9" fill={white} /><circle cx="56.4" cy="55.4" r="1.7" fill={ink} />
+              <circle cx="67" cy="55" r="2.9" fill={white} /><circle cx="67.8" cy="55" r="1.7" fill={ink} />
+            </g>
+            <g className="den-yawn">
+              <ellipse cx="71.5" cy="67.5" rx="4.6" ry="5.6" fill="#611f26" />
+              <ellipse cx="71.5" cy="69.8" rx="2.4" ry="2" fill="#ff7d8e" />
+            </g>
+          </g>
+        </g>
+
+        {/* the near rim, painted back OVER him — it is what cuts him off,
+            and without it he is an animal standing in front of a dark
+            circle rather than an animal inside a hole */}
+        <path className="den-rim" d="M 47.6 62 C 50 71 55 76.5 60 76.5 C 65 76.5 70 71 72.4 62 C 70 68.6 65 73 60 73 C 55 73 50 68.6 47.6 62 Z" fill="#6b4a2a" />
+
+        {/* ...and the two things that hang over that rim, so they go last */}
+        <g className="den-tail">
+          <path d="M 55 70 C 51 84 50 100 52 116" stroke={F[1]} strokeWidth="10" fill="none" strokeLinecap="round" />
+          <path d="M 55 70 C 51 84 50 100 52 116" stroke={K} strokeWidth="10" fill="none" strokeLinecap="round" strokeDasharray="5 6.5" />
+        </g>
+        <g className="den-paw">
+          <path d="M 62 66 C 66 65 70.5 65 74 66.5 L 73.4 72.5 C 69 72.4 64.6 72.6 61.4 72 Z" fill={K} />
+          <path d="M 64 73.4 l -1 2.6 M 68 73.6 l -.3 2.8 M 72 73.2 l .8 2.6"
+            stroke={claw} strokeWidth="1.4" fill="none" strokeLinecap="round" />
         </g>
       </g>
     </g>
