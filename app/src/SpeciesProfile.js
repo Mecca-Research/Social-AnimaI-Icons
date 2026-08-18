@@ -119,10 +119,14 @@ export const SPECIES_PROFILE = {
     dims: "3.5-10kg · 60-95cm · 23-30cm at shoulder",
     profile: "Compact and rotund. Looks fox-sized and is usually twice the " +
              "weight, on a much stockier build.",
-    habits: "Dousing is the signature: he gathers fruit in those dexterous " +
-            "front paws — sometimes climbing into the bush for it — then " +
-            "carries it to the shallows and washes it before eating. A " +
-            "lumbering scrambler that climbs rather than outruns.",
+    habits: "Those forepaws are the whole animal: two thirds of his brain's " +
+            "touch map is given over to them, and wetting the pads roughly " +
+            "doubles what they can feel — so he rubs his hands under water " +
+            "to sharpen them, then reads his food by fingertip while looking " +
+            "somewhere else entirely. It is not washing, and he does it with " +
+            "empty hands as often as full ones. Nocturnal: sleeps the day " +
+            "out in a hollow log or a tree cavity. Climbs for fruit rather " +
+            "than settling for what has fallen, and comes back down head-up.",
   },
   owl: {
     size: 26.9, speed: 44, flies: true,

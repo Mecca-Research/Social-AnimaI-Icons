@@ -43,7 +43,15 @@ const MAX_AGENTS = Object.keys(SPECIES).length; // one of each species, no repea
 
 const ENGAGE_MS = 8000;      // locked interaction duration (both friendly & fight)
 const FLEE_MS = 2200;        // forced flee time
-const SEP_MS = 1400;         // post-engagement separation push window
+// Post-encounter break-up windows, ms. Two flavors, rolled per animal.
+// The dash floor is not arbitrary: gait() eases MAGNITUDE with a ~0.29 s
+// time constant, so a dash shorter than about 350 ms never reaches the pace
+// it asked for and comes out as a lean, not a dash.
+const SEP_DASH_MS = [420, 700];
+const SEP_WALK_MS = [1100, 1900];
+// the beat a rescuer (and the friend it just pulled out) stands before
+// picking life back up. It was the whole no-engagement window; it is a beat.
+const RESCUE_BEAT_MS = 1000;
 const NOEVENT_MIN_MS = 4200; // min time to forbid new events after an interaction
 const NOEVENT_MAX_MS = 7000; // max time to forbid new events after an interaction
 const INTENT_MIN_S = 10, INTENT_MAX_S = 18;
@@ -120,26 +128,126 @@ function keepAshore(a, bounds) {
   const vin = a.vx * nx + a.vy * ny;
   if (vin < 0) { a.vx -= vin * nx; a.vy -= vin * ny; } // slide, don't sink
 }
+
+// ---------------- The shallows a standing bird can use ----------------
+// Read straight off the LAKE ART above: `Lake()` paints bankOuter=ring(1.08)
+// and bankInner=ring(1.03) FIRST and then covers both with opaque water at
+// ring(1.00). So the drawn brown occupies rho 1.00 -> 1.08 and open blue
+// begins at rho 1.00 EXACTLY — the rim is the 0.08 outside the waterline,
+// not a band inside it. (The bank group's filter is a feDropShadow; it adds
+// a shadow beneath the source, it does not paint brown inward. The only ink
+// inside 1.00 is the 3px teal rim stroke straddling it, ~0.005-0.010 rho.)
+//
+// Which makes "how shallow is too shallow" a question about the BIRD: an
+// anchor at rho r sits (1 - r) * lakeRhoScale(t) px inside the drawn shore,
+// the sprite is centred on its anchor, and whatever the pose draws outside
+// that anchor is what ends up on the mud.
+const LAKE_SHORE_RHO = 1.00;      // where the brown stops and the blue starts
+const LAKE_WET_RHO = 0.97;        // where inWater() starts calling it water
+const SWIM_RHO_MAX = 0.72;        // swim targets fill sqrt(rand) * 0.72
+const DAM_SECTOR = [2.45, 3.95];  // the beaver's build site; the floats dodge it too
+
+// Stage px travelled per 1.00 of rho along the ray at angle t — the exact
+// derivative of lakePoint: d/drho = (cos t * rx * m, sin t * ry * m).
+// On a 1200x800 stage that is 144 px on the south shore (short axis times
+// the wobble minimum, 0.816) and 299 on the east: a hundredth of rho is
+// worth twice as much on one shore as on the other, which is the whole
+// reason a single hard-coded band could not be right everywhere.
+function lakeRhoScale(bounds, t) {
+  return lakeWobble(t) * Math.hypot(Math.cos(t) * LAKE.rx * bounds.w,
+                                    Math.sin(t) * LAKE.ry * bounds.h);
+}
+// the line stepWorld clamps the floats to: 38px short of the shoreline
+function padRimRho(bounds) {
+  return Math.max(0.5, 0.97 - 38 / Math.min(LAKE.rx * bounds.w, LAKE.ry * bounds.h));
+}
+
+// How far the DRAWN dabble pose reaches outside its own anchor, in stage px,
+// measured off Critters.jsx rather than guessed. The sprite is r*2.7 px
+// across a 120-unit viewBox and centred on the anchor (0.6435 px/unit at
+// r = 28.6), and GooseDraw is wrapped in
+//   translate(60 106) scale(1.05) translate(-60 -106).
+// The outermost thing the pose paints is `dab-water`, cx58 cy97 rx58 ry12.5:
+//   x   0 .. 116   -> svg  -3 .. 118.8 -> px -40.5 .. +37.8 of the anchor
+//   y 84.5 .. 109.5 -> svg 83.4 .. 109.7 -> px +15.1 .. +32.0 of the anchor
+// Nothing is drawn above it — index.css switches the ground shadow off in
+// this state — which is why `up` is a token 6 and why the lake's northern
+// shore stays usable on stages where nothing else does.
+const STAND_REACH = { side: 41, down: 32, up: 6 };
+const STAND_BAND_PX = 20;   // how wide to make the band once it clears
+const STAND_MIN_PX = 5;     // thinner than this is not a band, it is a line
+
+function standClearance(t) {
+  const s = Math.sin(t);
+  return Math.abs(Math.cos(t)) * STAND_REACH.side +
+    (s > 0 ? s * STAND_REACH.down : -s * STAND_REACH.up);
+}
+
+/**
+ * The band of rho, AT ONE ANGLE, in which a bird standing on the bottom is
+ * drawn wholly on blue and is still out of everyone's way. Returns
+ * [far, near], or null where the two constraints leave no room — the lake's
+ * north/south lobes are its short axis, and on a squat stage there is
+ * simply no water there wide enough to stand a goose up in.
+ *
+ * near: far enough in that the pose stops overhanging the mud, and never so
+ *       shallow that inWater() would call him dry (0.97 is that line).
+ * far:  clear of the swim disc and of the floats' outer drift rim.
+ * Callers walk the angle until one comes back non-null.
+ */
+function shallowBandAt(bounds, t) {
+  let pa = t % (Math.PI * 2); if (pa < 0) pa += Math.PI * 2;
+  if (pa > DAM_SECTOR[0] && pa < DAM_SECTOR[1]) return null;   // a building site, not shallows
+  const px = lakeRhoScale(bounds, pa);
+  const near = Math.min(LAKE_WET_RHO - 0.03, LAKE_SHORE_RHO - standClearance(pa) / px);
+  const floor = Math.max(SWIM_RHO_MAX + 0.06, padRimRho(bounds) + 0.02);
+  if (near <= floor + 0.005) return null;
+  const far = Math.max(floor, near - STAND_BAND_PX / px);
+  return (near - far) * px >= STAND_MIN_PX ? [far, near] : null;
+}
 // ---------------- Forest trees ----------------
-// Four big trunked trees — two on the middle-left, two at the bottom-right.
-// Held in stage fractions (not the background SVG's own viewBox) so the
-// drawn trunk IS the spot the bear walks up to, the same geometry-as-
-// physics contract the lake, floats and dam use.
+// SIX big trunked trees: two down the west edge, two on the east flank
+// clear of the lake, one at the raised end of the big fallen log in the
+// bottom-left, and one lone spruce standing by itself in the bottom
+// centre. Held in stage fractions (not the background SVG's own viewBox)
+// so the drawn trunk IS the spot the bear walks up to, the same
+// geometry-as-physics contract the lake, floats and dam use.
+//
+// `kind` picks the drawing. Both species are drawn to the SAME two
+// metrics below — trunk foot 18px up, boughs closing over the centre
+// line at 117px — because the bear treats every entry in this list
+// identically: a species that closed its boughs somewhere else would
+// give him one tree he climbs wrong.
 const FOREST_TREES = [
-  { x: .075, y: .56, s: 1.15 },
-  { x: .125, y: .30, s: 0.98 },
-  { x: .905, y: .70, s: 1.20 },
-  { x: .805, y: .89, s: 1.05 },
+  { x: .095, y: .620, s: 1.38,  kind: "oak"  }, // west, low
+  { x: .078, y: .358, s: 1.176, kind: "oak"  }, // west, high
+  { x: .898, y: .480, s: 1.44,  kind: "oak"  }, // east flank, above the forage
+  { x: .910, y: .700, s: 1.26,  kind: "oak"  }, // east flank, below it
+  { x: .262, y: .835, s: 1.26,  kind: "oak"  }, // bottom-left, off the log's high end
+  // `fruit: false` retires a tree from bearing: no crop is drawn in its
+  // crown, and the raccoon's trunk picker skips it rather than climbing a
+  // conifer after berries that are not there.
+  { x: .500, y: .940, s: 1.56,  kind: "pine", fruit: false }, // the lone spruce
 ];
 const TREE_REACH = 96; // how close the bear must be to take an interest
-// Where the bear meets the tree, all in stage px above the anchor at scale
-// 1. The trunk art starts 18px up (svg y 2 maps to anchor + (2-20)*s), and
-// over the trunk's centre line the boughs close in about 107px up. Ending
-// a climb at 153 buries his head well inside them rather than brushing the
-// underside. The pose factors are the two drawn poses measured against the
-// sprite box (box = r * 3.1) — see .sai-crit-standpose / -climbpose.
+// Where the bear meets the tree, all in stage px above the anchor at
+// scale 1. Both drawings sit in a viewBox whose BOTTOM EDGE is local
+// y 20, so a local y is (20 - y) px above the anchor. Off that:
+//   trunk foot          local y 2      -> 18   (unchanged: the foot did
+//                                        not move when the trunk grew)
+//   boughs over the trunk's centre line: the lowest canopy ellipse is
+//     cx -26 / cy -113.4 / rx 34 / ry 26, and at x 0 its underside is
+//     -113.4 + 26*sqrt(1-(26/34)^2) = -96.65  -> 116.65 -> 117
+//     (it was 107 when that ellipse sat at cy -104; the 10% taller
+//      trunk lifted the whole crown by 9.4 local units)
+//   the spruce is drawn to land its lowest whorl's underside on exactly
+//     local y -97, so ONE pair of numbers covers both species.
+// Ending a climb at these puts his head well inside the boughs rather
+// than brushing the underside. The pose factors are the two drawn poses
+// measured against the sprite box (box = r * 3.1) — see
+// .sai-crit-standpose / -climbpose.
 const TREE_BASE_PX = 18;    // foot of the drawn trunk
-const TREE_CANOPY_PX = 107; // where the boughs close over the trunk's centre line
+const TREE_CANOPY_PX = 117; // where the boughs close over the trunk's centre line
 // How far past the leaf line his ears finish: head gone, back still showing.
 // Set from the WORST frame of a full sway cycle, not from a snapshot — the
 // canopy swings and the hug pose breathes. Deeper than this and the leaves
@@ -148,13 +256,113 @@ const TREE_HEAD_DEEP = 50;
 const STAND_FEET = 0.348;   // upright pose: paws below the sprite centre
 const STAND_BACK = 0.232;   // upright pose: spine right of the sprite centre
 const CLIMB_HEAD = 0.768;   // hug pose: ear tips above the sprite centre
+// Half the drawn trunk, in stage px either side of the tree's own anchor at
+// scale 1: the oak's TreeLayer path runs x -13..15, so the bark's west face
+// is 13 out, and the spruce's bole is drawn -14..16 for exactly that reason —
+// both species carry the same face. The bear writes this number inline; the
+// deer needs the same face for three different jobs, so it is a metric now.
+// THIS IS A FACT ABOUT THE TRUNK PATHS — if a resize changes the trunk's
+// width, this moves with it, and nothing else does.
+const TREE_TRUNK_R = 13;
+// The deer's three drawn poses, measured against the sprite box exactly the
+// way STAND_FEET / STAND_BACK / CLIMB_HEAD are, and for the same reason: the
+// ethogram has to know how far a POSE reaches before it can decide where the
+// ANIMAL stands. Each is how far east of his own centre the drawing gets, as
+// a fraction of the r*3.1 box, after DeerDraw's own scale(1.05).
+//   brow  antler tips (x 112) — where the bark has to be for a rub to land
+//   hoof  the working forehoof, set back far enough that it opens dirt and
+//         not bark, with the scrape sitting at the trunk's foot
+//   bed   the lying pose's muzzle, plus clearance, so he beds beside the
+//         trunk rather than inside it
+//   feet  the ground line all three poses share (y ~103.4) below his centre
+// See .sai-crit-rubpose / -hoofpose / -bedpose in Critters.jsx.
+const DEER_BROW = 0.396, DEER_HOOF = 0.400, DEER_BED = 0.430, DEER_FEET = 0.314;
 // the bear's tree work lives in his ethogram, which stays free of the
-// world's layout — hand it the numbers rather than have it import them
+// world's layout — hand it the numbers rather than have it import them.
+// The deer's rut and his bed are the second and third users of the same
+// route, so this now carries a per-species sub-object the way
+// setForageMetrics carries `nut`.
 setTreeMetrics({
   reach: TREE_REACH, basePx: TREE_BASE_PX, canopyPx: TREE_CANOPY_PX,
   headDeep: TREE_HEAD_DEEP, standFeet: STAND_FEET, standBack: STAND_BACK,
-  climbHead: CLIMB_HEAD,
+  // The raccoon's two errands on the same trunk, in the same units as
+  // basePx/canopyPx above: stage px over the anchor at scale 1, read off the
+  // art in TreeLayer. Handed over rather than derived, so that resizing the
+  // forest moves them with everything else.
+  //   trunkDX   the trunk's centre line, px right of the anchor. The oak's
+  //             bark path runs -13..15 at the foot and -8..9 under the
+  //             boughs, so the centre sits one px right of the anchor the
+  //             whole way up; the spruce's bole is drawn -14..16 for the
+  //             same reason, so one number covers both.
+  //   cavityPx  his day den. Mid-trunk: clear of the buttress at 18, well
+  //             under the boughs at 117, and there is about 22px of bark
+  //             across at that height at scale 1 — which is what the drawn
+  //             cavity in .sai-crit-racdenpose is sized against. A tree
+  //             added at a scale much under 0.9 wants this number moved
+  //             DOWN, where the trunk is wider, not the drawing made
+  //             smaller.
+  //   fruitPx   the wild fruit. ABOVE canopyPx on purpose: the crop hangs
+  //             inside the foliage, and stopping with his ears here puts his
+  //             head in the leaves and leaves his back and tail hanging
+  //             below the leaf line — which is the entire read of a raccoon
+  //             in the fork of a tree rather than an animal that vanished.
+  //             It is canopyPx + 17 and it MOVES WITH IT: the crown was
+  //             lifted 9.4 local units when the trunk grew 10%, and the
+  //             drawn crop in `forest-fruit` below sits at 120-142 with this
+  //             in the middle of it.
+  trunkDX: 1, cavityPx: 64, fruitPx: TREE_CANOPY_PX + 17,
+  climbHead: CLIMB_HEAD, trunkR: TREE_TRUNK_R,
+  deer: { brow: DEER_BROW, hoof: DEER_HOOF, bed: DEER_BED, feet: DEER_FEET },
 });
+
+// Per-species svg box. The one thing that may NOT vary is the bottom
+// edge: viewBox minY + height must be 20 for both, or TREE_BASE_PX and
+// TREE_CANOPY_PX stop meaning the same thing from one tree to the next.
+const TREE_BOX = {
+  oak:  { w: 150, h: 210, vb: "-75 -190 150 210" },
+  pine: { w: 170, h: 290, vb: "-85 -270 170 290" },
+};
+
+// The oak crown, lifted 9.4 with the trunk. Kept as data so the 117 above
+// can be read straight off the first row instead of out of a path string.
+const OAK_BOUGHS = [
+  [-26, -113.4, 34, 26, "#2f6b3f"], [ 28, -117.4, 36, 27, "#2a6138"],
+  [  0, -135.4, 44, 32, "#3a7d49"], [-20, -151.4, 30, 24, "#469356"],
+  [ 18, -157.4, 27, 22, "#3f8850"], [ -4, -169.4, 22, 18, "#54a763"],
+];
+
+/**
+ * ONE WHORL of the spruce. `bot` is the underside of the branch fan ON
+ * THE TRUNK'S CENTRE LINE: the lowest whorl's bot is -97, and
+ * (20 - -97) = 117 = TREE_CANOPY_PX. The drooping tips come down to the
+ * same level and the scallops between them lift, so nothing in the
+ * drawing ever hangs below the number the climb is measured against.
+ */
+function spruceWhorl(top, bot, R) {
+  const h = bot - top, p = (f) => +(R * f).toFixed(1), q = (f) => +(top + h * f).toFixed(1);
+  return `M 0 ${top} C ${-p(.34)} ${q(.18)} ${-p(.68)} ${q(.50)} ${-p(1)} ${bot}`
+    + ` L ${-p(.86)} ${bot - 6} L ${-p(.72)} ${bot - 1} L ${-p(.58)} ${bot - 6}`
+    + ` L ${-p(.44)} ${bot - 1} L ${-p(.30)} ${bot - 6} L ${-p(.14)} ${bot}`
+    + ` L ${p(.14)} ${bot} L ${p(.30)} ${bot - 6} L ${p(.44)} ${bot - 1}`
+    + ` L ${p(.58)} ${bot - 6} L ${p(.72)} ${bot - 1} L ${p(.86)} ${bot - 6} L ${p(1)} ${bot}`
+    + ` C ${p(.68)} ${q(.50)} ${p(.34)} ${q(.18)} 0 ${top} Z`;
+}
+/** the sunlit upper-left edge of one whorl — light from the upper left,
+ *  same convention as the oak's boughs */
+function spruceLit(top, bot, R) {
+  const h = bot - top;
+  return `M 0 ${top} C ${-(R * .34).toFixed(1)} ${(top + h * .18).toFixed(1)}`
+    + ` ${-(R * .68).toFixed(1)} ${(top + h * .50).toFixed(1)} ${-R} ${bot}`;
+}
+// bottom whorl first so the upper ones close over its top; darker below,
+// sunlit above. Cooler and bluer than the oak on purpose.
+const SPRUCE_WHORLS = [
+  { top: -129, bot:  -97, r: 40, fill: "#1d4a35", lit: "#2d6b4a" },
+  { top: -154, bot: -124, r: 34, fill: "#235741", lit: "#357e58" },
+  { top: -175, bot: -149, r: 28, fill: "#2b6a4c", lit: "#3f8f64" },
+  { top: -192, bot: -168, r: 21, fill: "#337a56", lit: "#4a9f70" },
+  { top: -204, bot: -184, r: 14, fill: "#3d8c62", lit: "#57b083" },
+];
 
 function TreeLayer({ bounds, part }) {
   const { w, h } = bounds;
@@ -162,45 +370,116 @@ function TreeLayer({ bounds, part }) {
   const canopy = part === "canopy";
   return (
     <>
-      {FOREST_TREES.map((t, i) => (
+      {FOREST_TREES.map((t, i) => {
+        const kind = t.kind || "oak", box = TREE_BOX[kind];
+        return (
         // trunks sit UNDER the animals (zIndex 2) so the bear hugs the near
         // face of the bark; the boughs are a second pass OVER them (12), so
         // a bear that climbs high enough disappears head-first into them
         <div key={i} style={{ position: "absolute", left: t.x * w, top: t.y * h, zIndex: canopy ? 12 : 2,
           pointerEvents: "none", transform: `translate(-50%,-100%) scale(${t.s})`, transformOrigin: "50% 100%" }}>
-          <svg width="150" height="210" viewBox="-75 -190 150 210" style={{ display: "block", overflow: "visible" }}>
+          <svg width={box.w} height={box.h} viewBox={box.vb} style={{ display: "block", overflow: "visible" }}>
             {canopy ? (
-              /* canopy: stacked boughs, light from the upper left */
               <g className="sai-bg-sway" style={{ animationDuration: `${6.5 + i * 0.7}s`, animationDelay: `${i * 1.3}s`, transformOrigin: "50% 100%" }}>
-                <ellipse cx="-26" cy="-104" rx="34" ry="26" fill="#2f6b3f" />
-                <ellipse cx="28" cy="-108" rx="36" ry="27" fill="#2a6138" />
-                <ellipse cx="0" cy="-126" rx="44" ry="32" fill="#3a7d49" />
-                <ellipse cx="-20" cy="-142" rx="30" ry="24" fill="#469356" />
-                <ellipse cx="18" cy="-148" rx="27" ry="22" fill="#3f8850" />
-                <ellipse cx="-4" cy="-160" rx="22" ry="18" fill="#54a763" />
-                <ellipse cx="-16" cy="-150" rx="14" ry="11" fill="#69bf76" opacity=".75" />
-                <ellipse cx="12" cy="-120" rx="16" ry="12" fill="#1f4d2c" opacity=".5" />
-                <ellipse cx="-34" cy="-116" rx="13" ry="10" fill="#1f4d2c" opacity=".45" />
+                {kind === "pine" ? (
+                  <>
+                    {SPRUCE_WHORLS.map((s, k) => (
+                      <g key={k}>
+                        <path d={spruceWhorl(s.top, s.bot, s.r)} fill={s.fill} />
+                        <path d={spruceLit(s.top, s.bot, s.r)} stroke={s.lit} strokeWidth="2.6"
+                          fill="none" strokeLinecap="round" opacity=".55" />
+                      </g>
+                    ))}
+                    {/* the leader: the spike that makes the silhouette a
+                        spire instead of a cloud */}
+                    <path d="M 0 -212 C 2.6 -207 4.4 -202 5.4 -197 L 2.6 -198 L 1.4 -193 L 0 -197
+                             L -1.4 -193 L -2.6 -198 L -5.4 -197 C -4.4 -202 -2.6 -207 0 -212 Z" fill="#46a077" />
+                  </>
+                ) : (
+                  /* canopy: stacked boughs, light from the upper left */
+                  <>
+                    {OAK_BOUGHS.map(([cx, cy, rx, ry, fill], k) => (
+                      <ellipse key={k} cx={cx} cy={cy} rx={rx} ry={ry} fill={fill} />
+                    ))}
+                    <ellipse cx="-16" cy="-159.4" rx="14" ry="11" fill="#69bf76" opacity=".75" />
+                    <ellipse cx="12" cy="-129.4" rx="16" ry="12" fill="#1f4d2c" opacity=".5" />
+                    <ellipse cx="-34" cy="-125.4" rx="13" ry="10" fill="#1f4d2c" opacity=".45" />
+                    {/* wild fruit, low in the canopy where a climbing animal
+                        can reach it and where his head arrives. Local y is
+                        (20 - y) px above the anchor, so this band is 120-142
+                        up — the `fruitPx` handed to setTreeMetrics
+                        (canopyPx + 17 = 134) sits in the middle of it.
+                        Inside the sway group, so the crop moves with the
+                        boughs it hangs off, and last so it paints over the
+                        leaves. Painted over HIM by the zIndex-12 canopy
+                        pass, which is right: he reaches INTO it.
+                        Oaks only — the spruce carries `fruit: false` in
+                        FOREST_TREES and the raccoon's picker honours it, so
+                        he never climbs a conifer looking for berries. */}
+                    <g className="forest-fruit">
+                      <circle cx="-24" cy="-100" r="3.4" fill="#7d1b3e" /><circle cx="-25" cy="-101" r="1.2" fill="#c96289" opacity=".7" />
+                      <circle cx="-9" cy="-108" r="3.1" fill="#8e1f46" /><circle cx="-10" cy="-109" r="1.1" fill="#d46b95" opacity=".7" />
+                      <circle cx="8" cy="-102" r="3.5" fill="#a8244f" /><circle cx="7" cy="-103" r="1.2" fill="#e08bad" opacity=".7" />
+                      <circle cx="23" cy="-110" r="3.2" fill="#7d1b3e" />
+                      <circle cx="-2" cy="-118" r="2.9" fill="#9c2149" />
+                      <circle cx="16" cy="-122" r="2.7" fill="#8e1f46" />
+                    </g>
+                  </>
+                )}
               </g>
+            ) : kind === "pine" ? (
+              <>
+                {/* root plate on the needle litter — a spruce sits on a
+                    shallow disc, not the oak's spread of surface roots */}
+                <ellipse cx="4" cy="4" rx="40" ry="12" fill="#0d2415" opacity=".45" />
+                {/* THE BOLE. Straight, hard-tapered, and bare for its whole
+                    visible length: a closed-canopy spruce self-prunes, which
+                    is exactly why this species can carry the same 117px leaf
+                    line as the oak and still look nothing like it. Base half
+                    width 14 on purpose — the bear's rub puts his spine at
+                    13 * s from the centre line, so a slimmer foot would
+                    stand him off the bark. */}
+                <path d="M -14 2 C -13 -34 -10 -80 -7 -128 C -5.6 -160 -4.4 -186 -3.6 -208
+                         L 3.6 -208 C 4.8 -186 6.4 -160 8.2 -128 C 11.4 -80 14.6 -34 16 2
+                         C 7 5 -6 5 -14 2 Z" fill="#4a3524" />
+                <path d="M -14 2 C -13 -34 -10 -80 -7 -128 C -5.6 -160 -4.4 -186 -3.6 -208
+                         L -1.4 -208 C -2.6 -186 -3.8 -160 -5 -128 C -7.4 -80 -9.6 -34 -10 2 Z" fill="#5e4530" />
+                {/* plated bark: short scales, not the oak's long grain */}
+                <path d="M -9 -20 l 6 -1.5 M -8.4 -40 l 5.6 -1.5 M -7.6 -60 l 5.2 -1.4
+                         M -6.8 -82 l 4.8 -1.3 M -6 -104 l 4.4 -1.2 M 4 -30 l 5 -1.4
+                         M 3.6 -52 l 4.6 -1.3 M 3.2 -74 l 4.2 -1.2 M 2.8 -96 l 3.8 -1.1"
+                  stroke="#33241a" strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".6" />
+                {/* dead whorl stubs, the shed lower branches — the clearest
+                    single tell that this is a conifer before the crown is
+                    even in frame */}
+                <path d="M -8 -46 l -10 -5 M 9 -58 l 11 -4 M -7 -72 l -9 -6 M 8.4 -88 l 10 -5"
+                  stroke="#4a3524" strokeWidth="3" fill="none" strokeLinecap="round" />
+                <path d="M -14 -3 C -23 -7 -30 -3 -34 3 C -25 4 -19 4 -14 2 Z" fill="#3f2c1c" />
+                <path d="M 16 -5 C 25 -9 32 -5 36 2 C 28 4 21 4 16 2 Z" fill="#3f2c1c" />
+              </>
             ) : (
               <>
                 {/* root shadow pooled on the forest floor */}
                 <ellipse cx="6" cy="4" rx="42" ry="12" fill="#0d2415" opacity=".45" />
-                {/* buttressed trunk with bark grain */}
-                <path d="M -13 2 C -12 -30 -9 -60 -8 -92 L 9 -92 C 10 -60 13 -30 15 2 C 6 5 -5 5 -13 2 Z" fill="#5b3f26" />
-                <path d="M -13 2 C -12 -30 -9 -60 -8 -92 L -2 -92 C -4 -58 -6 -28 -6 2 Z" fill="#6f4f30" />
-                <path d="M -7 -14 C -6 -38 -5 -62 -5 -84 M 3 -20 C 3 -44 2 -66 2 -84" stroke="#452f1c"
+                {/* buttressed trunk with bark grain — 10% taller than it was:
+                    the foot stays on the ground at y 2 and the top goes from
+                    -92 to -101.4, so the visible bark below the leaf line
+                    grows from 89px to 99px */}
+                <path d="M -13 2 C -12 -33.2 -9 -66.2 -8 -101.4 L 9 -101.4 C 10 -66.2 13 -33.2 15 2 C 6 5 -5 5 -13 2 Z" fill="#5b3f26" />
+                <path d="M -13 2 C -12 -33.2 -9 -66.2 -8 -101.4 L -2 -101.4 C -4 -64 -6 -31 -6 2 Z" fill="#6f4f30" />
+                <path d="M -7 -15.6 C -6 -42 -5 -68.4 -5 -92.6 M 3 -22.2 C 3 -48.6 2 -72.8 2 -92.6" stroke="#452f1c"
                   strokeWidth="2" fill="none" strokeLinecap="round" opacity=".65" />
                 <path d="M -13 -4 C -22 -8 -28 -4 -32 2 C -24 3 -18 3 -13 2 Z" fill="#4e3521" />
                 <path d="M 15 -6 C 24 -10 31 -6 35 1 C 27 3 20 3 15 2 Z" fill="#4e3521" />
-                {/* limbs reaching out from under the canopy */}
-                <path d="M -8 -86 C -22 -96 -34 -100 -46 -98 M 9 -88 C 22 -98 34 -102 46 -99" stroke="#5b3f26"
+                {/* limbs reaching out from under the canopy — they rose with it */}
+                <path d="M -8 -95.4 C -22 -105.4 -34 -109.4 -46 -107.4 M 9 -97.4 C 22 -107.4 34 -111.4 46 -108.4" stroke="#5b3f26"
                   strokeWidth="5" fill="none" strokeLinecap="round" />
               </>
             )}
           </svg>
         </div>
-      ))}
+        );
+      })}
     </>
   );
 }
@@ -219,13 +498,13 @@ const FORAGE_SITES = [
   { x: .265, y: .250, s: 1.00, kind: "berry" },
   { x: .330, y: .245, s: 0.92, kind: "berry" },
   { x: .395, y: .265, s: 0.88, kind: "shrub" },
-  // west berry thicket
-  { x: .255, y: .400, s: 1.05, kind: "berry" },
-  { x: .245, y: .520, s: 0.95, kind: "berry" },
-  { x: .300, y: .455, s: 1.10, kind: "berry" },
-  // nut trees around the edge of the clearing
+  // nut trees around the edge of the clearing. The middle one moved up
+  // into the ground the west thicket vacated: it used to sit at
+  // (.285,.600), which is now directly under the bottom-left tree's
+  // crown, and a nut tree whose foliage is buried in an oak canopy is a
+  // squirrel climbing into someone else's leaves.
   { x: .335, y: .335, s: 1.05, kind: "nut" },
-  { x: .285, y: .600, s: 0.98, kind: "nut" },
+  { x: .300, y: .450, s: 0.98, kind: "nut" },
   { x: .445, y: .565, s: 1.02, kind: "nut" },
   // browse shrubs through the middle
   { x: .375, y: .425, s: 1.00, kind: "shrub" },
@@ -240,22 +519,39 @@ const FORAGE_SITES = [
   { x: .345, y: .525, s: 1.00, kind: "soil" },
   { x: .385, y: .335, s: 0.95, kind: "soil" },
 
+  // ---- the south-east larder: the map's second foraging ground -------
+  // The three berry bushes that used to stand in a line down the west
+  // side, moved here whole (same kinds, same scales), plus two nut trees
+  // so the corner is worth a trip on its own and not just a detour.
+  //
+  // They ring the hedgehog's big surface root rather than crowd it: the
+  // root's art is 108px wide and 45px tall, so anything sharing its
+  // latitude has to sit 88px clear in x, and the two bands north and
+  // south of it are the only places in this corner that clear it, both
+  // east trees' 96px approach rings AND the 60px approach ring of every
+  // other site, at every aspect. North band first, then south.
+  { x: .672, y: .620, s: 1.02, kind: "nut"   },
+  { x: .772, y: .585, s: 1.05, kind: "berry" },
+  { x: .737, y: .858, s: 0.95, kind: "berry" },
+  { x: .848, y: .858, s: 0.98, kind: "nut"   },
+  { x: .928, y: .868, s: 1.10, kind: "berry" },
+
   // ---- the hedgehog's ground: fallen timber and surface roots ---------
   // Deliberately OUT of the clearing. He eats beetles, worms and snails,
   // which live in rotten wood and in the packed earth a root heaves up —
   // so putting him on the berry ground would be a seventh forager on the
-  // same sixteen sites eating something none of the other six can see.
+  // same sites eating something none of the other six can see.
   //   log   a big rotten trunk: he goes in through the hole in the top
   //   root  a surface root: he digs under it, or into its bottom edge
   // `dir` mirrors the art (-1 flips it), so each root can point its high
   // end at the trunk it plausibly belongs to.
   //
-  // Every position was checked against the lake, the four trees, the
-  // sixteen existing sites and the screen edges at 1280x720, 1440x900,
-  // 1024x640, 1600x820, 1000x800 and 1920x1000. Worst case across all
-  // six: 106px to a trunk, 116px to an existing site, 185px between two
-  // of these, 96px to an edge, and a 70px approach ring that never gets
-  // nearer the lake than rho 1.78 (the spawn guard bites at 1.12).
+  // Unmoved by the terrain rework, and re-checked against it: the six
+  // trees, the eighteen plant sites and the screen edges at 1008x700,
+  // 1264x732, 1350x700, 1424x832, 1600x820, 1904x1012, 1000x800 and
+  // 1240x1000. Worst case across all eight: 103px to a trunk, 80px to a
+  // plant site, and a 70px approach ring that never gets nearer the lake
+  // than rho 1.78 (the spawn guard bites at 1.12).
   { x: .400, y: .845, s: 1.00, kind: "log",  dir:  1 },
   { x: .600, y: .775, s: 0.92, kind: "log",  dir: -1 },
   { x: .185, y: .690, s: 1.00, kind: "root", dir: -1 },
@@ -429,6 +725,16 @@ setForageMetrics({
   // Forty px of leaf directly over the trunk, and he stops with his own
   // middle in the middle of it.
   nut: { basePx: 6, leafPx: 55, crownPx: 95, trunkDX: 1.5 },
+  // The fallen log, for anything that wants to be INSIDE one. The hedgehog
+  // goes in the rot hole in the top face; a raccoon does not fit through a
+  // hedgehog's hole, so he goes in the broken end and the two of them share
+  // the timber without ever sharing a doorway. Both read off the `log` art
+  // in ForageLayer, stage px at scale 1:
+  //   endDX  the open end, along the trunk from the anchor. The site's `dir`
+  //          mirrors the whole drawing, so multiply by it.
+  //   endPx  the middle of that end face, above the anchor: the end ellipse
+  //          is cy -5.5 and a local y is (16 - y) px up.
+  log: { endDX: 84, endPx: 21.5 },
   // Critter() draws the 120-unit sprite box at r * 2.7 px. (NOT r * 3.1 —
   // that is the container div; see the note in the squirrel's ethogram.)
   spritePx: 2.7,
@@ -897,6 +1203,9 @@ function makeAgent(world, species) {
     dragging: false,
     // post-interaction management
     separateEnd: 0,
+    // 0 = the historical open-ended cooldown (damp to a stop, then roll out
+    // once noEventUntil has passed). Non-zero = leave at this timestamp.
+    cooldownUntil: 0,
     noEventUntil: 0,
     // intent: wander | swim (swimmers only)
     intent: "wander",
@@ -2151,13 +2460,60 @@ WORLDS.forest.dam = DAM_PLAN;
 // Open grass, and nothing else: the goose grazes here. It needs no new
 // geometry because the empty ground was already the point — the lake's
 // southern shore stops at y≈.46, the clearing's lowest bush is at .625,
-// the two south-east trees stand east of .80, and the background already
+// the two east trees stand east of .89 and the lone spruce stands south
+// of it at y .94, close enough to the ground that only the underside of
+// its lowest whorl reaches the sward's northern strip, and the background already
 // scatters grass tufts, clover and flowers right through this rectangle.
 // Held in fractions and reached through `def`, like the trees and the
 // forage, so another world can hand him a different field or none at all
 // — with no sward the appetite simply never finds anywhere to go.
 const GOOSE_SWARD = { x0: 0.40, x1: 0.66, y0: 0.68, y1: 0.88 };
 WORLDS.forest.sward = GOOSE_SWARD;
+
+// ---------------- Bare earth ----------------
+// The four mud patches ForestScene paints on the floor. Held in ITS viewBox
+// (0 0 1200 800) and NOT in stage fractions, because the background is
+// preserveAspectRatio="xMidYMid slice": the short axis is CROPPED, not
+// squashed, so one stage fraction lands on a different part of the art at
+// every window shape. The mapping therefore lives here, next to the art it
+// maps; the ethogram only ever asks the predicate — the same handover the
+// sward and the trees get.
+//
+// Every patch is drawn through filter url(#sai-bg-rough), whose
+// feDisplacementMap has scale="40". Displacement is scale * (C - 0.5) with
+// C in 0..1, so the painted edge can bulge up to 20 viewBox units past the
+// ellipse written below. EARTH_FUZZ is that bound, not an estimate.
+const BG_VB = { w: 1200, h: 800 };
+const EARTH_FUZZ = 20;
+const BARE_EARTH = [
+  { cx: 300, cy: 640, rx: 150, ry: 70 },
+  { cx: 820, cy: 600, rx: 180, ry: 80 },
+  { cx: 560, cy: 730, rx: 140, ry: 60 },
+  { cx: 1000, cy: 720, rx: 120, ry: 55 },
+];
+WORLDS.forest.bareEarth = { vb: BG_VB, fuzz: EARTH_FUZZ, patches: BARE_EARTH };
+
+/**
+ * TRUE where a stage point is on painted mud, or within `pad` stage px of
+ * it. `pad` is in STAGE px (an animal's own footprint) and is converted, so
+ * a caller never has to know the background's units.
+ *
+ *   scale = max(W/1200, H/800);  the art is centred, so the crop splits evenly
+ *   vbX = (stageX - (W - 1200*scale)/2) / scale
+ */
+function onBareEarth(def, bounds, x, y, pad = 0) {
+  const be = def.bareEarth;
+  if (!be) return false;                      // a world with no mud has no bare earth
+  const s = Math.max(bounds.w / be.vb.w, bounds.h / be.vb.h);
+  const px = (x - (bounds.w - be.vb.w * s) / 2) / s;
+  const py = (y - (bounds.h - be.vb.h * s) / 2) / s;
+  const g = be.fuzz + pad / s;
+  for (const e of be.patches) {
+    const dx = (px - e.cx) / (e.rx + g), dy = (py - e.cy) / (e.ry + g);
+    if (dx * dx + dy * dy < 1) return true;
+  }
+  return false;
+}
 function DamLayer({ damRefs }) {
   return (
     <>
@@ -2429,7 +2785,13 @@ function stepWorld(world, cfg, dt) {
   }
 
   // everything an ethogram is allowed to see, assembled once a frame
-  const ethoCtx = { now, dt, def, bounds, world, cfg, rand, isWet, isFreeState, lakePoint, LAKE };
+  // everything an ethogram is allowed to see, assembled once a frame.
+  // shallowBand and onBareEarth are the world answering questions about its
+  // own ART — where the drawn waterline is, where the drawn mud is — so no
+  // ethogram has to carry a copy of geometry it cannot see change.
+  const ethoCtx = { now, dt, def, bounds, world, cfg, rand, isWet, isFreeState, lakePoint, LAKE,
+    shallowBand: (t) => (def.hasWater ? shallowBandAt(bounds, t) : null),
+    onBareEarth: (x, y, pad) => onBareEarth(def, bounds, x, y, pad) };
 
   // ---- floats (lily pads + drift logs): VERY slow quasi-chaotic drift
   // (sums of incommensurate sines), held inside a "strange attractor" rim
@@ -2564,14 +2926,11 @@ function stepWorld(world, cfg, dt) {
           if (b && (b.state === "friendly" || b.state === "fight")) {
             separatePair(world, a, b, world, false);
           } else {
-            // partner missing; self-separate
-            a.state = "separate";
-            a.separateEnd = now + SEP_MS;
-            const ang = Math.random() * Math.PI * 2;
-            const sp = cfg.speed * 1.1; a.vx = Math.cos(ang) * sp; a.vy = Math.sin(ang) * sp;
+            // partner vanished; leave the SPOT rather than the rival, and
+            // on the same dash-or-walk roll everyone else gets
+            breakAway(a, a.lockX, a.lockY, world);
             a.noEventUntil = now + rand(NOEVENT_MIN_MS, NOEVENT_MAX_MS);
             a.intent = "wander"; a.intentUntil = now + rand(4000, 8000);
-            a.targetId = null;
           }
         }
       }
@@ -2582,7 +2941,7 @@ function stepWorld(world, cfg, dt) {
     if (a.state === "rescue") {
       const friend = a.rescueFriendId ? agents.find((x) => x.id === a.rescueFriendId) : null;
       if (!friend || friend.state !== "fight" || !friend.targetId) {
-        a.state = "cooldown"; a.rescueFriendId = null;
+        enterCooldown(a, RESCUE_BEAT_MS, now); a.rescueFriendId = null;
       } else {
         const dx = friend.x - a.x, dy = friend.y - a.y; const d = Math.hypot(dx, dy) || 1;
         const sp = gait(a, ethoCtx, 1.0); // the rescue: the one place top speed belongs
@@ -2590,9 +2949,14 @@ function stepWorld(world, cfg, dt) {
         if (d < RESCUE_REACH) {
           const opp = agents.find((x) => x.id === friend.targetId);
           if (opp) forceFlee(opp, cfg);          // the opponent breaks off and flees
-          friend.state = "cooldown"; friend.targetId = null;
+          // a beat to register that it is over, then both get on with it.
+          // The no-engagement window is untouched and outlasts the beat —
+          // it is what stops them re-engaging, not the standing.
+          friend.targetId = null;
+          enterCooldown(friend, RESCUE_BEAT_MS, now);
           friend.noEventUntil = now + rand(NOEVENT_MIN_MS, NOEVENT_MAX_MS);
-          a.state = "cooldown"; a.rescueFriendId = null;
+          a.rescueFriendId = null;
+          enterCooldown(a, RESCUE_BEAT_MS, now);
           a.noEventUntil = now + rand(NOEVENT_MIN_MS, NOEVENT_MAX_MS);
           a.vx *= 0.3; a.vy *= 0.3;
         }
@@ -2936,16 +3300,35 @@ function stepWorld(world, cfg, dt) {
     }
 
     if (a.state === "separate") {
-      if (now >= a.separateEnd) { a.state = "cooldown"; }
-      // drift with current vx,vy until separateEnd
+      if (now >= a.separateEnd) {
+        // straight back to wandering — there is no standing pause any more.
+        // The velocity is handed over intact and the wander block re-derives
+        // its heading from it, so the departure runs on into an ordinary
+        // amble instead of stopping dead and restarting.
+        a.state = "wander";
+        a._sepMode = null;
+      } else {
+        const dash = a._sepMode === "dash";
+        a._sepAng = (a._sepAng || 0) + (a._sepTurn || 0) * dt;
+        // a dash is real urgency but brief; a walk-off is the errand rung.
+        // Top speed stays reserved for the rescue.
+        const sp = gait(a, ethoCtx, dash ? 0.80 : 0.45);
+        a.vx = Math.cos(a._sepAng) * sp;
+        a.vy = Math.sin(a._sepAng) * sp;
+      }
     }
 
-    if (a.state === "flee" && now >= a.fleeEnd) { a.state = "cooldown"; a.targetId = null; }
+    if (a.state === "flee" && now >= a.fleeEnd) { enterCooldown(a, 0, now); a.targetId = null; }
 
     if (a.state === "cooldown") {
       const kd = Math.exp(-3.7 * dt); a.vx *= kd; a.vy *= kd; // 0.94^60 ≈ e^-3.71
       if (Math.hypot(a.vx, a.vy) < 6) { a.vx = 0; a.vy = 0; }
-      if (Math.random() < 0.02 && now >= a.noEventUntil) a.state = "wander";
+      // A bounded cooldown leaves on its own clock; everything else keeps the
+      // old roll. Neither gates engagement — noEventUntil does that, in the
+      // encounter loop, and it is untouched.
+      if (a.cooldownUntil) {
+        if (now >= a.cooldownUntil) { a.cooldownUntil = 0; a.state = "wander"; }
+      } else if (Math.random() < 0.02 && now >= a.noEventUntil) a.state = "wander";
     }
 
     if (a.state === "idle" && now >= a.idleUntil) a.state = "wander";
@@ -3205,27 +3588,79 @@ function startFight(a, b, world) {
   const ra = getRel(a, b.id); const rb = getRel(b, a.id); ra.last = 'rival'; rb.last = 'rival';
 }
 
+// A world-shaped object may be the trimmed { agents, bounds } the drag
+// handler passes, so every field is optional here.
+const wetAt = (W, x, y) =>
+  !W || !W.def || !W.bounds ? false
+    : W.def.hasWater ? inWater(W.bounds, x, y)
+    : W.def.pool ? inPool(W.bounds, W.def.pool, x, y) : false;
+
+// One animal's departure from an encounter. Rolled INDEPENDENTLY per animal,
+// so a break-up is never a mirror: 50/50 a short hard dash or a longer
+// walk-off, each on its own heading, each on its own clock.
+//
+// The heading is deliberately NOT the a-b axis. It starts as "away from the
+// meeting point" — which for a pair IS that axis — and is then rotated by a
+// signed offset drawn from a band that never contains zero, so the departure
+// still leads away from both the rival and the spot (the dot product with
+// "away" stays positive: cos 1.15 = 0.41) without reading as a ruled line.
+// A slow constant turn rate on top keeps it curving, so no two look alike.
+function breakAway(a, mx, my, W) {
+  const now = performance.now();
+  let ax = a.x - mx, ay = a.y - my;
+  let d = Math.hypot(ax, ay);
+  if (d < 0.001) { const t = Math.random() * Math.PI * 2; ax = Math.cos(t); ay = Math.sin(t); d = 1; }
+  const away = Math.atan2(ay, ax);
+  const off = rand(0.55, 1.15) * (Math.random() < 0.5 ? -1 : 1);   // 32°..66°, either side
+  let h = away + off;
+
+  // A land animal aimed straight at the water takes the mirrored offset
+  // instead: the shoreline is a wall for him and sliding along it is not a
+  // departure, it is a shuffle. keepAshore still backs this up downstream.
+  if (W && W.def && !canSwimIn(W.def, a.species)) {
+    const probe = 90;
+    if (wetAt(W, a.x + Math.cos(h) * probe, a.y + Math.sin(h) * probe)) {
+      const h2 = away - off;
+      if (!wetAt(W, a.x + Math.cos(h2) * probe, a.y + Math.sin(h2) * probe)) h = h2;
+    }
+  }
+
+  const dash = Math.random() < 0.5;
+  a._sepMode = dash ? "dash" : "walk";
+  a._sepAng  = h;
+  a._sepTurn = dash ? rand(-0.30, 0.30) : rand(-0.65, 0.65);   // rad/s: the dash is committed
+  a.state = "separate";
+  a.separateEnd = now + (dash ? rand(SEP_DASH_MS[0], SEP_DASH_MS[1])
+                              : rand(SEP_WALK_MS[0], SEP_WALK_MS[1]));
+  a.targetId = null;
+  a._faceDir = 0;
+  // first frame's velocity, so he is already leaving on the frame the
+  // engagement ends. The state block re-derives it from gait() thereafter.
+  const sp = gaitIn(a, null, (W && W.cfg) || { speed: DEFAULTS.speed }, dash ? 0.80 : 0.45);
+  a.vx = Math.cos(h) * sp; a.vy = Math.sin(h) * sp;
+}
+
+// Entering the cooldown stand. ms = 0 keeps the historical open-ended form;
+// non-zero bounds it. Always assigned, so a timer can never leak forward
+// from an earlier cooldown the animal left by some other route.
+function enterCooldown(a, ms = 0, now = performance.now()) {
+  a.state = "cooldown";
+  a.cooldownUntil = ms ? now + ms : 0;
+}
+
 function separatePair(world, a, b, worldRefLike, force) {
   const now = performance.now();
-  // Apply opposite impulses
-  let dx = a.x - b.x, dy = a.y - b.y; let d = Math.hypot(dx, dy);
-  if (!d) { const ang = Math.random() * Math.PI * 2; dx = Math.cos(ang); dy = Math.sin(ang); d = 1; }
-  const nx = dx / d, ny = dy / d;
-  // each recoils at its OWN pace — a turtle and a bear used to spring apart
-  // at exactly the same speed
-  const cfgL = worldRefLike.cfg || { speed: 80 };
-  const spA = gaitIn(a, null, cfgL, 0.55), spB = gaitIn(b, null, cfgL, 0.55);
-
-  a.vx = nx * spA; a.vy = ny * spA; b.vx = -nx * spB; b.vy = -ny * spB;
-  a.state = b.state = 'separate';
-  a.separateEnd = b.separateEnd = now + SEP_MS;
-  // impose event cooldown + forced wander intent
+  const W = worldRefLike || world;
+  // the meeting point is the scene they are both leaving
+  const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+  breakAway(a, mx, my, W);
+  breakAway(b, mx, my, W);
+  // impose event cooldown + forced wander intent  (UNCHANGED from v0.x)
   a.noEventUntil = now + rand(NOEVENT_MIN_MS, NOEVENT_MAX_MS);
   b.noEventUntil = now + rand(NOEVENT_MIN_MS, NOEVENT_MAX_MS);
   a.intent = b.intent = 'wander';
   a.intentUntil = now + rand(4000, 8000);
   b.intentUntil = now + rand(4000, 8000);
-  a.targetId = b.targetId = null;
 }
 
 function forceFlee(agent, cfg) {
@@ -3310,6 +3745,9 @@ function renderWorld(world, iconsRef, padsRef, damRefs) {
       sprite.dataset.carry = a._carry || '';
       // the cat's pre-jump pause at a fence (little crouch via CSS)
       sprite.dataset.prep = nowMs < (a.hopPrepUntil || 0) ? '1' : '';
+      // which flavor of break-up is running, so the CSS can wind the leg
+      // cycle up for a dash. Empty every other frame of the sim.
+      sprite.dataset.sep = a.state === 'separate' ? (a._sepMode || '') : '';
       // The burst window Gait.js opens. This is the one fact about pace the
       // CSS cannot recover from displacement: a frog's 300ms leap and a
       // cougar's bound and an ordinary fast walk are all just px/s on the

@@ -1190,42 +1190,75 @@ function nearestForage(a, c, kind) {
 }
 
 /**
- * The nearest stretch of shallows, standing IN the water. He has to be past
- * the waterline for the wash to read at all — on the mud at rho 1.05 he was
- * miming it at a lake he had not reached.
+ * THE HANDS ARE THE POINT. THE FOOD IS NOT.
+ *
+ * This was modelled as washing, and it is not washing. A raccoon that puts
+ * his forepaws in water is not rinsing dinner — he is turning his hands ON.
+ * Wetting the pads softens the horny layer over the mechanoreceptors and
+ * roughly doubles what those paws can resolve; something like two thirds of
+ * his somatosensory cortex is given over to them, and he reads an object
+ * with his fingers the way we read one with our eyes. Which is also why he
+ * looks AWAY while he does it: the hands are the sense organ, and the eyes
+ * are free to watch the bank.
+ *
+ * So the bout below runs hands-first, and the order is the whole correction:
+ *
+ *   racwet   both forepaws under the surface, EMPTY, palm working on palm
+ *   racwash  only now does the fruit go under — turned slowly in live
+ *            fingertips, thumbed over, FELT. Not scrubbed, not rinsed
+ *   raceat   ...and then eaten
+ *
+ * The state names, the `ownsWater` flag and the pose group are deliberately
+ * kept. They are load-bearing in index.css and in the sim's swim rig, and
+ * renaming them would rewrite two hundred lines of CSS to change nothing on
+ * screen. What changed is what they MEAN and what they draw.
+ *
+ * And the `paws` event further down is the same behavior with nothing in his
+ * hands at all — which is the half of the truth the old model could not
+ * express, because a wash needs something to wash and a raccoon does this
+ * whether or not he has found anything.
+ */
+
+/**
+ * The nearest stretch of shallows, standing IN the water. His HANDS have to
+ * be past the waterline for any of this to read — on the mud at rho 1.05 he
+ * was miming it at a lake he had not reached.
  */
 function waterEdge(a, c) {
   const ang = Math.atan2((a.y - c.LAKE.cy * c.bounds.h) / (c.LAKE.ry * c.bounds.h),
                          (a.x - c.LAKE.cx * c.bounds.w) / (c.LAKE.rx * c.bounds.w));
   // rho 0.93, not 1.05. Above 1 he stands on the mud with the water in front
-  // of him and the wash reads as a mime; inside the waterline his body is
-  // actually in the shallows, which is the whole point of dousing.
+  // of him; inside the waterline his forearms are actually in it.
   return c.lakePoint(c.bounds, ang, 0.93);
 }
 
+/** how long the empty-hand rub runs inside a feeding bout, and on its own */
+const RUB_INBOUT = [2600, 3800];
+const RUB_ALONE = [7000, 11000];
+
 /**
- * Fruit in hand. The claim goes back HERE and not at the end of the bout:
- * he is away at the lake for the next ten seconds, and a bush he has walked
- * off from belongs to whoever reaches it next.
+ * Fruit in hand — from the ground, from a bush crown, or from thirty feet
+ * up a trunk. The claim goes back HERE and not at the end of the bout: he is
+ * away at the lake for the next ten seconds, and a bush he has walked off
+ * from belongs to whoever reaches it next.
  */
 function racCarry(a, c, S) {
   releaseClaim(a, S);
   a._carry = "berry";
-  a._racWash = waterEdge(a, c);
-  a._racWashBy = c.now + 18000;
+  a._racWater = waterEdge(a, c);
+  a._racWaterBy = c.now + 18000;
   a.state = "racdouse";
 }
 
 /**
- * The whole bout, from the branches down to the last mouthful. Both variants
- * run this same function, which is what lets the states below the climb live
- * on the picker: the dispatcher hands the frame across mid-bout and neither
- * variant has to know the other exists.
+ * The whole bout, from wherever he got it down to the last mouthful. All
+ * three variants run this same function, which is what lets the states below
+ * the climb live on the picker: the dispatcher hands the frame across
+ * mid-bout and no variant has to know the others exist.
  */
 function driveRaccoon(a, c, S) {
+  // ---- up in a bush: a scramble, a stretch, and down again in six seconds
   if (a.state === "racbushup") {
-    // A bush is not a tree. The whole climb is a scramble, a stretch at the
-    // ripe crown and a drop back down, and it is over in six seconds.
     a.vx = 0; a.vy = 0;
     const el = c.now - (a._racT0 || c.now), top = a._racTop || 22;
     if (el < 1300) a.z = top * (el / 1300);
@@ -1234,27 +1267,76 @@ function driveRaccoon(a, c, S) {
     else { a.z = 0; racCarry(a, c, S); }
     return;
   }
+
+  // ---- up a FRUIT TREE: bark, fork, and back down holding it -----------
+  // The bush climb is a scramble he could fall out of. This is the other
+  // thing entirely: he is one of very few carnivores that can rotate his
+  // hind feet a half turn, so he comes DOWN head-up and in reverse instead
+  // of dropping. Working the ground is what he does when the tree is taken.
+  if (a.state === "ractreeup" || a.state === "ractreepick" || a.state === "ractreedown") {
+    racCling(a, c);
+    const el = c.now - (a._racT0 || c.now), top = a._racTop || 40;
+    if (a.state === "ractreeup") {
+      a.z = top * Math.min(1, el / RAC_UP_MS);
+      if (el >= RAC_UP_MS) {
+        a.z = top;
+        a.state = "ractreepick"; a._racT0 = c.now;
+        a.stateUntil = c.now + c.rand(3400, 5000);
+      }
+      return;
+    }
+    if (a.state === "ractreepick") {
+      a.z = top;                       // head in the leaves, back below them
+      if (c.now < a.stateUntil) return;
+      a.state = "ractreedown"; a._racT0 = c.now;
+      return;
+    }
+    a.z = top * (1 - Math.min(1, el / RAC_DOWN_MS));
+    if (el >= RAC_DOWN_MS) { a.z = 0; a._faceDir = 0; racCarry(a, c, S); }
+    return;
+  }
+
   if (a.state === "rachandle") {
     a.vx = 0; a.vy = 0;
     if (c.now >= a.stateUntil) racCarry(a, c, S);
     return;
   }
+
   if (a.state === "racdouse") {
-    // The second walk of the bout, hand-driven: the engine's `goto` runs
-    // once and it has already been spent getting him to the bush.
-    if (stepToward(a, c, a._racWash, 1) < 13) {
+    // The second walk of the bout, hand-driven: the engine's `goto` ran once
+    // and it was spent getting him to the fruit. He is not carrying it to
+    // the water to clean it. He is carrying it to where his hands work.
+    // (This leg used to be a bare `stepToward(..., 1)` — a flat multiple of
+    // cfg.speed, which is the thing Gait.js exists to stop. It is an errand
+    // with something in his jaws, so it is 0.45, the same as the squirrel's
+    // haul to the larder.)
+    if (stepTowardAt(a, c, a._racWater, gait(a, c, 0.45)) < 13) {
       a.vx = 0; a.vy = 0;
       a._faceDir = c.LAKE.cx * c.bounds.w > a.x ? 1 : -1;   // work facing the water
-      a.state = "racwash"; a.stateUntil = c.now + c.rand(3800, 5400);
-    } else if (c.now >= a._racWashBy) {
-      // No water inside his patience. He eats it dry — the one thing in his
-      // repertoire that reads as a raccoon settling for less.
+      a.state = "racwet"; a.stateUntil = c.now + c.rand(RUB_INBOUT[0], RUB_INBOUT[1]);
+    } else if (c.now >= a._racWaterBy) {
+      // No water inside his patience. He eats it with his hands as they are
+      // — the one thing in his repertoire that reads as settling for less.
       a.vx = 0; a.vy = 0;
       a.state = "raceat"; a.stateUntil = c.now + c.rand(2400, 3200);
     }
     return;
   }
+
+  if (a.state === "racwet") {
+    // Hands only. The fruit is tucked against his chest and both palms are
+    // under the surface working on each other. Nothing is being cleaned.
+    a.vx = 0; a.vy = 0;
+    if (c.now >= a.stateUntil) {
+      a.state = "racwash"; a.stateUntil = c.now + c.rand(3400, 4800);
+    }
+    return;
+  }
+
   if (a.state === "racwash") {
+    // NOW the fruit goes under, into pads that are twice the instrument they
+    // were a moment ago. Turned, not scrubbed — and his eyes are up the bank
+    // the whole time, because they are not what is doing the looking.
     a.vx = 0; a.vy = 0;
     if (c.now >= a.stateUntil) {
       a._faceDir = 0;
@@ -1262,8 +1344,211 @@ function driveRaccoon(a, c, S) {
     }
     return;
   }
+
   a.vx = 0; a.vy = 0;                                       // raceat
   if (c.now >= a.stateUntil) { a._faceDir = 0; endEvent(a, c, { reroll: true, quiet: 1200 }); }
+}
+
+// ---------------------------------------------------------------------
+//  ON THE BARK, AND OUT OF THE LIGHT
+//
+//  Two errands share one drawing and one piece of arithmetic, because they
+//  are one action: a raccoon going up a trunk. One ends in the fruit at the
+//  crown, the other in a hole halfway up it.
+// ---------------------------------------------------------------------
+
+/**
+ * The cling pose measured against the sprite. Critter() renders the
+ * 120-unit box at r * 2.7 px — NOT r * 3.1, which is the container div. The
+ * bear's tree constants were taken on the 3.1 basis and he consequently
+ * climbs about 15% deeper into his own boughs than his arithmetic claims;
+ * harmless for him, not repeated here (the squirrel's note says the same).
+ *
+ * Off .sai-crit-racclingpose: hind pads on the bark at y 102, ear tips at
+ * y 15, sprite centre line y 60.
+ */
+const RAC_SPRITE = 2.7;
+const RAC_GRIP = (102 - 60) / 120;   // hind grip below the centre line
+const RAC_CROWN = (60 - 15) / 120;   // ear tips above it
+const RAC_UP_MS = 1900;              // heavier than a squirrel, quicker than a bear
+const RAC_DOWN_MS = 1500;            // and he descends head-up, so it is controlled
+
+/**
+ * The two heights on a trunk he cares about, in stage px above the tree's
+ * own anchor at scale 1. Both come from the world through setTreeMetrics —
+ * the forest is being resized underneath this, so nothing here may hold a
+ * coordinate. The fallbacks are expressed as fractions of the drawn trunk
+ * for the same reason: an older world that has not been handed the new
+ * numbers still gets a cavity in the middle of its bark and fruit inside its
+ * leaves, wherever those have moved to.
+ */
+const racCavityPx = () => TREE.cavityPx ?? (TREE.basePx + 0.52 * (TREE.canopyPx - TREE.basePx));
+const racFruitPx  = () => TREE.fruitPx  ?? (TREE.canopyPx + 17);
+
+/**
+ * A trunk with nobody on it, by INDEX and by geometry, never by coordinate.
+ * The bear takes an interest in these too and claims nothing — trees are not
+ * forage sites and have no claim slot — so the only way to keep two animals
+ * off one trunk is to look before setting off. `t.fruit === false` lets the
+ * world retire a tree from bearing without this file changing.
+ */
+function racTrunk(a, c) {
+  const trees = c.def.trees;
+  if (!trees || !TREE) return null;
+  let best = null, bd = Infinity;
+  for (let i = 0; i < trees.length; i++) {
+    const t = trees[i];
+    if (t.fruit === false) continue;
+    const x = t.x * c.bounds.w, y = t.y * c.bounds.h;
+    let taken = false;
+    for (const o of c.world.agents) {
+      if (o === a || o.dragging) continue;
+      if (Math.hypot(o.x - x, o.y - y) < TREE.reach * 0.55) { taken = true; break; }
+    }
+    if (taken) continue;
+    const d = Math.hypot(x - a.x, y - a.y);
+    if (d < bd) { bd = d; best = { x, y, tree: t, i }; }
+  }
+  return best;
+}
+
+/** pin him to the bark: he is holding on, not standing near it */
+function racCling(a, c) {
+  a.vx = 0; a.vy = 0;
+  const k = Math.min(1, c.dt * 5);
+  a.x += (a._trunkX - a.x) * k; a.y += (a._trunkY - a.y) * k;
+}
+
+/**
+ * Set the pin so that at z 0 his hind grip is on the foot of the drawn
+ * trunk, exactly the way the squirrel's is on his nut tree. Everything above
+ * this is z, and z alone.
+ */
+function racPin(a, c, g) {
+  const t = g.tree, box = a.r * RAC_SPRITE;
+  a._trunkX = g.x + (TREE.trunkDX || 0) * t.s;
+  a._trunkY = g.y - TREE.basePx * t.s - box * RAC_GRIP;
+  a._racT0 = c.now; a._faceDir = 1;
+  a.vx = 0; a.vy = 0;
+}
+/** lift that carries his EAR TIPS to `px` above the anchor (the fruit) */
+const racTopFor = (a, t, px) =>
+  Math.max(20, (px - TREE.basePx) * t.s - a.r * RAC_SPRITE * (RAC_GRIP + RAC_CROWN));
+/** lift that carries the DEN POSE'S HOLE — drawn on his own centre line —
+ *  to `px` above the anchor (the cavity) */
+const racDenFor = (a, t, px) =>
+  Math.max(10, (px - TREE.basePx) * t.s - a.r * RAC_SPRITE * RAC_GRIP);
+
+/**
+ * THE THIRTY-SECOND CEILING ON DEEP SLEEP, and how it is actually held.
+ *
+ * The requirement is a hard one — no spell of deep sleep may run past thirty
+ * seconds — and a random window that happens to sit under thirty is not an
+ * enforcement, it is a coincidence waiting for someone to widen the range.
+ * So it is held three ways, and the third is the one that matters:
+ *
+ *   1. the drawn window (15-24s) is already inside the ceiling, so the cap
+ *      is a guard rather than the normal terminator and he does not wake on
+ *      a stopwatch every single time;
+ *   2. racDeep() CLAMPS that draw against what is left of the budget, so no
+ *      roll can ever buy him a longer sleep than the ceiling allows;
+ *   3. racDeepSpent() bills every frame he is actually under against a
+ *      budget held PER BOUT and reset only in begin(). That is what stops
+ *      the obvious hole: surfacing and settling again cannot buy a second
+ *      thirty seconds — two spells of eighteen come out as eighteen then
+ *      twelve, and the third would be zero.
+ *
+ * The measured quantity is frame time asleep, not wall time in the state, so
+ * a paused or throttled tab cannot inflate it either.
+ */
+const ROOST_DEEP_MAX = 30000;
+const ROOST_DEEP_WIN = [15000, 24000];
+
+function racDeep(a, c, state) {
+  a.vx = 0; a.vy = 0;
+  const left = Math.max(0, ROOST_DEEP_MAX - (a._roostDeep || 0));
+  a.state = state;
+  a.stateUntil = c.now + Math.min(c.rand(ROOST_DEEP_WIN[0], ROOST_DEEP_WIN[1]), left);
+}
+/** true the moment he must come up: budget exhausted, or this spell done */
+function racDeepSpent(a, c) {
+  a._roostDeep = (a._roostDeep || 0) + c.dt * 1000;
+  return a._roostDeep >= ROOST_DEEP_MAX || c.now >= a.stateUntil;
+}
+
+/**
+ * The hollow log, entered at the BROKEN END and not the rot hole in the top.
+ * That is not a stylistic choice: the hole in the top face is thirteen px of
+ * drawn opening and it is the hedgehog's, and a raccoon does not fit through
+ * a hedgehog's hole. The open end is the entrance his size actually implies,
+ * so the two of them share one piece of timber and never share a doorway.
+ *
+ * Both numbers come from the world through setForageMetrics — `endDX` along
+ * the trunk, `endPx` above the anchor — and `dir` is the site's own mirror
+ * flag, so the same pair serves a log drawn either way round. If the world
+ * has not been handed them, he simply never picks a log and roosts up trees
+ * instead, which is a degradation and not a crash.
+ */
+function racLogDen(a, c) {
+  if (!SQ || !SQ.log) return null;
+  const f = nearestSite(a, c, "log");
+  if (!f) return null;
+  const d = f.dir || 1;
+  return { x: f.px + SQ.log.endDX * f.s * d, y: f.py - SQ.log.endPx * f.s, site: f, dir: d };
+}
+
+/**
+ * Both roosts, one function. The states are dispatched by name, so the two
+ * variants hand frames to each other's code without either knowing the other
+ * is there — the same arrangement the picker and the bush climb already use.
+ */
+function driveRoost(a, c, S) {
+  switch (a.state) {
+    // ---- the hollow log: floor level, so he has to HOLD the doorway or
+    // the crowd separation quietly walks him out of the log he is half in
+    case "raclogin":
+      holdSpot(a, c, a._denAt);
+      if (c.now >= a.stateUntil) racDeep(a, c, "raclogsleep");
+      return;
+    case "raclogsleep":
+      holdSpot(a, c, a._denAt);
+      if (racDeepSpent(a, c)) { a.state = "raclogstir"; a.stateUntil = c.now + c.rand(3400, 4200); }
+      return;
+    case "raclogstir":
+      holdSpot(a, c, a._denAt);
+      if (c.now >= a.stateUntil) {
+        a._faceDir = 0; a._roostDeep = 0;
+        endEvent(a, c, { reroll: true, quiet: 1400, stop: true });
+      }
+      return;
+
+    // ---- the tree cavity: up the bark, into the hole, and back down
+    case "raccavup": {
+      racCling(a, c);
+      const el = c.now - (a._racT0 || c.now);
+      a.z = a._racTop * Math.min(1, el / RAC_UP_MS);
+      if (el >= RAC_UP_MS) { a.z = a._racTop; racDeep(a, c, "raccavsleep"); }
+      return;
+    }
+    case "raccavsleep":
+      racCling(a, c); a.z = a._racTop;
+      if (racDeepSpent(a, c)) { a.state = "raccavstir"; a.stateUntil = c.now + c.rand(3400, 4200); }
+      return;
+    case "raccavstir":
+      racCling(a, c); a.z = a._racTop;
+      if (c.now >= a.stateUntil) { a.state = "raccavdown"; a._racT0 = c.now; }
+      return;
+    default: {                                             // raccavdown
+      racCling(a, c);
+      const el = c.now - (a._racT0 || c.now);
+      a.z = a._racTop * (1 - Math.min(1, el / RAC_DOWN_MS));
+      if (el >= RAC_DOWN_MS) {
+        a.z = 0; a._faceDir = 0; a._roostDeep = 0;
+        endEvent(a, c, { reroll: true, quiet: 1400, stop: true });
+      }
+      return;
+    }
+  }
 }
 
 // Both approaches want the same bush; only the state they walk in differs,
@@ -1294,9 +1579,18 @@ defineEthogram("raccoon", {
     water: { share: 0.10, dwell: [6000, 12000], travel: 26000, pull: 0.80 },
   },
 
-  // if a drag or an encounter knocked him out of the wash mid-pose, let him
-  // steer by his own velocity again
-  tick(a) { if (a._faceDir) a._faceDir = 0; },
+  // A drag, a fight or a rescue can lift him out of a bout with his head
+  // still notionally inside a log. The forced facing, the mouthful, the log
+  // he had booked and the sleep budget all have to be handed back here, or
+  // that log stays claimed against him for the rest of the session and the
+  // budget he never spent goes on being spent. tick() only runs on frames
+  // when NO ethogram state owns him, so it can never fire mid-bout.
+  tick(a, c, S) {
+    if (S.claim) releaseClaim(a, S);
+    if (a._faceDir) a._faceDir = 0;
+    if (a._carry) a._carry = null;
+    if (a._roostDeep) a._roostDeep = 0;
+  },
 
   events: [
     // ---- LAND: the berry thicket, and what he does with what he takes ----
@@ -1316,7 +1610,10 @@ defineEthogram("raccoon", {
           // GROUND PICK — the common case. He works the low fruit over in
           // both hands before deciding it is worth carrying anywhere.
           id: "racpick", w: 3, ownsWater: true,
-          states: ["rachandle", "racdouse", "racwash", "raceat"],
+          // `racwet` lives here with the rest of the tail: it is the state
+          // the douse now lands in, and the other two variants reach it by
+          // handing the frame across mid-bout.
+          states: ["rachandle", "racdouse", "racwet", "racwash", "raceat"],
           goto: { state: "toberry", ...RAC_TOBERRY },
           begin(a, c) {
             a.vx = 0; a.vy = 0;
@@ -1339,6 +1636,112 @@ defineEthogram("raccoon", {
             a._racTop = 4 + 18 * ((g && g.site && g.site.s) || 1);
           },
           drive: driveRaccoon,
+        },
+        {
+          // FRUIT TREE — the fruit he actually wants is not on the bush.
+          // He goes and gets it: bark, fork, both hands in the crop, and
+          // back down head-up holding one. The pick happens up there, so he
+          // drops straight into the carry when he reaches the ground, which
+          // is the same tail the ground pick and the bush climb both use.
+          //
+          // A variant and not an event of its own, on purpose — see the
+          // cadence note. It is the same appetite reached at a different
+          // height, so it must not be a second appetite.
+          id: "ractree", w: 3, holdsZ: true,
+          states: ["ractreeup", "ractreepick", "ractreedown"],
+          goto: { state: "totreefruit", within: 26, giveUp: 26000, urgency: 0.45,
+                  none: 12000, lost: 12000, pick: (a, c) => racTrunk(a, c) },
+          begin(a, c, S, g) {
+            racPin(a, c, g);
+            a._racTop = racTopFor(a, g.tree, racFruitPx());
+            a.state = "ractreeup";
+          },
+          drive: driveRaccoon,
+        },
+      ],
+    },
+
+    // ---- THE HANDS, ON THEIR OWN --------------------------------------
+    // The correction, stated as behavior rather than as a comment. If the
+    // water were for the food he would only ever go to it holding something,
+    // and that is precisely what the old model asserted. He does this with
+    // empty hands, often, because the point of it is the hands: he wets and
+    // works the pads until they are live, and then he goes back to reading
+    // the world with them. An urge every 70-120s taken half the time is a
+    // rub every ~3.2 minutes, and it runs 7-11s once he is standing in it.
+    //
+    // NOT a feeding event. Nothing is eaten, nothing is carried, no site is
+    // claimed, and tests/cadence.mjs is right not to count it.
+    {
+      id: "paws", domain: "land", trigger: "seek",
+      every: [70000, 120000], chance: 0.50, cool: 30000,
+      states: ["racpaws"], ownsWater: true,
+      goto: {
+        state: "towaterrub", within: 13, giveUp: 20000, urgency: 0.30,
+        none: 12000, lost: 12000,
+        pick: (a, c) => (c.def.hasWater ? waterEdge(a, c) : null),
+      },
+      begin(a, c) {
+        a.vx = 0; a.vy = 0;
+        a._faceDir = c.LAKE.cx * c.bounds.w > a.x ? 1 : -1;
+        a.state = "racpaws"; a.stateUntil = c.now + c.rand(RUB_ALONE[0], RUB_ALONE[1]);
+      },
+      drive(a, c) {
+        a.vx = 0; a.vy = 0;
+        if (c.now >= a.stateUntil) { a._faceDir = 0; endEvent(a, c, { reroll: true, quiet: 1000 }); }
+      },
+    },
+
+    // ---- ROOSTING OUT THE DAYLIGHT ------------------------------------
+    // He is nocturnal and the clearing is not. Every other animal here is
+    // awake because this world only has a daytime in it; the raccoon is the
+    // one who should visibly be having the wrong half of the day, so he goes
+    // and sleeps it off somewhere dark. Two dens, because he has two in
+    // life: a hollow log on the floor and a cavity up a trunk. The cavity is
+    // the commoner of them — it is his classic day den, and it also keeps
+    // him off the hedgehog's two pieces of timber.
+    //
+    // An urge every 2.5-4 minutes acted on three times in five is a roost
+    // about every 5.4 minutes; door to door the bout runs 45-55s, so he is
+    // asleep something near a seventh of his day. Visible, never dominant,
+    // and never on a metronome.
+    //
+    // NOT a feeding event: it costs the forage ladder nothing.
+    {
+      id: "roost", domain: "land", trigger: "seek",
+      every: [150000, 240000], chance: 0.60, miss: 20000, cool: 60000,
+      variants: [
+        {
+          // THE TREE CAVITY. He goes up the bark on the cling pose, wedges
+          // into the hole, and the tail hangs out of it — which is the whole
+          // read from the ground, and is also just what they do.
+          id: "roostcav", w: 2, holdsZ: true,
+          states: ["raccavup", "raccavsleep", "raccavstir", "raccavdown"],
+          goto: { state: "totrunkden", within: 26, giveUp: 26000, urgency: 0.30,
+                  none: 14000, lost: 14000, pick: (a, c) => racTrunk(a, c) },
+          begin(a, c, S, g) {
+            racPin(a, c, g);
+            a._racTop = racDenFor(a, g.tree, racCavityPx());
+            a._roostDeep = 0;                    // the budget. Per BOUT.
+            a.state = "raccavup";
+          },
+          drive: driveRoost,
+        },
+        {
+          // THE HOLLOW LOG. Same timber the hedgehog works, opposite end of
+          // it, and the site claim keeps them from arriving together.
+          id: "roostlog", w: 1,
+          states: ["raclogin", "raclogsleep", "raclogstir"],
+          goto: { state: "tologden", within: 15, giveUp: 24000, urgency: 0.30,
+                  none: 14000, lost: 14000, pick: racLogDen },
+          begin(a, c, S, g) {
+            a.vx = 0; a.vy = 0;
+            a._denAt = { x: g.x, y: g.y };
+            a._faceDir = g.dir;                  // looking out of the open end
+            a._roostDeep = 0;
+            a.state = "raclogin"; a.stateUntil = c.now + c.rand(1800, 2600);
+          },
+          drive: driveRoost,
         },
       ],
     },
@@ -1385,6 +1788,93 @@ function deerShrub(a, c, S) {
   use.sort((p, q) => Math.hypot(p.px - a.x, p.py - a.y) - Math.hypot(q.px - a.x, q.py - a.y));
   return (f => ({ x: f.px, y: f.py, site: f }))(use[Math.random() < 0.7 || use.length < 2 ? 0 : 1]);
 }
+
+/**
+ * SEASON AND HOUR, in a world that keeps neither.
+ *
+ * Nothing in the sim has a calendar or a clock, so a "seasonal" and a
+ * "crepuscular" behavior have to bring their own. Both are the same object:
+ * a period, a window inside it, and a random epoch PER ANIMAL so a reload
+ * doesn't start every deer on the same beat. Read straight off `now` rather
+ * than advanced by a tick, so they cannot drift, cost nothing on the frames
+ * nobody asks, and stay correct across a tab that was backgrounded.
+ *
+ * The gate is applied in ONE place — the event's `goto.pick` — because the
+ * engine already knows what to do with a pick that has nothing to offer: it
+ * parks the appetite on the `none` cooldown. Out of season the deer simply
+ * never finds a tree worth walking to. No new trigger type, no new field.
+ */
+const RUT_PERIOD = 360000;   // one deer year, six minutes long
+const RUT_WINDOW =  96000;   // ...of which the antlers are hard for about 27%
+const DAY_PERIOD = 250000;   // one compressed day
+const TWILIGHT   = 0.13;     // half-width of dawn, and of dusk, in days
+
+function phase(c, S, key, period) {
+  const k = key + "T0";
+  if (S.mem[k] === undefined) S.mem[k] = c.now - Math.random() * period;
+  return ((c.now - S.mem[k]) % period) / period;
+}
+/** hard antlers, a swollen neck, and a reason to take it out on a tree */
+const inRut = (c, S) => phase(c, S, "rut", RUT_PERIOD) < RUT_WINDOW / RUT_PERIOD;
+/**
+ * Crepuscular says when he is UP, so the beddable hours are everything the
+ * twilights are not: the long middle of the day and the long middle of the
+ * night, either side of dawn at 0 and dusk at .5. Roughly half the clock,
+ * which the appetite window below then rations down to a couple of lie-ups
+ * per rest phase rather than a deer who is permanently lying down.
+ */
+function beddingHour(c, S) {
+  const p = phase(c, S, "day", DAY_PERIOD);
+  return Math.min(Math.abs(p), Math.abs(p - 0.5), Math.abs(p - 1)) > TWILIGHT;
+}
+
+/**
+ * WHERE HE MEETS A TRUNK — the one place any of his tree work names a
+ * coordinate, and it names none: every number comes from `c.def.trees` and
+ * from the metrics the world hands over, so the trees can be resized, moved
+ * or extended to six and this follows them without an edit.
+ *
+ * `k` is how far the DRAWN pose reaches east of his own centre, so the same
+ * function serves all three jobs by being given a different pose: antlers on
+ * the bark, a hoof on the ground at its foot, a whole lying deer clear of it.
+ *
+ * He works a trunk from its WEST side for exactly the reason the bear strips
+ * a bush from the west — the sprite is drawn facing right, so this is the
+ * only side of it where the antlers meet bark instead of open grass.
+ */
+function trunkSpot(a, c, k, skip) {
+  if (!TREE || !c.def.trees) return null;
+  let best = null, bestD = Infinity;
+  c.def.trees.forEach((t, i) => {
+    if (i === skip) return;
+    const tx = t.x * c.bounds.w, ty = t.y * c.bounds.h;
+    const x = tx - TREE.trunkR * t.s - a.r * 3.1 * k;
+    const y = ty - TREE.basePx * t.s - a.r * 3.1 * TREE.deer.feet;
+    if (x < a.r * 1.2) return;                  // that tree's west side is off-stage
+    const d = Math.hypot(tx - a.x, ty - a.y);
+    if (d >= bestD) return;
+    // Trees carry no claim slot the way a forage site does — they are a
+    // const array, not world state — so "free" is answered with geometry
+    // instead: nobody else of any species standing inside the ring the
+    // trunk owns. Which is also what sends him elsewhere when the bear is
+    // already up that one.
+    if (c.world.agents.some((o) => o !== a && Math.hypot(o.x - tx, o.y - ty) < TREE.reach)) return;
+    best = { x, y, i, s: t.s, tx, ty }; bestD = d;
+  });
+  return best;
+}
+/** the same second-nearest courtesy the browse pays a bush it has just left */
+const rutTree = (a, c, S, k, last) =>
+  trunkSpot(a, c, k, S.mem[last]) || trunkSpot(a, c, k, -1);
+
+// One saw of the antlers up the bark, and one rake of the hoof — both cut to
+// the length of their own CSS cycle, so a bout always ends where the drawing
+// starts and he never walks away mid-stroke. Same reason STRIP_BRANCH exists.
+const RUB_PASS = 1100;
+const PAW_STROKE = 520;
+// Going down and getting up are one drawing each, played forwards; the CSS
+// durations below are these numbers and must move with them.
+const BED_FOLD = 1000, BED_RISE = 900;
 
 defineEthogram("deer", {
   domainOf: (a, c) => (c.def.hasWater && c.isWet(a.x, a.y) ? "water" : "land"),
@@ -1489,6 +1979,125 @@ defineEthogram("deer", {
         } else if (c.now >= a.stateUntil) {
           endEvent(a, c, { reroll: true, quiet: 500, stop: true });
         }
+      },
+    },
+
+    // ---- LAND: the rut ------------------------------------------------
+    // Seasonal, and the season is the deer's own (see inRut above): a six
+    // minute year with about a hundred seconds of hard rut in it. Inside
+    // the window he thinks about a tree every 40-64s and acts on half of
+    // those, which puts a bout on screen roughly every two minutes of rut
+    // and none at all the rest of the year — the point of a seasonal
+    // behavior being that its ABSENCE is also a state you can watch.
+    //
+    // One bout, two acts, one tree: he works the velvet off against the
+    // trunk and then turns to the ground at its foot and opens a scrape.
+    // They are two signposts a real buck leaves in the same place, so they
+    // are one visit here rather than a coin flip between two events — it
+    // costs one walk instead of two and reads as a sequence, not a mood.
+    //
+    // NOT a feeding event. It takes nothing off any plant and claims no
+    // forage site, so tests/cadence.mjs neither counts it nor should.
+    {
+      id: "rut", domain: "land", trigger: "seek",
+      every: [40000, 64000], chance: 0.50,
+      miss: 12000, cool: 20000,
+      states: ["velvetrub", "hoofpaw"],
+      goto: {
+        state: "rutwalk", within: 18, giveUp: 24000, urgency: 0.45,
+        // A buck on his way to a rub tree is on an errand — he is going
+        // somewhere for a reason and not ambling past. 0.45.
+        none: 40000, lost: 15000,
+        pick: (a, c, S) => (inRut(c, S) ? rutTree(a, c, S, TREE.deer.brow, "lastRub") : null),
+      },
+      begin(a, c, S, g) {
+        a.vx = 0; a.vy = 0;
+        S.mem.lastRub = g.i;
+        a._faceDir = 1;                 // antlers to the bark, and the bark is east
+        a._rutX = g.x; a._rutY = g.y; a._rutS = g.s; a._rutTX = g.tx;
+        a._rubLeft = 5 + Math.floor(Math.random() * 4);   // 5-8 saws up the trunk
+        a._pawLeft = 6 + Math.floor(Math.random() * 5);   // 6-10 rakes at its foot
+        a.state = "velvetrub"; a.stateUntil = c.now + RUB_PASS;
+      },
+      drive(a, c) {
+        a.vx = 0; a.vy = 0;
+        // Hold the working spot rather than merely having arrived at it:
+        // fifteen seconds is long enough for the crowd separation to have
+        // walked him off his own tree, which is the lesson the bear's strip
+        // learned the hard way.
+        const k = Math.min(1, c.dt * 3);
+        a.x += (a._rutX - a.x) * k; a.y += (a._rutY - a.y) * k;
+        if (c.now < a.stateUntil) return;
+        if (a.state === "velvetrub") {
+          if (--a._rubLeft > 0) { a.stateUntil = c.now + RUB_PASS; return; }
+          // ...then the ground under it. Same tree, one pose-width further
+          // out, so the hoof opens dirt and not bark.
+          a._rutX = a._rutTX - TREE.trunkR * a._rutS - a.r * 3.1 * TREE.deer.hoof;
+          a.state = "hoofpaw"; a.stateUntil = c.now + PAW_STROKE;
+        } else if (--a._pawLeft > 0) {
+          a.stateUntil = c.now + PAW_STROKE;
+        } else {
+          a._faceDir = 0;
+          endEvent(a, c, { reroll: true, quiet: 1200, stop: true });
+        }
+      },
+    },
+
+    // ---- LAND: lying up ------------------------------------------------
+    // The other half of a crepuscular animal. Browsing and grazing are what
+    // he does; this is what he does the rest of the time, and without it a
+    // deer that is awake at dawn and dusk is just a deer that is awake.
+    // Gated on beddingHour, so the lie-ups cluster in the two long stretches
+    // between the twilights instead of arriving at random.
+    //
+    // He beds at the foot of a tree, back to the trunk — cover is the whole
+    // reason a deer picks one bed over another, and it is the second use of
+    // the trees rather than a new piece of furniture. He never claims one:
+    // the same geometric "is anyone there" test trunkSpot uses for the rut
+    // keeps him off a tree the bear is working, and the crowd check below
+    // gets him back on his feet if someone arrives after he is down.
+    //
+    // Chewing the cud is NOT a feeding bout — it is the second pass over
+    // food browse and graze already counted. Adding "bed" to the FEEDING
+    // table in tests/cadence.mjs would double-count the same meal.
+    {
+      id: "bed", domain: "land", trigger: "seek",
+      every: [56000, 88000], chance: 0.62,
+      miss: 9000, cool: 26000,
+      states: ["bedfold", "bedcud", "bedrise"],
+      goto: {
+        state: "bedwalk", within: 18, giveUp: 24000, urgency: 0.30,
+        // Nothing is chasing him and nothing is waiting: an animal walking
+        // over to lie down is at an ordinary cruise. 0.30.
+        none: 30000, lost: 14000,
+        pick: (a, c, S) => (beddingHour(c, S) ? rutTree(a, c, S, TREE.deer.bed, "lastBed") : null),
+      },
+      begin(a, c, S, g) {
+        a.vx = 0; a.vy = 0;
+        S.mem.lastBed = g.i;
+        a._faceDir = 1;                 // he lies looking out, with the trunk behind him
+        a._bedX = g.x; a._bedY = g.y;
+        a._cudFor = c.rand(17000, 27000);
+        a.state = "bedfold"; a.stateUntil = c.now + BED_FOLD;
+      },
+      drive(a, c) {
+        a.vx = 0; a.vy = 0;
+        const k = Math.min(1, c.dt * 3);
+        a.x += (a._bedX - a.x) * k; a.y += (a._bedY - a.y) * k;
+        if (a.state === "bedcud") {
+          // He is down, not asleep, and this is the whole of what
+          // "interruptible" can mean for an owned state — the encounter
+          // engine is shut out of it, so the yielding has to be his own
+          // doing. Same courtesy the graze pays, on a tighter ring because
+          // a bedded deer is a lower thing to walk up on.
+          const crowded = c.world.agents.some(
+            (o) => o !== a && Math.hypot(o.x - a.x, o.y - a.y) < a.r * 3.2);
+          if (crowded) a.stateUntil = c.now;
+        }
+        if (c.now < a.stateUntil) return;
+        if (a.state === "bedfold") { a.state = "bedcud"; a.stateUntil = c.now + a._cudFor; }
+        else if (a.state === "bedcud") { a.state = "bedrise"; a.stateUntil = c.now + BED_RISE; }
+        else { a._faceDir = 0; endEvent(a, c, { reroll: true, quiet: 1400, stop: true }); }
       },
     },
   ],
@@ -1895,33 +2504,90 @@ const CROP_STRIDE = [380, 700];
 const CROP_HEAD_DOWN = [1000, 1900];
 
 /**
+ * The sward is a rectangle; the ground inside it is not all grass. The
+ * background paints four mud ellipses across the lower map and two of them
+ * — (820,600) and (560,730) in its own viewBox — reach well inside the
+ * rectangle, so a bout that only respects the rectangle grazes bare earth.
+ *
+ * The art and the mapping onto it belong to the world (the background is
+ * `preserveAspectRatio="slice"`, so its coords are not stage fractions);
+ * all that arrives here is the predicate, the same way `sward` itself does.
+ *
+ * The pad is his own drawn footprint, not a guess: the shadow under him is
+ * rx 29 of a 120-unit sprite box at 0.6435 px/unit — about 19px — and the
+ * crop pose paints the blades he is shearing another ~19px out past the
+ * bill (`crop-sward`, svg x 90-119). r * 0.8 covers the bird and his mouthful.
+ */
+const GRAZE_PAD = 0.8;   // of his own radius
+const grassAt = (a, c, x, y) => !(c.onBareEarth && c.onBareEarth(x, y, a.r * GRAZE_PAD));
+
+/**
  * A point in the sward, weighted to its middle. Landing on the rim means
  * his first turn is a turn back the way he came, and a bout that opens by
  * reversing reads as a goose who has changed his mind about lunch.
+ *
+ * ...and it must be grass. On some window shapes the middle of the
+ * rectangle IS the mud patch, so the weighted draw is allowed to fail and
+ * a sweep of the rectangle picks up whatever green is left. Returning null
+ * is a legitimate answer — `goto.none` simply re-rolls the appetite later.
  */
-function swardPoint(c) {
+function swardPoint(a, c) {
   const s = c.def.sward;
   if (!s) return null;                    // a world with no open field simply has no grazing
+  const b = c.bounds;
+  const at = (fx, fy) => ({ x: (s.x0 + (s.x1 - s.x0) * fx) * b.w,
+                            y: (s.y0 + (s.y1 - s.y0) * fy) * b.h });
   const t = () => 0.5 + (Math.random() + Math.random() - 1) * 0.34;
-  return { x: (s.x0 + (s.x1 - s.x0) * t()) * c.bounds.w,
-           y: (s.y0 + (s.y1 - s.y0) * t()) * c.bounds.h };
+  for (let i = 0; i < 24; i++) {
+    const p = at(t(), t());
+    if (grassAt(a, c, p.x, p.y)) return p;
+  }
+  // the middle is bare on this window shape: sweep the rectangle rather
+  // than give up on lunch, and take a random one of whatever is still green
+  const open = [];
+  for (let j = 0; j < 7; j++) for (let i = 0; i < 9; i++) {
+    const p = at((i + 0.5) / 9, (j + 0.5) / 7);
+    if (grassAt(a, c, p.x, p.y)) open.push(p);
+  }
+  return open.length ? open[Math.floor(Math.random() * open.length)] : null;
 }
 
 /**
  * Where the next stride points. A grazing bird wanders because the patch
  * in front of him runs out, not because he is going anywhere, so the
- * heading is the last one nudged — until he nears the edge of the grass,
- * where it becomes a heading back into it. Without that second half he
- * grazes his way into the lake in under a minute.
+ * heading is the last one nudged — until the stride would end somewhere he
+ * should not be, where it becomes a heading that does not. Two things
+ * count as "should not be": outside the grass rectangle (without that half
+ * he grazes his way into the lake in under a minute) and on the bare earth
+ * inside it (without THAT half he grazes his way onto the mud in about the
+ * same time, which is the same bug wearing a different coat).
+ *
+ * The look-ahead is one stride: 380-700ms at ~46 px/s is at most 32px, and
+ * his own footprint is ~19px, so r * 1.6 is exactly as far as he can get
+ * before the next call — no further, or he starts refusing grass he could
+ * safely stand on.
  */
 function swardHeading(a, c) {
   const s = c.def.sward, b = c.bounds, m = 26;   // one stride of margin
   const cx = ((s.x0 + s.x1) / 2) * b.w, cy = ((s.y0 + s.y1) / 2) * b.h;
-  if (a.x < s.x0 * b.w + m || a.x > s.x1 * b.w - m ||
-      a.y < s.y0 * b.h + m || a.y > s.y1 * b.h - m) {
-    return Math.atan2(cy - a.y, cx - a.x) + c.rand(-0.4, 0.4);
+  const home = Math.atan2(cy - a.y, cx - a.x);
+  const rimmed = a.x < s.x0 * b.w + m || a.x > s.x1 * b.w - m ||
+                 a.y < s.y0 * b.h + m || a.y > s.y1 * b.h - m;
+  const reach = a.r * 1.6;
+  const open = (ang) => {
+    const nx = a.x + Math.cos(ang) * reach, ny = a.y + Math.sin(ang) * reach;
+    return nx > s.x0 * b.w + m && nx < s.x1 * b.w - m &&
+           ny > s.y0 * b.h + m && ny < s.y1 * b.h - m && grassAt(a, c, nx, ny);
+  };
+  const want = rimmed ? home + c.rand(-0.4, 0.4) : a._cropAim + c.rand(-0.55, 0.55);
+  if (open(want)) return want;
+  // the stride he wanted ends on mud, or off the grass: fan out from it,
+  // alternating sides, and take the first heading that does not
+  for (let k = 1; k <= 11; k++) {
+    const ang = want + (k & 1 ? 1 : -1) * Math.ceil(k / 2) * (Math.PI / 6);
+    if (open(ang)) return ang;
   }
-  return a._cropAim + c.rand(-0.55, 0.55);
+  return home;   // ringed in — walk at the middle and let the next stride retry
 }
 
 function beginCrop(a, c) {
@@ -1958,31 +2624,26 @@ function driveCrop(a, c) {
 }
 
 /**
- * SHALLOW, in lakeRho, is 0.86 to 0.93 — call it 0.90.
+ * SHALLOW is not a constant, and the old [0.86, 0.93] was the right idea
+ * measured against the wrong thing.
  *
- * The shoreline is 1.0 and the water only starts at 0.97, so the whole
- * question is which seven hundredths beyond that he stands in. On this
- * stage a hundredth of rho is 1.8-2.6 px, so 0.90 is 12-19 px inside the
- * waterline: a third to a half of his own body length, one step. Inside it
- * his belly is wet, which is what makes the sprite read as being IN the
- * lake and what credits the water side of his ledger; outside it he is on
- * the mud miming a dabble at a lake he has not reached — the failure the
- * raccoon's wash line already records at 0.93, which is why 0.93 is the
- * shallow edge of this band rather than the middle of it.
+ * `Lake()` paints the bank at ring(1.08) and ring(1.03) and then covers
+ * both with opaque water at ring(1.00), so every grain of drawn brown lives
+ * OUTSIDE rho 1.00 — the rim does not eat into the blue at all. What eats
+ * into it is the bird. The sprite is centred on its anchor and the dabble
+ * pose paints its water lens 41px to the side and 32px below that anchor,
+ * while a hundredth of rho is worth only 1.4px on the lake's short axis.
+ * At 0.93 the anchor is ten pixels inside the waterline and the pose hangs
+ * thirty-two: he stood in the middle of the mud liner and the number said
+ * he was in the lake.
  *
- * The far limit is the more interesting one. It is not depth that stops
- * him at 0.86, it is what the world does with the space: the floats drift
- * the body of the lake between 0.38 and 0.62, and the sim's own swim
- * targets fill sqrt(rand)*0.72. Everything inside ~0.8 is water the world
- * expects a swimmer in, and a bird standing up in it reads as a bird
- * standing on nothing.
- */
-const DABBLE_RHO = [0.86, 0.93];
-/**
- * ...with the west end left alone. The dam's outer row sits at rho 0.89 —
- * squarely in the band — and the floats already keep out of the same
- * sector. Dabbling among the beaver's logs is not shallows, it is a
- * building site.
+ * So the band depends on which way the shore runs and how wide the lake is
+ * there — arithmetic about the ART, which is the world's to do. It arrives
+ * as c.shallowBand(angle) -> [far, near] in rho, already clear of the swim
+ * disc (sqrt(rand) * 0.72), of the floats' outer rim, and of the beaver's
+ * build sector, or null where no band wide enough exists at that angle.
+ * Here we only choose the angle, and try others when the margin he happens
+ * to be nearest is one of the ones with no room for him.
  */
 const DAM_SECTOR = [2.45, 3.95];
 
@@ -1990,15 +2651,18 @@ const DABBLE_DOWN = [2200, 3400];
 const DABBLE_UP = [1300, 2100];
 
 function shallowPoint(a, c) {
+  if (!c.shallowBand) return null;      // a water world that owns no shoreline art
   const b = c.bounds;
   let ang = Math.atan2((a.y - c.LAKE.cy * b.h) / (c.LAKE.ry * b.h),
                        (a.x - c.LAKE.cx * b.w) / (c.LAKE.rx * b.w));
   ang += c.rand(-0.3, 0.3);              // the nearest margin, not the same spot each time
-  let pa = ang < 0 ? ang + Math.PI * 2 : ang;
-  if (pa > DAM_SECTOR[0] && pa < DAM_SECTOR[1]) {
-    pa = pa - DAM_SECTOR[0] < DAM_SECTOR[1] - pa ? DAM_SECTOR[0] - 0.12 : DAM_SECTOR[1] + 0.12;
+  // walk outward from that margin, both ways, until a shore has room for him
+  for (let k = 0; k < 24; k++) {
+    const t = ang + (k === 0 ? 0 : (k & 1 ? 1 : -1) * Math.ceil(k / 2) * 0.26);
+    const band = c.shallowBand(t);
+    if (band) return c.lakePoint(b, t, c.rand(band[0], band[1]));
   }
-  return c.lakePoint(b, pa, c.rand(DABBLE_RHO[0], DABBLE_RHO[1]));
+  return null;    // no shore on this stage is both shallow and wide enough
 }
 
 function beginDabble(a, c, S, g) {
@@ -2104,7 +2768,7 @@ defineEthogram("goose", {
       goto: {
         state: "tosward", within: 20, giveUp: 26000, urgency: 0.45,
         none: 14000, lost: 14000,
-        pick: (a, c) => swardPoint(c),
+        pick: (a, c) => swardPoint(a, c),
       },
       begin: beginCrop,
       drive: driveCrop,

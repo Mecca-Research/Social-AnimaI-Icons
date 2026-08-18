@@ -11,7 +11,8 @@
     "test:bear": "node tests/ethogram.mjs",
     "test:forage": "node tests/forage.mjs",
     "test:gait": "node tests/gait.mjs",
-    "test:cadence": "node tests/cadence.mjs"
+    "test:cadence": "node tests/cadence.mjs",
+    "test:world": "node tests/world.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",
