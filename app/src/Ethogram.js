@@ -595,12 +595,6 @@ function driveStrip(a, c) {
   a.stateUntil = c.now + STRIP_BRANCH;               // reach for the next one
 }
 
-// ---- and inside defineEthogram("bear", ...), the existing tick widens by
-// one character so a strip can clear its facing too. Was `=== -1`:
-//
-//   tick(a) { if (a._faceDir) a._faceDir = 0; },
-//
-
 defineEthogram("bear", {
   domainOf: (a, c) => (c.def.hasWater && c.isWet(a.x, a.y) ? "water" : "land"),
 
@@ -616,9 +610,25 @@ defineEthogram("bear", {
     water: { share: 0.30, dwell: [10000, 22000], travel: 34000, pull: 0.92 },
   },
 
-  // if a drag or an encounter knocked him out of the scratch mid-pose, let
-  // him steer by his own velocity again
-  tick(a) { if (a._faceDir === -1) a._faceDir = 0; },
+  // The sweep for a bout that ended by any route other than its own. It runs
+  // only on frames where no ethogram state owns him, so it cannot fire
+  // mid-bout — and it has to be unconditional, because the interrupts are
+  // exactly the paths that skip an event's own cleanup: a drag, a musk cloud,
+  // a rescuer, the planner hauling him out of the water.
+  //
+  // Both halves were narrower than they needed to be. `=== -1` covered only
+  // the tree rub's facing, so a berry strip's `_faceDir = 1` survived
+  // forever — the renderer takes any truthy value over the velocity, and
+  // nothing else writes the field for a bear, so one interrupted strip left
+  // him walking backwards for the rest of the session. And he was the only
+  // one of nine species whose tick did not hand back its site claim, so an
+  // interrupted strip locked a berry bush out of the shared pool until his
+  // next bout — the world's own sweep deliberately leaves that case alone,
+  // because `_eth.claim` still points at the site.
+  tick(a, c, S) {
+    if (S.claim) releaseClaim(a, S);
+    if (a._faceDir) a._faceDir = 0;
+  },
 
   events: [
     // ---- LAND: the big trees ------------------------------------------
@@ -632,7 +642,15 @@ defineEthogram("bear", {
       near: (a, c) => {
         if (!c.def.trees) return null;
         for (const t of c.def.trees) {
-          if (Math.hypot(t.x * c.bounds.w - a.x, t.y * c.bounds.h - a.y) < TREE.reach) return t;
+          const tx = t.x * c.bounds.w, ty = t.y * c.bounds.h;
+          if (Math.hypot(tx - a.x, ty - a.y) >= TREE.reach) continue;
+          // The scratch stands him against the WEST face, so a trunk near the
+          // eastern shore has its own working spot in the lake. Checked here
+          // rather than trusted to placement — the deer's trunkSpot does the
+          // same, and for the same tree.
+          if (c.isWet(tx - 13 * t.s - a.r * 3.1 * TREE.standBack,
+                      ty - TREE.basePx * t.s - a.r * 3.1 * TREE.standFeet)) continue;
+          return t;
         }
         return null;
       },
@@ -2130,6 +2148,13 @@ function trunkSpot(a, c, k, skip) {
     const x = tx - TREE.trunkR * t.s - a.r * 3.1 * k;
     const y = ty - TREE.basePx * t.s - a.r * 3.1 * TREE.deer.feet;
     if (x < a.r * 1.2) return;                  // that tree's west side is off-stage
+    // ...and it has to be dry. Every trunk behavior works the WEST face, so a
+    // trunk near the eastern shore puts its own working spot in the lake —
+    // which is exactly what the tree at (.898,.480) did until it was moved.
+    // A deer lying up in the water plays the swimming rig while rearing
+    // against bark, so this is checked here rather than trusted to placement:
+    // every other spot picker in this world already filters on wetness.
+    if (c.isWet(x, y)) return;
     const d = Math.hypot(tx - a.x, ty - a.y);
     if (d >= bestD) return;
     // Trees carry no claim slot the way a forage site does — they are a

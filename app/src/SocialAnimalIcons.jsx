@@ -251,7 +251,14 @@ function shallowBandAt(bounds, t) {
 const FOREST_TREES = [
   { x: .095, y: .620, s: 1.38,  kind: "oak"  }, // west, low
   { x: .078, y: .358, s: 1.176, kind: "oak"  }, // west, high
-  { x: .898, y: .480, s: 1.44,  kind: "oak"  }, // east flank, above the forage
+  // Moved from (.898,.480) — its west face was over the lake. Every trunk
+  // behavior works a trunk from the WEST and stands its subject a sprite-foot
+  // north of the anchor, and at the old spot that put the bear's back scratch
+  // at lake rho 0.907 and the deer's bed at 0.853: both inside the DRAWN
+  // shore, so they played the swimming rig while rearing against a trunk on
+  // dry land, and the bear's domain flipped to water for the whole bout.
+  // Here the same two spots measure rho 1.16 and 1.11.
+  { x: .920, y: .535, s: 1.44,  kind: "oak"  }, // east flank, above the forage
   { x: .910, y: .700, s: 1.26,  kind: "oak"  }, // east flank, below it
   { x: .262, y: .835, s: 1.26,  kind: "oak"  }, // bottom-left, off the log's high end
   // `fruit: false` retires a tree from bearing: no crop is drawn in its
@@ -1606,6 +1613,20 @@ export default function SocialAnimalsRPG() {
       W.onBareEarthAt = (x, y, pad = 0) => onBareEarth(W.def, W.bounds, x, y, pad);
       W.__sep = (a, b) => separatePair(W, a, b, W, false);
       W.__cool = (a, ms) => enterCooldown(a, ms);
+      // ...and the two halves of a drag, so a suite can exercise the release
+      // path without a real pointer. __drop mirrors IconNode's pointerup.
+      W.__fight = (x, y) => startFight(x, y, W);
+      W.__drop = (x) => {
+        const from = x._grabFrom, tgt = x._grabTarget;
+        x._grabFrom = null; x._grabTarget = null;
+        const o = (from === 'fight' || from === 'friendly') && tgt
+          ? W.agents.find((q) => q.id === tgt) : null;
+        if (o && (o.state === 'fight' || o.state === 'friendly') && o.targetId === x.id) {
+          separatePair({ agents: W.agents, bounds: W.bounds }, x, o, W, true);
+        } else if (from === 'fight' || from === 'friendly') {
+          x.targetId = null; enterCooldown(x);
+        } else { enterCooldown(x); }
+      };
     }
 
     // main loop
@@ -3077,14 +3098,32 @@ function IconNode({ a, iconsRef, worldRef, onSelect }) {
   useEffect(() => {
     const el = ref.current; if (!el) return;
     let dragging = false; let pid = 0;
-    const down = (e) => { dragging = true; pid = e.pointerId; el.setPointerCapture(pid); const A = getAgent(worldRef.current, a.id); if (A) { A.dragging = true; A.state = "drag"; A._faceDir = 0; } };
+    const down = (e) => { dragging = true; pid = e.pointerId; el.setPointerCapture(pid);
+      const A = getAgent(worldRef.current, a.id); if (!A) return;
+      // Remember what he was doing BEFORE the grab overwrites it. Pointerup
+      // used to test A.state for "fight", which by then is always "drag" —
+      // so the separate-on-release branch below was unreachable, and pulling
+      // one animal out of a fight left the other one gliding at the contact
+      // point it was locked to. The file's own header lists this as one of
+      // the four ways a fight ends.
+      A._grabFrom = A.state; A._grabTarget = A.targetId;
+      A.dragging = true; A.state = "drag"; A._faceDir = 0; };
     const move = (e) => { if (!dragging) return; const A = getAgent(worldRef.current, a.id); if (!A) return; A.x += e.movementX; A.y += e.movementY; };
     const up = () => {
       if (!dragging) return; dragging = false; try { el.releasePointerCapture(pid); } catch {}
       const A = getAgent(worldRef.current, a.id); if (!A) return; A.dragging = false;
-      if ((A.state === "fight" || A.state === "friendly") && A.targetId) {
-        const B = getAgent(worldRef.current, A.targetId);
-        if (B) separatePair({ agents: worldRef.current.agents, bounds: worldRef.current.bounds }, A, B, worldRef.current, /*force*/ true);
+      const from = A._grabFrom, tgt = A._grabTarget;
+      A._grabFrom = null; A._grabTarget = null;
+      // The partner has to still be in it. A long drag can outlast the
+      // engagement's own clock, and separating two animals that already
+      // finished would hand them a second cooldown for nothing.
+      const B = (from === "fight" || from === "friendly") && tgt
+        ? getAgent(worldRef.current, tgt) : null;
+      if (B && (B.state === "fight" || B.state === "friendly") && B.targetId === A.id) {
+        separatePair({ agents: worldRef.current.agents, bounds: worldRef.current.bounds }, A, B, worldRef.current, /*force*/ true);
+      } else if (from === "fight" || from === "friendly") {
+        // pulled out of something the other side has already left
+        A.targetId = null; enterCooldown(A);
       } else {
         // a cat dropped onto a rooftop stays up there and starts a patrol —
         // if a bird's up too, the stalk-and-chase sequence kicks in

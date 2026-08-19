@@ -263,6 +263,120 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
     r.ms < 0 ? 'never left cooldown in 6s' : `left after ${r.ms}ms into ${r.state}`);
 }
 
+// ==================== audit regressions ====================
+// Four defects found by an adversarial pass over v0.34/v0.35, each one pinned
+// here so it cannot come back quietly. Three of the four were invisible to
+// every other suite because they only appear on an INTERRUPTED bout, and the
+// suites all drive bouts to completion.
+{
+  // Every species tick is the sweep for a bout that ended by some route other
+  // than its own. The bear's was the only one testing a specific value
+  // (_faceDir === -1), so a berry strip's _faceDir = 1 outlived the bout and
+  // pinned his sprite backwards for the rest of the session; and his was the
+  // only one that did not hand back its site claim, locking a berry bush out
+  // of the shared pool. Both checked by INTERRUPTING mid-strip, which is the
+  // only way either shows up.
+  const r = await page.evaluate(`(async w => {
+    const b = w.agents.find(a => a.species === 'bear');
+    const site = (w.forage || []).find(f => f.kind === 'berry');
+    b._eth = null; b.state = 'wander'; b.intent = 'wander'; b.z = 0;
+    for (let k = 0; k < 40 && !b._eth; k++) await new Promise(r => setTimeout(r, 25));
+    const S = b._eth;
+    // stand him in a strip, holding a claim, exactly as start() would
+    b._faceDir = 1; b.state = 'stripsit'; b.stateUntil = performance.now() + 900000;
+    site.userId = b.id; S.claim = site;
+    // now interrupt it the way a musk cloud or a rescuer does: state yanked
+    // away without the event's own cleanup running
+    b.state = 'flee'; b.fleeEnd = performance.now() + 1;
+    for (let k = 0; k < 60; k++) {
+      await new Promise(r => setTimeout(r, 60));
+      if (b.state !== 'flee' && b.state !== 'cooldown') break;
+      if (!b._faceDir && !S.claim) break;
+    }
+    const out = { face: b._faceDir || 0, claimed: !!S.claim, siteHeld: site.userId === b.id };
+    site.userId = null; S.claim = null; b._faceDir = 0;
+    return out; })(window.__saiWorld)`);
+  chk(r.face === 0, 'an interrupted strip hands back the bear\'s facing',
+    r.face ? `_faceDir stuck at ${r.face} — he walks backwards from here on` : 'swept');
+  chk(!r.claimed && !r.siteHeld, 'and hands back the bush it had claimed',
+    r.claimed ? 'the claim outlived the bout, so that bush is out of the pool' : 'released');
+}
+{
+  // Every trunk behavior works the WEST face and stands its subject a
+  // sprite-foot north of the anchor. A trunk near the eastern shore therefore
+  // has its own working spot in the lake — the tree at (.898,.480) put the
+  // bear's scratch at rho 0.907 and the deer's bed at 0.853, both inside the
+  // DRAWN shore, so they played the swimming rig while rearing against bark.
+  const r = await page.evaluate(`(w => {
+    const B = w.bounds, R = 13, BASE = 18, bad = [];
+    const bear = w.agents.find(a => a.species === 'bear');
+    const deer = w.agents.find(a => a.species === 'deer');
+    (w.def.trees || []).forEach((t, i) => {
+      const tx = t.x * B.w, ty = t.y * B.h;
+      const spots = [
+        ['bear scratch', tx - R*t.s - bear.r*3.1*0.232, ty - BASE*t.s - bear.r*3.1*0.348],
+        ['deer bed',     tx - R*t.s - deer.r*3.1*0.430, ty - BASE*t.s - deer.r*3.1*0.396],
+      ];
+      for (const [what, x, y] of spots) {
+        const rho = w.lakeRhoAt(x, y);
+        if (rho < 1.05) bad.push('tree ' + i + ' ' + what + ' at rho ' + rho.toFixed(3));
+      }
+    });
+    return bad; })(window.__saiWorld)`);
+  chk(r.length === 0, 'no trunk has its working face in the lake',
+    r.length ? r.join('; ') : 'all six clear of the drawn shore');
+}
+{
+  // ...and the pickers refuse a wet spot regardless of where the trees are,
+  // so moving one cannot reintroduce it.
+  const r = await page.evaluate(`(async w => {
+    const b = w.agents.find(a => a.species === 'bear');
+    const t = (w.def.trees || [])[0];
+    const saveX = t.x, saveY = t.y;
+    t.x = 0.71; t.y = 0.28;                       // shove a trunk into the lake
+    b._eth = null; b.state = 'wander'; b.intent = 'wander'; b.z = 0;
+    b.x = 0.71 * w.bounds.w + 60; b.y = 0.28 * w.bounds.h;
+    b.intentUntil = performance.now() + 900000; b.noEventUntil = 0;
+    for (let k = 0; k < 40 && !b._eth; k++) await new Promise(r => setTimeout(r, 25));
+    let took = false;
+    for (let k = 0; k < 40; k++) {
+      await new Promise(r => setTimeout(r, 60));
+      if (b.state === 'treerub' || b.state === 'treeclimb') { took = true; break; }
+    }
+    t.x = saveX; t.y = saveY; b.state = 'wander'; b._faceDir = 0;
+    return took; })(window.__saiWorld)`);
+  chk(r === false, 'and a trunk standing in water is refused outright',
+    r ? 'the bear took a tree whose west face is open lake' : 'skipped, as every other spot picker does');
+}
+{
+  // Dragging one animal out of a fight is a documented way for a fight to
+  // end, and it did not work: pointerdown overwrites state with "drag", so
+  // the release handler's test for "fight" could never be true and the
+  // partner was left gliding at the contact point it was locked to.
+  const r = await page.evaluate(`(async w => {
+    const [a, b] = w.agents.filter(x => !x.dragging).slice(0, 2);
+    for (const x of [a, b]) { x._eth = null; x.z = 0; }
+    a.x = .35 * w.bounds.w; a.y = .40 * w.bounds.h; b.x = a.x + 14; b.y = a.y;
+    w.__fight(a, b);
+    const locked = a.state === 'fight' && b.state === 'fight';
+    // the grab, exactly as IconNode does it
+    a._grabFrom = a.state; a._grabTarget = a.targetId;
+    a.dragging = true; a.state = 'drag'; a._faceDir = 0;
+    await new Promise(r => setTimeout(r, 200));
+    a.x += 300;
+    a.dragging = false;
+    w.__drop(a);
+    await new Promise(r => setTimeout(r, 300));
+    return { locked, aState: a.state, bState: b.state,
+             bTarget: b.targetId, aTarget: a.targetId }; })(window.__saiWorld)`);
+  chk(r.locked, 'two animals can be put into a fight', `${r.locked}`);
+  chk(r.bState !== 'fight' && r.bState !== 'friendly',
+    'dragging one out of a fight releases the other',
+    `partner left in "${r.bState}"`);
+  chk(!r.aTarget && !r.bTarget, 'and neither keeps a stale target',
+    `a→${r.aTarget || 'none'}, b→${r.bTarget || 'none'}`);
+}
+
 chk(errs.length === 0, 'no JS errors', errs.length ? errs[0] : 'clean');
 console.log(`\n${fail.length ? 'FAIL ' + fail.length : 'ALL PASS'} (${pass.length} passed)`);
 await browser.close();
