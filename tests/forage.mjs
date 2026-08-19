@@ -58,7 +58,16 @@ async function chain(species, evId, ms = 60000, seed = '') {
       // This tests whether the event WORKS, not how often it comes round —
       // the cadence is a separate question and a separate check.
       if (!started) {
-        for (const id of Object.keys(S.seekAt)) S.seekAt[id] = performance.now()+900000;
+        // Muzzle BOTH clocks on every other event, not just the appetite
+        // timers. Several species now have approach-triggered events — the
+        // hedgehog's roll-up, the squirrel's bolt — which do not read seekAt
+        // at all and will happily win the frame, so a forage check came back
+        // reading hogcurl>hogball and a sploot check came back reading
+        // boltzag. Both were the animal behaving correctly and the fixture
+        // failing to ask the question.
+        const t = performance.now();
+        for (const id of Object.keys(S.seekAt)) S.seekAt[id] = t+900000;
+        for (const id of Object.keys(S.cd)) S.cd[id] = t+900000;
         S.seekAt['${evId}'] = 0;
         S.cd['${evId}'] = 0;
       }
@@ -81,7 +90,9 @@ async function chain(species, evId, ms = 60000, seed = '') {
 }
 if (await page.evaluate(`!!window.__saiEtho.ETHOGRAM.raccoon`)) {
   const r = await chain('raccoon', 'berry', 120000);
-  chk(/rachandle|racbushup/.test(r.chain) && /racwash|raceat/.test(r.chain),
+  // Three ways this appetite can go now: the ground bush, up into the bush,
+  // or up a fruit tree. All three end at the water or at a meal.
+  chk(/rachandle|racbushup|ractreepick/.test(r.chain) && /racwash|raceat/.test(r.chain),
     'raccoon gathers then douses', r.chain);
 }
 if (await page.evaluate(`!!window.__saiEtho.ETHOGRAM.deer`)) {
@@ -102,7 +113,14 @@ if (await page.evaluate(`!!window.__saiEtho.ETHOGRAM.deer`)) {
   chk(r2.chain.split('>').length > 2, 'skunk scrapes soil', r2.chain);
 }
 {
-  const r = await chain('fox', 'scrump', 120000);
+  // Seeded beside a berry. The west thicket moved to the south-east this
+  // release, so the old seed left him a third of the map from the nearest
+  // bush and his 16s give-up expired mid-walk at 3fps. That the fox can WALK
+  // is not what this checks.
+  const r = await chain('fox', 'scrump', 120000,
+    `{ let n=null,d=1e9; for (const f of w.forage){ if(f.kind!=='berry') continue;
+         const q=Math.hypot(f.px-a.x,f.py-a.y); if(q<d){d=q;n=f;} }
+       if(n){ a.x=n.px-40; a.y=n.py+30; } }`);
   chk(/foxpluck|foxnose/.test(r.chain), 'fox helps himself', r.chain);
 }
 {
@@ -123,9 +141,15 @@ if (await page.evaluate(`!!window.__saiEtho.ETHOGRAM.deer`)) {
     for (const f of w.forage) { if (f.kind!=='berry') continue;
       const d=Math.hypot(f.px-fox.x, f.py-fox.y); if (d<nd){nd=d;near=f;} }
     rac.x=near.px; rac.y=near.py;
-    near.userId=rac.id; rac._eth.claim=near;              // a claim that survives housekeeping
     const S=fox._eth; let chose=null;
     for (let i=0;i<650;i++){
+      // RE-ASSERTED every pass. The raccoon's tick releases any claim on a
+      // frame where no ethogram state owns him — correct hygiene, since a
+      // claim must never outlive its bout, but it means a claim planted on a
+      // wandering raccoon is gone again within one frame. What is being
+      // tested is that the fox routes around a HELD site; how the hold is
+      // kept alive is the fixture's problem, not the fox's.
+      near.userId=rac.id; rac._eth.claim=near;
       await new Promise(r=>setTimeout(r,90));
       if (fox.state==='wander' && !S.goal){ S.seekAt['scrump']=0; S.cd['scrump']=0; }
       if (S.goal && S.goal.ref && S.goal.ref.site){ chose=S.goal.ref.site.i; break; }
@@ -307,7 +331,13 @@ await page.waitForTimeout(400);
 // ---- the squirrel's larder: one place, four holes ----
 {
   const L = await page.evaluate(`(w => w.__larder || null)(window.__saiWorld)`);
-  const r = await chain('squirrel', 'cache', 120000, `a.x=.30*w.bounds.w; a.y=.45*w.bounds.h;`);
+  // Seeded at a nut tree. The cache bout is climb + haul + dig, and the haul
+  // now goes to a scatter anchor rather than one stump beside the clearing —
+  // two long walks in one bout, against a give-up written for a real 60fps.
+  const r = await chain('squirrel', 'cache', 180000,
+    `{ let n=null,d=1e9; for (const f of w.forage){ if(f.kind!=='nut') continue;
+         const q=Math.hypot(f.px-a.x,f.py-a.y); if(q<d){d=q;n=f;} }
+       if(n){ a.x=n.px-30; a.y=n.py+35; } }`);
   chk(/nutup/.test(r.chain) && /cachedig/.test(r.chain),
     'squirrel climbs for a nut and buries it', r.chain);
   // The climb is the half a player watches: he has to actually leave the
@@ -324,13 +354,20 @@ await page.waitForTimeout(400);
   // One larder for the life of the world, and the stock is what makes the
   // hoarding visible. Filling it and robbing it have to move the same
   // number, or the two errands are unrelated animations.
-  // The stock lives on the WORLD, not in the squirrel's head — one larder
-  // for the map, so a second squirrel would rob the same holes rather than
-  // carry a private copy of the number.
-  const r = await page.evaluate(`(w => w.larder ? { n: w.larder.n } : null)(window.__saiWorld)`);
-  chk(r && r.n >= 0 && r.n <= 4,
-    'the larder holds a stock between 0 and 4',
-    r ? `stock ${r.n} of 4` : 'no larder on the world');
+  // Four scatter caches now, not one larder. They are ANCHORED — fixed for
+  // the life of the world — and INVISIBLE, so what can be checked is the
+  // anchors and the per-hole stock, which is the state the squirrel returns
+  // to the exact same spot for.
+  const r = await page.evaluate(`(w => ({
+    anchors: (w.def.caches || []).length,
+    stock: w.caches ? w.caches.slice() : null,
+    drawn: !!document.querySelector('[class*="larder"]'),
+  }))(window.__saiWorld)`);
+  chk(r.anchors === 4, 'four anchored cache spots', `${r.anchors} anchors on the world def`);
+  chk(!r.drawn, 'and none of them is drawn', r.drawn ? 'a larder layer is still mounted' : 'nothing on screen marks them');
+  chk(r.stock === null || (r.stock.length === 4 && r.stock.every(n => n >= 0 && n <= 1)),
+    'each hole holds at most one nut',
+    r.stock === null ? 'untouched so far this session' : `stock ${JSON.stringify(r.stock)}`);
 }
 
 // ---- the hedgehog works timber, not the clearing ----
@@ -380,6 +417,11 @@ for (const [ev, want, label] of [
     h.x=.30*w.bounds.w; h.y=.60*w.bounds.h;
     h.intentUntil=performance.now()+900000; h.noEventUntil=0;
     for (let k=0;k<40 && !h._eth;k++) await new Promise(r=>setTimeout(r,25));
+    // Muzzle his appetites. curl is an APPROACH trigger, so it competes on
+    // the same frame with whichever seek happens to be due, and a hungry
+    // hedgehog walks off to a root instead of balling up — which is correct
+    // behavior and a useless measurement. Same isolation chain() does.
+    for (const id of Object.keys(h._eth.seekAt)) h._eth.seekAt[id] = performance.now()+900000;
     const seen=new Set(); const t0=performance.now();
     while (performance.now()-t0 < 40000) {
       await new Promise(r=>setTimeout(r,80));

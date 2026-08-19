@@ -2808,6 +2808,10 @@ WORLDS.forest.dam = DAM_PLAN;
 // — with no sward the appetite simply never finds anywhere to go.
 const GOOSE_SWARD = { x0: 0.48, x1: 0.64, y0: 0.52, y1: 0.62 };
 WORLDS.forest.sward = GOOSE_SWARD;
+// ...and on the world def as well, beside the trees, the sward and the dam.
+// The anchors are world geometry: invisible, but fixed for the life of the
+// world, and a thing another world could hand over differently.
+WORLDS.forest.caches = CACHE_SPOTS;
 
 // ---------------- Bare earth ----------------
 // The four mud patches ForestScene paints on the floor. Held in ITS viewBox
