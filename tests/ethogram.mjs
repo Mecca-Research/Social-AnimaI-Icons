@@ -26,6 +26,14 @@ const pass = [], fail = [];
 const chk = (ok, label, detail) => { (ok?pass:fail).push(`${label} — ${detail}`);
   console.log(`${ok?'  ✔':'  ✘'} ${label} — ${detail}`); };
 
+// Wait for N SIM FRAMES, not N milliseconds. Everything below that used to
+// say "await 320ms" was really saying "await somewhere between zero and two
+// frames", and which one decided whether the check passed.
+const FRAMES = `const waitFrames = async (w, n, capMs = 20000) => {
+  const t = performance.now(), a = w.frames || 0;
+  while ((w.frames || 0) - a < n && performance.now() - t < capMs) await new Promise(r => setTimeout(r, 20));
+  return (w.frames || 0) - a; };`;
+
 const park = `(w => { for (const c of w.agents) { c.x=.45*w.bounds.w; c.y=.52*w.bounds.h; c.vx=c.vy=0;
   c.state='idle'; c.idleUntil=performance.now()+900000; c.intentUntil=performance.now()+900000;
   c.noEventUntil=performance.now()+900000; c.z=0; c._faceDir=0; c._eth=null; } })(window.__saiWorld)`;
@@ -70,13 +78,14 @@ chk(reg.domains.land.share === 0.70 && reg.domains.water.share === 0.30,
   let trig=0, rub=0, climb=0;
   for (let i=0;i<60;i++){
     const r = await page.evaluate(`(async w => { const b=w.agents.find(a=>a.species==='bear');
-      const t=w.def.trees[IDX % 4];
+      ${FRAMES}
+      const t=w.def.trees[IDX % w.def.trees.length];
       b.state='wander'; b.intent='wander'; b.z=0; b._eth=null;
       b.x=.45*w.bounds.w; b.y=.52*w.bounds.h;
       b.intentUntil=performance.now()+900000; b.noEventUntil=performance.now()+900000;
-      await new Promise(r2=>setTimeout(r2,90));
+      await waitFrames(w, 1);                     // register him away from any trunk
       b.x=t.x*w.bounds.w+40; b.y=t.y*w.bounds.h;
-      await new Promise(r2=>setTimeout(r2,320));
+      await waitFrames(w, 2);                     // the approach edge, then the roll
       const s=b.state; b.state='wander'; b.z=0; return s; })(window.__saiWorld)`.replace('IDX', String(i)));
     if (r==='treerub'){trig++;rub++;} else if (r==='treeclimb'){trig++;climb++;}
   }
@@ -86,23 +95,30 @@ chk(reg.domains.land.share === 0.70 && reg.domains.water.share === 0.30,
 
 // ---- fish event: 30% on a fresh entry into the water ----
 {
-  const r = await page.evaluate(`(async w => { const b=w.agents.find(a=>a.species==='bear');
+  const r = await page.evaluate(`(async w => { ${FRAMES}
+    const b=w.agents.find(a=>a.species==='bear');
     let entries=0, bouts=0;
     for (let i=0;i<80;i++){
       b.state='wander'; b.intent='wander'; b.z=0; b._eth=null; b.vx=0; b.vy=0;
-      b.x=.3*w.bounds.w; b.y=.8*w.bounds.h;                       // dry
+      // Dry, and 210px clear of every trunk. It used to be (.30,.80), which
+      // the bottom-left tree added in v0.34 now stands 66px from — inside the
+      // 96px approach ring. He was starting a tree bout on the shore and was
+      // still busy in it when the teleport put him in the lake, so the fish
+      // event could not fire and this read 11% instead of 30%. The rate was
+      // never wrong; the fixture had drifted into a tree.
+      b.x=.30*w.bounds.w; b.y=.62*w.bounds.h;
       b.intentUntil=performance.now()+900000; b.noEventUntil=performance.now()+900000;
       // wait for a frame to actually register him ashore, or the fresh
       // ethogram state initialises straight into "water" and the entry
       // edge — the thing being counted — never happens
       let ok=false;
-      for (let k=0;k<20;k++){ await new Promise(r=>setTimeout(r,25));
+      for (let k=0;k<40;k++){ await waitFrames(w, 1);
         if (b._eth && b._eth.here === 'land') { ok=true; break; } }
       if (!ok) continue;
       b.x=.71*w.bounds.w; b.y=.28*w.bounds.h;                     // into the lake
-      for (let k=0;k<20;k++){ await new Promise(r=>setTimeout(r,25));
+      for (let k=0;k<40;k++){ await waitFrames(w, 1);
         if (b._eth.here === 'water') break; }
-      await new Promise(r=>setTimeout(r,60));
+      await waitFrames(w, 1);                     // the entry edge fires on the frame after
       if (b._eth.here === 'water') { entries++;
         if (b.state.startsWith('fish')) bouts++; }
       b.state='wander'; }
@@ -198,9 +214,20 @@ chk(reg.domains.land.share === 0.70 && reg.domains.water.share === 0.30,
     S.domain='water'; S.left=900000; S.tripUntil=performance.now()+900000;
     b.x=.71*w.bounds.w; b.y=.28*w.bounds.h;            // in the lake
     for (let k=0;k<40 && S.here!=='water';k++) await new Promise(r=>setTimeout(r,25));
-    const before=S.left; await new Promise(r=>setTimeout(r,2000));
-    return { burned: Math.round(before - S.left) }; })(window.__saiWorld)`);
-  chk(arr.burned > 200, 'dwell clock runs on arrival', `${arr.burned}ms of dwell spent in 2s in the lake`);
+    // Counted in FRAMES, not wall time. The clock burns one dt per frame and
+    // headless rAF here runs at 3-4fps on a quiet machine and well under 1fps
+    // on a busy one, so "2000ms" is not a number of frames — a run that
+    // happened to catch a single frame reported 50ms and failed a working
+    // clock. Wait for the ticks instead, and give up only if none arrive.
+    const before=S.left; const seen=[]; let last=S.left;
+    for (let k=0;k<200 && seen.length<3;k++){
+      await new Promise(r=>setTimeout(r,100));
+      if (S.left !== last) { seen.push(last - S.left); last = S.left; }
+    }
+    return { burned: Math.round(before - S.left), ticks: seen.length,
+      monotonic: seen.every(d => d > 0) }; })(window.__saiWorld)`);
+  chk(arr.ticks >= 3 && arr.monotonic && arr.burned > 0, 'dwell clock runs on arrival',
+    `${arr.burned}ms over ${arr.ticks} ticks, all decreasing`);
 
   // (e) plan says land while he is wet → he is sent ashore, the same way
   //     every other swimmer in the world leaves the lake

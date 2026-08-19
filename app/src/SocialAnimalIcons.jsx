@@ -3,7 +3,7 @@ import { Critter, SPECIES, ALL_SPECIES } from "./Critters.jsx";
 import { PET_SPECIES } from "./CrittersPets.jsx";
 import { speciesSize } from "./SpeciesProfile.js";
 import { gait, gaitIn, speedCap, rescueReach, SPEED, GAIT_DEF } from "./Gait.js";
-import { stepEthogram, ethoSwimP, ethoShare, ETHOGRAM, ETHO_STATES, ETHO_Z_STATES, ETHO_OWNWATER_STATES, setTreeMetrics, setForageMetrics, ethoOffstage, hogCurl } from "./Ethogram.js";
+import { stepEthogram, ethoSwimP, ethoShare, ETHOGRAM, ETHO_STATES, ETHO_Z_STATES, ETHO_OWNWATER_STATES, setTreeMetrics, setForageMetrics, ethoOffstage, hogCurl, squirrelBolt } from "./Ethogram.js";
 
 /**
  * Social Animal Icons v0.11 — Lakeside world
@@ -68,6 +68,36 @@ const AVOID_RADIUS = 190;    // bystanders this close to a fight clear out
 const RESCUE_RADIUS = 620;   // a friend this close sprints in to break a fight up
 const RESCUE_REACH = 95;     // ...and succeeds once this close to their friend
 const EDGE_OFF = 70;         // fully off-screen distance before wrapping
+
+// ---- the skunk's musk, and the pits he digs ----------------------------
+// THE HOOK IS THE EDGE OF THE FIGHT STATE, never a state that follows it.
+// A fight ends four ways today: the engage clock running out into
+// separatePair, a rescuer arriving and forcing the opponent to flee, a
+// partner disappearing so the survivor self-separates, and the player
+// dragging one of them out. The break-up itself is a dash-away/walk-away.
+// Every route has exactly one thing in common — the frame on which
+// a.state stops being "fight" — and that is what this watches. It costs
+// one boolean per agent and cannot be broken by renaming, rerouting or
+// restyling anything on the far side of the break.
+const MUSK_MS = 1100;        // how long the jet is on screen (== sai-sk-spray)
+// Reach and half-width are READ OFF THE DRAWING rather than picked. The
+// furthest edge of .musk-cloud sits at art x 226 in the 120-unit box;
+// SkunkDraw's scale(.96) wrapper about (60,106) puts that 159.4 units
+// right of the sprite's centre, and Critter() renders the box at r * 2.7
+// px. The front cloud spans 36.5 units top to bottom, so half of it is
+// 18.25. Geometry-as-physics: the cloud that is drawn is the cloud that
+// hits, and moving those ellipses moves the hit with them.
+const MUSK_REACH = (a) => a.r * 2.7 * (159.4 / 120);   // ~93px for a skunk
+const MUSK_HALF  = (a) => a.r * 2.7 * (18.25 / 120);   // ~11px, plus the victim's own r
+const MUSK_KICK = 0.55;      // the flinch, as a gait urgency, along the jet
+const MUSK_HOLD = 2600;      // outside limit on waiting for the break-up to finish
+// He leaves cone-shaped pits behind him, and they are the payoff of the
+// digging: a hole that vanishes the moment he steps off it is a hole
+// nobody saw him dig. Held on the world like the beaver's damCount and
+// drawn from a fixed pool like the dam logs, so a new pit costs no render.
+const PIT_MAX = 6;           // the ground remembers his last six
+const PIT_LIFE = 150;        // seconds at full strength...
+const PIT_FADE = 60;         // ...then this long weathering back to nothing
 
 // swim-time share per species (probability of picking a "swim" intent).
 // Each world carries its own swimmer map: lake swimmers in the forest,
@@ -256,6 +286,70 @@ const TREE_HEAD_DEEP = 50;
 const STAND_FEET = 0.348;   // upright pose: paws below the sprite centre
 const STAND_BACK = 0.232;   // upright pose: spine right of the sprite centre
 const CLIMB_HEAD = 0.768;   // hug pose: ear tips above the sprite centre
+
+/**
+ * THE OWL'S NEST — where it is, in the same language as the constants above:
+ * stage px above the tree's own anchor, at scale 1. The trunk svg's local
+ * units ARE those px (viewBox bottom edge at local y 20), so a local y is
+ * simply 20 - (px above the anchor).
+ *
+ * WHICH TREE CARRIES IT is a rule, not an index. FOREST_TREES gets resized
+ * and extended, and a literal index would quietly move the nest to a
+ * different tree — or into the water — the moment the array changed. The
+ * rule is: the biggest trunk that stands clear of the lake, ties to the
+ * first. Biggest because a taller tree is a longer, better-looking flight;
+ * clear of the lake because the owl cannot swim and the whole roost happens
+ * at that tree's foot.
+ */
+const NEST_DX = 20;                    // right of the trunk's centre line
+const NEST_CLEAR_RHO = 1.6;            // shoreline is 1.0
+const NEST_TREE = (() => {
+  const clear = (t) => Math.hypot((t.x - LAKE.cx) / LAKE.rx, (t.y - LAKE.cy) / LAKE.ry) >= NEST_CLEAR_RHO;
+  let best = -1;
+  for (let i = 0; i < FOREST_TREES.length; i++) {
+    if (!clear(FOREST_TREES[i])) continue;
+    if (best < 0 || FOREST_TREES[i].s > FOREST_TREES[best].s) best = i;
+  }
+  // No inland tree at all would be a very different map than this one; take
+  // the biggest anyway rather than lose the behavior over a layout change.
+  if (best < 0) for (let i = 0; i < FOREST_TREES.length; i++) {
+    if (best < 0 || FOREST_TREES[i].s > FOREST_TREES[best].s) best = i;
+  }
+  return best;
+})();
+
+/**
+ * ...and HOW HIGH. Derived from the CANOPY line rather than measured off the
+ * ground, so a resized tree carries the nest up with the boughs instead of
+ * leaving it hanging in mid-air — but the DROP below that line cannot be a
+ * constant in tree-local units, because the one thing that has to fit in the
+ * gap does not scale with the tree. The owl is drawn at r * 2.7 stage px
+ * whatever trunk he is sitting on, and the trees now run 1.18-1.56, so a
+ * fixed local drop that veils him nicely on one tree buries his eyes on the
+ * next. The drop is therefore his own toe-to-tuft height in STAGE px,
+ * divided back out by the nest tree's scale.
+ *
+ * OWL_ROOST_SPAN is read straight off .sai-crit-roostpose: the clamped toes
+ * are drawn at y 104 and the erect ear tufts at y 20, and OwlDraw's
+ * scale(.94) about (60,106) lands those at 104.12 and 25.16 — 78.96 of the
+ * 120-unit box. The ethogram's ROOST_FOOT is the lower of the same pair, so
+ * the two files are measuring one drawing.
+ *
+ * NEST_VEIL is what is left over: his ear tips finish that many px INSIDE
+ * the leaf line, head under the boughs and everything from the eyes down in
+ * clear air. Cup and bird both readable, crown veiled — which is what an owl
+ * at roost looks like, and it is the canopy pass at zIndex 12 that does the
+ * veiling. (The boughs' sway does not disturb it: .sai-bg-sway rotates
+ * +-2.6 deg about the foliage's own bottom-centre, which moves the leaf line
+ * over the nest by well under a pixel vertically.)
+ */
+const OWL_ROOST_SPAN = (104.12 - 25.16) / 120;   // toes -> tuft tips, of the sprite box
+const NEST_VEIL = 4;                             // px of his ear tips inside the leaves
+const NEST_PX = TREE_CANOPY_PX
+  - (OWL_ROOST_SPAN * speciesSize("owl") * 2.7 - NEST_VEIL) / (FOREST_TREES[NEST_TREE].s || 1);
+// ...and the patch of floor he takes off from and lands back beside: out
+// past the buttress so he is never standing inside the bark.
+const NEST_FOOT_DX = 26, NEST_FOOT_DY = 14;
 // Half the drawn trunk, in stage px either side of the tree's own anchor at
 // scale 1: the oak's TreeLayer path runs x -13..15, so the bark's west face
 // is 13 out, and the spruce's bole is drawn -14..16 for exactly that reason —
@@ -313,6 +407,11 @@ setTreeMetrics({
   trunkDX: 1, cavityPx: 64, fruitPx: TREE_CANOPY_PX + 17,
   climbHead: CLIMB_HEAD, trunkR: TREE_TRUNK_R,
   deer: { brow: DEER_BROW, hoof: DEER_HOOF, bed: DEER_BED, feet: DEER_FEET },
+  // the owl's nest: which tree, and where on it. Handed over rather than
+  // imported, same as everything else here — the ethogram never learns a
+  // coordinate, only "tree number n, this far out and this far up it".
+  nest: { i: NEST_TREE, dx: NEST_DX, floorPx: NEST_PX,
+          footDX: NEST_FOOT_DX, footDY: NEST_FOOT_DY },
 });
 
 // Per-species svg box. The one thing that may NOT vary is the bottom
@@ -364,6 +463,79 @@ const SPRUCE_WHORLS = [
   { top: -204, bot: -184, r: 14, fill: "#3d8c62", lit: "#57b083" },
 ];
 
+/**
+ * THE NEST. World geometry, so the world draws it and no sprite does — the
+ * same contract as the trunks, the bushes and the larder: the cup that is
+ * drawn IS the cup the owl's talons land on, and if this art moves, the
+ * ethogram follows it, because both read NEST_PX.
+ *
+ * It comes in two halves, because the tree does. The cup, its lining and the
+ * broken limb it is wedged on belong to the TRUNK pass at zIndex 2, under
+ * the animals, so an owl in it stands in front of the sticks. The near rim
+ * is a second, much smaller piece in the CANOPY pass at 12, over the
+ * animals, so the same owl is also down INSIDE the cup with the front edge
+ * across his toes. Splitting one object across the animal layer is the only
+ * way a bird can be IN a nest rather than on one — and the split already
+ * exists for the bear's leaves. This is that mechanism used a second time,
+ * for a thing that is not foliage.
+ *
+ * Neither half goes inside .sai-bg-sway. The boughs swing; the trunk does
+ * not, and a nest that swayed with the leaves would visibly come off the
+ * limb holding it up.
+ */
+function TreeNest({ part }) {
+  const y = 20 - NEST_PX;           // the cup floor, in the trunk svg's own units
+  const x = NEST_DX;
+  if (part === "canopy") {
+    return (
+      <g className="sai-bg-nest" transform={`translate(${x} ${y})`}>
+        {/* the NEAR rim only — a shallow crescent whose top edge runs 3px
+            above the floor at the centre and 8px above it at the shoulders.
+            That is enough to take the owl's clamped toes and the bottom of
+            his tail and no more; any deeper and the bird is buried in his
+            own furniture. */}
+        <path d="M -19 -8 C -15 -4 -8 -3 0 -3 C 8 -3 15 -4 19 -8
+                 C 17 8 11 12 0 12 C -11 12 -17 8 -19 -8 Z" fill="#54391f" />
+        <path d="M -17 -5 C -11 -1 11 -1 17 -5" stroke="#6b4a2a" strokeWidth="1.6" fill="none" opacity=".8" />
+        {/* three sticks crossing the front, so the rim reads as woven and
+            not as a bowl of clay */}
+        <path d="M -16 1 C -6 5 8 5 17 0 M -14 6 C -4 10 8 10 15 5 M -9 -2 C -2 2 6 2 12 -2"
+          stroke="#3d2a17" strokeWidth="1.7" fill="none" strokeLinecap="round" opacity=".85" />
+        <path d="M -21 -6 l -6 -3 M 21 -7 l 7 -2 M 18 6 l 7 3"
+          stroke="#4a331d" strokeWidth="2" fill="none" strokeLinecap="round" />
+        {/* one down feather caught on the rim: the only sign of tenancy that
+            is there whether or not the owl is */}
+        <path d="M 12 -4 C 15 -7 18 -8 20 -7 C 18 -4 15 -2 12 -4 Z" fill="#e6dcc2" opacity=".7" />
+      </g>
+    );
+  }
+  return (
+    <g className="sai-bg-nest" transform={`translate(${x} ${y})`}>
+      {/* the broken limb it is wedged on: without a support the cup reads as
+          stuck to the bark rather than resting in a fork */}
+      <path d="M -12 6 C -4 4 6 3 14 4" stroke="#4e3521" strokeWidth="6" fill="none" strokeLinecap="round" />
+      <path d="M -10 11 C -3 10 4 9 9 8" stroke="#422c1a" strokeWidth="3.4" fill="none" strokeLinecap="round" />
+      {/* the cup: outer mass, with a concave top whose centre lands on y 0 —
+          which is NEST_PX above the anchor, which is where the talons go */}
+      <path d="M -18 -5 C -18 10 -12 14 0 14 C 12 14 18 10 18 -5
+               C 11 1.7 -11 1.7 -18 -5 Z" fill="#5a3f26" />
+      <path d="M -18 -5 C -18 6 -13 10 -4 12 C -12 9 -15 3 -15 -4 Z" fill="#6b4a2a" opacity=".7" />
+      {/* woven sticks around the outside, and a few ends poking free */}
+      <path d="M -16 1 C -6 6 8 6 16 1 M -15 6 C -6 11 7 11 15 6 M -13 10 C -5 14 6 14 13 10"
+        stroke="#43301c" strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".8" />
+      <path d="M -18 -3 l -8 -4 M 18 -4 l 9 -3 M -17 8 l -8 4 M 17 9 l 8 3"
+        stroke="#4e3521" strokeWidth="2" fill="none" strokeLinecap="round" />
+      {/* the lining he actually sits on: grass and down, warm against the
+          stick grey, and the one thing that says this is a nest and not a
+          burl on the trunk */}
+      <path d="M -13 -2.5 C -7 2.5 7 2.5 13 -2.5 C 7 0 -7 0 -13 -2.5 Z" fill="#8a7748" />
+      <path d="M -10 -1.6 C -5 1.6 5 1.6 10 -1.6" stroke="#a89468" strokeWidth="1.4" fill="none" opacity=".8" />
+      {/* contact shadow where the cup meets the bark */}
+      <ellipse cx="-8" cy="9" rx="12" ry="5" fill="#1c1109" opacity=".35" />
+    </g>
+  );
+}
+
 function TreeLayer({ bounds, part }) {
   const { w, h } = bounds;
   if (!w || !h) return null;
@@ -380,6 +552,14 @@ function TreeLayer({ bounds, part }) {
           pointerEvents: "none", transform: `translate(-50%,-100%) scale(${t.s})`, transformOrigin: "50% 100%" }}>
           <svg width={box.w} height={box.h} viewBox={box.vb} style={{ display: "block", overflow: "visible" }}>
             {canopy ? (
+              /* the boughs — and, on the nest tree, the near rim of the cup.
+                 It is in THIS pass, not the trunk pass, because it has to
+                 paint over the animals: that is what puts the owl down
+                 inside the nest instead of standing on top of it. Outside
+                 the sway group — the boughs swing, the trunk it is wedged
+                 into does not. */
+              <>
+              {i === NEST_TREE && <TreeNest part="canopy" />}
               <g className="sai-bg-sway" style={{ animationDuration: `${6.5 + i * 0.7}s`, animationDelay: `${i * 1.3}s`, transformOrigin: "50% 100%" }}>
                 {kind === "pine" ? (
                   <>
@@ -427,6 +607,7 @@ function TreeLayer({ bounds, part }) {
                   </>
                 )}
               </g>
+              </>
             ) : kind === "pine" ? (
               <>
                 {/* root plate on the needle litter — a spruce sits on a
@@ -456,6 +637,8 @@ function TreeLayer({ bounds, part }) {
                   stroke="#4a3524" strokeWidth="3" fill="none" strokeLinecap="round" />
                 <path d="M -14 -3 C -23 -7 -30 -3 -34 3 C -25 4 -19 4 -14 2 Z" fill="#3f2c1c" />
                 <path d="M 16 -5 C 25 -9 32 -5 36 2 C 28 4 21 4 16 2 Z" fill="#3f2c1c" />
+                {/* the nest's back half, last so it paints onto the bark */}
+                {i === NEST_TREE && <TreeNest part="trunk" />}
               </>
             ) : (
               <>
@@ -474,6 +657,8 @@ function TreeLayer({ bounds, part }) {
                 {/* limbs reaching out from under the canopy — they rose with it */}
                 <path d="M -8 -95.4 C -22 -105.4 -34 -109.4 -46 -107.4 M 9 -97.4 C 22 -107.4 34 -111.4 46 -108.4" stroke="#5b3f26"
                   strokeWidth="5" fill="none" strokeLinecap="round" />
+                {/* the nest's back half, last so it paints onto the bark */}
+                {i === NEST_TREE && <TreeNest part="trunk" />}
               </>
             )}
           </svg>
@@ -571,7 +756,25 @@ function ForageLayer({ bounds, sites }) {
           <svg width="96" height="104" viewBox="-48 -88 96 104" style={{ display: "block", overflow: "visible" }}>
             <ellipse cx="2" cy="9" ry="7" fill="#0d2415" opacity=".38"
               rx={f.kind === "log" ? 84 : f.kind === "root" ? 48 : f.kind === "soil" ? 30 : 26} />
-            {f.kind === "berry" && (
+            {f.kind === "berry" && (<>
+              {/* WHAT HAS ALREADY DROPPED. Three animals now work the ground
+                  under a bush rather than the crop on it — the skunk's whole
+                  living, the fox's windfall half — and until now that ground
+                  was bare: they were all miming over grass. Drawn INSIDE the
+                  shadow pool and OUTSIDE the sway group, because fallen fruit
+                  does not sway, and before the foliage so the bush paints
+                  over anything that strays under it. */}
+              <g className="forage-windfall">
+                <circle cx="-24" cy="6" r="3.2" fill="#7d1b3e" />
+                <circle cx="-25" cy="5" r="1.1" fill="#c96289" opacity=".6" />
+                <circle cx="-12" cy="10" r="2.9" fill="#8e1f46" />
+                <circle cx="7" cy="8" r="3.3" fill="#a8244f" />
+                <circle cx="6" cy="7" r="1.1" fill="#dc7fa3" opacity=".6" />
+                <circle cx="19" cy="11" r="2.7" fill="#7d1b3e" />
+                <circle cx="27" cy="5" r="2.4" fill="#9c2149" opacity=".9" />
+                {/* one gone over. A windfall is not a fruit bowl */}
+                <ellipse cx="-4" cy="12.5" rx="3.4" ry="1.6" fill="#5d1430" opacity=".75" />
+              </g>
               <g className="sai-bg-sway" style={{ animationDuration: `${5.2 + i * 0.4}s`, animationDelay: `${i * 0.7}s`, transformOrigin: "50% 100%" }}>
                 <path d="M -6 8 C -8 -6 -6 -18 -2 -26 M 4 8 C 7 -4 8 -16 6 -24" stroke="#5a4a2c" strokeWidth="3" fill="none" strokeLinecap="round" />
                 <ellipse cx="-15" cy="-20" rx="19" ry="16" fill="#2f6b3f" />
@@ -590,7 +793,7 @@ function ForageLayer({ bounds, sites }) {
                   <circle cx="16" cy="-36" r="2.8" fill="#7d1b3e" />
                 </g>
               </g>
-            )}
+            </>)}
             {f.kind === "nut" && (
               <>
                 <path d="M -5 10 C -4 -8 -3 -24 -3 -40 L 6 -40 C 6 -24 7 -8 9 10 C 4 12 0 12 -5 10 Z" fill="#5b3f26" />
@@ -686,35 +889,111 @@ function ForageLayer({ bounds, sites }) {
   );
 }
 
-// ---------------- The squirrel's larder ----------------
+// ---------------- The squirrel's caches ----------------
 /**
- * A hole in the ground is a cache; four in a row at the foot of one stump
- * is a LARDER, and that is the difference. He has exactly one, here, for
- * the life of the world — everything he takes out of a nut tree comes
- * back to this spot and everything he eats comes out of it — which is the
- * only version of hoarding a player can actually watch. A remembered map
- * of scattered caches was the old behavior and it read as a squirrel
- * digging in a random patch of soil.
+ * FOUR HOLES, AND NOT ONE OF THEM IS DRAWN.
  *
- * Placed in the gap between the two western forest trees: 150px clear of
- * both trunks so it never sits inside the bear's 96px approach ring,
- * ~90px west of the nearest berry bush so it is off the thicket's
- * traffic, and at lake rho 2.5 it is nowhere near the water. It reads as
- * his corner of the map rather than a fixture everybody shares.
+ * A larder is one place with a stump over it and a stock you can count off
+ * the screen. This is the opposite and it is the truthful one: a scatter
+ * hoarder puts single nuts all over his range and remembers where. So
+ * these anchors have no layer, no art and no entry in FORAGE_SITES — the
+ * only thing that ever happens at one is a squirrel crouching over bare
+ * ground, which is exactly what it looks like in a wood.
+ *
+ * They are ANCHORS, not spots he picks: a fixed stage fraction each, for
+ * the life of the world, so `digStand` puts the hole he mimes on the same
+ * pixel every visit and the nut he takes out comes out of the hole he put
+ * it in. That is the entire mechanism, and it only works because nothing
+ * about them is random at run time.
+ *
+ * The seeds are spread to the four quarters and kept off the lake, the
+ * berry cluster and the hedgehog's timber. They are then SETTLED against
+ * def.trees rather than checked against it by hand — the tree table is
+ * being resized and extended, and a cache that reads a trunk's coordinate
+ * would be inside that trunk the day it moves. settleCache asks the list.
  */
-const LARDER = {
-  x: .155, y: .445,
-  // The four scrapes, as px offsets from the anchor. Shared with the
-  // ethogram — geometry-as-physics, same contract as the trees and the
-  // forage sites: the mound he crouches over IS the mound that changes.
-  slots: [{ x: -30, y: 1 }, { x: -10, y: 7 }, { x: 10, y: 7 }, { x: 30, y: 1 }],
-};
+const CACHE_SEEDS = [
+  { x: .075, y: .115 },   // north-west, above the western trees
+  { x: .440, y: .145 },   // north-centre, west of the lake, north of the berries
+  { x: .105, y: .865 },   // south-west
+  { x: .925, y: .115 },   // north-east: the mid-east band is two big oaks and
+                          // the lake, so the fourth quarter is above them
+];
+// Clearance round a trunk, as stage fractions — TREE_REACH (96px, the ring
+// the bear takes an interest inside) plus a margin, in each axis, and
+// scaled by the tree's own s. A squirrel digging inside a bear's approach
+// ring is a bout that ends in a shove.
+const CACHE_CLEAR = { rx: .085, ry: .135 };
+const CACHE_SHORE = 1.30;      // lake rho: 1.05 is the haul-out, 1.12 the spawn guard
+function settleCache(p, trees) {
+  let { x, y } = p;
+  for (let pass = 0; pass < 24; pass++) {
+    let moved = false;
+    for (const t of trees || []) {
+      const dx = (x - t.x) / (CACHE_CLEAR.rx * t.s), dy = (y - t.y) / (CACHE_CLEAR.ry * t.s);
+      const d = Math.hypot(dx, dy);
+      if (d >= 1) continue;
+      const u = d || 1e-6;     // dead centre: push it out along +x rather than NaN
+      x = t.x + ((d ? dx : 1) / u) * CACHE_CLEAR.rx * t.s;
+      y = t.y + ((d ? dy : 0) / u) * CACHE_CLEAR.ry * t.s;
+      moved = true;
+    }
+    // ...and out of the water, in the same normalized space the shore uses
+    const lx = (x - LAKE.cx) / LAKE.rx, ly = (y - LAKE.cy) / LAKE.ry;
+    const lr = Math.hypot(lx, ly) / lakeWobble(Math.atan2(ly, lx));
+    if (lr < CACHE_SHORE) {
+      const k = CACHE_SHORE / Math.max(lr, .05);
+      x = LAKE.cx + (x - LAKE.cx) * k; y = LAKE.cy + (y - LAKE.cy) * k;
+      moved = true;
+    }
+    if (!moved) break;
+  }
+  // last resort: a world crowded enough to push a cache off the edge still
+  // has to have four reachable holes in it
+  return { x: clamp(x, .055, .945), y: clamp(y, .09, .915) };
+}
+const CACHE_SPOTS = CACHE_SEEDS.map((p) => settleCache(p, FOREST_TREES));
+
+// ---------------- The squirrel's drey ----------------
+/**
+ * WHICH TREE HE DENS IN, stated as a rule rather than an index. A drey
+ * goes where the food is, so it is the big trunk nearest the mast crop —
+ * which means a tree list that gets resized or extended re-answers the
+ * question instead of leaving the nest in a tree that has moved. Ties go
+ * to the bigger tree, then to the lower index, so the answer is stable.
+ */
+const DREY_TREE = (() => {
+  const nuts = FORAGE_SITES.filter((f) => f.kind === "nut");
+  const n = nuts.length || 1;
+  const cx = nuts.reduce((s, f) => s + f.x, 0) / n, cy = nuts.reduce((s, f) => s + f.y, 0) / n;
+  let best = 0, bd = Infinity, bs = 0;
+  FOREST_TREES.forEach((t, i) => {
+    const d = Math.hypot(t.x - cx, t.y - cy);
+    if (d < bd - 1e-9 || (Math.abs(d - bd) <= 1e-9 && t.s > bs)) { bd = d; bs = t.s; best = i; }
+  });
+  return best;
+})();
+// The nest, in stage px above the tree's own anchor at scale 1, expressed
+// through the two constants that already describe that drawing — so a
+// resized tree carries the drey up or down with it and nothing here reads
+// a path coordinate out of TreeLayer.
+const DREY_VB_BOTTOM = 20;              // TreeLayer's viewBox floor: y -> (20 - y) px up
+const DREY_R = 19;                      // basketball, against a 24.1-radius squirrel
+const DREY_FORK_PX = TREE_CANOPY_PX - 21;  // 96: its middle, so its crown (115) just
+                                        // tucks under the leaf line at 117 and the
+                                        // rest of the ball hangs in clear air
+const DREY_WORK_PX = DREY_FORK_PX - 12; // where HIS middle stops: hands in the weave
+const DREY_FORK_DX = 20;                // px right of the anchor — out of the trunk,
+                                        // on the side he faces. The nest art below is
+                                        // drawn about this line; nothing reads it back.
+const TREE_TRUNK_DX = 1;                // the trunk art's own centre line
+const DREY_COURSES = 6;                 // platform, floor, walls, roof, moss, lining
 
 // What the squirrel's ethogram needs to know about the map, handed over
 // rather than imported so that module stays free of the layout — the same
 // arrangement the bear's tree metrics use.
 setForageMetrics({
-  larder: LARDER,
+  caches: CACHE_SPOTS,
   // Read off the nut art in ForageLayer above. That svg maps a local y to
   // (16 - y) * s stage px above the site's anchor:
   //   trunk foot            local y 10                        ->  6
@@ -725,6 +1004,10 @@ setForageMetrics({
   // Forty px of leaf directly over the trunk, and he stops with his own
   // middle in the middle of it.
   nut: { basePx: 6, leafPx: 55, crownPx: 95, trunkDX: 1.5 },
+  drey: {
+    treeIndex: DREY_TREE, basePx: TREE_BASE_PX, forkPx: DREY_FORK_PX,
+    workPx: DREY_WORK_PX, trunkDX: TREE_TRUNK_DX, courses: DREY_COURSES,
+  },
   // The fallen log, for anything that wants to be INSIDE one. The hedgehog
   // goes in the rot hole in the top face; a raccoon does not fit through a
   // hedgehog's hole, so he goes in the broken end and the two of them share
@@ -738,78 +1021,99 @@ setForageMetrics({
   // Critter() draws the 120-unit sprite box at r * 2.7 px. (NOT r * 3.1 —
   // that is the container div; see the note in the squirrel's ethogram.)
   spritePx: 2.7,
+  // ...and how many of the skunk's pits the ground keeps, so his ethogram
+  // caps the list without knowing what draws it — the same arrangement as
+  // the tree metrics above.
+  pitMax: PIT_MAX,
 });
 
 /**
- * The larder itself. Drawn under the animals, like every other piece of
- * ground: he crouches in FRONT of the stump to work it.
+ * The drey itself: a woven ball high in the fork, revealed a course at a
+ * time as world.dreyN rises. Drawn UNDER the animals (zIndex 2) like the
+ * trunks, so the squirrel works the near face of it, and the canopy at 12
+ * still veils its crown — which is what puts it in the tree rather than in
+ * front of one.
  *
- * The stock is one integer that moves about twice a minute, so this reads
- * it off a slow interval instead of joining the frame loop — a rAF for
- * that would be waste, and threading a fifth ref through renderWorld for
- * it would be worse.
+ * The FORK is drawn here rather than read off TreeLayer's limb paths on
+ * purpose: those are art, they are being redrawn, and a nest pinned to a
+ * bezier control point is a nest that ends up in mid-air. The contract is
+ * the height under the leaf line, and that is all this takes.
+ *
+ * The count moves about twice a minute, so it is polled off a slow
+ * interval like the larder's stock was, rather than joining the frame loop.
  */
-function LarderLayer({ bounds, worldRef }) {
+function DreyLayer({ bounds, worldRef }) {
   const ref = useRef(null);
   useEffect(() => {
     const t = setInterval(() => {
       const el = ref.current; if (!el) return;
-      el.dataset.n = String(worldRef.current.larder?.n || 0);
+      el.dataset.n = String(worldRef.current.dreyN || 0);
     }, 200);
     return () => clearInterval(t);
   }, [worldRef]);
   const { w, h } = bounds;
-  if (!w || !h) return null;
+  const t = FOREST_TREES[DREY_TREE];
+  if (!w || !h || !t) return null;
+  const cy = DREY_VB_BOTTOM - DREY_FORK_PX;      // -76 at today's canopy
+  // the SAME box TreeLayer gives this trunk, so a local y here is a local y
+  // there whichever species the rule picked
+  const box = TREE_BOX[t.kind || "oak"];
   return (
-    <div ref={ref} className="sai-larder" data-n="0"
-      style={{ position: "absolute", left: LARDER.x * w, top: LARDER.y * h, zIndex: 2,
-        pointerEvents: "none", transform: "translate(-50%,-50%)" }}>
-      {/* viewBox centred on 0,0 so a slot offset IS a local coordinate */}
-      <svg width="120" height="120" viewBox="-60 -60 120 120" style={{ display: "block", overflow: "visible" }}>
-        {/* the ground round a working larder is bare and trodden — the
-            first thing that tells you this place gets used */}
-        <ellipse cx="0" cy="7" rx="47" ry="15" fill="#0d2415" opacity=".34" />
-        <ellipse cx="0" cy="5" rx="43" ry="13" fill="#4a3520" />
-        <ellipse cx="-3" cy="3" rx="34" ry="9" fill="#5d4327" />
-        <path d="M -22 3 C -31 1 -37 4 -41 9 M 23 3 C 32 2 38 5 42 10" stroke="#4e3521"
-          strokeWidth="4.5" fill="none" strokeLinecap="round" />
-        {/* the broken stump he keeps it under: heartwood showing, moss on
-            the shaded side. A stump rather than a live tree so it reads as
-            a store and not another thing to climb */}
-        <path d="M -22 5 C -21 -11 -20 -25 -19 -34 L 19 -34 C 20 -25 21 -11 23 5 C 12 9 -11 9 -22 5 Z" fill="#5b3f26" />
-        <path d="M -22 5 C -21 -11 -20 -25 -19 -34 L -8 -34 C -10 -19 -11 -7 -10 7 Z" fill="#6f4f30" />
-        <path d="M -14 -2 C -13 -14 -12 -24 -12 -31 M 4 -6 C 4 -17 3 -26 3 -31" stroke="#452f1c"
-          strokeWidth="1.8" fill="none" strokeLinecap="round" opacity=".6" />
-        <ellipse cx="0" cy="-34" rx="19" ry="6.5" fill="#8a6236" />
-        <ellipse cx="0" cy="-34.6" rx="13" ry="4.3" fill="#a37a48" />
-        <ellipse cx="0" cy="-34.6" rx="6.5" ry="2.1" fill="#7a5227" opacity=".65" />
-        {/* splintered rim where the top came off in some old gale */}
-        <path d="M -19 -34 l 5 -6 l 4 5 l 5 -8 l 4 7 l 6 -6 l 4 6 l 5 -4 l 5 6"
-          fill="none" stroke="#8a6236" strokeWidth="2.6" strokeLinejoin="round" />
-        <path d="M -22 -1 C -18 -6 -12 -6 -8 -2 C -13 0 -18 0 -22 -1 Z" fill="#3f7c4a" opacity=".8" />
-        <ellipse cx="18" cy="-7" rx="6" ry="3.2" fill="#3f7c4a" opacity=".5" />
-        {/* ---- the four scrapes. Order is load-bearing: he fills left to
-            right, and the CSS caps the first n of these ---- */}
-        <g className="sai-larder-slots">
-          {LARDER.slots.map((s, k) => (
-            <g className="sai-larder-slot" key={k}>
-              <ellipse cx={s.x} cy={s.y} rx="8.6" ry="4.5" fill="#2e1f10" />
-              <ellipse cx={s.x} cy={s.y - .7} rx="6.4" ry="3.2" fill="#19100a" />
-              <g className="sai-larder-cap">
-                <ellipse cx={s.x} cy={s.y - 1} rx="8.9" ry="5" fill="#5d4327" />
-                <ellipse cx={s.x - 1.6} cy={s.y - 2.6} rx="5" ry="2.8" fill="#6d5030" />
-                <ellipse cx={s.x - 5} cy={s.y - 4.2} rx="2.4" ry="2.9" fill="#7a5227" />
-                <path className="cap-leaf"
-                  d={`M ${s.x + 3.6} ${s.y - 2.8} C ${s.x + 8.6} ${s.y - 8} ${s.x + 12} ${s.y - 6} ${s.x + 11} ${s.y - 1.6} C ${s.x + 8} ${s.y + .4} ${s.x + 4.6} ${s.y - .8} ${s.x + 3.6} ${s.y - 2.8} Z`}
-                  fill="#8a6a34" />
-              </g>
+    <div ref={ref} className="sai-drey" data-n="0"
+      style={{ position: "absolute", left: t.x * w, top: t.y * h, zIndex: 2,
+        pointerEvents: "none", transform: `translate(-50%,-100%) scale(${t.s})`,
+        transformOrigin: "50% 100%" }}>
+      <svg width={box.w} height={box.h} viewBox={box.vb} style={{ display: "block", overflow: "visible" }}>
+        <g className="sai-drey-parts">
+          {/* 1 — the fork, and the first twigs wedged across it */}
+          <g className="sai-drey-part">
+            <path d={`M 3 ${cy + 36} C 10 ${cy + 28} 19 ${cy + 22} 29 ${cy + 19}`} stroke="#5b3f26" strokeWidth="5.5" fill="none" strokeLinecap="round" />
+            <path d={`M 3 ${cy + 40} C 11 ${cy + 36} 21 ${cy + 33} 30 ${cy + 31}`} stroke="#4e3521" strokeWidth="4" fill="none" strokeLinecap="round" />
+            <path d={`M 5 ${cy + 20} L 33 ${cy + 16} M 6 ${cy + 24} L 32 ${cy + 21} M 8 ${cy + 28} L 30 ${cy + 25}`}
+              stroke="#6b4a2a" strokeWidth="2.4" fill="none" strokeLinecap="round" />
+          </g>
+          {/* 2 — the floor: a shallow raft of twigs across the platform */}
+          <g className="sai-drey-part">
+            <path d={`M 2 ${cy + 8} C 3 ${cy + 22} 37 ${cy + 22} 38 ${cy + 8} C 30 ${cy + 14} 10 ${cy + 14} 2 ${cy + 8} Z`} fill="#4a3520" />
+            <path d={`M 4 ${cy + 14} L -3 ${cy + 17} M 11 ${cy + 18} L 6 ${cy + 22} M 29 ${cy + 18} L 35 ${cy + 21} M 36 ${cy + 13} L 43 ${cy + 15}`}
+              stroke="#6b4a2a" strokeWidth="2.2" fill="none" strokeLinecap="round" />
+          </g>
+          {/* 3 — the walls go up and it becomes a bowl */}
+          <g className="sai-drey-part">
+            <path d={`M 1 ${cy + 4} C 1 ${cy + 20} 39 ${cy + 20} 39 ${cy + 4} C 34 ${cy - 2} 6 ${cy - 2} 1 ${cy + 4} Z`} fill="#57402a" />
+            <path d={`M 2 ${cy + 1} L -5 ${cy - 1} M 38 ${cy + 1} L 45 ${cy - 2} M 6 ${cy + 9} L -2 ${cy + 9}`}
+              stroke="#6b4a2a" strokeWidth="2.2" fill="none" strokeLinecap="round" />
+          </g>
+          {/* 4 — the roof closes it into a ball */}
+          <g className="sai-drey-part">
+            <path d={`M 1 ${cy + 3} C 2 ${cy - 18} 38 ${cy - 18} 39 ${cy + 3} C 30 ${cy - 4} 10 ${cy - 4} 1 ${cy + 3} Z`} fill="#63492e" />
+            <path d={`M 6 ${cy - 8} C 14 ${cy - 14} 26 ${cy - 14} 34 ${cy - 8}`} stroke="#7d5a33" strokeWidth="2.4" fill="none" strokeLinecap="round" />
+            <path d={`M 9 ${cy - 14} L 4 ${cy - 20} M 20 ${cy - 17} L 20 ${cy - 24} M 31 ${cy - 13} L 37 ${cy - 19}`}
+              stroke="#6b4a2a" strokeWidth="2" fill="none" strokeLinecap="round" />
+          </g>
+          {/* 5 — moss chinked into the weave, the way it is in life */}
+          <g className="sai-drey-part">
+            <ellipse cx="12" cy={cy - 6} rx="7" ry="5" fill="#4f7a45" opacity=".85" />
+            <ellipse cx="27" cy={cy - 11} rx="5.5" ry="4" fill="#5c8a4c" opacity=".8" />
+            <ellipse cx="8" cy={cy + 8} rx="6" ry="4.2" fill="#456f3d" opacity=".8" />
+            <ellipse cx="31" cy={cy + 6} rx="5" ry="3.6" fill="#4f7a45" opacity=".75" />
+          </g>
+          {/* 6 — the green lining, and the way in on the sheltered side */}
+          <g className="sai-drey-part">
+            <g className="sai-drey-leaves">
+              <path d={`M 14 ${cy - 18} q 8 -8 15 -4 q -5 9 -14 7 Z`} fill="#4f8f4a" />
+              <path d={`M 4 ${cy - 12} q -8 -5 -13 1 q 7 6 13 2 Z`} fill="#3f7c4a" />
+              <path d={`M 30 ${cy - 4} q 9 -3 12 3 q -8 4 -13 0 Z`} fill="#57a054" />
             </g>
-          ))}
+            <ellipse cx="33" cy={cy + 3} rx="5.2" ry="4.4" fill="#1c1208" />
+            <ellipse cx="33" cy={cy + 1.6} rx="3.4" ry="2.4" fill="#100a05" />
+          </g>
         </g>
       </svg>
     </div>
   );
 }
+
 
 /**
  * The nut trees' FOLIAGE, painted after the animals — exactly what
@@ -1251,6 +1555,7 @@ export default function SocialAnimalsRPG() {
   const iconsRef = useRef(new Map()); // id -> HTMLElement
   const padsRef = useRef(new Map()); // lily pad index -> HTMLElement
   const damRefs = useRef(new Map()); // dam log index -> HTMLElement
+  const pitRefs = useRef(new Map()); // skunk pit index -> HTMLElement
   const [cfg, setCfg] = useState(DEFAULTS);
   const cfgRef = useRef(cfg); cfgRef.current = cfg; // the RAF loop reads the live value
   const [worldKey, setWorldKey] = useState("forest");
@@ -1287,6 +1592,20 @@ export default function SocialAnimalsRPG() {
       // the gait core, so a test can ask an animal how fast it would move at a
       // given urgency instead of inferring it from a smoothed random walk
       window.__saiGait = { gait, SPEED, GAIT_DEF, speedCap };
+      // Geometry and break-up entry points, for tests/world.mjs. These are
+      // the world's OWN predicates rather than a reimplementation: a suite
+      // that carried its own copy of the lake or the mud patches would keep
+      // passing after the real ones moved.
+      const W = worldRef.current;
+      W.inWaterAt = (x, y) => wetAt(W, x, y);
+      // ...and the DRAWN shore, which is not the same line. inWaterAt is the
+      // sim's 0.97 threshold; the brown rim starts at rho 1.00. A pose corner
+      // between the two is painted on blue while inWaterAt calls it dry, so a
+      // test about what the eye sees has to ask for rho.
+      W.lakeRhoAt = (x, y) => lakeRho(W.bounds, x, y);
+      W.onBareEarthAt = (x, y, pad = 0) => onBareEarth(W.def, W.bounds, x, y, pad);
+      W.__sep = (a, b) => separatePair(W, a, b, W, false);
+      W.__cool = (a, ms) => enterCooldown(a, ms);
     }
 
     // main loop
@@ -1297,9 +1616,14 @@ export default function SocialAnimalsRPG() {
       const now = performance.now();
       let dt = (now - worldRef.current.last) / 1000; // seconds
       worldRef.current.last = now;
+      // A frame counter, for tests. Headless rAF runs at 3-4fps on a quiet
+      // machine and under 1fps on a busy one, so a suite that waits "320ms"
+      // for an event is waiting an unknown number of frames — sometimes none.
+      // Counting them turns every such wait into a real one.
+      worldRef.current.frames = (worldRef.current.frames || 0) + 1;
       dt = Math.min(0.05, Math.max(0, dt));
       if (worldRef.current.running) stepWorld(worldRef.current, cfgRef.current, dt);
-      renderWorld(worldRef.current, iconsRef, padsRef, damRefs);
+      renderWorld(worldRef.current, iconsRef, padsRef, damRefs, pitRefs);
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
@@ -1324,14 +1648,19 @@ export default function SocialAnimalsRPG() {
     if (s) { const a = makeAgent(w, s); enterFromEdge(a, w, DEFAULTS.speed); w.agents.push(a); }
   };
   const removeAgent = () => { worldRef.current.agents.pop(); };
-  const resetWorld = () => { const w = worldRef.current; w.agents = seedAgents(w, DEFAULTS.numAgents); w.damCount = 0; };
+  const resetWorld = () => {
+    const w = worldRef.current;
+    w.agents = seedAgents(w, DEFAULTS.numAgents);
+    // the three structures a world accumulates: logs, buried nuts, courses
+    w.damCount = 0; w.dreyN = 0; w.caches = null;
+  };
   const switchWorld = (key) => {
     if (!WORLDS[key]) return;
     setWorldKey(key);
     const w = worldRef.current;
     w.def = WORLDS[key];
     w.agents = seedAgents(w, DEFAULTS.numAgents);
-    w.damCount = 0;
+    w.damCount = 0; w.dreyN = 0; w.caches = null;
     setSnapshot((s) => ({ ...s, selectedId: null }));
   };
 
@@ -1378,10 +1707,13 @@ export default function SocialAnimalsRPG() {
         {worldKey === "forest" && <ForestScene />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <Lake bounds={snapshot.bounds} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <TreeLayer bounds={snapshot.bounds} part="trunk" />}
+        {/* the drey paints after the trunk it is in and before the animals,
+            so he works its near face and the canopy still veils its crown */}
+        {worldKey === "forest" && snapshot.bounds.w > 0 && <DreyLayer bounds={snapshot.bounds} worldRef={worldRef} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <ForageLayer bounds={snapshot.bounds} sites={FORAGE_SITES} />}
-        {worldKey === "forest" && snapshot.bounds.w > 0 && <LarderLayer bounds={snapshot.bounds} worldRef={worldRef} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <PadLayer padsRef={padsRef} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <DamLayer damRefs={damRefs} />}
+        {worldKey === "forest" && snapshot.bounds.w > 0 && <PitLayer pitRefs={pitRefs} />}
         {worldKey === "neighborhood" && snapshot.bounds.w > 0 && <NeighborhoodScene bounds={snapshot.bounds} />}
 
         {/* Agents */}
@@ -2457,7 +2789,14 @@ const DAM_PLAN = (() => {
 WORLDS.forest.dam = DAM_PLAN;
 
 // ---------------- The sward ----------------
-// Open grass, and nothing else: the goose grazes here. It needs no new
+// Open grass, and nothing else: the goose grazes here. It is a wide, shallow
+// verge rather than a square, because that is the shape of the grass — the
+// bare-earth patches the background paints start at about y .66 and run to
+// the bottom of the map, so the only real sward is the band between them and
+// the lake's southern shore. The rectangle it replaced spanned x .40-.66 by
+// y .68-.88 and was 68% mud, with its own CENTRE on bare earth: the goose
+// refused ground on nearly every stride and grazed the patches anyway
+// whenever the "ringed in" fallback walked him at the middle. It needs no new
 // geometry because the empty ground was already the point — the lake's
 // southern shore stops at y≈.46, the clearing's lowest bush is at .625,
 // the two east trees stand east of .89 and the lone spruce stands south
@@ -2467,7 +2806,7 @@ WORLDS.forest.dam = DAM_PLAN;
 // Held in fractions and reached through `def`, like the trees and the
 // forage, so another world can hand him a different field or none at all
 // — with no sward the appetite simply never finds anywhere to go.
-const GOOSE_SWARD = { x0: 0.40, x1: 0.66, y0: 0.68, y1: 0.88 };
+const GOOSE_SWARD = { x0: 0.48, x1: 0.64, y0: 0.52, y1: 0.62 };
 WORLDS.forest.sward = GOOSE_SWARD;
 
 // ---------------- Bare earth ----------------
@@ -2533,6 +2872,36 @@ function DamLayer({ damRefs }) {
             <ellipse cx={-s.len / 2} cy="0" rx="2" ry="4" fill="#5a3d22" />
             <ellipse cx={s.len / 2} cy="0" rx="4" ry="7.5" fill="#8a6236" />
             <ellipse cx={s.len / 2} cy="0" rx="2" ry="4" fill="#5a3d22" />
+          </svg>
+        </div>
+      ))}
+    </>
+  );
+}
+
+// The skunk's diggings. Same cone the sprite draws under his own paws, at
+// ground scale — the sprite's .cone-pit and this are one shape at two
+// sizes, which is what makes the hole he leaves the hole he was seen to
+// make. Rendered from a fixed pool and driven imperatively, the dam log
+// trick, so a new pit never touches React.
+function PitLayer({ pitRefs }) {
+  return (
+    <>
+      {Array.from({ length: PIT_MAX }, (_, i) => (
+        <div key={i}
+          ref={(el) => { if (el) pitRefs.current.set(i, el); else pitRefs.current.delete(i); }}
+          style={{ position: "absolute", left: 0, top: 0, zIndex: 1, pointerEvents: "none", display: "none", willChange: "transform" }}>
+          <svg width="44" height="26" viewBox="-22 -18 44 26"
+            style={{ display: "block", marginLeft: -22, marginTop: -18, overflow: "visible" }}>
+            <ellipse cx="0" cy="0" rx="17" ry="7" fill="#4a3520" opacity=".85" />
+            <ellipse cx="0" cy="-.6" rx="13.5" ry="5.4" fill="#2e2010" />
+            {/* the wall converges to a POINT, which is the one thing that
+                separates his pits from the squirrel's scrapes at the
+                larder — those are scoops with a nut in them */}
+            <path d="M -13 -1.6 C -8 -5 8 -5 13 -1.6 L 0 5.6 Z" fill="#54391d" opacity=".8" />
+            <path d="M -11 0 L 0 6 L 11 0" fill="none" stroke="#150e06" strokeWidth="1.3" opacity=".75" />
+            <ellipse cx="-13" cy="2.6" rx="6" ry="2.6" fill="#5d4327" opacity=".9" />
+            <ellipse cx="14" cy="2" rx="5.4" ry="2.4" fill="#54391d" opacity=".9" />
           </svg>
         </div>
       ))}
@@ -2782,6 +3151,12 @@ function stepWorld(world, cfg, dt) {
       // a claim dies with the animal that made it, or when it wanders off
       if (f.userId && !agents.some((c) => c.id === f.userId && c._eth && c._eth.claim === f)) f.userId = null;
     }
+  }
+  // a pit that has weathered away frees its slot for the next one. Cheap,
+  // and it runs at most PIT_MAX comparisons.
+  if (world.pits && world.pits.length &&
+      now - world.pits[0].t0 >= (PIT_LIFE + PIT_FADE) * 1000) {
+    world.pits = world.pits.filter((p) => now - p.t0 < (PIT_LIFE + PIT_FADE) * 1000);
   }
 
   // everything an ethogram is allowed to see, assembled once a frame
@@ -3426,6 +3801,10 @@ function stepWorld(world, cfg, dt) {
     }
   }
 
+  // the skunk's musk. Runs after the state machine, so a break decided
+  // this frame is already visible as an edge this frame.
+  stepMusk(world, cfg, now);
+
   // encounters: nose-range only, and only within the same medium
   // (land ↔ land or water ↔ water — swimmers in the lake are off-limits
   // to shore animals and vice versa)
@@ -3675,6 +4054,18 @@ function forceFlee(agent, cfg) {
     agent.noEventUntil = performance.now() + rand(NOEVENT_MIN_MS, NOEVENT_MAX_MS);
     return;
   }
+  // The squirrel is the other exception, and for the opposite reason to the
+  // hedgehog's: he is fast enough to win the race and still would not run
+  // it in a straight line. His escape is a zig-zag of short legs, and it is
+  // in his ethogram — shared with the approach trigger so a scare arriving
+  // down the fight path cannot produce a different, tamer escape than one
+  // arriving down the alarm path. No `from`: a fight he has just lost is
+  // behind him already, so the bearing stays the one this function picks.
+  if (agent.species === "squirrel" && ETHOGRAM.squirrel) {
+    squirrelBolt(agent, performance.now(), rand, null);
+    agent.noEventUntil = performance.now() + rand(NOEVENT_MIN_MS, NOEVENT_MAX_MS);
+    return;
+  }
   agent.state = 'flee'; agent.fleeEnd = performance.now() + FLEE_MS; agent.targetId = null;
   // run to a random spot away from current location
   const ang = Math.atan2(agent.y, agent.x) + rand(-0.8, 0.8);
@@ -3686,7 +4077,109 @@ function forceFlee(agent, cfg) {
   agent.noEventUntil = performance.now() + rand(NOEVENT_MIN_MS, NOEVENT_MAX_MS);
 }
 
-function renderWorld(world, iconsRef, padsRef, damRefs) {
+/**
+ * THE MUSK — the one consequence a fight with the skunk leaves behind.
+ *
+ * Two halves, deliberately pulled apart:
+ *
+ *   GEOMETRY is settled on the break frame itself, while the two are still
+ *   nose to nose. A spray at that range is not a projectile, and giving it
+ *   a flight time only made it miss the animal it was aimed at: both of
+ *   them recoil at 0.55 the moment the fight breaks, so a 260ms lead put a
+ *   bear a hundred pixels out of a ninety-six pixel cone.
+ *
+ *   CONSEQUENCE is held back until the break-up has finished with its
+ *   victim. He takes the recoil the break-up gave him — plus a flinch
+ *   ADDED to it, never replacing it — and only when the world hands him
+ *   back (any free state, or a 2.6s cap if something holds him longer)
+ *   does the smell take him and he bolts a second time.
+ *
+ * That ordering is why this cannot break the break-up whatever the
+ * break-up gets rewritten into: it never overwrites a state the break-up
+ * is still using, and it never touches the skunk's own.
+ */
+function stepMusk(world, cfg, now) {
+  for (const a of world.agents) {
+    // the edge, tracked for everyone because anyone may be the one fighting
+    // the skunk. targetId is nulled by the break, so the foe is remembered
+    // on the way in rather than looked up on the way out.
+    const was = a._inFight;
+    a._inFight = a.state === "fight";
+    if (a._inFight) { a._foeId = a.targetId; continue; }
+    if (was && a.species === "skunk" && !a.dragging) muskFire(world, cfg, a, now);
+    // HOLD the forced aim for as long as the jet is drawn, and let it go on
+    // the frame after. Re-asserted every frame rather than set once, because
+    // the jet outlives the state he fires it from: a dash break-up is
+    // 420-700ms against MUSK_MS 1100, so he reaches a free state mid-spray
+    // and his own ethogram tick — which clears _faceDir the moment he is
+    // free — would hand his facing back to his fleeing velocity and fire the
+    // cloud out of his back. This runs after the state machine, so it is the
+    // last word on his facing whoever else has had an opinion this frame.
+    if (a._muskUntil) {
+      if (now < a._muskUntil) a._faceDir = a._muskFace || a._faceDir;
+      else { a._muskUntil = 0; a._muskFace = 0; a._faceDir = 0; }
+    }
+  }
+  for (const a of world.agents) {
+    if (!a._muskAim) continue;
+    if (a.dragging) { a._muskAim = null; continue; }      // the player has him
+    if (!isFreeState(a) && now < a._muskFleeBy) continue; // the break-up still owns him
+    muskFlee(a, cfg);
+  }
+}
+
+function muskFire(world, cfg, sk, now) {
+  const foe = sk._foeId ? getAgent(world, sk._foeId) : null;
+  sk._foeId = null;
+  if (!foe) return;
+  const dx = foe.x - sk.x, dy = foe.y - sk.y, d = Math.hypot(dx, dy) || 1;
+  const ax = dx / d, ay = dy / d;
+  // He turns the working end on what he is aiming at and HOLDS it there for
+  // as long as the jet is drawn. _faceDir is the same lever the bear's tree
+  // rub and the squirrel's dig already use; without it his facing follows
+  // his own recoil velocity within a frame and fires the cloud out of his
+  // back. (His ethogram's tick only clears _faceDir from a free state, so
+  // it cannot take this away mid-spray — he is in `separate` throughout.)
+  sk._faceDir = sk._muskFace = ax < 0 ? -1 : 1;
+  sk._muskUntil = now + MUSK_MS;
+  // GEOMETRY-AS-PHYSICS. The cone below is the cloud .musk-jet draws, and
+  // ANYTHING standing in it gets it — a rescuer who arrived a moment too
+  // late is exactly as sprayed as the animal the fight was with.
+  const reach = MUSK_REACH(sk), half = MUSK_HALF(sk);
+  for (const v of world.agents) {
+    if (v === sk || v.dragging) continue;
+    const vx = v.x - sk.x, vy = v.y - sk.y;
+    const along = vx * ax + vy * ay;
+    if (along <= 0 || along > reach) continue;
+    // the plume is narrow and the victim is not: what has to overlap is the
+    // cloud's half-width plus the animal's own drawn radius
+    if (Math.abs(vy * ax - vx * ay) > half + v.r) continue;
+    v._muskAim = { x: ax, y: ay };
+    v._muskFleeBy = now + MUSK_HOLD;
+    // the flinch, now, as an impulse ADDED to whatever the break-up just
+    // handed him — so it can never be the thing that replaced it
+    const kick = gaitIn(v, null, cfg, MUSK_KICK) * 0.5;
+    v.vx += ax * kick; v.vy += ay * kick;
+  }
+}
+
+function muskFlee(v, cfg) {
+  const aim = v._muskAim; v._muskAim = null;
+  // Every rule the world already has for a scared animal, reused rather
+  // than restated — including the hedgehog, who balls up where it stands
+  // instead of running a race it cannot win.
+  forceFlee(v, cfg);
+  // ...but pointed by the CLOUD. forceFlee measures its heading from the
+  // map origin, which is right for a rescue breaking up a fight in the
+  // middle of the clearing and wrong for running away from a smell.
+  if (v.state === "flee") {
+    const sp = Math.hypot(v.vx, v.vy) || gaitIn(v, null, cfg, 0.85);
+    const ang = Math.atan2(aim.y, aim.x) + rand(-0.35, 0.35);
+    v.vx = Math.cos(ang) * sp; v.vy = Math.sin(ang) * sp;
+  }
+}
+
+function renderWorld(world, iconsRef, padsRef, damRefs, pitRefs) {
   const t = performance.now() / 1000;
   // drifting lily pads
   if (world.pads && padsRef) {
@@ -3706,6 +4199,25 @@ function renderWorld(world, iconsRef, padsRef, damRefs) {
         el.style.display = "";
         el.style.transform = `translate(${p.x}px, ${p.y}px) rotate(${DAM_PLAN[i].rot}deg)`;
       } else el.style.display = "none";
+    }
+  }
+  // the skunk's pits, index-aligned to world.pits. That list is only ever
+  // trimmed from the FRONT, so a slot changes only when the oldest hole
+  // weathers away — and every slot is re-driven each frame regardless, so
+  // the pits on screen never move when it does.
+  if (pitRefs) {
+    const pits = world.pits || [];
+    for (let i = 0; i < PIT_MAX; i++) {
+      const el = pitRefs.current.get(i);
+      if (!el) continue;
+      const p = pits[i];
+      if (!p) { el.style.display = "none"; continue; }
+      const age = (performance.now() - p.t0) / 1000;
+      const o = age < PIT_LIFE ? 1 : 1 - (age - PIT_LIFE) / PIT_FADE;
+      if (o <= 0) { el.style.display = "none"; continue; }
+      el.style.display = "";
+      el.style.opacity = String(o);
+      el.style.transform = `translate(${p.x}px, ${p.y}px) scale(${p.s})`;
     }
   }
   for (const a of world.agents) {
@@ -3759,6 +4271,11 @@ function renderWorld(world, iconsRef, padsRef, damRefs) {
       // here, and a wolf at drain 0.10 never does, which is the whole point
       // of putting the cougar next to him.
       sprite.dataset.spent = (a._ex || 0) > 0.6 ? '1' : '';
+      // The musk. A fact about a MOMENT rather than about a state — the
+      // fight it answers is already over by the time it shows, and the
+      // break-up that follows is a dash-away — so it rides its own flag
+      // the way data-burst does rather than any state name.
+      sprite.dataset.musk = nowMs < (a._muskUntil || 0) ? '1' : '';
       let dir = Number(sprite.dataset.dir || '1');
       if (a.vx < -8) dir = -1; else if (a.vx > 8) dir = 1;
       if (a._faceDir) dir = a._faceDir; // e.g. the dog turning to face a fence it sniffs

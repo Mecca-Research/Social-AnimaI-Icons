@@ -71,6 +71,23 @@ function FoxDraw({ uid }) {
           <circle cx="103" cy="61" r="3.6" fill="#8e1f46" />
           <circle cx="101.9" cy="59.9" r="1.3" fill="#d46b95" opacity=".7" />
         </g>
+        {/* THE OPEN MUZZLE (foxbark). Drawn cracked, not hinged: the head
+            rig can carry a jaw but it cannot open one, and swapping a wedge
+            in over the closed mouth is exactly what the bear's chomp does
+            with mouth-rest / mouth-open. Painted after the FaceKit so it
+            covers the resting mouth line. CSS shows it only while barking. */}
+        <g className="sai-crit-foxgape">
+          <path d="M 91 54 C 98 55.5 104 56.4 107.6 56.2 C 105 62 99 65 93 63 C 91 61 90 57 91 54 Z" fill="#5e1f2a" />
+          <ellipse cx="99.5" cy="61" rx="4.6" ry="1.9" fill="#e0728a" opacity=".85" />
+          <path d="M 93 63 C 99 65.4 104.6 63 108 57.6 C 108.8 61 106 65.6 100.6 67 C 96 68 93.2 66.2 92.6 63.8 Z" fill={bib} />
+        </g>
+        {/* ...and the blade, for the mouthful of grass. It rides the same
+            carry channel as the berry, so the head shows one or the other
+            and never both. */}
+        <g className="sai-crit-foxblade">
+          <path d="M 97 62 C 107 61 115 58 122 51" stroke="#4f9a5c" strokeWidth="2.6" fill="none" strokeLinecap="round" />
+          <path d="M 98 64.5 C 106 64 113 62.5 119 59" stroke="#69b877" strokeWidth="2.2" fill="none" strokeLinecap="round" />
+        </g>
       </g>
         {/* ---- (2) and (3) at the END of FoxDraw's outer <g>, after the head group
              — the two feeding poses. His body is one level ellipse with the head
@@ -187,6 +204,103 @@ function FoxDraw({ uid }) {
             <circle cx="88" cy="101.5" r="2.9" fill="#a8244f" />
           </g>
           <path d="M 82 103 l -1.4 -6 M 92 103.5 l .6 -5.6 M 110 102 l 2.2 -5.4" stroke="#4f9a5c" strokeWidth="1.7" fill="none" strokeLinecap="round" opacity=".85" />
+          {/* ...and for the grass crop, the same posture over different
+              ground. Soft stuff, not the wiry sward the goose shears: three
+              broad blades lying where his muzzle lands, and one he has hold
+              of. The windfall's fruit is hidden in that state and this is
+              shown instead, which is the whole difference between them —
+              the skunk shares one drawn head between two bouts the same way. */}
+          <g className="nose-tuft">
+            <path d="M 88 103 C 89 96 91 91 94 87" stroke="#4f9a5c" strokeWidth="2.4" fill="none" strokeLinecap="round" />
+            <path d="M 97 103.5 C 97 97 96 92 94 88" stroke="#5fae6c" strokeWidth="2.2" fill="none" strokeLinecap="round" />
+            <path d="M 106 102.5 C 105 96 102 92 99 89" stroke="#468c57" strokeWidth="2.1" fill="none" strokeLinecap="round" />
+            <path className="tuft-blade" d="M 101 103 C 103 96 105 91 108 86" stroke="#6fc079" strokeWidth="2.6" fill="none" strokeLinecap="round" />
+          </g>
+        </g>
+
+        {/* THE SCREAM (foxscream). The one posture in his repertoire that is
+            not about food. Head thrown up and back, muzzle gaping at the
+            sky, ears laid flat, the brush dropped low and stiff, and his
+            weight rocked back over the hips so the chest is off the
+            forelegs — a fox screaming is not standing, he is bracing.
+            Drawn whole for the same reason the other two poses are. */}
+        <g className="sai-crit-screampose">
+          {/* dropped and stiff. A calling fox is not waving it */}
+          <g className="scream-tail">
+            <path d="M 44 78 C 30 80 15 84 5 91 C 1 86 2 77 9 73 C 19 67 33 70 42 72 Z" fill={`url(#${uid}f)`} />
+            <path d="M 5 91 C 1 86 2 77 9 73 C 8 79 8 85 10 89 C 8 90.6 6 91.4 5 91 Z" fill={bib} />
+          </g>
+          <rect x="34" y="72" width="8.5" height="31" rx="4.2" fill={sockF} />
+          <rect x="62" y="70" width="8.5" height="33" rx="4.2" fill={sockF} />
+          <g className="sai-crit-screambody">
+            {/* the spine runs UP to the shoulder — the opposite slope to the
+                windfall body, and the read is the opposite too */}
+            <path d="M 24 86 C 20 74 26 62 40 57 C 56 51 74 53 83 61 C 91 68 89 82 78 88 C 62 96 32 96 24 86 Z" fill={`url(#${uid}f)`} />
+            {/* THE NECK. He has none standing up — the whole reason these
+                poses are drawn whole — and a head thrown back needs one or
+                it hangs in the air over the shoulder. Drawn INSIDE the body
+                group so it stays welded to the chest while the skull wavers
+                on top of it, and before the shading so the back tone runs
+                up it. It is buried under the skull at the top and under the
+                chest bib at the bottom, so only the throat of it shows. */}
+            <path d="M 66 72 C 64 58 71 46 82 42 C 91 39 95 46 94 56 C 93 66 89 75 80 78 C 72 80 67 78 66 72 Z" fill={`url(#${uid}f)`} />
+            <BackShade cx={56} cy={70} rx={25} ry={15} color="#8a4514" op={.18} />
+            <Under cx={52} cy={80} rx={25} ry={16} color={bib} k={.56} opacity={.9} />
+            <path d="M 74 58 C 82 64 85 74 81 84 C 75 82 70 74 69 64 Z" fill={bib} opacity=".9" />
+            <BellyShade cx={52} cy={92} rx={20} />
+          </g>
+          <rect x="42" y="74" width="9" height="29" rx="4.5" fill={sock} />
+          <rect x="70" y="72" width="9" height="31" rx="4.5" fill={sock} />
+          <g className="sai-crit-screamhead">
+            {/* laid flat back along the skull. This one line is what keeps
+                the pose from reading as a friendly howl */}
+            <g className="sai-crit-ear sai-crit-ear-l">
+              <path d="M 79 24 L 62 27 L 80 43 Z" fill={F[1]} />
+              <path d="M 79 28 L 68 29 L 80 38 Z" fill={earIn} />
+            </g>
+            <g className="sai-crit-ear sai-crit-ear-r">
+              <path d="M 85 19 L 66 17 L 87 37 Z" fill={F[1]} />
+              <path d="M 85 23 L 72 22 L 86 33 Z" fill={earIn} />
+            </g>
+            <circle cx="88" cy="34" r="17.5" fill={`url(#${uid}f)`} />
+            <path d="M 71 40 l -5 3 4 2 Z M 72 45 l -4 3 4 1.4 Z" fill={F[1]} />
+            {/* the muzzle, forty-four degrees up, gaping. A static transform
+                on a child of an animated group is fine — the group itself
+                carries none. Upper jaw, then the throat, then the dropped
+                lower jaw, so the dark reads as depth and not as a hole */}
+            <g transform="rotate(-44 88 34)">
+              <path d="M 92 30 C 101 28 108 30.5 111.6 34.6 C 106 36.5 98 37 92 35.6 Z" fill={bib} />
+              <ellipse cx="110.6" cy="32.6" rx="3.2" ry="2.7" fill={ink} />
+              <path d="M 92 35 C 99 36.6 106 37 111 35.6 C 107 42 99 45.6 93 44 C 91 42.4 90.6 38 92 35 Z" fill="#5e1f2a" />
+              <ellipse cx="100" cy="41" rx="5.2" ry="2.1" fill="#e0728a" opacity=".85" />
+              <path d="M 93 44 C 99 46.6 105 44.6 109 39.6 C 109.6 43.4 106.6 48 101 49.4 C 96 50.4 93.2 48.4 92.6 45.6 Z" fill={bib} />
+            </g>
+            <FaceKit lid={F[1]} e1={[81, 30]} e2={[94, 27]} er={3.2} iris={ink} mouths={false} />
+          </g>
+        </g>
+
+        {/* THE CALL ITSELF — the frog's chorus rings, stretched. His is a
+            pulse and this is a wail, so these are bigger, slower, fewer and
+            they travel further. Kept OUTSIDE the pose group so the pose's
+            fill-box origin is his body and not the sound he is making; the
+            static rotate lays them along the line of the muzzle, and only
+            the paths inside are animated. */}
+        <g className="sai-crit-screamrings" transform="rotate(-44 104 22)">
+          <path d="M 110 12 q 7 10 0 20" stroke="#ffe4bd" strokeWidth="2.6" fill="none" strokeLinecap="round" />
+          <path d="M 119 7 q 10 15 0 30" stroke="#ffe4bd" strokeWidth="2.3" fill="none" strokeLinecap="round" />
+          <path d="M 128 2 q 13 20 0 40" stroke="#ffdcb0" strokeWidth="2" fill="none" strokeLinecap="round" />
+          <path d="M 137 -3 q 16 25 0 50" stroke="#ffdcb0" strokeWidth="1.7" fill="none" strokeLinecap="round" />
+        </g>
+
+        {/* THE BARK (foxbark) needs no new animal — it needs an open mouth
+            and a hard rhythm, both of which the ordinary rig can carry. All
+            it needs drawn is the sound: three chevrons off the end of the
+            resting muzzle. Sharp where the scream's are round, which is the
+            entire difference between the two at sprite size. */}
+        <g className="sai-crit-barkrings">
+          <path d="M 113 47 l 5.5 7 l -5.5 7" stroke="#ffe4bd" strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M 121 44 l 7 10 l -7 10" stroke="#ffe4bd" strokeWidth="2.3" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M 130 41 l 8.5 13 l -8.5 13" stroke="#ffdcb0" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
         </g>
     </g>
   );
@@ -1170,6 +1284,59 @@ function GooseDraw({ uid }) {
         </g>
       </g>
 
+      {/* HISSING POSE (fight): the neck run out FLAT, bill wide open,
+          tongue buzzing in the gape. Only the head and neck are swapped —
+          his own preen/crop/dabble trick — so body, legs and wings stay on
+          the rig and go on taking the global fight animations underneath.
+          The neck has to be drawn for the third time and for the same
+          reason each time: it is one filled path rooted in the breast, and
+          the rotation that would lay it level carries the head out past
+          his own tail. A threatening goose also does not carry an S, so
+          this one is nearly straight — which no rotation of the rig's
+          curve could ever produce anyway. */}
+      <g className="sai-crit-hisspose">
+        <g className="hiss-neck">
+          <path d="M 68 76 C 78 74 88 74 98 77" stroke={dark} strokeWidth="12" fill="none" strokeLinecap="round" />
+          <path d="M 70 73 C 79 71.4 87 71.4 95 73.6" stroke="#2c3036" strokeWidth="4" fill="none" strokeLinecap="round" opacity=".5" />
+          <circle cx="101" cy="78" r="9.2" fill={dark} />
+          {/* the chinstrap, riding the underside of a level head */}
+          <path d="M 96 82 C 95 86 98 89.6 102.6 89 C 105 86 105 81.6 102.6 79 C 99.4 78.6 96.8 79.6 96 82 Z" fill={white} />
+          <g className="sai-crit-eyes-normal">
+            <circle cx="100" cy="74" r="2.4" fill="#fff" opacity=".9" />
+            <circle cx="100.4" cy="74.2" r="1.6" fill={ink} />
+          </g>
+          {/* the throat behind the mandibles — painted before both of them
+              so the gape reads as a hole and not as a gap */}
+          <path d="M 107 75.6 L 116 79.4 L 107.6 82.6 Z" fill="#7a2b33" />
+          {/* upper mandible, fixed to the skull... */}
+          <path d="M 108 73.6 L 123 74.6 L 109.4 79 Q 107.6 76.4 108 73.6 Z" fill={shank} />
+          <path d="M 111 75.6 l 6 .6" stroke="#3c4046" strokeWidth="1" strokeLinecap="round" />
+          {/* ...lower one hinged wide, which is the whole of the display */}
+          <g className="hiss-jaw">
+            <path d="M 108 80 L 122 86.4 L 108.6 85 Q 107.6 82.4 108 80 Z" fill="#2c3036" />
+            <path d="M 111 82 l 6 2" stroke="#4a4f56" strokeWidth="1" strokeLinecap="round" />
+          </g>
+          {/* THE TONGUE. Drawn as one thick stroke with a tip, because at
+              85ms nothing narrower than this survives the blur. */}
+          <g className="hiss-tongue">
+            <path d="M 108.4 78.4 C 112 78 115 78.6 117.4 80" stroke="#d4737f" strokeWidth="2.6" fill="none" strokeLinecap="round" />
+            <path d="M 117.4 80 l 2.6 .6" stroke="#c05f6c" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+          </g>
+          {/* the serrations along the tomium — a goose's "teeth", and only
+              ever visible with the bill open this far */}
+          <path d="M 110 78.8 l 0 1.4 M 113 79.4 l 0 1.4 M 116 80.2 l 0 1.4"
+            stroke="#e8e2d4" strokeWidth="1" strokeLinecap="round" fill="none" opacity=".85" />
+        </g>
+        {/* the hiss itself. There is no audio, so the air leaving him is
+            drawn: a flat jet of it running out along the open bill, in the
+            direction the neck is pointing, in bursts on the gape's clock. */}
+        <g className="hiss-air">
+          <path d="M 124 76 C 132 74.4 140 74.6 147 76.4" stroke="#e8f2f6" strokeWidth="2.2" fill="none" strokeLinecap="round" opacity=".7" />
+          <path d="M 124 81 C 133 81.4 141 83 147 85.4" stroke="#e8f2f6" strokeWidth="1.8" fill="none" strokeLinecap="round" opacity=".55" />
+          <path d="M 126 78.6 C 134 78 142 78.4 149 79.6" stroke="#cfe6ee" strokeWidth="1.4" fill="none" strokeLinecap="round" opacity=".45" />
+        </g>
+      </g>
+
       {/* WING-FLAP SPLASH: both wings thrown wide and high off the water,
           primaries fanned, spray flying. CSS shows this only mid-splash */}
       <g className="sai-crit-splashwings">
@@ -1386,6 +1553,222 @@ function SkunkDraw({ uid }) {
           <ellipse cx="63" cy="101.8" rx="1.5" ry="1.2" fill="#5d4327" />
         </g>
       </g>
+
+      {/* ---- APOSEMATIC DISPLAY (fight) ----
+          The final warning, drawn whole for the same reason the scrape is.
+          The rig is a level ellipse on four full-length shanks: it cannot
+          arch, it cannot drop its chest, and — the one that decides it —
+          it cannot stand its tail on end. The plume he carries is drawn
+          lying back over the rump, and no rotation of it points straight
+          up without swinging the tip out past his own nose. So the arch,
+          the low forequarters and the raised plume are DRAWN and the
+          display animates on top of them.
+          The plume here is not the plume he walks around with, either. A
+          threat plume is fanned and bristled, which is why it is a fresh
+          path rather than the usual re-aim of the one he has. */}
+      <g className="sai-crit-apopose">
+        {/* laid down first so the feet stamp on top of their own dust */}
+        <g className="apo-stomp">
+          <ellipse cx="70" cy="102" rx="3.4" ry="2.4" fill="#6d5030" />
+          <ellipse cx="80" cy="102.4" rx="3.8" ry="2.6" fill="#5d4327" />
+          <ellipse cx="62" cy="101.6" rx="2.6" ry="1.9" fill="#4a3520" />
+          <ellipse cx="88" cy="101.8" rx="2.8" ry="2" fill="#6d5030" />
+        </g>
+        {/* THE FLAG. Every white line on a skunk exists to be seen from the
+            front, so the stripes run UP it rather than along it. */}
+        <g className="apo-tail">
+          <path d="M 44 84 C 34 74 26 58 28 40 C 30 24 40 14 50 16 C 46 30 46 48 52 62 C 56 72 54 80 48 85 Z" fill={K[1]} />
+          <path d="M 30 44 C 29 28 38 18 48 18.5 C 44 30 44 46 48 60 C 40 60 32 54 30 44 Z" fill={white} />
+          <path d="M 27 52 l -5 -3 M 26 40 l -6 -2 M 29 28 l -5 -4 M 36 18 l -3 -5
+                   M 50 20 l 5 -4 M 52 34 l 6 -2 M 53 48 l 6 1"
+            stroke={K[0]} strokeWidth="2" strokeLinecap="round" fill="none" opacity=".8" />
+        </g>
+        {/* hocks planted and braced: the rump is the one part of him that
+            does NOT move through the display */}
+        <g className="apo-hind">
+          <rect x="30" y="80" width="9" height="23" rx="4.5" fill={K[2]} />
+          <ellipse cx="34.5" cy="101.6" rx="5.4" ry="3" fill="#101015" />
+          <rect x="40" y="82" width="9" height="21" rx="4.5" fill={K[1]} />
+          <ellipse cx="44.5" cy="101.6" rx="5.8" ry="3.2" fill={K[2]} />
+        </g>
+        <g className="apo-fore-f">
+          <rect x="66" y="84" width="8" height="19" rx="4" fill={K[2]} />
+          <ellipse cx="70" cy="101.8" rx="5" ry="3" fill="#101015" />
+        </g>
+        {/* the arch. Peak at x 55 and the chest carried nine units lower
+            than the scrape's, which is what makes this a hunch rather than
+            the same crouch with a different tail. */}
+        <g className="apo-body">
+          <path d="M 26 86 C 20 68 34 50 55 50 C 72 50 84 62 88 76 C 90 84 84 92 76 94 C 58 98 36 97 29 91 C 26.5 89.4 26 88 26 86 Z"
+            fill={`url(#${uid}f)`} />
+          <path d="M 32 80 C 28 62 40 56 55 56 C 70 56 80 64 85 76 L 78 78 C 73 68 66 62 55 62 C 43 62 37 68 37 81 Z" fill={white} />
+          <Under cx={56} cy={82} rx={26} ry={13} color="#4d4d59" k={.5} opacity={.85} />
+          <BellyShade cx={55} cy={95} rx={19} />
+        </g>
+        {/* the head stays low and ON him. A warning is aimed. */}
+        <g className="apo-head">
+          <circle cx="82" cy="66" r="4.6" fill={K[2]} />
+          <circle cx="99" cy="80" r="14.5" fill={`url(#${uid}f)`} />
+          <path d="M 92 67 C 98 70 105 76 110 84 C 107.5 86 104.5 85.4 103 83 C 99 77 95 72.5 90 70 Z" fill={white} />
+          <circle cx="103" cy="76" r="3.2" fill="#fff" /><circle cx="104" cy="76.3" r="1.9" fill={ink} />
+          <circle cx="93" cy="77" r="3" fill="#fff" /><circle cx="94" cy="77.3" r="1.8" fill={ink} />
+          {/* brows drawn in: the rig's .sai-crit-brows lives inside the head
+              group this pose replaces, so the global fight rule that turns
+              them on has nothing left to turn on */}
+          <path d="M 89 71.5 l 7 2.6 M 107 70.5 l -7 2.6" stroke="#0c0b10" strokeWidth="2.6" strokeLinecap="round" fill="none" />
+          <ellipse cx="112" cy="87.5" rx="3.1" ry="2.7" fill={ink} />
+          <g className="apo-teeth">
+            <path d="M 105 89 Q 110 92 113 90.4 Q 110.5 95.4 105.6 93.6 Z" fill="#5e1f27" />
+            <path d="M 106 89.6 l 1.4 2.4 M 109 90.2 l 1 2.4" stroke={white} strokeWidth="1.4" strokeLinecap="round" fill="none" />
+          </g>
+        </g>
+        <g className="apo-fore-n">
+          <rect x="76" y="84" width="8.5" height="19" rx="4.25" fill={K[1]} />
+          <ellipse cx="80.2" cy="101.8" rx="5.4" ry="3.2" fill={K[2]} />
+        </g>
+      </g>
+
+      {/* ---- THE SPRAY (data-musk) ----
+          Drawn REAR-ON, and that is not a stylization. The world flips this
+          sprite to point at whatever he just sprayed, so "the way he faces
+          in the drawing" is the way he is TRAVELLING — away from it, with
+          the working end presented, which is what a skunk actually does.
+          It also puts the jet on the same side as the target for free.
+          The jet's furthest cloud edge is at art x 226. That number is
+          load-bearing: MUSK_REACH in the sim is read off it, so the cloud
+          that is drawn IS the cloud that hits. Move these ellipses and the
+          hit test moves with them. */}
+      <g className="sai-crit-muskpose">
+        <g className="musk-hind">
+          <rect x="70" y="82" width="9" height="21" rx="4.5" fill={K[2]} />
+          <ellipse cx="74.5" cy="101.6" rx="5.4" ry="3" fill="#101015" />
+          <rect x="82" y="82" width="9" height="21" rx="4.5" fill={K[1]} />
+          <ellipse cx="86.5" cy="101.6" rx="5.8" ry="3.2" fill={K[2]} />
+        </g>
+        <g className="musk-tail">
+          <path d="M 86 76 C 78 64 74 46 78 30 C 82 16 94 8 104 12 C 98 26 96 44 100 58 C 103 68 98 76 92 79 Z" fill={K[1]} />
+          <path d="M 80 44 C 78 28 86 16 98 14.5 C 94 28 93 44 96 58 C 88 58 82 54 80 44 Z" fill={white} />
+          <path d="M 76 50 l -5 -2 M 77 36 l -5 -3 M 82 22 l -4 -4 M 100 16 l 5 -4 M 102 32 l 6 -2 M 101 48 l 6 1"
+            stroke={K[0]} strokeWidth="2" strokeLinecap="round" fill="none" opacity=".8" />
+        </g>
+        <g className="musk-body">
+          <path d="M 18 84 C 14 70 26 58 46 56 C 68 54 84 60 92 72 C 96 80 92 92 82 94 C 58 99 30 97 22 91 C 19 89 18 86 18 84 Z"
+            fill={`url(#${uid}f)`} />
+          <path d="M 24 76 C 22 64 34 62 48 61 C 66 60 78 64 86 74 L 80 78 C 73 69 64 65 50 66 C 36 67 30 70 30 79 Z" fill={white} />
+          <Under cx={52} cy={82} rx={28} ry={13} color="#4d4d59" k={.5} opacity={.85} />
+          <BellyShade cx={52} cy={95} rx={20} />
+        </g>
+        <g className="musk-fore">
+          <rect x="26" y="82" width="8" height="21" rx="4" fill={K[2]} />
+          <ellipse cx="30" cy="101.8" rx="5" ry="3" fill="#101015" />
+          <rect x="36" y="83" width="8.5" height="20" rx="4.25" fill={K[1]} />
+          <ellipse cx="40.2" cy="101.8" rx="5.4" ry="3.2" fill={K[2]} />
+        </g>
+        {/* the head twisted back over the shoulder — he watches it land */}
+        <g className="musk-head">
+          <circle cx="20" cy="60" r="4.4" fill={K[2]} />
+          <circle cx="26" cy="72" r="13" fill={`url(#${uid}f)`} />
+          <path d="M 20 60 C 24 64 30 71 34 79 C 31.5 81 28.6 80.4 27.2 78 C 24 72 21 66 17.6 63 Z" fill={white} />
+          <circle cx="33" cy="70" r="3.1" fill="#fff" /><circle cx="34" cy="70.3" r="1.9" fill={ink} />
+          <path d="M 28 64.5 l 6.6 2.2" stroke="#0c0b10" strokeWidth="2.4" strokeLinecap="round" fill="none" />
+          <ellipse cx="37" cy="79.5" rx="2.9" ry="2.5" fill={ink} />
+        </g>
+        {/* PAIRED streams, because that is what makes it a skunk and not a
+            puff of smoke: two glands, two jets, converging into one cloud */}
+        <g className="musk-jet">
+          <g className="musk-stream">
+            <path d="M 94 72 C 116 68 138 68 160 74" stroke="#8fbf3a" strokeWidth="4.4" fill="none" strokeLinecap="round" opacity=".9" />
+            <path d="M 94 78 C 116 78 138 80 158 88" stroke="#a7cf52" strokeWidth="3.4" fill="none" strokeLinecap="round" opacity=".8" />
+          </g>
+          <g className="musk-cloud">
+            <ellipse cx="150" cy="74" rx="17" ry="13" fill="#7fae2f" opacity=".55" />
+            <ellipse cx="176" cy="70" rx="21" ry="16" fill="#93c23c" opacity=".45" />
+            <ellipse cx="200" cy="78" rx="26" ry="19" fill="#7fae2f" opacity=".38" />
+            <ellipse cx="168" cy="86" rx="15" ry="11" fill="#a7cf52" opacity=".35" />
+          </g>
+          <g className="musk-drops" fill="#b9dd6a">
+            <ellipse cx="132" cy="66" rx="2.4" ry="1.8" opacity=".8" />
+            <ellipse cx="152" cy="90" rx="2" ry="1.5" opacity=".7" />
+            <ellipse cx="188" cy="60" rx="2.6" ry="2" opacity=".65" />
+            <ellipse cx="196" cy="92" rx="2.2" ry="1.7" opacity=".6" />
+          </g>
+        </g>
+      </g>
+
+      {/* ---- CLUMSY DIGGING (conedig, conenose) ----
+          Not the claw scrape with a longer timer. That one holds its rump
+          UP over straight hocks and works the top half-inch with one paw;
+          this one SITS BACK on its haunches, which is what lets the
+          shoulders drop and the face get under the rim, and what makes him
+          slow and heavy about getting out of it again. Both forepaws, soil
+          thrown forward past his own nose as often as back, and a hole at
+          the end of it instead of a scuff.
+          The pit at (98,100) is the load-bearing number: the ethogram's
+          PIT_DX / PIT_DY put the ground layer's cone exactly there, so
+          what he leaves behind is what he was seen to make. */}
+      <g className="sai-crit-conepose">
+        <g className="cone-pit">
+          <ellipse cx="98" cy="100.4" rx="13.5" ry="5.4" fill="#3c2a15" />
+          <ellipse cx="98" cy="99.6" rx="11" ry="4.2" fill="#241809" />
+          {/* the far wall catches light and the near one runs down to a
+              POINT — the point is the whole difference between a cone and
+              the squirrel's scoop */}
+          <path d="M 87.4 99.2 C 91 96.6 105 96.6 108.6 99.2 L 98 104.6 Z" fill="#4e371c" opacity=".75" />
+          <path d="M 89 100.6 L 98 105 L 107 100.6" fill="none" stroke="#171008" strokeWidth="1.2" opacity=".7" />
+          <ellipse cx="86" cy="102.6" rx="5.4" ry="2.4" fill="#5d4327" />
+          <ellipse cx="110" cy="102.4" rx="5" ry="2.2" fill="#54391d" />
+        </g>
+        {/* the plume, dropped and loose. Inner static transform re-aims the
+            tail he already has; the animated group carries none. */}
+        <g className="cone-tail"><g transform="translate(2 6) rotate(-8 44 78)">
+          <path d="M 44 80 C 24 84 8 72 10 52 C 12 34 26 24 40 28 C 36 40 38 54 46 64 C 50 70 50 76 44 80 Z" fill={K[1]} />
+          <path d="M 12 56 C 11 41 21 29 35 29.5 C 32 38 32.5 48 37 57 C 28 62 17 62 12 56 Z" fill={white} />
+        </g></g>
+        {/* sat down on the hocks: a folded haunch, not a standing shank */}
+        <g className="cone-hind">
+          <ellipse cx="40" cy="88" rx="17" ry="14" fill={K[2]} />
+          <ellipse cx="44" cy="97" rx="11" ry="6.6" fill={K[1]} />
+          <ellipse cx="49" cy="101.6" rx="6.4" ry="3.2" fill="#101015" />
+        </g>
+        <g className="cone-body">
+          <path d="M 26 84 C 24 70 36 60 54 60 C 70 60 82 68 88 80 C 91 86 88 93 80 95 C 60 100 38 98 30 92 C 27 90 26 87 26 84 Z"
+            fill={`url(#${uid}f)`} />
+          <path d="M 30 78 C 32 66 42 62 55 63 C 68 64 77 70 83 79 L 78 81 C 72 73 65 68 55 67 C 44 66 37 70 35 79 Z" fill={white} />
+          <Under cx={56} cy={84} rx={24} ry={13} color="#4d4d59" k={.5} opacity={.85} />
+          <BellyShade cx={55} cy={96} rx={18} />
+        </g>
+        <g className="cone-arm-f">
+          <path d="M 74 86 C 72 92 73 97 75 100" stroke={K[2]} strokeWidth="9" fill="none" strokeLinecap="round" />
+          <ellipse cx="76" cy="100.6" rx="6" ry="3.4" fill="#101015" />
+          <path d="M 80 102 l 2.6 1 M 76.6 102.8 l 1.2 1.8" stroke="#c9bda6" strokeWidth="1.4" fill="none" strokeLinecap="round" opacity=".75" />
+        </g>
+        <g className="cone-head">
+          <circle cx="82" cy="70" r="4.4" fill={K[2]} />
+          <circle cx="92" cy="84" r="14.5" fill={`url(#${uid}f)`} />
+          <path d="M 85 76 C 88 84 93 92 100 97" stroke={white} strokeWidth="7" fill="none" strokeLinecap="round" />
+          <circle cx="95" cy="81" r="3.2" fill="#fff" /><circle cx="95.8" cy="81.3" r="1.9" fill={ink} />
+          <ellipse cx="103" cy="99" rx="3" ry="2.6" fill={ink} />
+          <path d="M 105 96.4 l 5 -2 M 105.4 99.2 l 5 1.8" stroke={white} strokeWidth="1" fill="none" strokeLinecap="round" opacity=".5" />
+        </g>
+        {/* near forepaw, the deeper of the two. Claws coloured off the soil,
+            not off the blaze — the scrape learned that the hard way. */}
+        <g className="cone-arm-n">
+          <path d="M 84 87 C 82.4 93 83 98 85 100.6" stroke={K[1]} strokeWidth="9.5" fill="none" strokeLinecap="round" />
+          <ellipse cx="86.4" cy="101" rx="6.4" ry="3.6" fill={K[2]} />
+          <path d="M 91 102.4 l 2.8 .9 M 87 103.2 l 1.3 1.8 M 83 103 l -.7 1.8"
+            stroke="#c9bda6" strokeWidth="1.5" fill="none" strokeLinecap="round" opacity=".8" />
+        </g>
+        {/* six clods, and children 4 and 5 go FORWARD past his own nose —
+            which is why there is spoil on both sides of the rim */}
+        <g className="cone-spray">
+          <ellipse cx="70" cy="98" rx="2.8" ry="2.2" fill="#5d4327" />
+          <ellipse cx="58" cy="92" rx="2.4" ry="1.9" fill="#4a3520" />
+          <ellipse cx="46" cy="86" rx="2.6" ry="2" fill="#6d5030" />
+          <ellipse cx="112" cy="94" rx="2.2" ry="1.7" fill="#5d4327" />
+          <ellipse cx="118" cy="88" rx="2" ry="1.6" fill="#4a3520" />
+          <ellipse cx="34" cy="94" rx="2.2" ry="1.7" fill="#54391d" />
+        </g>
+      </g>
     </g>
   );
 }
@@ -1427,6 +1810,19 @@ function SquirrelDraw({ uid }) {
         <rect x="94.6" y="60.4" width="2.9" height="4.4" rx="1" fill="#fff" stroke={F[2]} strokeWidth=".45" />
         <path d="M 99 56 l 11 -2.4 M 99 58.5 l 11 0.8" stroke="#d8d2ca" strokeWidth="1" strokeLinecap="round" />
         <FaceKit lid={F[1]} e1={[78, 48]} e2={[91, 46.5]} er={3.1} iris={ink} mouths={false} />
+        {/* ---- THE GAPE (fight) ----
+            He is the one animal here with no mouth on the rig at all: his
+            FaceKit is built mouths={false}, so the global fight rule that
+            opens every other animal's jaws found nothing on him to open
+            and a chattering squirrel came out silent AND still. The
+            incisors are the only part of a grey squirrel's face that reads
+            at sprite size, which is the reason the gape is drawn at all. */}
+        <g className="sai-crit-chatter">
+          <ellipse cx="95.4" cy="63.6" rx="4.6" ry="3.8" fill="#5e2530" />
+          <ellipse cx="95.4" cy="65.4" rx="2.4" ry="1.9" fill="#c9707c" />
+          <path d="M 93.4 60.8 h 2.4 v 3.4 h -2.4 Z M 96.4 61 h 2.2 v 3.2 h -2.2 Z"
+            fill="#fffdf4" stroke={F[2]} strokeWidth=".4" />
+        </g>
       </g>
       {/* a nut stowed in the cheek: the pouch swells and one shell tip
           shows at the corner of the mouth. Drawn inside the head so it
@@ -1437,6 +1833,36 @@ function SquirrelDraw({ uid }) {
         <path d="M 76 62 q 6 4.6 13 1.6" stroke={F[2]} strokeWidth="1.1" fill="none" strokeLinecap="round" opacity=".5" />
         <ellipse cx="90" cy="64" rx="3.2" ry="3.8" fill="#7a5227" transform="rotate(18 90 64)" />
         <ellipse cx="90" cy="62.8" rx="1.4" ry="1.2" fill="#a9793f" />
+      </g>
+
+      {/* ---- THE BARK (fight) ----
+          Chevrons, not rings. A ring is a soft round call; this is hard and
+          clipped, and it fires in the same volley the jaw does so the eye
+          counts separate barks instead of reading one continuous siren.
+          Kept OUT of the head group deliberately: the head is running the
+          global .18s fight bob, and sound marks that shake are noise. */}
+      <g className="sai-crit-barkpuff">
+        <path d="M 104 52 C 108 56 108 62 104 66" stroke="#f2ead8" strokeWidth="2.4" fill="none" strokeLinecap="round" />
+        <path d="M 110 48 C 116 55 116 63 110 70" stroke="#f2ead8" strokeWidth="2.1" fill="none" strokeLinecap="round" opacity=".8" />
+        <path d="M 116 44 C 124 54 124 64 116 74" stroke="#f2ead8" strokeWidth="1.8" fill="none" strokeLinecap="round" opacity=".6" />
+      </g>
+
+
+      {/* a bundle of nest material carried crosswise in the jaws: three
+          twigs, a moss tuft and two green leaves — the drey's whole
+          material list, so what he cuts is visibly what the nest is made
+          of. A sibling of the head rather than a child of it, like the
+          cheek nut above: the head's own animations are nods and casts,
+          and a bundle that nods with them reads as a loose mouth. Both
+          dedicated poses hide the head, so the CSS hides this with them. */}
+      <g className="sai-crit-twigbundle">
+        <path d="M 96 66 L 118 52" stroke="#6b4a2a" strokeWidth="2.6" fill="none" strokeLinecap="round" />
+        <path d="M 97 62 L 119 57" stroke="#7d5a33" strokeWidth="2.2" fill="none" strokeLinecap="round" />
+        <path d="M 98 58 L 115 47" stroke="#5b3f26" strokeWidth="2" fill="none" strokeLinecap="round" />
+        <path d="M 108 56 q 6 -7 12 -5 q -3 8 -11 7 Z" fill="#4f8f4a" />
+        <path d="M 104 63 q 7 -3 12 1 q -6 5 -12 1 Z" fill="#3f7c4a" />
+        <ellipse cx="101" cy="61" rx="4.2" ry="3" fill="#6f8a4a" />
+        <ellipse cx="100" cy="60" rx="2.4" ry="1.6" fill="#88a35c" opacity=".8" />
       </g>
 
       {/* ---- DIGGING POSE (cachedig, unearth, cachepat) ----
@@ -1631,6 +2057,18 @@ function SquirrelDraw({ uid }) {
         <g className="cling-nut">
           <ellipse cx="77.6" cy="52.6" rx="4.2" ry="5" fill="#7a5227" transform="rotate(14 77.6 52.6)" />
           <ellipse cx="77.4" cy="50.6" rx="1.9" ry="1.6" fill="#a9793f" />
+        </g>
+        {/* the same bundle, seen from behind him on the trunk. The cling
+            drawing hides the normal rig's jaws along with the rest of it,
+            so this is the only bundle on screen while he is climbing, and
+            it is what he still has in his mouth while both hands weave. */}
+        <g className="cling-twigs">
+          <path d="M 71 59 L 105 45" stroke="#6b4a2a" strokeWidth="2.6" fill="none" strokeLinecap="round" />
+          <path d="M 72 63 L 103 51" stroke="#7d5a33" strokeWidth="2.2" fill="none" strokeLinecap="round" />
+          <path d="M 75 56 L 100 42" stroke="#5b3f26" strokeWidth="2" fill="none" strokeLinecap="round" />
+          <path d="M 92 47 q 7 -6 13 -3 q -4 7 -12 6 Z" fill="#4f8f4a" />
+          <path d="M 84 57 q 7 -3 12 1 q -6 5 -12 1 Z" fill="#3f7c4a" />
+          <ellipse cx="80" cy="56" rx="4.4" ry="3.2" fill="#6f8a4a" />
         </g>
       </g>
     </g>
@@ -2472,7 +2910,7 @@ function FrogDraw({ uid }) {
 
 // ---------------- OWL — huge disc face, giant golden eyes, talons ----------------
 function OwlDraw({ uid }) {
-  const F = ["#b08453", "#84603a", "#5a3f22"], cream = "#ecd9ae", gold = "#f2b53c", ink = "#241708", orange = "#e08f2d";
+  const F = ["#b08453", "#84603a", "#5a3f22"], cream = "#ecd9ae", gold = "#f2b53c", ink = "#241708", orange = "#e08f2d", bib = "#f6edd6";
   return (
     <g transform="translate(60 106) scale(.94) translate(-60 -106)">
       <defs><Fur id={`${uid}f`} c={F} /></defs>
@@ -2518,6 +2956,205 @@ function OwlDraw({ uid }) {
           <path d="M 64 50 L 71 54 L 64 61 Z" fill="#5e1f26" />
         </g>
         <FaceKit lid={F[1]} e1={[54, 43]} e2={[74, 41]} er={7.2} drawEyes={false} mouths={false} browCol={ink} blushCol="#e8a48e" />
+      </g>
+
+      {/* ---- HOOTING (owlhoot) ----
+          There is no audio in this world, so a call has to be a PICTURE of
+          one, and the frog already wrote the grammar for that: a throat that
+          pumps and rings that roll off the head (.sai-crit-croaksac /
+          -croakwaves, driven by data-chorus). This is the same device two
+          octaves down — one long phrase instead of a rolling chorus, two
+          pulses in it instead of one, arcs half again as wide and dimmer.
+          The rig cannot make the posture: a calling owl tips forward onto
+          its chest, drives the head down and out and cocks the tail up over
+          its back, and the rig is an upright body-ellipse under a head
+          circle that pivots at its own base. So the lean is drawn.
+          The THROAT is the load-bearing part. Everything else in here could
+          be mistaken for a stretch. */}
+      <g className="sai-crit-hootpose">
+        {/* tail cocked up behind him — the half of the posture you can read
+            from clean across the clearing */}
+        <g className="hoot-tail">
+          <path d="M 56 82 C 46 74 34 64 24 53 L 34 49 C 43 60 52 69 60 76 Z" fill={F[2]} />
+          <path d="M 28 55 C 36 63 45 70 53 76 M 32 51 C 40 59 49 66 57 72"
+            stroke={F[1]} strokeWidth="1.3" fill="none" strokeLinecap="round" opacity=".55" />
+        </g>
+        {/* both feet planted and spread: he braces against his own call */}
+        <g className="hoot-leg-far">
+          <rect x="51" y="89" width="5.2" height="13" rx="2.6" fill="#b4701f" />
+          <path d="M 50.4 101.6 l -3.4 3 M 53.8 102 l 0 3 M 57.2 101.6 l 3.4 3"
+            stroke="#b4701f" strokeWidth="2" fill="none" strokeLinecap="round" />
+        </g>
+        <g className="hoot-leg-near">
+          <rect x="65" y="89" width="5.6" height="13" rx="2.8" fill={orange} />
+          <path d="M 64.4 101.6 l -3.6 3.2 M 68 102 l 0 3.2 M 71.6 101.6 l 3.6 3.2"
+            stroke={orange} strokeWidth="2.1" fill="none" strokeLinecap="round" />
+        </g>
+        <g className="hoot-body">
+          {/* tipped forward off the vertical: chest low and out, rump up */}
+          <path d="M 44 85 C 37 73 41 58 54 51 C 67 44 82 50 87 65 C 92 79 84 94 68 96 C 56 97 48 94 44 85 Z"
+            fill={`url(#${uid}f)`} />
+          <ellipse cx="70" cy="80" rx="13" ry="12" fill={cream} opacity=".95" />
+          <path d="M 62 70 q 4 3.4 8 0 M 70 70 q 4 3.4 8 0 M 58 78 q 4 3.4 8 0 M 66 78 q 4 3.4 8 0
+                   M 74 78 q 4 3.4 8 0 M 62 86 q 4 3.4 8 0 M 70 86 q 4 3.4 8 0"
+            stroke={F[1]} strokeWidth="1.5" fill="none" strokeLinecap="round" opacity=".7" />
+          {/* folded wing along the flank */}
+          <path d="M 47 60 C 40 68 40 82 48 92 C 54 94 58 90 58 82 C 58 72 54 64 47 60 Z" fill={F[2]} />
+          <path d="M 46 66 q -1 9 2 17 M 51 65 q -1 10 2 19" stroke={F[1]} strokeWidth="1.4" fill="none" opacity=".6" />
+          <BellyShade cx={64} cy={95} rx={15} />
+        </g>
+        {/* THE THROAT. Drawn between the chest and the head, so the chin
+            covers its top edge and it swells out from UNDER the bill rather
+            than appearing beside it. CSS pumps it twice and then leaves it
+            deflated for two full seconds, which is the whole of "hoo-hoo
+            ......" — the rhythm is the word. */}
+        <g className="hoot-throat">
+          <ellipse cx="78" cy="72" rx="12" ry="10.5" fill={bib} />
+          <ellipse cx="78" cy="74.5" rx="8.4" ry="6.6" fill="#fffdf3" opacity=".55" />
+          <path d="M 69 70 q 9 5 18 0 M 71 76 q 7 4 14 0" stroke="#cbb693" strokeWidth="1.1" fill="none" opacity=".7" />
+        </g>
+        <g className="hoot-head">
+          {/* tufts laid FLAT and swept back. A great horned owl raises them
+              at an intruder and lowers them to call; the roost pose below
+              carries the other half of that pair, standing straight up. Drawn
+              before the disc so their bases disappear into the crown. */}
+          <path d="M 80 32 L 66 24 L 74 33 Z" fill={F[2]} />
+          <path d="M 95 35 L 79 21 L 89 33 Z" fill={F[1]} />
+          <circle cx="82" cy="50" r="20" fill={`url(#${uid}f)`} />
+          <circle cx="73" cy="52" r="9.5" fill={cream} />
+          <circle cx="91" cy="50" r="9.5" fill={cream} />
+          <circle cx="73" cy="52" r="6.4" fill="#fffbe8" />
+          <circle cx="73.7" cy="52" r="4.3" fill={gold} />
+          <circle cx="74.2" cy="52" r="2.2" fill={ink} />
+          <circle cx="75.1" cy="50.8" r=".95" fill="#fff" />
+          <circle cx="91" cy="50" r="6.4" fill="#fffbe8" />
+          <circle cx="91.7" cy="50" r="4.3" fill={gold} />
+          <circle cx="92.2" cy="50" r="2.2" fill={ink} />
+          <circle cx="93.1" cy="48.8" r=".95" fill="#fff" />
+          {/* the bill barely parts — an owl calls with its throat, not its
+              mouth, and drawing a gaping beak would make him a cartoon */}
+          <path d="M 83 57 L 88.5 62 L 83 68.5 Q 80 62.5 83 57 Z" fill={orange} />
+          <path d="M 83 62.6 L 88 63.4" stroke="#8a5312" strokeWidth="1.1" strokeLinecap="round" />
+        </g>
+        {/* THE CALL: three arcs rolling off the bill, twice per phrase.
+            Broader, slower, dimmer and warmer than the frog's rings on
+            purpose — a low sound drawn as big lazy waves against his tight
+            bright ones. */}
+        <g className="hoot-call">
+          <path d="M 96 50 q 8 12 0 24" stroke="#f0e2bd" strokeWidth="3" fill="none" strokeLinecap="round" />
+          <path d="M 105 41 q 12 21 0 42" stroke="#f0e2bd" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+          <path d="M 114 32 q 16 30 0 60" stroke="#f0e2bd" strokeWidth="2" fill="none" strokeLinecap="round" />
+        </g>
+      </g>
+
+      {/* ---- AT ROOST (owlroost) ----
+          The rig has no such shape: a roosting owl sleeks down to a narrow
+          upright column with no neck, tufts straight up, wing wrapped round
+          the front and toes clamped. Nothing in this group is animated,
+          anywhere, and THAT IS THE BEHAVIOR — see the note over the CSS.
+          Two numbers here are load-bearing and must not drift: the clamped
+          toes are at y 104 and the tuft tips at y 20. ROOST_FOOT in the
+          ethogram is (104.12-60)/120 measured off the first (104 through the
+          .94 wrapper), and the nest's height in the world file was chosen
+          against the second. Move either and the owl stops landing in the
+          cup that is drawn for him. */}
+      <g className="sai-crit-roostpose">
+        {/* the stick he is clamped to. The drawn nest is world geometry and
+            paints BEHIND him, so without this his toes close on nothing —
+            and it is what makes the pose stand up on its own in the sprite
+            gallery, where there is no tree. Same reason the bear's sit-strip
+            carries its own branch. */}
+        <path d="M 38 99 C 50 96.5 72 96.5 84 99 C 72 102 50 102 38 99 Z" fill="#4a331d" />
+        {/* tail hanging straight down the trunk side, short and closed */}
+        <path d="M 52 78 C 50 86 49 94 49 100 L 60 100 C 61 92 61 84 60 78 Z" fill={F[2]} />
+        <path d="M 54 82 C 53 89 53 95 53 99 M 57 82 C 57 89 57 95 57 99"
+          stroke={F[1]} strokeWidth="1.1" fill="none" opacity=".5" />
+        {/* the column: shoulders straight into the skull, no neck at all */}
+        <path d="M 45 90 C 41 76 42 58 49 48 C 54 41 66 41 71 48 C 78 58 79 76 75 90 C 72 99 48 99 45 90 Z"
+          fill={`url(#${uid}f)`} />
+        <ellipse cx="61" cy="76" rx="12" ry="15" fill={cream} opacity=".9" />
+        <path d="M 53 62 q 4 3.2 8 0 M 61 62 q 4 3.2 8 0 M 50 70 q 4 3.2 8 0 M 58 70 q 4 3.2 8 0
+                 M 66 70 q 4 3.2 8 0 M 53 78 q 4 3.2 8 0 M 61 78 q 4 3.2 8 0 M 57 86 q 4 3.2 8 0"
+          stroke={F[1]} strokeWidth="1.5" fill="none" strokeLinecap="round" opacity=".7" />
+        {/* wing wrapped round the front, primaries crossed at the tail root */}
+        <path d="M 68 52 C 76 62 78 78 73 92 C 68 95 64 91 64 82 C 64 70 65 59 68 52 Z" fill={F[2]} />
+        <path d="M 69 60 q 3 12 1 26 M 72 64 q 2 11 0 24" stroke={F[1]} strokeWidth="1.3" fill="none" opacity=".6" />
+        {/* toes clamped over the stick, fore and aft — the bottom of him */}
+        <path d="M 51 92 l 0 8 M 47 98 q -3 3 -5 5 M 51 100 q 0 2.5 0 4 M 55 98 q 3 3 5 5"
+          stroke="#b4701f" strokeWidth="2.4" fill="none" strokeLinecap="round" />
+        <path d="M 68 92 l 0 8 M 64 98 q -3 3 -5 5.6 M 68 100 q 0 2.6 0 4 M 72 98 q 3 3 5 5.6"
+          stroke={orange} strokeWidth="2.6" fill="none" strokeLinecap="round" />
+        {/* ear tufts ERECT — the pair to the hoot pose's flattened ones */}
+        <path d="M 50 36 L 46 20 L 58 31 Z" fill={F[2]} />
+        <path d="M 68 33 L 74 20 L 77 34 Z" fill={F[1]} />
+        {/* the disc, sitting straight on the shoulders */}
+        <circle cx="61" cy="43" r="20" fill={`url(#${uid}f)`} />
+        <circle cx="52" cy="45" r="9.5" fill={cream} />
+        <circle cx="70" cy="43" r="9.5" fill={cream} />
+        {/* eyes down to SLITS, not shut. A roosting owl is still watching,
+            and a closed eye on a sprite that also has no motion reads as a
+            dead icon rather than a still animal. */}
+        <path d="M 46.5 45 q 5.5 4.4 11 0 q -5.5 -1.5 -11 0 Z" fill={gold} />
+        <path d="M 64.5 43 q 5.5 4.4 11 0 q -5.5 -1.5 -11 0 Z" fill={gold} />
+        <path d="M 49 45.6 q 3 1.7 6 0 M 67 43.6 q 3 1.7 6 0" stroke={ink} strokeWidth="2" fill="none" strokeLinecap="round" />
+        <path d="M 46 44.6 q 5.5 2 11 0 M 64 42.6 q 5.5 2 11 0" stroke={F[2]} strokeWidth="1.8" fill="none" strokeLinecap="round" />
+        {/* bill tucked down into the breast feathers */}
+        <path d="M 61 50 L 65 54 L 61 59.5 Q 58.6 54.4 61 50 Z" fill={orange} opacity=".95" />
+      </g>
+
+      {/* ---- IN THE AIR (owlflyup / owlflydown) ----
+          One drawing for both legs of the trip; the difference between them
+          is entirely in the CSS, and that difference is the species' whole
+          character as SpeciesProfile states it — "rarely flies fast, glides
+          slow and silent". He BEATS his way up to the nest and comes down on
+          set wings without a stroke. The rig's folded wing rotates 16 degrees
+          at the shoulder, which is a shrug; a 1.4m span is not something you
+          can reach by rotating it further, so it is drawn. */}
+      <g className="sai-crit-flappose">
+        {/* far wing, thrown up and back behind the body */}
+        <g className="flap-wing-far">
+          <path d="M 56 66 C 44 54 28 42 10 36 C 12 54 22 72 38 80 C 46 84 53 78 56 66 Z" fill={F[2]} />
+          <path d="M 10 36 C 24 46 36 58 46 70 M 13 46 C 25 54 35 64 43 75 M 18 56 C 27 62 34 70 40 78"
+            stroke="#4a3520" strokeWidth="1.5" fill="none" opacity=".7" />
+        </g>
+        {/* tail fanned wide — an owl's brake and rudder both */}
+        <g className="flap-tail">
+          <path d="M 48 82 C 38 88 26 94 16 98 L 30 100 C 40 96 48 91 53 86 Z" fill={F[2]} />
+          <path d="M 20 97 C 29 93 38 88 45 83 M 24 99 C 33 95 41 90 48 85"
+            stroke={F[1]} strokeWidth="1.2" fill="none" opacity=".55" />
+        </g>
+        {/* talons trailing under the tail, half tucked */}
+        <g className="flap-feet">
+          <path d="M 56 86 C 52 90 48 93 44 95 M 44 95 l -4 1.6 M 44 95 l -1 3.4"
+            stroke={orange} strokeWidth="2.4" fill="none" strokeLinecap="round" />
+          <path d="M 63 88 C 59 92 55 95 51 97 M 51 97 l -4 1.6 M 51 97 l -1 3.4"
+            stroke="#b4701f" strokeWidth="2.2" fill="none" strokeLinecap="round" />
+        </g>
+        <g className="flap-body">
+          <path d="M 42 88 C 33 80 35 65 49 58 C 63 51 79 54 87 62 C 94 70 89 84 74 89 C 61 93 48 93 42 88 Z"
+            fill={`url(#${uid}f)`} />
+          <ellipse cx="68" cy="80" rx="15" ry="9" fill={cream} opacity=".92" />
+          <path d="M 54 66 q 4 3.2 8 0 M 62 66 q 4 3.2 8 0 M 50 74 q 4 3.2 8 0 M 58 74 q 4 3.2 8 0 M 66 74 q 4 3.2 8 0"
+            stroke={F[1]} strokeWidth="1.4" fill="none" strokeLinecap="round" opacity=".65" />
+        </g>
+        {/* head thrust forward, tufts flat to the airstream (so: none) */}
+        <g className="flap-head">
+          <circle cx="90" cy="56" r="16" fill={`url(#${uid}f)`} />
+          <circle cx="83" cy="58" r="7.6" fill={cream} />
+          <circle cx="97" cy="56" r="7.6" fill={cream} />
+          <circle cx="83.6" cy="58" r="3.4" fill={gold} />
+          <circle cx="84" cy="58" r="1.8" fill={ink} />
+          <circle cx="97.6" cy="56" r="3.4" fill={gold} />
+          <circle cx="98" cy="56" r="1.8" fill={ink} />
+          <path d="M 91 62 L 95.5 66 L 91 72 Q 88.6 66.6 91 62 Z" fill={orange} />
+        </g>
+        {/* near wing: the big one, up over the head, primaries fanned */}
+        <g className="flap-wing-near">
+          <path d="M 64 64 C 58 44 46 22 26 4 C 22 28 30 58 46 76 C 53 84 61 78 64 64 Z" fill={F[1]} />
+          <path d="M 26 4 C 38 26 48 50 56 70 M 22 16 C 32 38 42 60 50 76 M 22 32 C 30 50 38 66 45 78"
+            stroke={F[2]} strokeWidth="1.6" fill="none" opacity=".8" />
+          <path d="M 26 4 C 36 14 44 28 51 44 C 42 32 33 18 26 4 Z" fill="#c9a271" opacity=".45" />
+        </g>
       </g>
     </g>
   );

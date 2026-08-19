@@ -110,9 +110,12 @@ export const SPECIES_PROFILE = {
     dims: "3-7kg · 90-112cm incl tail · 35-50cm at shoulder",
     profile: "False size: mostly fluff and long legs, often lighter than a " +
              "large house cat despite looking substantial.",
-    habits: "An opportunist, not a forager — a quick pluck off a branch or a " +
-            "nose through fallen fruit, then gone. The lightest user of the " +
-            "clearing by a wide margin.",
+    habits: "An opportunist, not a forager — a pluck off a branch tip, a nose " +
+            "through the windfall, sometimes just a mouthful of grass, then " +
+            "gone. The lightest user of the clearing by a wide margin, and the " +
+            "only animal here you can hear: in the mating season he stops in " +
+            "the open, throws his head back and screams, or barks at the trees " +
+            "in threes and waits for an answer.",
   },
   raccoon: {
     size: 27.1, speed: 20, swims: true,
