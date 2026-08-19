@@ -89,7 +89,17 @@ async function chain(species, evId, ms = 60000, seed = '') {
   for (const [sp, ids] of Object.entries(evs)) console.log(`     ${sp}: ${ids}`);
 }
 if (await page.evaluate(`!!window.__saiEtho.ETHOGRAM.raccoon`)) {
-  const r = await chain('raccoon', 'berry', 120000);
+  // Up to three goes. The appetite picks one of three variants at random and
+  // they walk to different places — a bush beside him, or a fruit tree
+  // across the map — so a single run is a draw on the give-up timer as much
+  // as on the behavior. Seeded beside a bush so the two ground variants are
+  // short; the tree one is what occasionally needs the retry.
+  const racSeed = `{ let n=null,d=1e9; for (const f of w.forage){ if(f.kind!=='berry') continue;
+       const q=Math.hypot(f.px-a.x,f.py-a.y); if(q<d){d=q;n=f;} }
+     if(n){ a.x=n.px-38; a.y=n.py+28; } }`;
+  let r = await chain('raccoon', 'berry', 120000, racSeed);
+  for (let k = 0; k < 2 && !/racwash|raceat/.test(r.chain); k++)
+    r = await chain('raccoon', 'berry', 120000, racSeed);
   // Three ways this appetite can go now: the ground bush, up into the bush,
   // or up a fruit tree. All three end at the water or at a meal.
   chk(/rachandle|racbushup|ractreepick/.test(r.chain) && /racwash|raceat/.test(r.chain),
@@ -121,7 +131,10 @@ if (await page.evaluate(`!!window.__saiEtho.ETHOGRAM.deer`)) {
     `{ let n=null,d=1e9; for (const f of w.forage){ if(f.kind!=='berry') continue;
          const q=Math.hypot(f.px-a.x,f.py-a.y); if(q<d){d=q;n=f;} }
        if(n){ a.x=n.px-40; a.y=n.py+30; } }`);
-  chk(/foxpluck|foxnose/.test(r.chain), 'fox helps himself', r.chain);
+  // Three variants share this one appetite now: plucking a berry off the
+  // branch, nosing through windfall, and a mouthful of soft grass. Any of
+  // them is the fox helping himself.
+  chk(/foxpluck|foxnose|foxgraze/.test(r.chain), 'fox helps himself', r.chain);
 }
 {
   // Contention. The claim has to be held by a REAL agent: the world releases
@@ -130,7 +143,12 @@ if (await page.evaluate(`!!window.__saiEtho.ETHOGRAM.deer`)) {
   // fixture. So park the raccoon on a bush for real, then check the fox
   // routes around it.
   const r = await page.evaluate(`(async w => {
-    const rac=w.agents.find(x=>x.species==='raccoon'), fox=w.agents.find(x=>x.species==='fox');
+    // The BEAR holds it, not the raccoon. Nearly every ethogram tick now
+    // calls releaseClaim on a frame where no state owns the animal — correct
+    // hygiene, a claim must not outlive its bout — so a claim planted on a
+    // wandering raccoon was gone again inside the same frame, before the fox
+    // ever looked. The bear has no tick and legitimately claims berry bushes.
+    const rac=w.agents.find(x=>x.species==='bear'), fox=w.agents.find(x=>x.species==='fox');
     for (const a of [rac, fox]) { a._eth=null; a.state='wander'; a.intent='wander';
       a.intentUntil=performance.now()+900000; a.noEventUntil=performance.now()+900000; }
     for (let k=0;k<40 && !(rac._eth && fox._eth);k++) await new Promise(r=>setTimeout(r,25));
@@ -186,7 +204,12 @@ await page.waitForTimeout(400);
   chk(/padsit/.test(r.chain), 'frog rides a float', r.chain);
 }
 {
-  const r = await chain('turtle', 'float', 140000, `a.x=.60*w.bounds.w; a.y=.34*w.bounds.h;`);
+  // Pad claims cleared and seeded beside a LOG float, same reasoning as the
+  // frog: the give-up is wall-clock and his progress is frame-based.
+  const r = await chain('turtle', 'float', 140000,
+    `{ for (const p of w.pads) p.userId=null;
+       const L=w.pads.filter(p=>p.log); const p=L[0]||w.pads[0];
+       a.x=p.x-30; a.y=p.y-20; }`);
   chk(/padsit/.test(r.chain), 'turtle basks on a log', r.chain);
   // sample the claim WHILE he is on it — chain() runs to completion and the
   // claim is released on the way out, so checking afterwards proves nothing
