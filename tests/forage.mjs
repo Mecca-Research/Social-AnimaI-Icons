@@ -137,43 +137,42 @@ if (await page.evaluate(`!!window.__saiEtho.ETHOGRAM.deer`)) {
   chk(/foxpluck|foxnose|foxgraze/.test(r.chain), 'fox helps himself', r.chain);
 }
 {
-  // Contention. The claim has to be held by a REAL agent: the world releases
-  // any claim whose holder no longer points back at the site, so a made-up
-  // userId is cleared on the next frame — correct housekeeping, useless as a
-  // fixture. So park the raccoon on a bush for real, then check the fox
-  // routes around it.
+  // Contention: a held site must not be poached. The holder has to be an
+  // animal genuinely WORKING the bush, not one with a claim planted on it.
+  // Every species tick now hands back its claim on any frame where no
+  // ethogram state owns the animal — correct hygiene, a claim must not
+  // outlive its bout, and as of this release the bear does it too — so a
+  // claim written onto a wandering agent is released within the frame,
+  // before the fox ever looks. Parking him in `stripsit` with a far
+  // stateUntil is the production situation: driveStrip holds his position,
+  // no tick runs, and the claim stands for as long as the bout does.
   const r = await page.evaluate(`(async w => {
-    // The BEAR holds it, not the raccoon. Nearly every ethogram tick now
-    // calls releaseClaim on a frame where no state owns the animal — correct
-    // hygiene, a claim must not outlive its bout — so a claim planted on a
-    // wandering raccoon was gone again inside the same frame, before the fox
-    // ever looked. The bear has no tick and legitimately claims berry bushes.
     const rac=w.agents.find(x=>x.species==='bear'), fox=w.agents.find(x=>x.species==='fox');
     for (const a of [rac, fox]) { a._eth=null; a.state='wander'; a.intent='wander';
       a.intentUntil=performance.now()+900000; a.noEventUntil=performance.now()+900000; }
     for (let k=0;k<40 && !(rac._eth && fox._eth);k++) await new Promise(r=>setTimeout(r,25));
-    // the raccoon takes the bush nearest the fox, so it is the one the fox
+    // the holder takes the bush nearest the fox, so it is the one the fox
     // would otherwise pick
     fox.x=.30*w.bounds.w; fox.y=.45*w.bounds.h;
     let near=null, nd=Infinity;
     for (const f of w.forage) { if (f.kind!=='berry') continue;
       const d=Math.hypot(f.px-fox.x, f.py-fox.y); if (d<nd){nd=d;near=f;} }
     rac.x=near.px; rac.y=near.py;
+    near.userId=rac.id; rac._eth.claim=near;
+    // ...and put him in the bout that owns it
+    rac.state='stripsit'; rac._stripX=rac.x; rac._stripY=rac.y;
+    rac.stateUntil=performance.now()+900000; rac._branch=0; rac._branchN=999;
     const S=fox._eth; let chose=null;
     for (let i=0;i<650;i++){
-      // RE-ASSERTED every pass. The raccoon's tick releases any claim on a
-      // frame where no ethogram state owns him — correct hygiene, since a
-      // claim must never outlive its bout, but it means a claim planted on a
-      // wandering raccoon is gone again within one frame. What is being
-      // tested is that the fox routes around a HELD site; how the hold is
-      // kept alive is the fixture's problem, not the fox's.
-      near.userId=rac.id; rac._eth.claim=near;
       await new Promise(r=>setTimeout(r,90));
       if (fox.state==='wander' && !S.goal){ S.seekAt['scrump']=0; S.cd['scrump']=0; }
       if (S.goal && S.goal.ref && S.goal.ref.site){ chose=S.goal.ref.site.i; break; }
     }
-    near.userId=null; rac._eth.claim=null;
-    return { chose, held: near.i }; })(window.__saiWorld)`);
+    const heldThroughout = near.userId === rac.id;
+    near.userId=null; rac._eth.claim=null; rac.state='wander'; rac._faceDir=0;
+    return { chose, held: near.i, heldThroughout }; })(window.__saiWorld)`);
+  chk(r.heldThroughout, 'the holder keeps its claim for the whole bout',
+    r.heldThroughout ? 'still held at the end' : 'the claim was released mid-bout');
   chk(r.chose !== null && r.chose !== r.held, 'a claimed site is not poached',
     `raccoon holds site ${r.held}, fox went to ${r.chose === null ? 'none' : r.chose}`);
 }
