@@ -98,10 +98,14 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
       saw = true;
       // the drawn pose's own footprint, from Critters.jsx: 41px sideways,
       // 32px below the anchor, ~nothing above it
+      // Against the DRAWN shore (rho 1.00), not inWaterAt's 0.97: those are
+      // different lines and only the first one is the mud. A corner at 0.98 is
+      // painted on blue, and failing it would be testing the sim's threshold
+      // rather than what anybody can see.
       const pts = [[g.x - 41, g.y], [g.x + 41, g.y], [g.x, g.y + 32]];
       for (const [x, y] of pts) {
-        const wet = w.inWaterAt ? w.inWaterAt(x, y) : null;
-        if (wet === false) worst = { x: Math.round(x - g.x), y: Math.round(y - g.y) };
+        const rho = w.lakeRhoAt(x, y);
+        if (rho >= 1.0) worst = { x: Math.round(x - g.x), y: Math.round(y - g.y), rho: +rho.toFixed(3) };
       }
     }
     return { saw, worst };
@@ -110,7 +114,8 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     chk(false, 'the goose dabbles', 'never entered a dabble state');
   } else {
     chk(r.worst === null, 'the dabble pose stays off the mud',
-      r.worst ? `pose corner (${r.worst.x},${r.worst.y}) landed dry` : 'all three extremes wet');
+      r.worst ? `pose corner (${r.worst.x},${r.worst.y}) at rho ${r.worst.rho} â€” past the shore`
+              : 'all three extremes inside the drawn waterline');
   }
 }
 {
@@ -158,17 +163,21 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     const modes = [a._sepMode, b._sepMode];
     // sample the whole window: how much of it is spent standing, and does
     // either of them turn round and come back to the scene
-    let still = 0, frames = 0, closed = 0;
+    let still = 0, frames = 0, engaged = 0;
     const noEv = Math.max(a.noEventUntil, b.noEventUntil);
     while (performance.now() < noEv + 200) {
       await new Promise(r => setTimeout(r, 60));
       frames++;
       const va = Math.hypot(a.vx, a.vy), vb = Math.hypot(b.vx, b.vy);
       if (va < 4 && vb < 4) still++;
-      if (Math.hypot(a.x - mx, a.y - my) < 20 || Math.hypot(b.x - mx, b.y - my) < 20) closed++;
-      if (a.state === 'fight' || a.state === 'friendly') closed += 99;
+      // Re-engaging means STARTING SOMETHING, not being near the spot.
+      // Once the departure hands over to an ordinary wander they are free to
+      // amble back past it, and counting that as a failure measured the
+      // wander, not the cooldown.
+      for (const x of [a, b]) if (x.state === 'fight' || x.state === 'friendly') engaged++;
+
     }
-    return { modes, still, frames, closed,
+    return { modes, still, frames, engaged,
              windowMs: Math.round(noEv - t0),
              states: [a.state, b.state] };
   })(window.__saiWorld)`);
@@ -178,10 +187,45 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
   // stillness is fine â€” an animal may pause mid-amble â€” but not most of it.
   chk(r.still < r.frames * 0.34, 'they do not stand frozen through the timeout',
     `${r.still} of ${r.frames} frames stationary`);
-  chk(r.closed === 0, 'and neither re-engages inside the window',
-    `${r.closed} frames back at the scene`);
+  chk(r.engaged === 0, 'and neither starts anything inside the window',
+    `${r.engaged} frames in fight or friendly`);
+
   chk(r.windowMs >= 4000 && r.windowMs <= 7200, 'the no-engagement window is unchanged',
     `${r.windowMs}ms, against the 4200-7000 it has always been`);
+}
+{
+  // Departures must LEAD AWAY â€” from the rival and from the spot they shared.
+  // Checked as a heading at the moment of the break rather than as distance
+  // covered afterwards, because distance is frame-rate bound: headless rAF
+  // runs at 3.8fps and the sim clamps dt, so a second of wall time buys about
+  // ten pixels of travel and any displacement threshold would be measuring
+  // the test rig. The heading is the actual design claim â€” the offset is
+  // drawn from a band that never contains zero, so the dot product with
+  // "away from the meeting point" stays positive (cos 1.15 = 0.41).
+  const r = await page.evaluate(`(async w => {
+    const [a, b] = w.agents.filter(x => !x.dragging).slice(0, 2);
+    let worst = 1, n = 0, backwards = 0;
+    for (let i = 0; i < 30; i++) {
+      a.x = .35 * w.bounds.w; a.y = .40 * w.bounds.h; b.x = a.x + 12; b.y = a.y;
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      w.__sep(a, b);
+      for (const x of [a, b]) {
+        const away = Math.atan2(x.y - my, x.x - mx);
+        const v = Math.atan2(x.vy, x.vx);
+        let d = Math.abs(((v - away + Math.PI) % (Math.PI * 2)) - Math.PI);
+        const dot = Math.cos(d);
+        worst = Math.min(worst, dot); n++;
+        if (dot <= 0) backwards++;
+      }
+    }
+    return { worst: +worst.toFixed(2), n, backwards };
+  })(window.__saiWorld)`);
+  chk(r.backwards === 0, 'every departure leads away from the scene',
+    `${r.backwards} of ${r.n} headed back in; worst dot ${r.worst}`);
+  // ...and never straight down the axis between them, which is what the old
+  // animation did and what the offset band exists to prevent.
+  chk(r.worst < 0.99, 'and none of them is the old ruled line',
+    `worst-case alignment with the axis is ${r.worst}`);
 }
 {
   // Over many break-ups the two flavors should both turn up, and roughly
