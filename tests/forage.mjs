@@ -539,7 +539,11 @@ const alone = `for (const o of w.agents) { if (o===a) continue;
   o.idleUntil=performance.now()+900000; o.noEventUntil=performance.now()+900000; }`;
 for (const [ev, want, label] of [
   ['roots', /rootdig|rootbore/, 'hedgehog works a surface root'],
-  ['logs', /logdive/, 'hedgehog goes into the log'],
+  // EITHER WAY IN. Dead wood comes in two kinds now and he works them
+  // differently — down the rot hole of a rotten log, under the near edge of
+  // a sound one — so a check that names only `logdive` fails on a perfect
+  // `logunder` bout and reports it as the hedgehog not going into a log.
+  ['logs', /logdive|logunder/, 'hedgehog goes into the log'],
 ]) {
   const r = await chain('hedgehog', ev, 90000,
     `a.x=.30*w.bounds.w; a.y=.60*w.bounds.h; ${alone}`);
