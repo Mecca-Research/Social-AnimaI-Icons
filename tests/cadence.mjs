@@ -16,7 +16,7 @@
  * skunk's eleven seconds nosing windfall, and after this retune the fox
  * actually STARTS marginally more bouts per minute than the raccoon
  * (0.149 against 0.147) while spending a third of the raccoon's clock on
- * them, because a fox bout is 7.4s and a raccoon bout is 22.7s. Whichever
+ * them, because a fox bout is 7.4s and a raccoon bout is 24.1s. Whichever
  * number you print, the other one reads as a bug. What is being dialled
  * now is time spent, so that is what is checked.
  *
@@ -92,10 +92,24 @@
  *     nearest cache anchor                 287 px
  *     nut tree -> its nearest cache        348 px
  *     berry bush -> lake at rho .93        209 px
- *     shore band -> sward centre           342 px   (he sets off from ashore)
+ *     fruiting trunk -> lake at rho .93    404 px   (NOT the same walk)
+ *     shore band -> sward centre           293 px   (he sets off from ashore)
  *     swim disc -> shallow band             95 px
  *     nearest berry within .34w (fox)      192 px
  *     fox's own grass tuft                  57 px   (rand(34,80), mean 57)
+ *
+ * Two of those rows were re-measured for this release and it is worth
+ * saying how, because they are the two that changed a bout length:
+ *   - the CARRY rows are a nearest-source catchment: for every dry-land
+ *     point of the stage, take the source that point would send him to,
+ *     and measure THAT source's own distance to rho .93. Re-running it on
+ *     the berry row returns 217 rather than the 209 carried above — 0.1s
+ *     in the tail, inside the precision of the whole table, so the older
+ *     number is left alone rather than churned. The trunk row is new.
+ *   - `shore band -> sward centre` is the mean over rho .97-1.05 (he sets
+ *     off from where he came ashore), and it moved because the sward did:
+ *     the lawn was under the lone spruce's crown and has gone east to the
+ *     lake's south shore, which is nearer the water he starts from.
  *
  * (3) STATE TIMERS, meaned, with the loops counted out. Everything below
  * is `c.rand(a,b)` in the event's own begin/drive, so the mean is (a+b)/2.
@@ -155,15 +169,26 @@
  *                                                        TOTAL   12.1
  *
  * ---- RACCOON --------------------------------------------------------
- * The three variants share one tail from the moment fruit is in hand:
- *   racdouse (209-13)/58.8 3.3 + racwet 3.2 + racwash 4.1
- *   + raceat 2.8                                        TAIL     13.4
- * berry     racpick   w3  goto (216-24)/58.8 3.3 + rachandle 4.2 + tail = 20.9
+ * The three variants share one tail from the moment fruit is in hand —
+ * douse, wet, wash, eat — but they do NOT share one douse, and this table
+ * used to say they did. The carry starts wherever the fruit was got: two
+ * variants get it off a bush and the third gets it out of a crown, the
+ * bushes are the western clearing and the fruiting trunks are the east
+ * flank and the far corners, and the mean carry from a trunk is nearly
+ * twice as long. Pricing all three at the bush figure understated the
+ * variant with the heaviest weight on it.
+ *   from a BUSH   racdouse (209-13)/58.8 3.3
+ *                 + racwet 3.2 + racwash 4.1 + raceat 2.8   TAIL   13.4
+ *   from a TRUNK  racdouse (404-13)/58.8 6.6
+ *                 + the same 10.1                           TAIL   16.7
+ * berry     racpick   w3  goto (216-24)/58.8 3.3 + rachandle 4.2
+ *                         + bush tail                               = 20.9
  *           racbush   w1  goto 3.3 + racbushup 6.0 (1300/4700/6000
- *                         thresholds) + tail                       = 22.7
+ *                         thresholds) + bush tail                   = 22.7
  *           ractree   w3  goto (227-26)/58.8 3.4 + RAC_UP 1.9
- *                         + ractreepick 4.2 + RAC_DOWN 1.5 + tail  = 24.5
- *           weighted (3*20.9 + 22.7 + 3*24.5)/7          TOTAL   22.7
+ *                         + ractreepick 4.2 + RAC_DOWN 1.5
+ *                         + trunk tail                              = 27.7
+ *           weighted (3*20.9 + 22.7 + 3*27.7)/7          TOTAL   24.1
  *
  * ---- FOX ------------------------------------------------------------
  * scrump    foxpluck  w1.0  goto (192-20)/67.9 2.5 + pluck 2.8
@@ -185,11 +210,11 @@
  *                                                        TOTAL   16.4
  *
  * ---- GOOSE ----------------------------------------------------------
- * graze     walk (342-20)/54.5                                   5.9
+ * graze     walk (293-20)/54.5                                   5.0
  *           _cropN round(rand(10,16)) -> 13 head-downs at
  *             CROP_HEAD_DOWN 1450 and 12 strides between them
  *             at CROP_STRIDE 540: 18850 + 6480                   25.3
- *                                                        TOTAL   31.2
+ *                                                        TOTAL   30.3
  * dabble    paddle to the band (95-10)/66.3, wet                  1.3
  *           _dabN round(rand(3,5)) -> 4 cycles of
  *             DABBLE_DOWN 2800 + DABBLE_UP 1700                  18.0
@@ -242,10 +267,10 @@ const FEEDING = {
   deer:     { browse: 14.5, graze: 5.0 },
   bear:     { strip: 34.0 },     // a floor: he also fishes — see the note above
   squirrel: { cache: 17.1, raid: 12.1 },
-  raccoon:  { berry: 22.7 },
+  raccoon:  { berry: 24.1 },
   fox:      { scrump: 7.4 },
   hedgehog: { roots: 12.7, logs: 16.4 },
-  goose:    { graze: 31.2, dabble: 19.3 },
+  goose:    { graze: 30.3, dabble: 19.3 },
 };
 
 const duty = await page.evaluate(`(feeding => {

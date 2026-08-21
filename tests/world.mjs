@@ -377,6 +377,122 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
     `a→${r.aTarget || 'none'}, b→${r.bTarget || 'none'}`);
 }
 
+// ==================== the lawn is on screen ====================
+// A crown paints at zIndex 12 and the animals at 10. That is deliberate — it
+// is what puts the squirrel's drey IN the tree rather than in front of one —
+// but it means a grazing goose standing under one is not visible at all, and
+// the sward was laid straight across the lone spruce's band: 56% of the lawn
+// had the bird behind needles, for the longest single bout he has.
+//
+// GEOMETRY, so it is asked of the geometry rather than watched for: the
+// rectangle, the trees and the painted crown boxes all come off the world —
+// the SAME object the ethogram grazes by — and are swept over a dozen stage
+// shapes here rather than only the one this suite happens to run at, because
+// the fault only showed on stages shorter than about 1130px.
+{
+  const r = await page.evaluate(`(w => {
+    const S = w.def.sward, T = w.def.trees || [], C = w.__crowns;
+    if (!S || !C) return { missing: true };
+    const SIZES = [[1008,700],[1264,732],[1350,700],[1424,832],[1600,820],[1904,1012],
+                   [1000,800],[1240,1000],[900,620],[1440,900],[1280,720],[1920,1080]];
+    // a goose's own box, from the biggest radius any agent carries
+    const rr = Math.max(...w.agents.map(a => a.r), 18);
+    const hw = rr * 1.35, up = rr * 2;
+    let worst = 0, worstAt = '';
+    for (const [W, H] of SIZES) {
+      let n = 0, bad = 0;
+      for (let i = 0; i <= 20; i++) for (let j = 0; j <= 20; j++) {
+        const x = (S.x0 + (S.x1 - S.x0) * i / 20) * W;
+        const y = (S.y0 + (S.y1 - S.y0) * j / 20) * H;
+        n++;
+        for (const t of T) {
+          const k = C[t.kind || 'oak']; if (!k) continue;
+          const tx = t.x * W, ty = t.y * H;
+          if (Math.abs(x - tx) > k.half * t.s + hw) continue;
+          if (y > ty - k.topPx * t.s && y - up < ty - k.botPx * t.s) { bad++; break; }
+        }
+      }
+      if (bad / n > worst) { worst = bad / n; worstAt = W + 'x' + H; }
+    }
+    return { worst, worstAt, sward: [S.x0, S.x1, S.y0, S.y1].join(',') };
+  })(window.__saiWorld)`);
+  chk(!r.missing && r.worst === 0, 'no part of the sward is under a painted crown',
+    r.missing ? 'the world hands over no sward or no crown boxes'
+      : r.worst === 0 ? `x ${r.sward} clear at all twelve stage shapes`
+      : `${(100 * r.worst).toFixed(0)}% under a crown at ${r.worstAt}`);
+}
+
+// ==================== the floats do not march in step ====================
+// The eleven drifting floats are dealt three bob phases off a NINE-character
+// string, so the last two indices came back `pad-undefined`, matched no rule,
+// and fell to the base 5s/0s animation — two big drift logs rocking in exact
+// lockstep on open water, which is the one pairing that reads as machinery.
+{
+  const r = await page.evaluate(`(() => {
+    const els = [...document.querySelectorAll('.sai-water-pad')];
+    const cls = els.map(e => [...e.classList].find(c => c.startsWith('pad-')) || 'NONE');
+    const st = els.map(e => { const s = getComputedStyle(e);
+      return s.animationDuration + '/' + s.animationDelay; });
+    // a log is the taller box: PadLayer draws logs at height 40
+    const isLog = els.map(e => (e.closest('svg')?.getAttribute('height') | 0) === 40);
+    const logPhases = st.filter((_, i) => isLog[i]);
+    return { n: els.length, cls, unnamed: cls.filter(c => c === 'NONE').length,
+             logs: logPhases.length, logDistinct: new Set(logPhases).size,
+             allDistinct: new Set(st).size };
+  })()`);
+  chk(r.n > 0 && r.unnamed === 0, 'every float is dealt a bob phase',
+    `${r.n} floats, ${r.unnamed} with no pad- class`);
+  chk(r.logs > 0 && r.logDistinct === r.logs, 'and no two drift logs rock in step',
+    `${r.logs} logs on ${r.logDistinct} distinct phases`);
+}
+
+// ==================== the skunk's holes stay visible ====================
+// A pit is drawn at zIndex 1 and the forage art at 2, so a hole under a
+// fallen log is a hole that is not there. His ethogram kept a flat 78px off
+// every site — a BUSH's number: the log art reaches 91px along its own axis
+// to the end grain, so a pit at 79px passed the test and was then painted
+// over by the timber. The clearance is now art-to-art, and this checks the
+// holes he actually leaves rather than the arithmetic that places them.
+{
+  const r = await page.evaluate(`(async w => {
+    const a = w.agents.find(x => x.species === 'skunk');
+    if (!a) return { none: 'no skunk' };
+    const half = w.__siteHalf, pit = w.__pitHalf;
+    if (!half) return { none: 'the world hands over no painted site widths' };
+    w.pits = [];
+    a._eth = null; a.state = 'wander'; a.intent = 'wander'; a.z = 0;
+    a.intentUntil = performance.now() + 900000;
+    a.noEventUntil = performance.now() + 900000;
+    for (let k = 0; k < 40 && !a._eth; k++) await new Promise(r => setTimeout(r, 25));
+    const S = a._eth; if (!S) return { none: 'the skunk never got an ethogram' };
+    const t0 = performance.now();
+    while (performance.now() - t0 < 120000 && (w.pits || []).length < 3) {
+      await new Promise(r => setTimeout(r, 90));
+      if (a.state === 'wander') {              // keep the dig due, everything else muzzled
+        const t = performance.now();
+        for (const id of Object.keys(S.seekAt)) S.seekAt[id] = t + 900000;
+        for (const id of Object.keys(S.cd)) S.cd[id] = t + 900000;
+        S.seekAt['dig'] = 0; S.cd['dig'] = 0;
+      }
+    }
+    const pits = (w.pits || []).slice();
+    let worst = null;
+    for (const p of pits) for (const f of w.forage || []) {
+      const need = (half[f.kind] || 0) * (f.s || 1) + pit;
+      const d = Math.hypot(f.px - p.x, f.py - p.y);
+      if (d < need && (!worst || need - d > worst.by))
+        worst = { kind: f.kind, d: Math.round(d), need: Math.round(need), by: need - d };
+    }
+    return { pits: pits.length, worst };
+  })(window.__saiWorld)`);
+  if (r.none) chk(false, 'a skunk pit never lands inside drawn forage art', r.none);
+  else if (!r.pits) chk(false, 'a skunk pit never lands inside drawn forage art',
+    'no pit was dug inside 120s — the check never got to ask');
+  else chk(!r.worst, 'a skunk pit never lands inside drawn forage art',
+    r.worst ? `a pit sits ${r.worst.d}px from a ${r.worst.kind}, which is painted ${r.worst.need}px wide`
+            : `${r.pits} pits, all clear of all ${(await page.evaluate('window.__saiWorld.forage.length'))} sites`);
+}
+
 chk(errs.length === 0, 'no JS errors', errs.length ? errs[0] : 'clean');
 console.log(`\n${fail.length ? 'FAIL ' + fail.length : 'ALL PASS'} (${pass.length} passed)`);
 await browser.close();

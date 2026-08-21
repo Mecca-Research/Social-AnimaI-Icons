@@ -423,9 +423,18 @@ body {
   100% { transform: translateY(0)     rotate(0deg); }
   50%  { transform: translateY(-2px)  rotate(1.4deg); }
 }
+/* FOUR phases, not three, because the float pool is eleven long. Three
+   cycled over eleven leaves i=9 and i=10 with no class at all — the string
+   they were indexed into was nine characters — so the last two drift logs
+   fell back to the 5s / 0s base rule and rocked in perfect lockstep on open
+   water, which is the one pairing a viewer reads as machinery rather than
+   as weather. Four covers the eleven with every log on its own phase and
+   repeats only among the small pads, where a coincidence is invisible.
+   A pool past twelve wants a pad-e. */
 .sai-water-pad.pad-a { animation-duration: 4.6s; animation-delay: 0s;    }
 .sai-water-pad.pad-b { animation-duration: 5.4s; animation-delay: -1.9s; } /* out of phase */
 .sai-water-pad.pad-c { animation-duration: 5.0s; animation-delay: -0.7s; }
+.sai-water-pad.pad-d { animation-duration: 5.8s; animation-delay: -3.1s; }
 
 /* waterlily flower: a slow, tiny breathing + shimmer. Subtle scale keeps any
    transform-origin drift sub-pixel. */

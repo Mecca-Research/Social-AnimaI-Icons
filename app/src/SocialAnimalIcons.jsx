@@ -378,6 +378,35 @@ const TREE_TRUNK_R = 13;
 //   feet  the ground line all three poses share (y ~103.4) below his centre
 // See .sai-crit-rubpose / -hoofpose / -bedpose in Critters.jsx.
 const DEER_BROW = 0.396, DEER_HOOF = 0.400, DEER_BED = 0.430, DEER_FEET = 0.314;
+// Per-species svg box. The one thing that may NOT vary is the bottom
+// edge: viewBox minY + height must be 20 for both, or TREE_BASE_PX and
+// TREE_CANOPY_PX stop meaning the same thing from one tree to the next.
+const TREE_BOX = {
+  oak:  { w: 150, h: 210, vb: "-75 -190 150 210" },
+  pine: { w: 170, h: 290, vb: "-85 -270 170 290" },
+};
+
+// WHERE EACH SPECIES OF CROWN IS PAINTED, in stage px above the anchor at
+// scale 1. Everything else handed to the ethogram is a place an animal GOES;
+// this is the one thing that is a place an animal must not STOP, because a
+// crown paints at zIndex 12 over the animals at 10 and anything standing
+// under one is not on screen. Read off the two crown drawings below, where a
+// local y is (20 - y) px above the anchor:
+//   oak   OAK_BOUGHS, widest ellipse cx 28 rx 36 -> half 64; lowest bough
+//         underside -113.4 + 26 = -87.4 -> 107.4; highest -169.4 - 18
+//         = -187.4 -> 207.4
+//   pine  SPRUCE_WHORLS, lowest whorl r 40 -> half 40; its underside -97
+//         -> 117 (which is TREE_CANOPY_PX), the leader's tip -212 -> 232
+// `half` is the crown at its WIDEST, so the box is deliberately fatter than
+// the silhouette: over-refusing a strip of ground costs nothing, and a spire
+// that pinches in as it rises would otherwise let a bird stand in the part
+// of the band that happens to be needle-free at one window shape and vanish
+// at the next.
+const TREE_CROWNS = {
+  oak:  { half: 64, botPx: 107.4, topPx: 207.4 },
+  pine: { half: 40, botPx: 117,   topPx: 232 },
+};
+
 // the bear's tree work lives in his ethogram, which stays free of the
 // world's layout — hand it the numbers rather than have it import them.
 // The deer's rut and his bed are the second and third users of the same
@@ -419,15 +448,10 @@ setTreeMetrics({
   // coordinate, only "tree number n, this far out and this far up it".
   nest: { i: NEST_TREE, dx: NEST_DX, floorPx: NEST_PX,
           footDX: NEST_FOOT_DX, footDY: NEST_FOOT_DY },
+  // ...and where each species of crown is PAINTED, which is the one entry
+  // here that is a place an animal must not stop rather than one it goes to.
+  crowns: TREE_CROWNS,
 });
-
-// Per-species svg box. The one thing that may NOT vary is the bottom
-// edge: viewBox minY + height must be 20 for both, or TREE_BASE_PX and
-// TREE_CANOPY_PX stop meaning the same thing from one tree to the next.
-const TREE_BOX = {
-  oak:  { w: 150, h: 210, vb: "-75 -190 150 210" },
-  pine: { w: 170, h: 290, vb: "-85 -270 170 290" },
-};
 
 // The oak crown, lifted 9.4 with the trunk. Kept as data so the 117 above
 // can be read straight off the first row instead of out of a path string.
@@ -996,6 +1020,19 @@ const DREY_FORK_DX = 20;                // px right of the anchor — out of the
 const TREE_TRUNK_DX = 1;                // the trunk art's own centre line
 const DREY_COURSES = 6;                 // platform, floor, walls, roof, moss, lining
 
+// How WIDE each kind of forage site is actually painted: half-width in stage
+// px at scale 1, read straight off ForageLayer above. The skunk's pits are
+// the only thing in the world that has to stay off the drawn ART rather than
+// a distance from its anchor, and the flat 78px his ethogram used is a
+// bush's number — a fallen log is drawn 91px out to the end grain and a
+// surface root 63, so a pit could be placed legally and land underneath
+// timber that paints over it at a higher zIndex.
+//   berry  foliage cx 14 rx 20        shrub  cx 13 rx 19
+//   nut    leaf path to x 28 + stroke soil   shadow rx 30
+//   log    end ellipse cx 84 rx 7     root   path x 54 + stroke 17
+const FORAGE_SITE_HALF = { berry: 34, nut: 30, shrub: 32, soil: 30, log: 91, root: 63 };
+const PIT_HALF_PX = 20;   // PitLayer's outermost spoil ellipse, cx 14 rx 5.4
+
 // What the squirrel's ethogram needs to know about the map, handed over
 // rather than imported so that module stays free of the layout — the same
 // arrangement the bear's tree metrics use.
@@ -1032,6 +1069,20 @@ setForageMetrics({
   // caps the list without knowing what draws it — the same arrangement as
   // the tree metrics above.
   pitMax: PIT_MAX,
+  // How WIDE each kind of site is actually painted, half-width in stage px
+  // at scale 1, read straight off ForageLayer. His pits are the only thing
+  // in the world that has to stay OFF the drawn art rather than a distance
+  // from its anchor, and the flat 78px his ethogram used is a bush's number:
+  // a fallen log is drawn 91px out to the end grain and a surface root 63,
+  // so a pit could be placed legally and land underneath timber that paints
+  // over it at a higher zIndex. Every site multiplies by its own `s`.
+  //   berry  foliage cx 14 rx 20        shrub  cx 13 rx 19
+  //   nut    leaf path to x 28 + stroke soil   shadow rx 30
+  //   log    end ellipse cx 84 rx 7     root   path x 54 + stroke 17
+  siteHalf: FORAGE_SITE_HALF,
+  // ...and how wide the pit itself is drawn, so the clearance is art-to-art
+  // and not centre-to-art: PitLayer's outermost spoil ellipse is cx 14 rx 5.4.
+  pitHalf: PIT_HALF_PX,
 });
 
 /**
@@ -1611,6 +1662,15 @@ export default function SocialAnimalsRPG() {
       // test about what the eye sees has to ask for rho.
       W.lakeRhoAt = (x, y) => lakeRho(W.bounds, x, y);
       W.onBareEarthAt = (x, y, pad = 0) => onBareEarth(W.def, W.bounds, x, y, pad);
+      // ...and the painted crowns, the SAME object the ethogram was handed,
+      // so a suite that asks "is this ground under a tree" cannot drift from
+      // the predicate the goose actually grazes by.
+      W.__crowns = TREE_CROWNS;
+      // ...and the painted width of each kind of forage site, plus the pit's
+      // own, for the same reason: the suite checks the skunk's holes against
+      // the drawing, and must not carry its own copy of the drawing.
+      W.__siteHalf = FORAGE_SITE_HALF;
+      W.__pitHalf = PIT_HALF_PX;
       W.__sep = (a, b) => separatePair(W, a, b, W, false);
       W.__cool = (a, ms) => enterCooldown(a, ms);
       // ...and the two halves of a drag, so a suite can exercise the release
@@ -2718,7 +2778,7 @@ function NeighborhoodScene({ bounds }) {
 }
 
 // --------------- Lake (organic shoreline, upper-right) ---------------
-// Drifting floats: seven lily pads (index 2 blooms) + two logs. Positions
+// Drifting floats: seven lily pads (index 2 blooms) + four logs. Positions
 // live in world.pads (stepped chaotically in stepWorld); renderWorld moves
 // these elements. The frog sits on any float; the turtle basks on logs.
 const PAD_SPECS = [
@@ -2740,7 +2800,7 @@ function PadLayer({ padsRef }) {
           <svg width={W} height={H}
             viewBox={`${-W / 2} ${-H / 2} ${W} ${H}`}
             style={{ display: "block", marginLeft: -W / 2, marginTop: -H / 2, overflow: "visible" }}>
-            <g className={`sai-water-pad pad-${"abcabcabc"[i]}`}>
+            <g className={`sai-water-pad pad-${"abcd"[i % 4]}`}>
               {s.log ? (
                 <>
                   {/* a weathered drift log, end ring facing out */}
@@ -2814,20 +2874,45 @@ WORLDS.forest.dam = DAM_PLAN;
 // verge rather than a square, because that is the shape of the grass — the
 // bare-earth patches the background paints start at about y .66 and run to
 // the bottom of the map, so the only real sward is the band between them and
-// the lake's southern shore. The rectangle it replaced spanned x .40-.66 by
-// y .68-.88 and was 68% mud, with its own CENTRE on bare earth: the goose
-// refused ground on nearly every stride and grazed the patches anyway
-// whenever the "ringed in" fallback walked him at the middle. It needs no new
-// geometry because the empty ground was already the point — the lake's
-// southern shore stops at y≈.46, the clearing's lowest bush is at .625,
-// the two east trees stand east of .89 and the lone spruce stands south
-// of it at y .94, close enough to the ground that only the underside of
-// its lowest whorl reaches the sward's northern strip, and the background already
-// scatters grass tufts, clover and flowers right through this rectangle.
+// the lake's southern shore.
+//
+// It has now been wrong twice, in two different ways, and the second way is
+// the one worth writing down.
+//
+// FIRST it spanned x .40-.66 by y .68-.88 and was 68% mud, with its own
+// CENTRE on bare earth: the goose refused ground on nearly every stride and
+// grazed the patches anyway whenever the "ringed in" fallback walked him at
+// the middle. Moving it to x .48-.64 by y .52-.61 fixed that and introduced
+// the second fault in the same stroke.
+//
+// SECOND it sat under the lone spruce. A crown is drawn at zIndex 12 and the
+// animals at 10, which is deliberate — it is what puts the squirrel's drey
+// IN the tree rather than in front of one — but that cuts both ways: the
+// spruce is anchored at y .94 and its foliage runs from 117 to 232px above
+// its own anchor at scale 1.56, so it paints a band from y·h - 362 to
+// y·h - 183. On any stage shorter than about 1130px that band lies straight
+// across y .52-.62, and the old rectangle put its west half inside it.
+// Measured over twelve window shapes, 56% of the lawn had the bird behind
+// needles — for a 24-second head-down bout, which is the longest single
+// thing the goose does. The comment here used to claim "only the underside
+// of its lowest whorl reaches the sward's northern strip". That was an
+// assumption, and it was wrong by the whole crown.
+//
+// So the lawn moved EAST, out from under the spire and around to the lake's
+// southern shore, which is where a grazing goose belongs anyway: he steps
+// off the grass straight into the water he dabbles in. This rectangle was
+// picked by measurement, not by eye — swept against the six trees' painted
+// crowns, the four mud ellipses, the twenty-one forage sites and the drawn
+// shoreline at 1008x700, 1264x732, 1350x700, 1424x832, 1600x820, 1904x1012,
+// 1000x800, 1240x1000, 900x620, 1440x900, 1280x720 and 1920x1080. Worst case
+// across all twelve: NO part of it under any crown, 11% on mud (which
+// `grassAt` already refuses stride by stride), and never nearer the drawn
+// shore than rho 1.09.
+//
 // Held in fractions and reached through `def`, like the trees and the
 // forage, so another world can hand him a different field or none at all
 // — with no sward the appetite simply never finds anywhere to go.
-const GOOSE_SWARD = { x0: 0.48, x1: 0.64, y0: 0.52, y1: 0.62 };
+const GOOSE_SWARD = { x0: 0.60, x1: 0.74, y0: 0.52, y1: 0.61 };
 WORLDS.forest.sward = GOOSE_SWARD;
 // ...and on the world def as well, beside the trees, the sward and the dam.
 // The anchors are world geometry: invisible, but fixed for the life of the

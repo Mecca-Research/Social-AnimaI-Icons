@@ -650,6 +650,10 @@ defineEthogram("bear", {
           // same, and for the same tree.
           if (c.isWet(tx - 13 * t.s - a.r * 3.1 * TREE.standBack,
                       ty - TREE.basePx * t.s - a.r * 3.1 * TREE.standFeet)) continue;
+          // ...and nobody else on it. His was the one trunk picker of the six
+          // that never looked, so he would walk up to a tree the deer was
+          // already rubbing and rear through it. Same test racTrunk uses.
+          if (trunkBusy(a, c, tx, ty)) continue;
           return t;
         }
         return null;
@@ -1686,6 +1690,43 @@ const racFruitPx  = () => TREE.fruitPx  ?? (TREE.canopyPx + 17);
  * off one trunk is to look before setting off. `t.fruit === false` lets the
  * world retire a tree from bearing without this file changing.
  */
+/**
+ * IS SOMEBODY ALREADY WORKING THIS TRUNK? Shared, because a tree is not a
+ * claimable site — there is no slot to take, so the only record that a trunk
+ * is busy is the animal standing at it, and every picker has to read that
+ * record the same way or two of them converge on one bole.
+ *
+ * Two things were wrong with the flat ring this replaces, and they pull in
+ * opposite directions:
+ *
+ *   TOO SMALL for the animal being looked for. Every trunk behavior in this
+ *   file — the bear's rub and climb, the deer's rub and bed, the squirrel's
+ *   drey, the owl's nest, the raccoon's own den — parks its subject on the
+ *   WEST face, a sprite-foot north of the anchor, and how far out that is
+ *   depends on how big the animal is: `standBack`/`standFeet` are fractions
+ *   of its own sprite. A bear settles 66px from the anchor, a squirrel 20.
+ *   A single 53px ring was inside the bear and outside the squirrel, so the
+ *   one animal you could not see was the biggest one in the wood. The ring
+ *   therefore grows with the OCCUPANT, not with the asker.
+ *
+ *   TOO BIG for anyone merely walking past. Widening it to the bear's full
+ *   96px reach instead made every trunk a no-go zone whenever any of forty
+ *   wandering animals drifted near, and the raccoon started walking past the
+ *   tree beside him to one across the map. Proximity is not occupancy: an
+ *   animal owns a trunk when it is DOING something, and `ETHO_STATES` is
+ *   exactly that set — every state any ethogram registers, the walk-there
+ *   legs included, and nothing an idler or a wanderer is ever in.
+ */
+function trunkBusy(a, c, tx, ty) {
+  if (!TREE) return false;
+  for (const o of c.world.agents) {
+    if (o === a || o.dragging) continue;
+    if (!ETHO_STATES.has(o.state)) continue;       // a passer-by owns nothing
+    if (Math.hypot(o.x - tx, o.y - ty) < TREE.reach * 0.55 + o.r * 1.6) return true;
+  }
+  return false;
+}
+
 function racTrunk(a, c) {
   const trees = c.def.trees;
   if (!trees || !TREE) return null;
@@ -1694,12 +1735,7 @@ function racTrunk(a, c) {
     const t = trees[i];
     if (t.fruit === false) continue;
     const x = t.x * c.bounds.w, y = t.y * c.bounds.h;
-    let taken = false;
-    for (const o of c.world.agents) {
-      if (o === a || o.dragging) continue;
-      if (Math.hypot(o.x - x, o.y - y) < TREE.reach * 0.55) { taken = true; break; }
-    }
-    if (taken) continue;
+    if (trunkBusy(a, c, x, y)) continue;
     const d = Math.hypot(x - a.x, y - a.y);
     if (d < bd) { bd = d; best = { x, y, tree: t, i }; }
   }
@@ -2468,8 +2504,23 @@ function openSpot(p, c) {
       if (Math.hypot(t.x * c.bounds.w - p.x, t.y * c.bounds.h - p.y) < TREE.reach) return false;
     }
   }
+  // 78 is a BUSH'S number, and not every site is a bush. It is measured from
+  // the anchor, and the two kinds of site the hedgehog works are drawn far
+  // wider than that: a fallen log paints 91px out to the end grain at scale
+  // 1 and a surface root 63, against a berry bush's 34. A pit at 79px along
+  // a log's axis therefore passed this test and was then painted over by the
+  // timber, which sits at zIndex 2 to the pit's 1 — a hole the skunk was
+  // watched to dig, gone the moment he stepped off it.
+  //
+  // So the clearance is the larger of the flat rule and the two drawings not
+  // touching: this kind's painted half-width at its own scale, plus the
+  // pit's own. Both halves come from the world through setForageMetrics, so
+  // redrawing a bush wider moves this without the ethogram learning the art.
+  const siteHalf = (SQ && SQ.siteHalf) || null;
+  const pitHalf = (SQ && SQ.pitHalf) || 20;
   for (const f of c.world.forage || []) {
-    if (Math.hypot(f.px - p.x, f.py - p.y) < OPEN_SITE) return false;
+    const half = siteHalf ? (siteHalf[f.kind] || 0) * (f.s || 1) + pitHalf : 0;
+    if (Math.hypot(f.px - p.x, f.py - p.y) < Math.max(OPEN_SITE, half)) return false;
   }
   // and the squirrel's caches are somebody's larder, not open ground. The
   // ONE stump is gone — a scatter hoarder keeps four invisible anchors
@@ -3193,9 +3244,10 @@ const CROP_HEAD_DOWN = [1000, 1900];
 
 /**
  * The sward is a rectangle; the ground inside it is not all grass. The
- * background paints four mud ellipses across the lower map and two of them
- * — (820,600) and (560,730) in its own viewBox — reach well inside the
- * rectangle, so a bout that only respects the rectangle grazes bare earth.
+ * background paints four mud ellipses across the lower map and one of them
+ * — (820,600) in its own viewBox, the big east patch — reaches inside the
+ * rectangle on most window shapes, so a bout that only respects the
+ * rectangle grazes bare earth.
  *
  * The art and the mapping onto it belong to the world (the background is
  * `preserveAspectRatio="slice"`, so its coords are not stage fractions);
@@ -3207,7 +3259,38 @@ const CROP_HEAD_DOWN = [1000, 1900];
  * bill (`crop-sward`, svg x 90-119). r * 0.8 covers the bird and his mouthful.
  */
 const GRAZE_PAD = 0.8;   // of his own radius
-const grassAt = (a, c, x, y) => !(c.onBareEarth && c.onBareEarth(x, y, a.r * GRAZE_PAD));
+
+/**
+ * ...and it must be IN VIEW. A crown paints at zIndex 12 and the animals at
+ * 10, so a bird standing under one is not on screen at all — and the sward
+ * has already been laid, once, straight across the lone spruce's band. The
+ * lawn has been moved out from under it, but a rectangle is only ever right
+ * for the tree positions and window shapes it was measured against, and both
+ * of those have moved twice in three releases. This is the guard that does
+ * not go stale: it asks the crowns where they are, every stride.
+ *
+ * The bird's own box is his sprite's, not a point — Critter draws the
+ * 120-unit box at r * 2.7, and the goose stands in the upper half of it, so
+ * `r * 1.35` out each way and `r * 2` of him above the ground line is the
+ * shape that has to clear the needles.
+ */
+function inCrown(a, c, x, y) {
+  const cr = TREE && TREE.crowns;
+  if (!cr || !c.def.trees) return false;
+  const hw = a.r * 1.35, up = a.r * 2;
+  for (const t of c.def.trees) {
+    const k = cr[t.kind]; if (!k) continue;
+    const tx = t.x * c.bounds.w, ty = t.y * c.bounds.h;
+    if (Math.abs(x - tx) > k.half * t.s + hw) continue;
+    // the crown's stage-y band: botPx/topPx are px ABOVE the anchor
+    const top = ty - k.topPx * t.s, bot = ty - k.botPx * t.s;
+    if (y > top && y - up < bot) return true;
+  }
+  return false;
+}
+
+const grassAt = (a, c, x, y) =>
+  !(c.onBareEarth && c.onBareEarth(x, y, a.r * GRAZE_PAD)) && !inCrown(a, c, x, y);
 
 /**
  * A point in the sward, weighted to its middle. Landing on the rim means
