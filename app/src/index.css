@@ -2804,6 +2804,15 @@ body {
 /* a bird standing in the lake casts no shadow on the forest floor */
 .sai-sprite[data-state="dabble"] .sai-crit--goose .sai-crit-shadow,
 .sai-sprite[data-state="dabblelift"] .sai-crit--goose .sai-crit-shadow{ opacity:0; animation:none; }
+/* ...and the shanks are UNDER it. They run y 90-102 against a waterline
+   that crosses them at about 89.7, so there is no part of a leg above the
+   surface to draw: the old pose left them showing through the lens on the
+   argument that standing on the bottom is what separates a dabbler from a
+   swimmer, which is true and was still a pair of feet visible through a
+   foot of water. The stern-up tilt and the lens carry that read instead.
+   Same mechanism the generic swim rig uses on every other species. */
+.sai-sprite[data-state="dabble"] .sai-crit--goose .sai-crit-leg,
+.sai-sprite[data-state="dabblelift"] .sai-crit--goose .sai-crit-leg{ opacity:0; }
 .dab-weed{ display:none; }
 .sai-sprite[data-carry="weed"] .sai-crit--goose .dab-weed{ display:inline; }
 

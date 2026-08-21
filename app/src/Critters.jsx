@@ -1106,7 +1106,17 @@ function GooseDraw({ uid }) {
   const F = ["#a5967f", "#8a7a64", "#6e5f4c"], breast = "#cfc4ae", white = "#f4f2ec", dark = "#1b1d20", shank = "#22262a", ink = "#141518";
   return (
     <g transform="translate(60 106) scale(1.05) translate(-60 -106)">
-      <defs><Fur id={`${uid}f`} c={F} /></defs>
+      <defs>
+        <Fur id={`${uid}f`} c={F} />
+        {/* THE WATERLINE, as a clip rather than as a tint. Its edge is the
+            SAME curve `dab-water` draws as the meniscus — one line, used
+            twice: once to cut what is under it and once to draw where it
+            cuts. Move one and move the other or the goose develops a
+            second, invisible surface a few px off the visible one. */}
+        <clipPath id={`${uid}air`}>
+          <path d="M -40 -40 L 160 -40 L 160 95 L 114 95 C 92 88 22 88 2 94 L -40 94 Z" />
+        </clipPath>
+      </defs>
       {/* The wake is the whole argument for water factor 1.25: on land he is
           a set of moving parts and on the water he is one shape being carried,
           and a shape with no moving parts needs something else to say it is
@@ -1205,14 +1215,24 @@ function GooseDraw({ uid }) {
       </g>
 
       {/* DABBLING POSE: head and neck driven straight down through the
-          surface, bill working the roots. Drawn rather than posed for the
-          same reason as the crop, and for one more — everything under the
-          waterline has to be painted BEFORE the water so the surface passes
-          over it. `ownsWater` on the event keeps the generic swimming rig
-          off, which leaves the legs showing through the lens: that is the
-          whole point of the pose, since standing on the bottom is exactly
-          what separates a dabbling goose from a swimming one. */}
+          surface, bill working the roots.
+          
+          The surface used to be a TINT: a translucent lens painted over the
+          submerged parts so they read "as submerged rather than as missing".
+          They did not — at .42 opacity you watched a whole head and both
+          feet carry on being visible underwater, which is the one thing a
+          surface is for. Water is not a filter you see through at this
+          scale; it is an edge things go behind.
+          
+          So the neck is CLIPPED at the waterline now, and the lens has the
+          job it can actually do: colour and movement on the surface itself.
+          The clip is on a static wrapper and not on `dab-neck`, because
+          `dab-neck` is the thing being animated — clip the animated element
+          and the cut travels down with the head, which is a head that never
+          submerges. Clipping the parent leaves the surface where the water
+          is and slides the goose through it. */}
       <g className="sai-crit-dabblepose">
+        <g clipPath={`url(#${uid}air)`}>
         <g className="dab-neck">
           <path d="M 70 74 C 76 70 86 74 92 82 C 97 89 99 95 99 100"
             stroke={dark} strokeWidth="11.5" fill="none" strokeLinecap="round" />
@@ -1231,12 +1251,15 @@ function GooseDraw({ uid }) {
             <ellipse cx="113" cy="110" rx="2.6" ry="1.8" fill="#cbb98a" opacity=".8" transform="rotate(-18 113 110)" />
           </g>
         </g>
-        {/* THE SURFACE, over everything beneath it. The lens is translucent
-            so the submerged neck and the shanks read as submerged rather
-            than as missing, and the meniscus is the bright line where the
-            water actually cuts the feathers. */}
+        </g>
+        {/* THE SURFACE. Not an occluder any more — the clip above does that
+            — so this is what it always should have been: the colour of the
+            water over his floating half, the bright line where it cuts the
+            feathers, and the rings going out from where his head went in.
+            The lens can be heavier now that nothing is trying to be seen
+            through it. */}
         <g className="dab-water">
-          <ellipse cx="58" cy="97" rx="58" ry="12.5" fill="#2f7c9b" opacity=".42" />
+          <ellipse cx="58" cy="97" rx="58" ry="12.5" fill="#2f7c9b" opacity=".55" />
           <path d="M 2 94 C 22 88 92 88 114 95" stroke="#dff3fb" strokeWidth="2" fill="none"
             strokeLinecap="round" opacity=".55" />
           <g className="dab-rings">
