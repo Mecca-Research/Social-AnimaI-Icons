@@ -210,10 +210,22 @@ chk(reg.domains.land.share === 0.70 && reg.domains.water.share === 0.30,
 
   // (d) ...and it does run once he is there
   const arr = await page.evaluate(`(async w => { const b=w.agents.find(a=>a.species==='bear');
-    const S=b._eth; S.cd.fish = S.cd.tree = performance.now()+900000;
+    const S=b._eth;
+    // Every event off the EVENT LIST, not the two that came to mind. The
+    // clock being measured only burns while he reads as being in the water,
+    // and any bout that starts can move him or end with him ashore: the
+    // berry strip walks him to a bush in the clearing, and then the check
+    // is watching a stopped clock and calling it broken.
+    const muzzle = () => { const t=performance.now();
+      for (const e of window.__saiEtho.ETHOGRAM.bear.events) { S.cd[e.id]=t+900000; S.armed[e.id]=0; } };
+    muzzle();
     S.domain='water'; S.left=900000; S.tripUntil=performance.now()+900000;
-    b.x=.71*w.bounds.w; b.y=.28*w.bounds.h;            // in the lake
-    for (let k=0;k<40 && S.here!=='water';k++) await new Promise(r=>setTimeout(r,25));
+    // ...and he is HELD there. A bear at the lake's centre is swimming, and
+    // the shoreline and crowd rules are free to move him; drifting ashore
+    // stops the clock just as effectively as a bout does.
+    const hold = () => { b.x=.71*w.bounds.w; b.y=.28*w.bounds.h; b.vx=b.vy=0; };
+    hold();
+    for (let k=0;k<40 && S.here!=='water';k++) { hold(); await new Promise(r=>setTimeout(r,25)); }
     // Counted in FRAMES, not wall time. The clock burns one dt per frame and
     // headless rAF here runs at 3-4fps on a quiet machine and well under 1fps
     // on a busy one, so "2000ms" is not a number of frames — a run that
@@ -222,9 +234,10 @@ chk(reg.domains.land.share === 0.70 && reg.domains.water.share === 0.30,
     const before=S.left; const seen=[]; let last=S.left;
     for (let k=0;k<200 && seen.length<3;k++){
       await new Promise(r=>setTimeout(r,100));
+      hold(); muzzle();
       if (S.left !== last) { seen.push(last - S.left); last = S.left; }
     }
-    return { burned: Math.round(before - S.left), ticks: seen.length,
+    return { burned: Math.round(before - S.left), ticks: seen.length, here: S.here,
       monotonic: seen.every(d => d > 0) }; })(window.__saiWorld)`);
   chk(arr.ticks >= 3 && arr.monotonic && arr.burned > 0, 'dwell clock runs on arrival',
     `${arr.burned}ms over ${arr.ticks} ticks, all decreasing`);

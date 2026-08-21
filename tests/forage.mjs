@@ -24,10 +24,40 @@ await page.waitForTimeout(2500);
 const pass = [], fail = [];
 const chk = (ok, l, d) => { (ok?pass:fail).push(`${l} — ${d}`); console.log(`${ok?'  ✔':'  ✘'} ${l} — ${d}`); };
 
-const park = `(w => { for (const c of w.agents) { c.x=.62*w.bounds.w; c.y=.72*w.bounds.h; c.vx=c.vy=0;
-  c.state='idle'; c.idleUntil=performance.now()+900000; c.intentUntil=performance.now()+900000;
-  c.noEventUntil=performance.now()+900000; c.z=0; c._faceDir=0; c._carry=null; c._eth=null; }
-  for (const f of (w.forage||[])) f.userId=null; })(window.__saiWorld)`;
+// Everyone EXCEPT the subject, held still. Muzzling the subject's own
+// events is not enough isolation, because two things reach him from
+// outside his ethogram entirely and neither reads a cooldown:
+//
+//   the RESCUE — a friend arriving at a fight makes the opponent flee, and
+//   the squirrel's flee IS his zig-zag bolt, spliced in from the world side
+//   so a scare down the fight path cannot look tamer than one down the
+//   alarm path;
+//   the MUSK — the skunk's cloud is geometry-as-physics and sprays anything
+//   standing in the cone, by design, cooldown or no cooldown.
+//
+// Both need a fight somewhere on the map, so the isolation that removes
+// them is "nobody else is doing anything". Positions are left alone: moving
+// thirteen animals to one spot is how you put one in the lake or on top of
+// a site somebody's claim is about to be measured against.
+//
+// ...and `_muskAim` is cleared on EVERYONE, the subject included, because a
+// spraying is not an event with a cooldown — it is a flag left on the
+// victim, and the world holds it until he is FREE before acting on it:
+//
+//   if (!isFreeState(a) && now < a._muskFleeBy) continue;  // still busy
+//   muskFlee(a, cfg);
+//
+// So a cloud that caught him minutes ago, while the suite was still setting
+// up, sits on him and discharges on the first frame this fixture puts him
+// back into `wander` — which is the frame the measurement starts. It looked
+// like a squirrel bolting for no reason with every one of his events
+// muzzled, and it was a scare that had already happened.
+const stillness = (subject) => `for (const o of w.agents) {
+  o._muskAim=null; o._muskFleeBy=0; o._foeId=null;
+  if (o.species==='${subject}') continue;
+  o.state='idle'; o.vx=o.vy=0; o.targetId=null; o.z=0; o.intent='wander';
+  o.idleUntil=performance.now()+900000; o.intentUntil=performance.now()+900000;
+  o.noEventUntil=performance.now()+900000; }`;
 
 const world = await page.evaluate(`(w => ({ forage: (w.forage||[]).length,
   kinds: [...new Set((w.forage||[]).map(f=>f.kind))].sort().join(','),
@@ -44,13 +74,35 @@ chk(world.eth.includes('squirrel'), 'squirrel has an ethogram', world.eth);
 // force a species' event to fire now, and report the state chain it walks
 async function chain(species, evId, ms = 60000, seed = '') {
   return page.evaluate(`(async w => { const a=w.agents.find(x=>x.species==='${species}');
-    a._eth=null; a.state='wander'; a.intent='wander'; a.z=0; a._carry=null;
+    ${stillness(species)}
+    a.state='wander'; a.intent='wander'; a.z=0; a._carry=null;
     a.x=.30*w.bounds.w; a.y=.45*w.bounds.h;
     a.intentUntil=performance.now()+900000; a.noEventUntil=performance.now()+900000;
-    for (let k=0;k<40 && !a._eth;k++) await new Promise(r=>setTimeout(r,25));
-    ${seed}
+    // The ethogram state is CLEANED, not dropped. Dropping it (a._eth=null)
+    // means the engine builds a fresh one on some later frame, and offer()
+    // runs on that same frame, in front of a state whose cooldowns are all
+    // still zero. An approach trigger needs nothing but a neighbour to fire
+    // through that gap, and the neighbours are wherever the world left them:
+    // that is a squirrel bolting on the one frame the fixture could not have
+    // reached yet, which is exactly what this check kept reporting.
+    //
+    // Everything up to the first await here is atomic against the frame
+    // loop, so cleaning a state that already exists and muzzling it in the
+    // same breath closes the window instead of narrowing it.
+    if (!a._eth) for (let k=0;k<40 && !a._eth;k++) await new Promise(r=>setTimeout(r,25));
     const S=a._eth;
-    const seen=[]; let last='', started=false, maxZ=0;
+    if (S) {
+      if (S.claim) { S.claim.userId=null; S.claim=null; }
+      S.goal=null; S.goalUntil=0; S.near={}; S.dwelt={};
+      const t0m=performance.now();
+      for (const e of window.__saiEtho.ETHOGRAM['${species}'].events) {
+        if (e.id==='${evId}') continue;
+        S.cd[e.id]=t0m+900000; S.seekAt[e.id]=t0m+900000; S.armed[e.id]=0;
+      }
+      S.seekAt['${evId}']=0; S.cd['${evId}']=0;
+    }
+    ${seed}
+    const seen=[]; let last='', started=false, maxZ=0, scared=0;
     const t0=performance.now();
     while (performance.now()-t0 < ${ms}) {
       await new Promise(r=>setTimeout(r,90));
@@ -58,25 +110,47 @@ async function chain(species, evId, ms = 60000, seed = '') {
       // This tests whether the event WORKS, not how often it comes round —
       // the cadence is a separate question and a separate check.
       if (!started) {
-        // Muzzle BOTH clocks on every other event, not just the appetite
-        // timers. Several species now have approach-triggered events — the
-        // hedgehog's roll-up, the squirrel's bolt — which do not read seekAt
-        // at all and will happily win the frame, so a forage check came back
-        // reading hogcurl>hogball and a sploot check came back reading
-        // boltzag. Both were the animal behaving correctly and the fixture
-        // failing to ask the question.
+        ${stillness(species)}
+        // Muzzle every event this species OWNS, off the ethogram's own event
+        // list — not the keys that happen to be present in S.cd/S.seekAt.
+        //
+        // Those two objects are written lazily: an event that has not fired
+        // yet has no entry at all. Iterating their keys therefore muzzled
+        // only the events that had already run this session and left the
+        // virgin ones wide open, which is why this check kept coming back
+        // reading boltzag or hogcurl — approach triggers that had not fired
+        // yet, so they had no cooldown key to overwrite. Whichever of them
+        // was still untouched won the frame, and it alternated run to run.
+        //
+        // The engine's gate is 'now < S.cd[id]' and it sits in front of
+        // EVERY trigger type, so one cooldown per id is a complete muzzle.
+        // 'armed' is read BEFORE that gate, so a delay already ticking has
+        // to be cleared as well or it fires straight through it.
+        // ...and the event UNDER TEST is skipped, not muzzled and then
+        // un-muzzled: this block runs every pass until it bites, and an
+        // event with an armed delay arms on one pass and fires on a later
+        // one, so clearing its armed slot each time round would hold it off
+        // forever.
         const t = performance.now();
-        for (const id of Object.keys(S.seekAt)) S.seekAt[id] = t+900000;
-        for (const id of Object.keys(S.cd)) S.cd[id] = t+900000;
+        for (const e of window.__saiEtho.ETHOGRAM['${species}'].events) {
+          if (e.id === '${evId}') continue;
+          S.cd[e.id] = t+900000; S.seekAt[e.id] = t+900000; S.armed[e.id] = 0;
+        }
         S.seekAt['${evId}'] = 0;
         S.cd['${evId}'] = 0;
       }
+      if (a._muskAim || w.agents.some(o=>o.state==='fight')) scared++;
       if (a.state!==last){ seen.push(a.state+(a._carry?'['+a._carry+']':'')); last=a.state;
         if (a.state!=='wander') started=true; }
       maxZ = Math.max(maxZ, a.z || 0);
       if (started && a.state==='wander') break;
     }
-    return { chain: seen.join('>'), maxZ, stock: S.mem.stock }; })(window.__saiWorld)`);
+    // Named in the result rather than left for the next reader to re-derive:
+    // if this run was scared, the chain it reports is not a measurement of
+    // the event and saying so is the difference between a fixable failure
+    // and a flake.
+    return { chain: seen.join('>') + (scared ? ' [scared on '+scared+' passes]' : ''),
+             maxZ, stock: S.mem.stock }; })(window.__saiWorld)`);
 }
 
 {
@@ -94,9 +168,19 @@ if (await page.evaluate(`!!window.__saiEtho.ETHOGRAM.raccoon`)) {
   // across the map — so a single run is a draw on the give-up timer as much
   // as on the behavior. Seeded beside a bush so the two ground variants are
   // short; the tree one is what occasionally needs the retry.
+  // Seeded BETWEEN a berry bush and a fruiting trunk, not beside a bush.
+  // Two of the three variants set off for a bush and the third for a trunk,
+  // the bushes and the trunks are not in the same place, and the walk-there
+  // legs are frame-driven against a wall-clock give-up — so a seed that is
+  // short for one is a coin flip for the other, and the tree draw (weight 3
+  // of 7) failed about one run in four. The midpoint is short for both.
   const racSeed = `{ let n=null,d=1e9; for (const f of w.forage){ if(f.kind!=='berry') continue;
        const q=Math.hypot(f.px-a.x,f.py-a.y); if(q<d){d=q;n=f;} }
-     if(n){ a.x=n.px-38; a.y=n.py+28; } }`;
+     let t=null,td=1e9; for (const x of (w.def.trees||[])){ if(x.fruit===false) continue;
+       const tx=x.x*w.bounds.w, ty=x.y*w.bounds.h;
+       const q=Math.hypot(tx-a.x,ty-a.y); if(q<td){td=q;t={x:tx,y:ty};} }
+     if(n&&t){ a.x=(n.px+t.x)/2; a.y=(n.py+t.y)/2; }
+     else if(n){ a.x=n.px-38; a.y=n.py+28; } }`;
   let r = await chain('raccoon', 'berry', 120000, racSeed);
   for (let k = 0; k < 2 && !/racwash|raceat/.test(r.chain); k++)
     r = await chain('raccoon', 'berry', 120000, racSeed);
@@ -137,43 +221,42 @@ if (await page.evaluate(`!!window.__saiEtho.ETHOGRAM.deer`)) {
   chk(/foxpluck|foxnose|foxgraze/.test(r.chain), 'fox helps himself', r.chain);
 }
 {
-  // Contention. The claim has to be held by a REAL agent: the world releases
-  // any claim whose holder no longer points back at the site, so a made-up
-  // userId is cleared on the next frame — correct housekeeping, useless as a
-  // fixture. So park the raccoon on a bush for real, then check the fox
-  // routes around it.
+  // Contention: a held site must not be poached. The holder has to be an
+  // animal genuinely WORKING the bush, not one with a claim planted on it.
+  // Every species tick now hands back its claim on any frame where no
+  // ethogram state owns the animal — correct hygiene, a claim must not
+  // outlive its bout, and as of this release the bear does it too — so a
+  // claim written onto a wandering agent is released within the frame,
+  // before the fox ever looks. Parking him in `stripsit` with a far
+  // stateUntil is the production situation: driveStrip holds his position,
+  // no tick runs, and the claim stands for as long as the bout does.
   const r = await page.evaluate(`(async w => {
-    // The BEAR holds it, not the raccoon. Nearly every ethogram tick now
-    // calls releaseClaim on a frame where no state owns the animal — correct
-    // hygiene, a claim must not outlive its bout — so a claim planted on a
-    // wandering raccoon was gone again inside the same frame, before the fox
-    // ever looked. The bear has no tick and legitimately claims berry bushes.
     const rac=w.agents.find(x=>x.species==='bear'), fox=w.agents.find(x=>x.species==='fox');
     for (const a of [rac, fox]) { a._eth=null; a.state='wander'; a.intent='wander';
       a.intentUntil=performance.now()+900000; a.noEventUntil=performance.now()+900000; }
     for (let k=0;k<40 && !(rac._eth && fox._eth);k++) await new Promise(r=>setTimeout(r,25));
-    // the raccoon takes the bush nearest the fox, so it is the one the fox
+    // the holder takes the bush nearest the fox, so it is the one the fox
     // would otherwise pick
     fox.x=.30*w.bounds.w; fox.y=.45*w.bounds.h;
     let near=null, nd=Infinity;
     for (const f of w.forage) { if (f.kind!=='berry') continue;
       const d=Math.hypot(f.px-fox.x, f.py-fox.y); if (d<nd){nd=d;near=f;} }
     rac.x=near.px; rac.y=near.py;
+    near.userId=rac.id; rac._eth.claim=near;
+    // ...and put him in the bout that owns it
+    rac.state='stripsit'; rac._stripX=rac.x; rac._stripY=rac.y;
+    rac.stateUntil=performance.now()+900000; rac._branch=0; rac._branchN=999;
     const S=fox._eth; let chose=null;
     for (let i=0;i<650;i++){
-      // RE-ASSERTED every pass. The raccoon's tick releases any claim on a
-      // frame where no ethogram state owns him — correct hygiene, since a
-      // claim must never outlive its bout, but it means a claim planted on a
-      // wandering raccoon is gone again within one frame. What is being
-      // tested is that the fox routes around a HELD site; how the hold is
-      // kept alive is the fixture's problem, not the fox's.
-      near.userId=rac.id; rac._eth.claim=near;
       await new Promise(r=>setTimeout(r,90));
       if (fox.state==='wander' && !S.goal){ S.seekAt['scrump']=0; S.cd['scrump']=0; }
       if (S.goal && S.goal.ref && S.goal.ref.site){ chose=S.goal.ref.site.i; break; }
     }
-    near.userId=null; rac._eth.claim=null;
-    return { chose, held: near.i }; })(window.__saiWorld)`);
+    const heldThroughout = near.userId === rac.id;
+    near.userId=null; rac._eth.claim=null; rac.state='wander'; rac._faceDir=0;
+    return { chose, held: near.i, heldThroughout }; })(window.__saiWorld)`);
+  chk(r.heldThroughout, 'the holder keeps its claim for the whole bout',
+    r.heldThroughout ? 'still held at the end' : 'the claim was released mid-bout');
   chk(r.chose !== null && r.chose !== r.held, 'a claimed site is not poached',
     `raccoon holds site ${r.held}, fox went to ${r.chose === null ? 'none' : r.chose}`);
 }
@@ -214,11 +297,21 @@ await page.waitForTimeout(400);
   // sample the claim WHILE he is on it — chain() runs to completion and the
   // claim is released on the way out, so checking afterwards proves nothing
   const onLog = await page.evaluate(`(async w => { const t=w.agents.find(a=>a.species==='turtle');
-    t._eth=null; t.state='wander'; t.intent='wander';
-    t.x=.60*w.bounds.w; t.y=.34*w.bounds.h;
+    t.state='wander'; t.intent='wander';
+    // Seeded beside a LOG and the claims cleared, for the same reason the
+    // check above it says: his progress is frame-based and the give-up is
+    // wall-clock, so a seed out in open water is a stopwatch race and not a
+    // question about what he chooses. The old seed was a fixed point in the
+    // middle of the lake and it read "never sat" about one run in three.
+    for (const p of w.pads) p.userId=null;
+    const L=w.pads.filter(p=>p.log); const p0=L[0]||w.pads[0];
+    t.x=p0.x-30; t.y=p0.y-20;
     t.intentUntil=performance.now()+900000; t.noEventUntil=performance.now()+900000;
-    for (let k=0;k<40 && !t._eth;k++) await new Promise(r=>setTimeout(r,25));
+    // cleaned, not dropped — see chain()
+    if (!t._eth) for (let k=0;k<40 && !t._eth;k++) await new Promise(r=>setTimeout(r,25));
     const S=t._eth;
+    if (S) { if (S.claim) { S.claim.userId=null; S.claim=null; }
+             S.goal=null; S.goalUntil=0; S.near={}; S.dwelt={}; }
     for (let i=0;i<1400;i++){
       await new Promise(r=>setTimeout(r,90));
       if (t.state==='wander'){ S.seekAt['float']=0; S.cd['float']=0; }
@@ -325,7 +418,11 @@ await page.waitForTimeout(400);
       for (let k=0;k<50 && g._wet===undefined;k++) await new Promise(r=>setTimeout(r,50));
       return !!g._wet; };
     const inside = w.pads[0];                       // a lily pad is water by construction
-    let lo={x:inside.x,y:inside.y}, hi={x:.5*b.w,y:.85*b.h};   // the sward is dry by construction
+    // ...and the far end is dry by construction too, but it is no longer the
+    // sward: that moved east to the lake's south shore this release. It is
+    // the bottom-centre open ground, which is as far from the lake as the
+    // stage goes and is where the lone spruce stands.
+    let lo={x:inside.x,y:inside.y}, hi={x:.5*b.w,y:.85*b.h};
     if (!(await wet(lo.x,lo.y))) return null;
     for (let i=0;i<14;i++){
       const m={x:(lo.x+hi.x)/2, y:(lo.y+hi.y)/2};
@@ -338,8 +435,26 @@ await page.waitForTimeout(400);
     const dx=inside.x-lo.x, dy=inside.y-lo.y, d=Math.hypot(dx,dy)||1;
     return { x: lo.x + dx/d*45, y: lo.y + dy/d*45 }; })(window.__saiWorld)`);
   chk(!!seed, 'the waterline can be found', seed ? `margin at ${Math.round(seed.x)},${Math.round(seed.y)}` : 'pad[0] read dry');
+  // ...and then he is placed ON a band the world says is dabblable, rather
+  // than at the margin he then has to swim along. shallowPoint starts from
+  // his OWN angle and fans out in 0.26 rad steps until a shore has room for
+  // him, so a goose already standing in a legal band gets a target a few px
+  // away; a goose at a margin whose own sector has no band gets one a third
+  // of the way round the lake, and an 18s give-up at this frame rate buys
+  // about three seconds of swimming. That was a 50/50 check.
+  const spot = await page.evaluate(`(w => {
+    if (!w.shallowBandAt || !w.lakePointAt) return null;
+    for (let k = 0; k < 48; k++) {
+      const t = (k / 48) * Math.PI * 2;
+      const band = w.shallowBandAt(t);
+      if (band) return w.lakePointAt(t, (band[0] + band[1]) / 2);
+    }
+    return null; })(window.__saiWorld)`);
+  chk(!!spot, 'the world names a dabblable band',
+    spot ? `band point at ${Math.round(spot.x)},${Math.round(spot.y)}` : 'no shore is both shallow and wide enough');
+  const at = spot || seed;
   const r = await chain('goose', 'dabble', 90000,
-    seed ? `a.x=${seed.x}; a.y=${seed.y};` : `a.x=.71*w.bounds.w; a.y=.28*w.bounds.h;`);
+    at ? `a.x=${at.x}; a.y=${at.y};` : `a.x=.71*w.bounds.w; a.y=.28*w.bounds.h;`);
   chk(/dabble/.test(r.chain), 'goose dabbles the shallows', r.chain);
 }
 {
@@ -443,8 +558,17 @@ for (const [ev, want, label] of [
     // Muzzle his appetites. curl is an APPROACH trigger, so it competes on
     // the same frame with whichever seek happens to be due, and a hungry
     // hedgehog walks off to a root instead of balling up — which is correct
-    // behavior and a useless measurement. Same isolation chain() does.
-    for (const id of Object.keys(h._eth.seekAt)) h._eth.seekAt[id] = performance.now()+900000;
+    // behavior and a useless measurement. Same isolation chain() does, and
+    // for the same reason it is taken off the EVENT LIST rather than off the
+    // keys already written: muzzling seekAt alone left curl's own cooldown
+    // standing from an earlier roll-up, so the one event being measured was
+    // the one still gated, and the check watched him idle for forty seconds.
+    const tt = performance.now();
+    for (const e of window.__saiEtho.ETHOGRAM.hedgehog.events) {
+      if (e.id === 'curl') continue;
+      h._eth.seekAt[e.id] = tt+900000; h._eth.cd[e.id] = tt+900000; h._eth.armed[e.id] = 0;
+    }
+    h._eth.cd['curl'] = 0;
     const seen=new Set(); const t0=performance.now();
     while (performance.now()-t0 < 40000) {
       await new Promise(r=>setTimeout(r,80));
@@ -454,6 +578,14 @@ for (const [ev, want, label] of [
       big.state='idle'; big.vx=big.vy=0;
       big.idleUntil=performance.now()+900000; big.noEventUntil=performance.now()+900000;
       big.x=h.x+30; big.y=h.y;
+      // An approach trigger fires on the RISING EDGE: the engine keeps
+      // S.near[id] and only offers the event when a threat that was absent
+      // becomes present. Holding one beside him therefore gives exactly ONE
+      // offer for the whole forty seconds — and curl takes 85% of them, so
+      // one run in seven watched a hedgehog stand there being brave. The
+      // edge is re-armed each pass, and the 4s miss cooldown with it, so the
+      // check asks the question as many times as it has frames for.
+      h._eth.near['curl'] = false; h._eth.cd['curl'] = 0;
       seen.add(h.state);
       if (seen.has('hogball')) break;
     }

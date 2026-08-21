@@ -263,6 +263,244 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
     r.ms < 0 ? 'never left cooldown in 6s' : `left after ${r.ms}ms into ${r.state}`);
 }
 
+// ==================== audit regressions ====================
+// Four defects found by an adversarial pass over v0.34/v0.35, each one pinned
+// here so it cannot come back quietly. Three of the four were invisible to
+// every other suite because they only appear on an INTERRUPTED bout, and the
+// suites all drive bouts to completion.
+{
+  // Every species tick is the sweep for a bout that ended by some route other
+  // than its own. The bear's was the only one testing a specific value
+  // (_faceDir === -1), so a berry strip's _faceDir = 1 outlived the bout and
+  // pinned his sprite backwards for the rest of the session; and his was the
+  // only one that did not hand back its site claim, locking a berry bush out
+  // of the shared pool. Both checked by INTERRUPTING mid-strip, which is the
+  // only way either shows up.
+  const r = await page.evaluate(`(async w => {
+    const b = w.agents.find(a => a.species === 'bear');
+    const site = (w.forage || []).find(f => f.kind === 'berry');
+    b._eth = null; b.state = 'wander'; b.intent = 'wander'; b.z = 0;
+    for (let k = 0; k < 40 && !b._eth; k++) await new Promise(r => setTimeout(r, 25));
+    const S = b._eth;
+    // stand him in a strip, holding a claim, exactly as start() would
+    b._faceDir = 1; b.state = 'stripsit'; b.stateUntil = performance.now() + 900000;
+    site.userId = b.id; S.claim = site;
+    // now interrupt it the way a musk cloud or a rescuer does: state yanked
+    // away without the event's own cleanup running
+    b.state = 'flee'; b.fleeEnd = performance.now() + 1;
+    for (let k = 0; k < 60; k++) {
+      await new Promise(r => setTimeout(r, 60));
+      if (b.state !== 'flee' && b.state !== 'cooldown') break;
+      if (!b._faceDir && !S.claim) break;
+    }
+    const out = { face: b._faceDir || 0, claimed: !!S.claim, siteHeld: site.userId === b.id };
+    site.userId = null; S.claim = null; b._faceDir = 0;
+    return out; })(window.__saiWorld)`);
+  chk(r.face === 0, 'an interrupted strip hands back the bear\'s facing',
+    r.face ? `_faceDir stuck at ${r.face} — he walks backwards from here on` : 'swept');
+  chk(!r.claimed && !r.siteHeld, 'and hands back the bush it had claimed',
+    r.claimed ? 'the claim outlived the bout, so that bush is out of the pool' : 'released');
+}
+{
+  // Every trunk behavior works the WEST face and stands its subject a
+  // sprite-foot north of the anchor. A trunk near the eastern shore therefore
+  // has its own working spot in the lake — the tree at (.898,.480) put the
+  // bear's scratch at rho 0.907 and the deer's bed at 0.853, both inside the
+  // DRAWN shore, so they played the swimming rig while rearing against bark.
+  const r = await page.evaluate(`(w => {
+    const B = w.bounds, R = 13, BASE = 18, bad = [];
+    const bear = w.agents.find(a => a.species === 'bear');
+    const deer = w.agents.find(a => a.species === 'deer');
+    (w.def.trees || []).forEach((t, i) => {
+      const tx = t.x * B.w, ty = t.y * B.h;
+      const spots = [
+        ['bear scratch', tx - R*t.s - bear.r*3.1*0.232, ty - BASE*t.s - bear.r*3.1*0.348],
+        ['deer bed',     tx - R*t.s - deer.r*3.1*0.430, ty - BASE*t.s - deer.r*3.1*0.396],
+      ];
+      for (const [what, x, y] of spots) {
+        const rho = w.lakeRhoAt(x, y);
+        if (rho < 1.05) bad.push('tree ' + i + ' ' + what + ' at rho ' + rho.toFixed(3));
+      }
+    });
+    return bad; })(window.__saiWorld)`);
+  chk(r.length === 0, 'no trunk has its working face in the lake',
+    r.length ? r.join('; ') : 'all six clear of the drawn shore');
+}
+{
+  // ...and the pickers refuse a wet spot regardless of where the trees are,
+  // so moving one cannot reintroduce it.
+  const r = await page.evaluate(`(async w => {
+    const b = w.agents.find(a => a.species === 'bear');
+    const t = (w.def.trees || [])[0];
+    const saveX = t.x, saveY = t.y;
+    t.x = 0.71; t.y = 0.28;                       // shove a trunk into the lake
+    b._eth = null; b.state = 'wander'; b.intent = 'wander'; b.z = 0;
+    b.x = 0.71 * w.bounds.w + 60; b.y = 0.28 * w.bounds.h;
+    b.intentUntil = performance.now() + 900000; b.noEventUntil = 0;
+    for (let k = 0; k < 40 && !b._eth; k++) await new Promise(r => setTimeout(r, 25));
+    let took = false;
+    for (let k = 0; k < 40; k++) {
+      await new Promise(r => setTimeout(r, 60));
+      if (b.state === 'treerub' || b.state === 'treeclimb') { took = true; break; }
+    }
+    t.x = saveX; t.y = saveY; b.state = 'wander'; b._faceDir = 0;
+    return took; })(window.__saiWorld)`);
+  chk(r === false, 'and a trunk standing in water is refused outright',
+    r ? 'the bear took a tree whose west face is open lake' : 'skipped, as every other spot picker does');
+}
+{
+  // Dragging one animal out of a fight is a documented way for a fight to
+  // end, and it did not work: pointerdown overwrites state with "drag", so
+  // the release handler's test for "fight" could never be true and the
+  // partner was left gliding at the contact point it was locked to.
+  const r = await page.evaluate(`(async w => {
+    const [a, b] = w.agents.filter(x => !x.dragging).slice(0, 2);
+    for (const x of [a, b]) { x._eth = null; x.z = 0; }
+    a.x = .35 * w.bounds.w; a.y = .40 * w.bounds.h; b.x = a.x + 14; b.y = a.y;
+    w.__fight(a, b);
+    const locked = a.state === 'fight' && b.state === 'fight';
+    // the grab, exactly as IconNode does it
+    a._grabFrom = a.state; a._grabTarget = a.targetId;
+    a.dragging = true; a.state = 'drag'; a._faceDir = 0;
+    await new Promise(r => setTimeout(r, 200));
+    a.x += 300;
+    a.dragging = false;
+    w.__drop(a);
+    await new Promise(r => setTimeout(r, 300));
+    return { locked, aState: a.state, bState: b.state,
+             bTarget: b.targetId, aTarget: a.targetId }; })(window.__saiWorld)`);
+  chk(r.locked, 'two animals can be put into a fight', `${r.locked}`);
+  chk(r.bState !== 'fight' && r.bState !== 'friendly',
+    'dragging one out of a fight releases the other',
+    `partner left in "${r.bState}"`);
+  chk(!r.aTarget && !r.bTarget, 'and neither keeps a stale target',
+    `a→${r.aTarget || 'none'}, b→${r.bTarget || 'none'}`);
+}
+
+// ==================== the lawn is on screen ====================
+// A crown paints at zIndex 12 and the animals at 10. That is deliberate — it
+// is what puts the squirrel's drey IN the tree rather than in front of one —
+// but it means a grazing goose standing under one is not visible at all, and
+// the sward was laid straight across the lone spruce's band: 56% of the lawn
+// had the bird behind needles, for the longest single bout he has.
+//
+// GEOMETRY, so it is asked of the geometry rather than watched for: the
+// rectangle, the trees and the painted crown boxes all come off the world —
+// the SAME object the ethogram grazes by — and are swept over a dozen stage
+// shapes here rather than only the one this suite happens to run at, because
+// the fault only showed on stages shorter than about 1130px.
+{
+  const r = await page.evaluate(`(w => {
+    const S = w.def.sward, T = w.def.trees || [], C = w.__crowns;
+    if (!S || !C) return { missing: true };
+    const SIZES = [[1008,700],[1264,732],[1350,700],[1424,832],[1600,820],[1904,1012],
+                   [1000,800],[1240,1000],[900,620],[1440,900],[1280,720],[1920,1080],
+                   [960,600],[1120,640]];
+    // The GOOSE'S own box, and his alone: inCrown builds it from the grazing
+    // bird's own r, so a check built from the biggest radius on the map is
+    // asking whether a BEAR could graze here, which is a question nobody is
+    // going to ask. Critter draws the 120-unit sprite at r * 2.7.
+    const g = w.agents.find(a => a.species === 'goose');
+    const rr = g ? g.r : 28.6;
+    const hw = rr * 1.35, up = rr * 2;
+    let worst = 0, worstAt = '';
+    for (const [W, H] of SIZES) {
+      let n = 0, bad = 0;
+      for (let i = 0; i <= 20; i++) for (let j = 0; j <= 20; j++) {
+        const x = (S.x0 + (S.x1 - S.x0) * i / 20) * W;
+        const y = (S.y0 + (S.y1 - S.y0) * j / 20) * H;
+        n++;
+        for (const t of T) {
+          const k = C[t.kind || 'oak']; if (!k) continue;
+          const tx = t.x * W, ty = t.y * H;
+          if (Math.abs(x - tx) > k.half * t.s + hw) continue;
+          if (y > ty - k.topPx * t.s && y - up < ty - k.botPx * t.s) { bad++; break; }
+        }
+      }
+      if (bad / n > worst) { worst = bad / n; worstAt = W + 'x' + H; }
+    }
+    return { worst, worstAt, sward: [S.x0, S.x1, S.y0, S.y1].join(',') };
+  })(window.__saiWorld)`);
+  chk(!r.missing && r.worst === 0, 'no part of the sward is under a painted crown',
+    r.missing ? 'the world hands over no sward or no crown boxes'
+      : r.worst === 0 ? `x ${r.sward} clear at all fourteen stage shapes`
+      : `${(100 * r.worst).toFixed(0)}% under a crown at ${r.worstAt}`);
+}
+
+// ==================== the floats do not march in step ====================
+// The eleven drifting floats are dealt three bob phases off a NINE-character
+// string, so the last two indices came back `pad-undefined`, matched no rule,
+// and fell to the base 5s/0s animation — two big drift logs rocking in exact
+// lockstep on open water, which is the one pairing that reads as machinery.
+{
+  const r = await page.evaluate(`(w => {
+    const els = [...document.querySelectorAll('.sai-water-pad')];
+    const cls = els.map(e => [...e.classList].find(c => c.startsWith('pad-')) || 'NONE');
+    const st = els.map(e => { const s = getComputedStyle(e);
+      return s.animationDuration + '/' + s.animationDelay; });
+    // WHICH floats are logs comes off the world, not off the drawing. The
+    // first version of this read the svg's height and called 40 a log —
+    // and the rp 12 lily pad is drawn 40 tall too, so it counted five logs
+    // and failed a fix that was correct. PadLayer maps its specs in order,
+    // so the DOM order and w.pads are index-aligned.
+    const logPhases = st.filter((_, i) => w.pads && w.pads[i] && w.pads[i].log);
+    return { n: els.length, pads: (w.pads || []).length,
+             unnamed: cls.filter(c => c === 'NONE').length,
+             logs: logPhases.length, logDistinct: new Set(logPhases).size };
+  })(window.__saiWorld)`);
+  chk(r.n > 0 && r.n === r.pads && r.unnamed === 0, 'every float is dealt a bob phase',
+    `${r.n} drawn against ${r.pads} in the world, ${r.unnamed} with no pad- class`);
+  chk(r.logs > 0 && r.logDistinct === r.logs, 'and no two drift logs rock in step',
+    `${r.logs} logs on ${r.logDistinct} distinct phases`);
+}
+
+// ==================== the skunk's holes stay visible ====================
+// A pit is drawn at zIndex 1 and the forage art at 2, so a hole under a
+// fallen log is a hole that is not there. His ethogram kept a flat 78px off
+// every site — a BUSH's number: the log art reaches 91px along its own axis
+// to the end grain, so a pit at 79px passed the test and was then painted
+// over by the timber. The clearance is now art-to-art, and this checks the
+// holes he actually leaves rather than the arithmetic that places them.
+{
+  const r = await page.evaluate(`(async w => {
+    const a = w.agents.find(x => x.species === 'skunk');
+    if (!a) return { none: 'no skunk' };
+    const half = w.__siteHalf, pit = w.__pitHalf;
+    if (!half) return { none: 'the world hands over no painted site widths' };
+    w.pits = [];
+    a._eth = null; a.state = 'wander'; a.intent = 'wander'; a.z = 0;
+    a.intentUntil = performance.now() + 900000;
+    a.noEventUntil = performance.now() + 900000;
+    for (let k = 0; k < 40 && !a._eth; k++) await new Promise(r => setTimeout(r, 25));
+    const S = a._eth; if (!S) return { none: 'the skunk never got an ethogram' };
+    const t0 = performance.now();
+    while (performance.now() - t0 < 120000 && (w.pits || []).length < 3) {
+      await new Promise(r => setTimeout(r, 90));
+      if (a.state === 'wander') {              // keep the dig due, everything else muzzled
+        const t = performance.now();
+        for (const id of Object.keys(S.seekAt)) S.seekAt[id] = t + 900000;
+        for (const id of Object.keys(S.cd)) S.cd[id] = t + 900000;
+        S.seekAt['dig'] = 0; S.cd['dig'] = 0;
+      }
+    }
+    const pits = (w.pits || []).slice();
+    let worst = null;
+    for (const p of pits) for (const f of w.forage || []) {
+      const need = (half[f.kind] || 0) * (f.s || 1) + pit;
+      const d = Math.hypot(f.px - p.x, f.py - p.y);
+      if (d < need && (!worst || need - d > worst.by))
+        worst = { kind: f.kind, d: Math.round(d), need: Math.round(need), by: need - d };
+    }
+    return { pits: pits.length, worst };
+  })(window.__saiWorld)`);
+  if (r.none) chk(false, 'a skunk pit never lands inside drawn forage art', r.none);
+  else if (!r.pits) chk(false, 'a skunk pit never lands inside drawn forage art',
+    'no pit was dug inside 120s — the check never got to ask');
+  else chk(!r.worst, 'a skunk pit never lands inside drawn forage art',
+    r.worst ? `a pit sits ${r.worst.d}px from a ${r.worst.kind}, which is painted ${r.worst.need}px wide`
+            : `${r.pits} pits, all clear of all ${(await page.evaluate('window.__saiWorld.forage.length'))} sites`);
+}
+
 chk(errs.length === 0, 'no JS errors', errs.length ? errs[0] : 'clean');
 console.log(`\n${fail.length ? 'FAIL ' + fail.length : 'ALL PASS'} (${pass.length} passed)`);
 await browser.close();

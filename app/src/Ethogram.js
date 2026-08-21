@@ -595,12 +595,6 @@ function driveStrip(a, c) {
   a.stateUntil = c.now + STRIP_BRANCH;               // reach for the next one
 }
 
-// ---- and inside defineEthogram("bear", ...), the existing tick widens by
-// one character so a strip can clear its facing too. Was `=== -1`:
-//
-//   tick(a) { if (a._faceDir) a._faceDir = 0; },
-//
-
 defineEthogram("bear", {
   domainOf: (a, c) => (c.def.hasWater && c.isWet(a.x, a.y) ? "water" : "land"),
 
@@ -616,9 +610,25 @@ defineEthogram("bear", {
     water: { share: 0.30, dwell: [10000, 22000], travel: 34000, pull: 0.92 },
   },
 
-  // if a drag or an encounter knocked him out of the scratch mid-pose, let
-  // him steer by his own velocity again
-  tick(a) { if (a._faceDir === -1) a._faceDir = 0; },
+  // The sweep for a bout that ended by any route other than its own. It runs
+  // only on frames where no ethogram state owns him, so it cannot fire
+  // mid-bout — and it has to be unconditional, because the interrupts are
+  // exactly the paths that skip an event's own cleanup: a drag, a musk cloud,
+  // a rescuer, the planner hauling him out of the water.
+  //
+  // Both halves were narrower than they needed to be. `=== -1` covered only
+  // the tree rub's facing, so a berry strip's `_faceDir = 1` survived
+  // forever — the renderer takes any truthy value over the velocity, and
+  // nothing else writes the field for a bear, so one interrupted strip left
+  // him walking backwards for the rest of the session. And he was the only
+  // one of nine species whose tick did not hand back its site claim, so an
+  // interrupted strip locked a berry bush out of the shared pool until his
+  // next bout — the world's own sweep deliberately leaves that case alone,
+  // because `_eth.claim` still points at the site.
+  tick(a, c, S) {
+    if (S.claim) releaseClaim(a, S);
+    if (a._faceDir) a._faceDir = 0;
+  },
 
   events: [
     // ---- LAND: the big trees ------------------------------------------
@@ -632,7 +642,19 @@ defineEthogram("bear", {
       near: (a, c) => {
         if (!c.def.trees) return null;
         for (const t of c.def.trees) {
-          if (Math.hypot(t.x * c.bounds.w - a.x, t.y * c.bounds.h - a.y) < TREE.reach) return t;
+          const tx = t.x * c.bounds.w, ty = t.y * c.bounds.h;
+          if (Math.hypot(tx - a.x, ty - a.y) >= TREE.reach) continue;
+          // The scratch stands him against the WEST face, so a trunk near the
+          // eastern shore has its own working spot in the lake. Checked here
+          // rather than trusted to placement — the deer's trunkSpot does the
+          // same, and for the same tree.
+          if (c.isWet(tx - 13 * t.s - a.r * 3.1 * TREE.standBack,
+                      ty - TREE.basePx * t.s - a.r * 3.1 * TREE.standFeet)) continue;
+          // ...and nobody else on it. His was the one trunk picker of the six
+          // that never looked, so he would walk up to a tree the deer was
+          // already rubbing and rear through it. Same test racTrunk uses.
+          if (trunkBusy(a, c, tx, ty)) continue;
+          return t;
         }
         return null;
       },
@@ -749,15 +771,18 @@ defineEthogram("bear", {
     // ---- LAND: stripping a berry bush ---------------------------------
     // The longest forage bout in the world by some way. He settles at one
     // bush and works it branch by branch for half a minute, where the
-    // raccoon holds a bush ten seconds and the fox barely stops walking.
-    // That length IS the behavior, so what gets rationed is the appetite:
-    // 82-146s between the thoughts, a bout every two and a half minutes or
-    // so, which is bout-plus-amble under a quarter of his time ashore and
-    // well under a fifth of his day. Seven berry sites and he only ever
-    // holds one: heaviest user of the clearing, never its owner.
+    // raccoon holds a bush twenty seconds and the fox barely stops walking.
+    // That length IS the behavior, so what gets rationed is the appetite —
+    // and the ladder is dialled on TIME SPENT feeding rather than on bouts
+    // started (see the header of tests/cadence.mjs), so a 34s bout has to
+    // buy a long window or he owns the clearing's clock. 128-194s between
+    // the thoughts, three in four acted on, is a bout every ~3.6 minutes
+    // and 16% of his day feeding: third rung, behind the skunk and the
+    // deer. Seven berry sites and he only ever holds one: heaviest user of
+    // the clearing, never its owner.
     {
       id: "strip", domain: "land", trigger: "seek",
-      every: [50000, 78000],
+      every: [128000, 194000],
       // three appetites in four are acted on: the timer already makes this
       // rare, and the roll is only here to keep the rhythm off a metronome
       chance: 0.75,
@@ -1112,14 +1137,16 @@ defineEthogram("squirrel", {
     // goes and gets it: trunk, leaves, out of sight, back down with it in
     // the cheek, then the long carry west to the stump.
     //
-    // 46-78s between the appetites and better than two in three acted on
-    // is a caching trip about every 91s WHILE THERE IS ROOM, and the trip
-    // runs 16-20s door to door. Nothing is claimed but the tree, and only
-    // for the five seconds he is on it: three nut sites, the lightest
-    // touch anyone here puts on the shared ground.
+    // 134-202s between the appetites and better than two in three acted
+    // on is a caching trip about every 4.1 minutes WHILE THERE IS ROOM,
+    // and the trip runs 16-20s door to door. Together with the raid below
+    // that is 12% of his day on food — fourth rung, clear of the bear
+    // above him and well clear of the raccoon below. Nothing is claimed
+    // but the tree, and only for the five seconds he is on it: three nut
+    // sites, the lightest touch anyone here puts on the shared ground.
     {
       id: "cache", domain: "land", trigger: "seek",
-      every: [106000, 166000], chance: 0.68, cool: 20000,
+      every: [134000, 202000], chance: 0.68, cool: 20000,
       states: ["nutup", "takenut", "nutdown", "nuthaul", "cachedig", "cachepat"],
       // only the three climb states need this; the other three never leave
       // the ground, so exempting them from the z decay costs nothing
@@ -1237,7 +1264,7 @@ defineEthogram("squirrel", {
     // either way gives a sawtooth — four caches in a row, then four meals.
     {
       id: "raid", domain: "land", trigger: "seek",
-      every: [106000, 166000], chance: 0.68, cool: 20000,
+      every: [134000, 202000], chance: 0.68, cool: 20000,
       states: ["nuthunt", "unearth", "nutmunch"],
       goto: {
         state: "tocache", within: 30, giveUp: 24000, urgency: 0.45,
@@ -1663,6 +1690,43 @@ const racFruitPx  = () => TREE.fruitPx  ?? (TREE.canopyPx + 17);
  * off one trunk is to look before setting off. `t.fruit === false` lets the
  * world retire a tree from bearing without this file changing.
  */
+/**
+ * IS SOMEBODY ALREADY WORKING THIS TRUNK? Shared, because a tree is not a
+ * claimable site — there is no slot to take, so the only record that a trunk
+ * is busy is the animal standing at it, and every picker has to read that
+ * record the same way or two of them converge on one bole.
+ *
+ * Two things were wrong with the flat ring this replaces, and they pull in
+ * opposite directions:
+ *
+ *   TOO SMALL for the animal being looked for. Every trunk behavior in this
+ *   file — the bear's rub and climb, the deer's rub and bed, the squirrel's
+ *   drey, the owl's nest, the raccoon's own den — parks its subject on the
+ *   WEST face, a sprite-foot north of the anchor, and how far out that is
+ *   depends on how big the animal is: `standBack`/`standFeet` are fractions
+ *   of its own sprite. A bear settles 66px from the anchor, a squirrel 20.
+ *   A single 53px ring was inside the bear and outside the squirrel, so the
+ *   one animal you could not see was the biggest one in the wood. The ring
+ *   therefore grows with the OCCUPANT, not with the asker.
+ *
+ *   TOO BIG for anyone merely walking past. Widening it to the bear's full
+ *   96px reach instead made every trunk a no-go zone whenever any of forty
+ *   wandering animals drifted near, and the raccoon started walking past the
+ *   tree beside him to one across the map. Proximity is not occupancy: an
+ *   animal owns a trunk when it is DOING something, and `ETHO_STATES` is
+ *   exactly that set — every state any ethogram registers, the walk-there
+ *   legs included, and nothing an idler or a wanderer is ever in.
+ */
+function trunkBusy(a, c, tx, ty) {
+  if (!TREE) return false;
+  for (const o of c.world.agents) {
+    if (o === a || o.dragging) continue;
+    if (!ETHO_STATES.has(o.state)) continue;       // a passer-by owns nothing
+    if (Math.hypot(o.x - tx, o.y - ty) < TREE.reach * 0.55 + o.r * 1.6) return true;
+  }
+  return false;
+}
+
 function racTrunk(a, c) {
   const trees = c.def.trees;
   if (!trees || !TREE) return null;
@@ -1671,12 +1735,7 @@ function racTrunk(a, c) {
     const t = trees[i];
     if (t.fruit === false) continue;
     const x = t.x * c.bounds.w, y = t.y * c.bounds.h;
-    let taken = false;
-    for (const o of c.world.agents) {
-      if (o === a || o.dragging) continue;
-      if (Math.hypot(o.x - x, o.y - y) < TREE.reach * 0.55) { taken = true; break; }
-    }
-    if (taken) continue;
+    if (trunkBusy(a, c, x, y)) continue;
     const d = Math.hypot(x - a.x, y - a.y);
     if (d < bd) { bd = d; best = { x, y, tree: t, i }; }
   }
@@ -1866,16 +1925,17 @@ defineEthogram("raccoon", {
   events: [
     // ---- LAND: the berry thicket, and what he does with what he takes ----
     // An appetite on a timer, not an encounter: nothing has to be near him.
-    // 42-78s between the thoughts and slightly better than even odds on each
-    // works out at a bout roughly every hundred seconds, and a bout is a bit
-    // over twenty — about a fifth of his day at the bushes. That is well
-    // under the bear, who strips a bush as a matter of course, and well over
-    // the fox, who takes what is at nose height and moves on. Seven berry
-    // sites and he holds one for only the ten seconds it takes to pick, so
-    // he is cheap to share the clearing with.
+    // The bout is the second longest in the world — walk in, pick, carry to
+    // the water, wet the hands, wash, eat, call it 23s — so a window that
+    // reads as generous still buys a great deal of clock. 146-222s between
+    // the thoughts and a bit under even odds on each is a bout every ~6.8
+    // minutes and 5.5% of his day feeding: the ">>" step down off the four
+    // above him on the ladder, and still three times the fox below. Seven
+    // berry sites and he holds one only for the ten seconds it takes to
+    // pick, so he is cheap to share the clearing with.
     {
       id: "berry", domain: "land", trigger: "seek",
-      every: [92000, 154000], chance: 0.55, cool: 24000,
+      every: [146000, 222000], chance: 0.45, cool: 24000,
       variants: [
         {
           // GROUND PICK — the common case. He works the low fruit over in
@@ -2124,6 +2184,13 @@ function trunkSpot(a, c, k, skip) {
     const x = tx - TREE.trunkR * t.s - a.r * 3.1 * k;
     const y = ty - TREE.basePx * t.s - a.r * 3.1 * TREE.deer.feet;
     if (x < a.r * 1.2) return;                  // that tree's west side is off-stage
+    // ...and it has to be dry. Every trunk behavior works the WEST face, so a
+    // trunk near the eastern shore puts its own working spot in the lake —
+    // which is exactly what the tree at (.898,.480) did until it was moved.
+    // A deer lying up in the water plays the swimming rig while rearing
+    // against bark, so this is checked here rather than trusted to placement:
+    // every other spot picker in this world already filters on wetness.
+    if (c.isWet(x, y)) return;
     const d = Math.hypot(tx - a.x, ty - a.y);
     if (d >= bestD) return;
     // Trees carry no claim slot the way a forage site does — they are a
@@ -2437,8 +2504,23 @@ function openSpot(p, c) {
       if (Math.hypot(t.x * c.bounds.w - p.x, t.y * c.bounds.h - p.y) < TREE.reach) return false;
     }
   }
+  // 78 is a BUSH'S number, and not every site is a bush. It is measured from
+  // the anchor, and the two kinds of site the hedgehog works are drawn far
+  // wider than that: a fallen log paints 91px out to the end grain at scale
+  // 1 and a surface root 63, against a berry bush's 34. A pit at 79px along
+  // a log's axis therefore passed this test and was then painted over by the
+  // timber, which sits at zIndex 2 to the pit's 1 — a hole the skunk was
+  // watched to dig, gone the moment he stepped off it.
+  //
+  // So the clearance is the larger of the flat rule and the two drawings not
+  // touching: this kind's painted half-width at its own scale, plus the
+  // pit's own. Both halves come from the world through setForageMetrics, so
+  // redrawing a bush wider moves this without the ethogram learning the art.
+  const siteHalf = (SQ && SQ.siteHalf) || null;
+  const pitHalf = (SQ && SQ.pitHalf) || 20;
   for (const f of c.world.forage || []) {
-    if (Math.hypot(f.px - p.x, f.py - p.y) < OPEN_SITE) return false;
+    const half = siteHalf ? (siteHalf[f.kind] || 0) * (f.s || 1) + pitHalf : 0;
+    if (Math.hypot(f.px - p.x, f.py - p.y) < Math.max(OPEN_SITE, half)) return false;
   }
   // and the squirrel's caches are somebody's larder, not open ground. The
   // ONE stump is gone — a scatter hoarder keeps four invisible anchors
@@ -2834,15 +2916,17 @@ defineEthogram("fox", {
 
   events: [
     // ---- LAND: helping himself on the way past --------------------------
-    // An urge every 40-72s works out at a bout roughly every two and a half
-    // minutes, and the distance test in foxWindfall throws a good share of
-    // those away again — call it four minutes of fox for five seconds of
-    // eating. The raccoon runs a twenty-second bout every hundred seconds
-    // and the bear stops at every trunk he passes; this is under a tenth of
-    // either, which is the point of him.
+    // An urge every 112-170s taken a third of the time works out at a bout
+    // roughly every seven minutes, and the distance test in foxWindfall
+    // throws some of those away again before a bout ever starts — so what
+    // reaches the screen is under the figure below. A bout is seven and a
+    // half seconds door to door against the raccoon's twenty-three and the
+    // bear's thirty-four, and 1.9% of his day goes on one: the ">>>" step,
+    // a third of the raccoon's share and a fifteenth of the skunk's, which
+    // is the whole point of him.
     {
       id: "scrump", domain: "land", trigger: "seek",
-      every: [78000, 122000],
+      every: [112000, 170000],
       // A third of the urges taken. Half would put him level with the deer's
       // graze, and he is meant to be the one you notice feeding least.
       chance: 0.35,
@@ -3160,9 +3244,10 @@ const CROP_HEAD_DOWN = [1000, 1900];
 
 /**
  * The sward is a rectangle; the ground inside it is not all grass. The
- * background paints four mud ellipses across the lower map and two of them
- * — (820,600) and (560,730) in its own viewBox — reach well inside the
- * rectangle, so a bout that only respects the rectangle grazes bare earth.
+ * background paints four mud ellipses across the lower map and one of them
+ * — (820,600) in its own viewBox, the big east patch — reaches inside the
+ * rectangle on most window shapes, so a bout that only respects the
+ * rectangle grazes bare earth.
  *
  * The art and the mapping onto it belong to the world (the background is
  * `preserveAspectRatio="slice"`, so its coords are not stage fractions);
@@ -3174,7 +3259,38 @@ const CROP_HEAD_DOWN = [1000, 1900];
  * bill (`crop-sward`, svg x 90-119). r * 0.8 covers the bird and his mouthful.
  */
 const GRAZE_PAD = 0.8;   // of his own radius
-const grassAt = (a, c, x, y) => !(c.onBareEarth && c.onBareEarth(x, y, a.r * GRAZE_PAD));
+
+/**
+ * ...and it must be IN VIEW. A crown paints at zIndex 12 and the animals at
+ * 10, so a bird standing under one is not on screen at all — and the sward
+ * has already been laid, once, straight across the lone spruce's band. The
+ * lawn has been moved out from under it, but a rectangle is only ever right
+ * for the tree positions and window shapes it was measured against, and both
+ * of those have moved twice in three releases. This is the guard that does
+ * not go stale: it asks the crowns where they are, every stride.
+ *
+ * The bird's own box is his sprite's, not a point — Critter draws the
+ * 120-unit box at r * 2.7, and the goose stands in the upper half of it, so
+ * `r * 1.35` out each way and `r * 2` of him above the ground line is the
+ * shape that has to clear the needles.
+ */
+function inCrown(a, c, x, y) {
+  const cr = TREE && TREE.crowns;
+  if (!cr || !c.def.trees) return false;
+  const hw = a.r * 1.35, up = a.r * 2;
+  for (const t of c.def.trees) {
+    const k = cr[t.kind]; if (!k) continue;
+    const tx = t.x * c.bounds.w, ty = t.y * c.bounds.h;
+    if (Math.abs(x - tx) > k.half * t.s + hw) continue;
+    // the crown's stage-y band: botPx/topPx are px ABOVE the anchor
+    const top = ty - k.topPx * t.s, bot = ty - k.botPx * t.s;
+    if (y > top && y - up < bot) return true;
+  }
+  return false;
+}
+
+const grassAt = (a, c, x, y) =>
+  !(c.onBareEarth && c.onBareEarth(x, y, a.r * GRAZE_PAD)) && !inCrown(a, c, x, y);
 
 /**
  * A point in the sward, weighted to its middle. Landing on the rim means
@@ -3416,15 +3532,18 @@ defineEthogram("goose", {
     // waterline; this is the one thing worth walking inland for, so it is
     // allowed to outlast the window that sent him there — the plan stands
     // down while an event owns him, and the ledger's debt pull puts the
-    // time back on the water side afterwards. An urge every 78-132s taken
-    // slightly better than half the time is a bout every three minutes or
-    // so, and a bout with its walk either side is forty seconds: half his
-    // time ashore spent doing the thing geese ashore do, and about a fifth
-    // of his day. He claims nothing — the sward is not a forage site and
-    // any number of birds can crop it at once.
+    // time back on the water side afterwards. Thirteen mouthfuls is 25s of
+    // grass and the sward is a long way from the water, so the bout runs
+    // 31s door to door — the third longest in the world, and the reason
+    // this window had to grow when the ladder moved onto time spent rather
+    // than bouts started. An urge every 140-212s taken a bit under half
+    // the time is a bout every ~6.5 minutes and 8% of his day; with the
+    // dabble below, 14%. No rung of his own, and never near the skunk. He
+    // claims nothing: the sward is not a forage site and any number of
+    // birds can crop it at once.
     {
       id: "graze", domain: "land", trigger: "seek",
-      every: [78000, 132000], chance: 0.55, cool: 30000,
+      every: [140000, 212000], chance: 0.45, cool: 30000,
       states: ["cropgrass"],
       goto: {
         state: "tosward", within: 20, giveUp: 26000, urgency: 0.45,
@@ -3441,11 +3560,15 @@ defineEthogram("goose", {
     // events for a bird who feeds at the edge of the lake he lives on.
     // Three to five plunges is fifteen to twenty seconds, inside his 11-20s
     // water dwell, so unlike the graze this one costs the plan nothing.
+    // The window is 120-184s rather than the old 40-76: at nineteen seconds
+    // a bout the old one had him dabbling 18% of the clock on this alone,
+    // which put a goose over the skunk the moment the ladder was read as
+    // time spent feeding rather than as bouts started.
     // `ownsWater` is the important flag: he is standing on the bottom, and
     // the generic swimming rig would tuck away the very legs that say so.
     {
       id: "dabble", domain: "water", trigger: "seek",
-      every: [40000, 76000], chance: 0.55, cool: 26000,
+      every: [120000, 184000], chance: 0.50, cool: 26000,
       states: ["dabble", "dabblelift"], ownsWater: true,
       goto: {
         state: "toshallow", within: 10, giveUp: 18000, urgency: 0.30,
@@ -3635,13 +3758,15 @@ defineEthogram("hedgehog", {
 
   events: [
     // ---- THE ROOTS: two ways at the same root ------------------------
-    // An urge every 30-52s taken a bit over half the time works out at a
-    // bout every ninety seconds or so, of which about eight seconds is
-    // spent stationary. That is deliberately just under the skunk, who is
-    // this world's most frequent forager and should stay so.
+    // An urge every 66-106s taken a bit over half the time works out at a
+    // bout every ~2.6 minutes, of which about eight seconds is spent
+    // stationary and five is the walk out to the timber. With the log
+    // below it that is 15% of his day on food — no rung of his own, but
+    // comfortably inside the pack and never near the skunk, who is this
+    // world's hungriest forager and should stay so.
     {
       id: "roots", domain: "land", trigger: "seek",
-      every: [52000, 86000], chance: 0.55, miss: 11000, cool: 26000,
+      every: [66000, 106000], chance: 0.55, miss: 11000, cool: 26000,
       variants: [
         {
           // UNDER IT — the classic: side on, rump up, snout jammed into
@@ -3677,12 +3802,14 @@ defineEthogram("hedgehog", {
     // ---- THE LOG: in at the top, and something to show for it --------
     // Rarer and longer than the root work, because it is the bout with a
     // payoff at the end and a payoff every ninety seconds is a habit
-    // rather than a find. He keeps the log claimed through the chew: he
-    // is still sitting on it, and a second animal walking into him there
-    // would be the one place in this world where two sprites overlap.
+    // rather than a find. Longer than it looks, too: the two logs are at
+    // the far corners of the map, so eight of its sixteen seconds are the
+    // walk. He keeps the log claimed through the chew — he is still
+    // sitting on it, and a second animal walking into him there would be
+    // the one place in this world where two sprites overlap.
     {
       id: "logs", domain: "land", trigger: "seek",
-      every: [58000, 96000], chance: 0.45, miss: 14000, cool: 30000,
+      every: [80000, 130000], chance: 0.45, miss: 14000, cool: 30000,
       states: ["logdive", "logchew"],
       goto: {
         state: "hhtolog", within: 13, giveUp: 24000, none: 10000, lost: 10000,
