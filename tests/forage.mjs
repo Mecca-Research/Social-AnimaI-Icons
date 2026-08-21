@@ -58,16 +58,31 @@ async function chain(species, evId, ms = 60000, seed = '') {
       // This tests whether the event WORKS, not how often it comes round —
       // the cadence is a separate question and a separate check.
       if (!started) {
-        // Muzzle BOTH clocks on every other event, not just the appetite
-        // timers. Several species now have approach-triggered events — the
-        // hedgehog's roll-up, the squirrel's bolt — which do not read seekAt
-        // at all and will happily win the frame, so a forage check came back
-        // reading hogcurl>hogball and a sploot check came back reading
-        // boltzag. Both were the animal behaving correctly and the fixture
-        // failing to ask the question.
+        // Muzzle every event this species OWNS, off the ethogram's own event
+        // list — not the keys that happen to be present in S.cd/S.seekAt.
+        //
+        // Those two objects are written lazily: an event that has not fired
+        // yet has no entry at all. Iterating their keys therefore muzzled
+        // only the events that had already run this session and left the
+        // virgin ones wide open, which is why this check kept coming back
+        // reading boltzag or hogcurl — approach triggers that had not fired
+        // yet, so they had no cooldown key to overwrite. Whichever of them
+        // was still untouched won the frame, and it alternated run to run.
+        //
+        // The engine's gate is 'now < S.cd[id]' and it sits in front of
+        // EVERY trigger type, so one cooldown per id is a complete muzzle.
+        // 'armed' is read BEFORE that gate, so a delay already ticking has
+        // to be cleared as well or it fires straight through it.
+        // ...and the event UNDER TEST is skipped, not muzzled and then
+        // un-muzzled: this block runs every pass until it bites, and an
+        // event with an armed delay arms on one pass and fires on a later
+        // one, so clearing its armed slot each time round would hold it off
+        // forever.
         const t = performance.now();
-        for (const id of Object.keys(S.seekAt)) S.seekAt[id] = t+900000;
-        for (const id of Object.keys(S.cd)) S.cd[id] = t+900000;
+        for (const e of window.__saiEtho.ETHOGRAM['${species}'].events) {
+          if (e.id === '${evId}') continue;
+          S.cd[e.id] = t+900000; S.seekAt[e.id] = t+900000; S.armed[e.id] = 0;
+        }
         S.seekAt['${evId}'] = 0;
         S.cd['${evId}'] = 0;
       }
@@ -446,8 +461,17 @@ for (const [ev, want, label] of [
     // Muzzle his appetites. curl is an APPROACH trigger, so it competes on
     // the same frame with whichever seek happens to be due, and a hungry
     // hedgehog walks off to a root instead of balling up — which is correct
-    // behavior and a useless measurement. Same isolation chain() does.
-    for (const id of Object.keys(h._eth.seekAt)) h._eth.seekAt[id] = performance.now()+900000;
+    // behavior and a useless measurement. Same isolation chain() does, and
+    // for the same reason it is taken off the EVENT LIST rather than off the
+    // keys already written: muzzling seekAt alone left curl's own cooldown
+    // standing from an earlier roll-up, so the one event being measured was
+    // the one still gated, and the check watched him idle for forty seconds.
+    const tt = performance.now();
+    for (const e of window.__saiEtho.ETHOGRAM.hedgehog.events) {
+      if (e.id === 'curl') continue;
+      h._eth.seekAt[e.id] = tt+900000; h._eth.cd[e.id] = tt+900000; h._eth.armed[e.id] = 0;
+    }
+    h._eth.cd['curl'] = 0;
     const seen=new Set(); const t0=performance.now();
     while (performance.now()-t0 < 40000) {
       await new Promise(r=>setTimeout(r,80));
