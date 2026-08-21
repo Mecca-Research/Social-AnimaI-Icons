@@ -3889,9 +3889,22 @@ defineEthogram("hedgehog", {
           goto: {
             state: "hhtoedge", within: 13, giveUp: 24000, none: 10000, lost: 10000,
             urgency: 0.30,
-            // a third of the way along the near edge, and low enough that
-            // his muzzle is under the lip drawn at local y -6.5..+12
-            pick: (a, c) => hogAim(a, c, "log", -26, 9, "mossy"),
+            // A THIRD OF THE WAY ALONG THE NEAR EDGE, with his muzzle under
+            // the lip and the rest of him in front of the timber. Both
+            // numbers are read off the two drawings rather than judged:
+            //   ForageLayer maps a site's local (x,y) to
+            //     (px + x*s, py - (16 - y)*s)
+            //   so the lip, drawn at local y +4..+12, is the stage band
+            //     py - 9.6*s .. py - 3.2*s
+            //   and `.lu-front` puts his head at pose (84,74), which through
+            //   HedgehogDraw's 0.95 wrapper and Critter's r*2.7/120 sits
+            //   9.5px right of his anchor and 6.5px BELOW it — his anchor is
+            //   the sprite box's centre, not his feet.
+            // Solving head-into-lip for his anchor gives -16 local units up.
+            // The first attempt used +9, which put him a clear 18px below the
+            // log with nothing over him and nothing behind him: he was not
+            // hidden by the timber, he was just standing somewhere else.
+            pick: (a, c) => hogAim(a, c, "log", -26, -16, "mossy"),
           },
           begin(a, c) {
             a.vx = 0; a.vy = 0; a._faceDir = 1;

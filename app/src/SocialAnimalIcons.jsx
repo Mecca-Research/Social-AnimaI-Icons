@@ -1313,9 +1313,15 @@ function ForageCanopyLayer({ bounds, sites, worldRef }) {
                    against it: he pushes his head under here and it is the
                    log's own front face that hides it */
                 <>
-                  <path d="M -84 -6.5 C -84 2 -80 8.5 -70 9.6 C -30 12.6 30 12.6 70 9.6
-                           C 80 8.5 84 2 84 -6.5 C 84 3.4 80 8 70 6.4 C 30 3.4 -30 3.4 -70 6.4
-                           C -80 8 -84 3.4 -84 -6.5 Z" fill="#3d2b19" />
+                  {/* ONLY the bottom sliver of the near face. It covered the
+                      whole face at first, which hid the entire animal rather
+                      than the end of him — the point is a muzzle under a log,
+                      not an empty log. local y +4..+12, so his head goes
+                      under it and the rest of him stands in front of the
+                      timber, over the body at zIndex 2. */}
+                  <path d="M -84 4 C -84 8.4 -80 11 -70 11.8 C -30 13.6 30 13.6 70 11.8
+                           C 80 11 84 8.4 84 4 C 84 9 80 8.6 70 7.6 C 30 6 -30 6 -70 7.6
+                           C -80 8.6 -84 9 -84 4 Z" fill="#3d2b19" />
                   <path d="M -52 9 C -44 5.4 -34 5.4 -27 9 M -14 10 C -6 6.4 4 6.4 11 10
                            M 26 9 C 34 5.4 44 5.4 51 9"
                     stroke="#6d5030" strokeWidth="3" fill="none" strokeLinecap="round" opacity=".9" />
