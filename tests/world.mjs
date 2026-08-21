@@ -518,11 +518,12 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
     for (const o of w.agents) { o.state = 'idle'; o.vx = o.vy = 0;
       o.idleUntil = performance.now() + 900000;
       o.noEventUntil = performance.now() + 900000; }
-    const el = w.__iconOf ? w.__iconOf(a.id) : null;
-    const z = () => {
-      const n = document.querySelector('[style*="left: ' + a.x + 'px"]');
-      return n ? n.style.zIndex : (el ? el.style.zIndex : '?');
-    };
+    // asked of the world by AGENT ID. Finding the node by its inline left:
+    // also matches every trunk and bush standing at the same x, which is
+    // how the first version of this check came back reading zIndex 2 — a
+    // tree's — and called the feature broken.
+    if (!w.__iconOf) return { none: 'the world hands out no icon lookup' };
+    const z = () => { const n = w.__iconOf(a.id); return n ? n.style.zIndex : '?'; };
     const put = async (x, y) => { a.x = x; a.y = y;
       await new Promise(r => setTimeout(r, 400)); return z(); };
     return {

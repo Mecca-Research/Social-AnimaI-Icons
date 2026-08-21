@@ -1663,6 +1663,11 @@ export default function SocialAnimalsRPG() {
       // that carried its own copy of the lake or the mud patches would keep
       // passing after the real ones moved.
       const W = worldRef.current;
+      // an agent's own DOM node, by id. The suites were finding it by
+      // matching on an inline `left:` value, which also matches any trunk
+      // or bush that happens to stand at the same x — a depth check that
+      // read a tree's zIndex and reported it as the animal's.
+      W.__iconOf = (id) => iconsRef.current.get(id) || null;
       W.inWaterAt = (x, y) => wetAt(W, x, y);
       // ...and the DRAWN shore, which is not the same line. inWaterAt is the
       // sim's 0.97 threshold; the brown rim starts at rho 1.00. A pose corner
