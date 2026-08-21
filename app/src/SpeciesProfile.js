@@ -36,14 +36,42 @@
  * and it changes, which is why tests/sizes.mjs re-measures it in a real
  * browser and fails if the three columns stop agreeing.
  *
+ * `fill` IS THE PLAIN STANDING ANIMAL WITH THE ANIMATIONS OFF, and getting
+ * to a number that means the same thing twice took three attempts, because
+ * these sprites are moving drawings and almost nothing about them holds
+ * still. Three things had to be pinned:
+ *
+ *   THE ANIMATION. The bear breathes as a scale on his whole svg — his box
+ *   measures 85.3px one frame and 87.3px the next — and the cougar's idle
+ *   cycle is longer than any sample window worth waiting for. Averaging does
+ *   not fix a period you fail to cover: the same build gave 59.6px of cougar
+ *   in one run and 52.9px in the next. The animations are killed outright.
+ *
+ *   THE STATE. `state='idle'` set once does not stay idle. Fights are struck
+ *   world-side off proximity, and clearing `_eth` to stop the ethogram in
+ *   fact INVITES it — the engine rebuilds with every cooldown at zero. The
+ *   bear took the invitation and stood up in `treerub`: 77px of rearing bear
+ *   recorded as his idle size, 7px over what this table claims.
+ *
+ *   THE OTHER SEVEN POSE FLAGS. data-state is not the only one the renderer
+ *   poses off; data-walking, data-swimming, data-spent, data-burst,
+ *   data-musk, data-prep and data-air all have art, and a sprite can be
+ *   state=idle and swimming at once. Whichever animals happened to be in the
+ *   lake got measured mid-paddle.
+ *
+ * With all three pinned the reading is byte-identical run to run, which is
+ * the property that makes it worth writing down at all. tests/sizes.mjs
+ * pins them the same way — it has to, or the table and the suite are
+ * describing two different animals.
+ *
  * WHERE `apparent` COMES FROM. Real dimensions, through a bulk index that
  * mixes mass with body length and shoulder height rather than any one of
  * them, compressed so fourteen animals stay legible on one map:
  *
  *     B        = mass^(1/6) * bodyLength^(1/4) * height^(1/4)   (tail excluded)
- *     apparent = 62 * (B / B_bear)^0.45
+ *     apparent = 70 * (B / B_bear)^0.45
  *
- * The bear is the anchor at 62px, near where it already sat. The exponent is
+ * The bear is the anchor at 70px, near where it already sat. The exponent is
  * the only free choice in here: real bulk spans 9.7x from bear to frog, and
  * applied straight that is a frog you cannot see, let alone drag. 0.45 puts
  * the frog at 36% of the bear — against 53% before, which was barely a
@@ -78,8 +106,8 @@
 export const SPECIES_PROFILE = {
   // ================= FOREST =================
   bear: {
-    size: 31.7, speed: 44, swims: true,
-    apparent: 70.0, fill: 0.8173,
+    size: 31.9, speed: 44, swims: true,
+    apparent: 70.0, fill: 0.8123,
     dims: "90-270kg · 1.2-2m · 75-105cm at shoulder",
     profile: "The heaviest and most massive here. A large male can weigh as " +
              "much as the next three animals combined.",
@@ -88,8 +116,8 @@ export const SPECIES_PROFILE = {
             "The longest-dwelling forager: he settles in where others pass.",
   },
   deer: {
-    size: 31.9, speed: 60,
-    apparent: 67.4, fill: 0.7815,
+    size: 32.1, speed: 60,
+    apparent: 67.4, fill: 0.7786,
     dims: "45-100kg · 1.6-2.1m · 90-105cm at shoulder",
     profile: "The tallest here. Lighter than a bear, but long legs and neck " +
              "give it real vertical presence.",
@@ -98,16 +126,16 @@ export const SPECIES_PROFILE = {
             "opportunistically wherever it stands.",
   },
   cougar: {
-    size: 26.7, speed: 72,
-    apparent: 61.8, fill: 0.8562,
+    size: 26.9, speed: 72,
+    apparent: 61.8, fill: 0.8503,
     dims: "53-72kg · 2-2.4m incl tail · 60-76cm at shoulder",
     profile: "The longest here, on account of a tail near a metre. Dense, " +
              "muscular. Length that is mostly tail reads as reach, not bulk.",
     habits: "Ambush sprinter. Enormous top speed it cannot hold for long.",
   },
   wolf: {
-    size: 22.9, speed: 55,
-    apparent: 62.8, fill: 1.0158,
+    size: 23.0, speed: 55,
+    apparent: 62.8, fill: 1.0108,
     dims: "27-65kg · 1.5-2m · 66-84cm at shoulder",
     profile: "Tall and lanky — often stands taller than a cougar while being " +
              "lighter and shorter overall.",
@@ -115,8 +143,8 @@ export const SPECIES_PROFILE = {
             "longer: a steady pursuit pace rather than a burst.",
   },
   beaver: {
-    size: 25.2, speed: 9, swims: true,
-    apparent: 49.9, fill: 0.7325,
+    size: 25.5, speed: 9, swims: true,
+    apparent: 49.9, fill: 0.7258,
     dims: "11-32kg · 95-125cm incl tail · 30-45cm",
     profile: "Surprisingly heavy — a dense brick of muscle and fat, well " +
              "above everything below it despite being shorter than some.",
@@ -126,7 +154,7 @@ export const SPECIES_PROFILE = {
   },
   goose: {
     size: 23.7, speed: 20, swims: true, flies: true,
-    apparent: 50.1, fill: 0.7848,
+    apparent: 50.1, fill: 0.7814,
     dims: "3-9kg · 75-110cm body · 55-100cm standing",
     profile: "Visually large — long neck, 1.2-1.8m wingspan — on a body mass " +
              "kept low enough to fly.",
@@ -135,8 +163,8 @@ export const SPECIES_PROFILE = {
             "and dabbles for roots. Fast in the air, an awkward waddle on land.",
   },
   fox: {
-    size: 20.1, speed: 49,
-    apparent: 44.5, fill: 0.8207,
+    size: 20.2, speed: 49,
+    apparent: 44.5, fill: 0.8155,
     dims: "3-7kg · 90-112cm incl tail · 35-50cm at shoulder",
     profile: "False size: mostly fluff and long legs, often lighter than a " +
              "large house cat despite looking substantial.",
@@ -148,8 +176,8 @@ export const SPECIES_PROFILE = {
             "in threes and waits for an answer.",
   },
   raccoon: {
-    size: 20.7, speed: 20, swims: true,
-    apparent: 44.0, fill: 0.7856,
+    size: 20.9, speed: 20, swims: true,
+    apparent: 44.0, fill: 0.7807,
     dims: "3.5-10kg · 60-95cm · 23-30cm at shoulder",
     profile: "Compact and rotund. Looks fox-sized and is usually twice the " +
              "weight, on a much stockier build.",
@@ -164,7 +192,7 @@ export const SPECIES_PROFILE = {
   },
   owl: {
     size: 25.6, speed: 44, flies: true,
-    apparent: 41.2, fill: 0.596,
+    apparent: 41.2, fill: 0.5959,
     dims: "0.9-2.5kg · 46-63cm · 45-60cm perched",
     profile: "The other false size: thick feathers and a 1-1.5m wingspan on " +
              "very little actual weight.",
@@ -172,8 +200,8 @@ export const SPECIES_PROFILE = {
             "top speed exists but is almost never spent.",
   },
   skunk: {
-    size: 20.0, speed: 11,
-    apparent: 38.5, fill: 0.7135,
+    size: 20.1, speed: 11,
+    apparent: 38.5, fill: 0.7082,
     dims: "1.1-5.5kg · 50-80cm · 14-21cm",
     profile: "Low to the ground: about a house cat, on shorter legs and a " +
              "wider, heavier body.",
@@ -183,8 +211,8 @@ export const SPECIES_PROFILE = {
             "defence that good, it has little reason to hurry.",
   },
   hedgehog: {
-    size: 18.5, speed: 6.5,
-    apparent: 30.3, fill: 0.6065,
+    size: 18.7, speed: 6.5,
+    apparent: 30.3, fill: 0.6011,
     dims: "0.5-1.2kg · 20-30cm · 10-15cm",
     profile: "A small dense ball — heavier and rounder than a squirrel.",
     habits: "An insectivore that roots leaf litter by smell and hearing for " +
@@ -193,8 +221,8 @@ export const SPECIES_PROFILE = {
             "to outrun anything: it rolls up instead.",
   },
   squirrel: {
-    size: 17.4, speed: 28,
-    apparent: 29.3, fill: 0.6223,
+    size: 17.6, speed: 28,
+    apparent: 29.3, fill: 0.6176,
     dims: "0.4-0.7kg · 43-50cm incl tail · 10-12cm on all fours",
     profile: "Long and slender, and mostly tail — the body alone is about " +
              "25cm.",
@@ -204,8 +232,8 @@ export const SPECIES_PROFILE = {
             "heat. Erratic and agile in short vertical bursts.",
   },
   turtle: {
-    size: 18.2, speed: 1.6, swims: true,
-    apparent: 25.9, fill: 0.5256,
+    size: 18.4, speed: 1.6, swims: true,
+    apparent: 25.9, fill: 0.5209,
     dims: "0.3-0.5kg · 10-25cm shell · 5-8cm",
     profile: "Flat and compact. This is the pond turtle; a snapper would " +
              "rank far higher.",
@@ -215,7 +243,7 @@ export const SPECIES_PROFILE = {
   },
   frog: {
     size: 19.9, speed: 3, swims: true,
-    apparent: 25.2, fill: 0.4699,
+    apparent: 25.2, fill: 0.4684,
     dims: "0.2-0.5kg · 9-15cm snout-vent · 7-10cm sitting",
     profile: "The smallest here, though a big female can outweigh a small " +
              "turtle or squirrel.",

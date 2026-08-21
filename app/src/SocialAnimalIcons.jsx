@@ -818,7 +818,16 @@ const FORAGE_SITES = [
   // top-centre band and the bottom-left corner were the only ground left
   // that a 182px-wide object fits in.
   { x: .500, y: .115, s: 0.95, kind: "log", logType: "mossy", dir:  1 },
-  { x: .135, y: .905, s: 0.80, kind: "log", logType: "mossy", dir: -1 },
+  // The bottom-left one is at (.210,.950) and not in the corner it was
+  // drawn in, because the corner is 93px from the west-low trunk at the
+  // shape the suite runs — inside the 96px ring, i.e. a log the bear
+  // cannot leave alone. The rule is stage-RELATIVE: every gap here is a
+  // fraction of the stage, so the world's own tightest pair falls to 81px
+  // on a 900x620 window. The bar a new site has to clear is therefore not
+  // a flat 96 but "never be the tightest thing on the map", and this spot
+  // clears the world's own worst pair at all fourteen shapes (127 vs 92 at
+  // 1008x700, 112 vs 81 at 900x620, 182 vs 131 at 1500x940).
+  { x: .210, y: .950, s: 0.80, kind: "log", logType: "mossy", dir: -1 },
   { x: .185, y: .690, s: 1.00, kind: "root", dir: -1 },
   { x: .170, y: .150, s: 0.90, kind: "root", dir: -1 },
   { x: .775, y: .700, s: 1.05, kind: "root", dir:  1 },
