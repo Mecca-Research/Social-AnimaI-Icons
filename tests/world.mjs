@@ -547,6 +547,61 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
   }
 }
 
+// ==================== four logs, two kinds ====================
+// The two the background used to draw are real sites now. They were in the
+// background's own viewBox, which is preserveAspectRatio="slice", so they
+// slid across the map as the window changed shape — nothing could be placed
+// against them and nothing could touch them.
+{
+  const r = await page.evaluate(`(w => {
+    const logs = (w.forage || []).filter((f) => f.kind === 'log');
+    const kinds = logs.map((f) => f.logType || 'rot').sort();
+    const b = w.bounds;
+    let worstTrunk = Infinity, worstPair = Infinity;
+    for (const f of logs) {
+      for (const t of (w.def.trees || []))
+        worstTrunk = Math.min(worstTrunk, Math.hypot(f.px - t.x * b.w, f.py - t.y * b.h));
+      for (const g of (w.forage || [])) if (g !== f)
+        worstPair = Math.min(worstPair, Math.hypot(f.px - g.px, f.py - g.py));
+    }
+    return { n: logs.length, kinds: kinds.join(','),
+             rot: kinds.filter((k) => k === 'rot').length,
+             mossy: kinds.filter((k) => k === 'mossy').length,
+             worstTrunk: Math.round(worstTrunk), worstPair: Math.round(worstPair) };
+  })(window.__saiWorld)`);
+  chk(r.n === 4, 'four logs in the wood', `${r.n}: ${r.kinds}`);
+  chk(r.rot === 2 && r.mossy === 2, 'two of each kind',
+    `${r.rot} rotten, ${r.mossy} sound`);
+  chk(r.worstTrunk >= 96, 'no log stands inside a trunk',
+    `nearest is ${r.worstTrunk}px from one`);
+  chk(r.worstPair >= 96, 'and none of them is on top of another site',
+    `nearest other site is ${r.worstPair}px away`);
+}
+
+// ==================== the reeds are off the tree ====================
+// Three tall tufts stood on and above the ground the west-high tree moved
+// into — a tree growing out of a clump of rushes. Held out by BG_KEEPOUT
+// rather than by deleting three generated items, because the generator is
+// seeded and changing the count shuffles every tuft after it.
+{
+  const r = await page.evaluate(`(w => {
+    const svg = document.querySelector('svg.sai-bg-svg');
+    const tufts = [];
+    for (const g of svg.querySelectorAll('g')) {
+      const t = g.getAttribute('transform') || '';
+      const m = t.match(/translate\\(([-\\d.]+)\\s+([-\\d.]+)\\)/);
+      if (!m) continue;
+      if (!g.querySelector('path[fill*="grassGrad"]')) continue;
+      tufts.push([+m[1], +m[2]]);
+    }
+    // the box the west-high tree now occupies, in the background's viewBox
+    const inBox = tufts.filter(([x, y]) => x > 120 && x < 290 && y > 190 && y < 330);
+    return { n: tufts.length, inBox: inBox.length, where: inBox.map(t => t.join(',')).join(' ') };
+  })(window.__saiWorld)`);
+  chk(r.inBox === 0, 'no reeds left where the west-high tree now stands',
+    r.inBox ? `still there: ${r.where}` : `${r.n} tufts, none in the tree's ground`);
+}
+
 chk(errs.length === 0, 'no JS errors', errs.length ? errs[0] : 'clean');
 console.log(`\n${fail.length ? 'FAIL ' + fail.length : 'ALL PASS'} (${pass.length} passed)`);
 await browser.close();
