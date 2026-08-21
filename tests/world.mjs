@@ -501,6 +501,51 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
             : `${r.pits} pits, all clear of all ${(await page.evaluate('window.__saiWorld.forage.length'))} sites`);
 }
 
+// ==================== the forest has depth now ====================
+// Trunks paint at 2 and animals at 10, so for three releases an animal
+// never went behind anything and the canopy at 12 was the only depth in
+// the world. That is why three animations ended up faking their own
+// occlusion. An animal whose feet are above a trunk's base and whose body
+// crosses the bark now drops under it â€” EXCEPT inside the tree's own reach,
+// where every trunk behavior in the world stands its subject, and where it
+// is touching the tree rather than standing behind it.
+{
+  const r = await page.evaluate(`(async w => {
+    const b = w.bounds, t = w.def.trees[0];
+    const tx = t.x * b.w, ty = t.y * b.h;
+    const a = w.agents.find(x => x.species === 'fox');
+    if (!a) return { none: 'no fox' };
+    for (const o of w.agents) { o.state = 'idle'; o.vx = o.vy = 0;
+      o.idleUntil = performance.now() + 900000;
+      o.noEventUntil = performance.now() + 900000; }
+    const el = w.__iconOf ? w.__iconOf(a.id) : null;
+    const z = () => {
+      const n = document.querySelector('[style*="left: ' + a.x + 'px"]');
+      return n ? n.style.zIndex : (el ? el.style.zIndex : '?');
+    };
+    const put = async (x, y) => { a.x = x; a.y = y;
+      await new Promise(r => setTimeout(r, 400)); return z(); };
+    return {
+      tree: { x: Math.round(tx), y: Math.round(ty), s: t.s },
+      behind:  await put(tx, ty - 160),        // up the screen, across the bark
+      atTree:  await put(tx - 40, ty - 55),    // where the bear rubs
+      inFront: await put(tx, ty + 40),         // nearer the viewer
+      beside:  await put(tx + 180, ty - 160),  // above it but clear of the bark
+    };
+  })(window.__saiWorld)`);
+  if (r.none) chk(false, 'an animal can go behind a trunk', r.none);
+  else {
+    chk(r.behind === '1', 'an animal up the screen goes behind the trunk',
+      `zIndex ${r.behind} at 160px above the base, on the bark line`);
+    chk(r.inFront === '10', 'and one nearer the viewer stays in front',
+      `zIndex ${r.inFront} at 40px below the base`);
+    chk(r.atTree === '10', 'an animal AT the tree is touching it, not behind it',
+      `zIndex ${r.atTree} at the spot every trunk behavior stands its subject`);
+    chk(r.beside === '10', 'and one that never crosses the bark is unaffected',
+      `zIndex ${r.beside} at 180px to the side`);
+  }
+}
+
 chk(errs.length === 0, 'no JS errors', errs.length ? errs[0] : 'clean');
 console.log(`\n${fail.length ? 'FAIL ' + fail.length : 'ALL PASS'} (${pass.length} passed)`);
 await browser.close();

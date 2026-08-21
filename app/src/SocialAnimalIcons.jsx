@@ -576,9 +576,12 @@ function TreeLayer({ bounds, part }) {
       {FOREST_TREES.map((t, i) => {
         const kind = t.kind || "oak", box = TREE_BOX[kind];
         return (
-        // trunks sit UNDER the animals (zIndex 2) so the bear hugs the near
-        // face of the bark; the boughs are a second pass OVER them (12), so
-        // a bear that climbs high enough disappears head-first into them
+        // Trunks at 2, boughs at 12, animals at 10 in between — so a bear
+        // that climbs high enough disappears head-first into the leaves.
+        // The trunk is UNDER the animals by default and the animal drops
+        // below it when it is further away: see behindTrunk(), which moves
+        // the AGENT rather than the tree, because one trunk has to be in
+        // front of some animals and behind others at the same moment.
         <div key={i} style={{ position: "absolute", left: t.x * w, top: t.y * h, zIndex: canopy ? 12 : 2,
           pointerEvents: "none", transform: `translate(-50%,-100%) scale(${t.s})`, transformOrigin: "50% 100%" }}>
           <svg width={box.w} height={box.h} viewBox={box.vb} style={{ display: "block", overflow: "visible" }}>
@@ -4377,6 +4380,14 @@ function renderWorld(world, iconsRef, padsRef, damRefs, pitRefs) {
     const el = iconsRef.current.get(a.id);
     if (!el) continue;
     el.style.left = `${a.x}px`; el.style.top = `${a.y}px`;
+    // ...and its depth. Driven here rather than in the JSX because position
+    // is: the React snapshot only re-renders on a state change, and an
+    // animal walks behind a tree without changing state. zIndex 1 sits under
+    // the trunks, the bushes and the drey at 2 and over the lake and the
+    // skunk's pits, which are also 1 but earlier in the DOM — so an animal
+    // behind a tree is still in front of the water it is standing beside.
+    const zi = behindTrunk(a, world.def, world.bounds) ? '1' : '10';
+    if (el.style.zIndex !== zi) el.style.zIndex = zi;
 
     // drive the sprite: facing, walk cycle, and interaction jitter
     const sprite = el.querySelector('.sai-sprite');
@@ -4469,6 +4480,45 @@ function renderWorld(world, iconsRef, padsRef, damRefs, pitRefs) {
       sprite.style.transform = `translate(${jx}px, ${jy - (a.z || 0)}px) scaleX(${dir})`;
     }
   }
+}
+
+/**
+ * IS THIS ANIMAL BEHIND THAT TREE?
+ *
+ * The forest has been flat until now: trunks paint at zIndex 2 and every
+ * animal at 10, so an animal never went behind anything. The canopy at 12
+ * was the only depth in the world, and it is why three separate animations
+ * ended up faking their own occlusion — the hedgehog carrying a whole log
+ * inside his sprite, the goose tinting his own head to suggest it was under
+ * water. Nothing could paint over an animal, so anything that needed to
+ * had to be drawn as part of one.
+ *
+ * The rule is the one the eye already uses on a flat picture: what is
+ * FURTHER UP the screen is further away. An animal whose feet are above a
+ * trunk's base, and whose body crosses the bark, is behind that tree.
+ *
+ * ...unless it is AT the tree, and that exception is the whole subtlety.
+ * Every trunk behavior in this world — the bear's rub and climb, the deer's
+ * rut and bed, the raccoon's den, the squirrel's drey, the owl's nest —
+ * works the WEST face and stands its subject a sprite-foot NORTH of the
+ * anchor, which is to say above it. Read the depth rule literally and every
+ * one of them vanishes into the bark the moment it starts. So inside the
+ * tree's own reach the animal is not behind the tree, it is touching it,
+ * and it stays in front. Beyond that ring it is simply further away than
+ * the tree is. One ring, already defined, doing both jobs.
+ */
+function behindTrunk(a, def, bounds) {
+  if (!def.trees || a.dragging) return false;
+  for (const t of def.trees) {
+    const s = t.s || 1;
+    const tx = t.x * bounds.w, ty = t.y * bounds.h;
+    if (a.y >= ty) continue;                                  // nearer than the base
+    if (ty - a.y > TREE_CANOPY_PX * s) continue;              // above the trunk: the canopy's problem
+    if (Math.abs(a.x - tx) > (TREE_TRUNK_R + 2) * s + a.r * 1.35) continue;  // not across the bark
+    if (Math.hypot(a.x - tx, a.y - ty) <= TREE_REACH) continue;              // at the tree, not behind it
+    return true;
+  }
+  return false;
 }
 
 function getAgent(world, id) { return world.agents.find(a => a.id === id); }
