@@ -12,7 +12,8 @@
     "test:forage": "node tests/forage.mjs",
     "test:gait": "node tests/gait.mjs",
     "test:cadence": "node tests/cadence.mjs",
-    "test:world": "node tests/world.mjs"
+    "test:world": "node tests/world.mjs",
+    "test:parse": "node scripts/checktests.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",
