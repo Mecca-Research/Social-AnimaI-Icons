@@ -2142,11 +2142,20 @@ function HedgehogDraw({ uid }) {
     spikes.push(<path key={i} d={`M ${x0} ${y0} L ${x1} ${y1} L ${x2} ${y2} Z`} fill={i % 2 ? spikeA : spikeB} />);
   }
   return (
-    // Drawn to 1.52 rather than the 0.86 it had. Every other species fills
-    // most of its 120 box; this one filled about a third of it, so however
-    // its radius was set it came out roughly a quarter the squirrel's on
-    // screen — an animal that is heavier and rounder than a squirrel in life.
-    <g transform="translate(60 106) scale(1.52) translate(-60 -106)">
+    // 0.95, having been 0.86 and then — briefly and much too far — 1.52.
+    //
+    // The 1.52 was the right instinct aimed at the wrong lever. He really was
+    // coming out a quarter of the squirrel, but the cause was his RADIUS, and
+    // inflating the art to compensate made him fill 0.98 of his own box while
+    // every other species sits between 0.47 and 0.86. That is not a drawing
+    // that fills its box, it is a drawing wearing its box: it left him as
+    // wide as a fox at a fourteenth of a fox's body length, and it forced his
+    // radius — which is also his hit target and his collision circle — down
+    // to 11.6 to get the size back.
+    //
+    // Radius carries size now (see SpeciesProfile: size = apparent / (fill *
+    // 2.7)), so this only has to put his coverage back in the normal band.
+    <g transform="translate(60 106) scale(0.95) translate(-60 -106)">
       <defs><Fur id={`${uid}f`} c={F} /></defs>
       <Leg x={44} top={90} len={13} w={6} color={F[2]} cls="bl" />
       <Leg x={72} top={90} len={13} w={6} color={F[2]} cls="fl" />

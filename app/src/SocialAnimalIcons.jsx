@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Critter, SPECIES, ALL_SPECIES } from "./Critters.jsx";
 import { PET_SPECIES } from "./CrittersPets.jsx";
-import { speciesSize } from "./SpeciesProfile.js";
+import { SPECIES_PROFILE, speciesSize } from "./SpeciesProfile.js";
 import { gait, gaitIn, speedCap, rescueReach, SPEED, GAIT_DEF } from "./Gait.js";
 import { stepEthogram, ethoSwimP, ethoShare, ETHOGRAM, ETHO_STATES, ETHO_Z_STATES, ETHO_OWNWATER_STATES, setTreeMetrics, setForageMetrics, ethoOffstage, hogCurl, squirrelBolt } from "./Ethogram.js";
 
@@ -1650,6 +1650,11 @@ export default function SocialAnimalsRPG() {
       // the gait core, so a test can ask an animal how fast it would move at a
       // given urgency instead of inferring it from a smoothed random walk
       window.__saiGait = { gait, SPEED, GAIT_DEF, speedCap };
+      // ...and the size table, so tests/sizes.mjs can hold what a species
+      // CLAIMS to measure against what it is measured to be. Those two live
+      // in different files — the radius here, the art's own coverage in
+      // Critters.jsx — and for two releases nothing multiplied them together.
+      window.__saiProfile = SPECIES_PROFILE;
       // Geometry and break-up entry points, for tests/world.mjs. These are
       // the world's OWN predicates rather than a reimplementation: a suite
       // that carried its own copy of the lake or the mud patches would keep
