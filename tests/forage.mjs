@@ -39,8 +39,23 @@ const chk = (ok, l, d) => { (ok?pass:fail).push(`${l} — ${d}`); console.log(`$
 // them is "nobody else is doing anything". Positions are left alone: moving
 // thirteen animals to one spot is how you put one in the lake or on top of
 // a site somebody's claim is about to be measured against.
-const stillness = (subject) => `for (const o of w.agents) { if (o.species==='${subject}') continue;
-  o.state='idle'; o.vx=o.vy=0; o.targetId=null; o.z=0;
+//
+// ...and `_muskAim` is cleared on EVERYONE, the subject included, because a
+// spraying is not an event with a cooldown — it is a flag left on the
+// victim, and the world holds it until he is FREE before acting on it:
+//
+//   if (!isFreeState(a) && now < a._muskFleeBy) continue;  // still busy
+//   muskFlee(a, cfg);
+//
+// So a cloud that caught him minutes ago, while the suite was still setting
+// up, sits on him and discharges on the first frame this fixture puts him
+// back into `wander` — which is the frame the measurement starts. It looked
+// like a squirrel bolting for no reason with every one of his events
+// muzzled, and it was a scare that had already happened.
+const stillness = (subject) => `for (const o of w.agents) {
+  o._muskAim=null; o._muskFleeBy=0; o._foeId=null;
+  if (o.species==='${subject}') continue;
+  o.state='idle'; o.vx=o.vy=0; o.targetId=null; o.z=0; o.intent='wander';
   o.idleUntil=performance.now()+900000; o.intentUntil=performance.now()+900000;
   o.noEventUntil=performance.now()+900000; }`;
 
@@ -66,7 +81,7 @@ async function chain(species, evId, ms = 60000, seed = '') {
     for (let k=0;k<40 && !a._eth;k++) await new Promise(r=>setTimeout(r,25));
     ${seed}
     const S=a._eth;
-    const seen=[]; let last='', started=false, maxZ=0;
+    const seen=[]; let last='', started=false, maxZ=0, scared=0;
     const t0=performance.now();
     while (performance.now()-t0 < ${ms}) {
       await new Promise(r=>setTimeout(r,90));
@@ -103,12 +118,18 @@ async function chain(species, evId, ms = 60000, seed = '') {
         S.seekAt['${evId}'] = 0;
         S.cd['${evId}'] = 0;
       }
+      if (a._muskAim || w.agents.some(o=>o.state==='fight')) scared++;
       if (a.state!==last){ seen.push(a.state+(a._carry?'['+a._carry+']':'')); last=a.state;
         if (a.state!=='wander') started=true; }
       maxZ = Math.max(maxZ, a.z || 0);
       if (started && a.state==='wander') break;
     }
-    return { chain: seen.join('>'), maxZ, stock: S.mem.stock }; })(window.__saiWorld)`);
+    // Named in the result rather than left for the next reader to re-derive:
+    // if this run was scared, the chain it reports is not a measurement of
+    // the event and saying so is the difference between a fixable failure
+    // and a flake.
+    return { chain: seen.join('>') + (scared ? ' [scared on '+scared+' passes]' : ''),
+             maxZ, stock: S.mem.stock }; })(window.__saiWorld)`);
 }
 
 {
