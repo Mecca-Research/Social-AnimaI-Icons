@@ -75,12 +75,33 @@ chk(world.eth.includes('squirrel'), 'squirrel has an ethogram', world.eth);
 async function chain(species, evId, ms = 60000, seed = '') {
   return page.evaluate(`(async w => { const a=w.agents.find(x=>x.species==='${species}');
     ${stillness(species)}
-    a._eth=null; a.state='wander'; a.intent='wander'; a.z=0; a._carry=null;
+    a.state='wander'; a.intent='wander'; a.z=0; a._carry=null;
     a.x=.30*w.bounds.w; a.y=.45*w.bounds.h;
     a.intentUntil=performance.now()+900000; a.noEventUntil=performance.now()+900000;
-    for (let k=0;k<40 && !a._eth;k++) await new Promise(r=>setTimeout(r,25));
-    ${seed}
+    // The ethogram state is CLEANED, not dropped. Dropping it (a._eth=null)
+    // means the engine builds a fresh one on some later frame, and offer()
+    // runs on that same frame, in front of a state whose cooldowns are all
+    // still zero. An approach trigger needs nothing but a neighbour to fire
+    // through that gap, and the neighbours are wherever the world left them:
+    // that is a squirrel bolting on the one frame the fixture could not have
+    // reached yet, which is exactly what this check kept reporting.
+    //
+    // Everything up to the first await here is atomic against the frame
+    // loop, so cleaning a state that already exists and muzzling it in the
+    // same breath closes the window instead of narrowing it.
+    if (!a._eth) for (let k=0;k<40 && !a._eth;k++) await new Promise(r=>setTimeout(r,25));
     const S=a._eth;
+    if (S) {
+      if (S.claim) { S.claim.userId=null; S.claim=null; }
+      S.goal=null; S.goalUntil=0; S.near={}; S.dwelt={};
+      const t0m=performance.now();
+      for (const e of window.__saiEtho.ETHOGRAM['${species}'].events) {
+        if (e.id==='${evId}') continue;
+        S.cd[e.id]=t0m+900000; S.seekAt[e.id]=t0m+900000; S.armed[e.id]=0;
+      }
+      S.seekAt['${evId}']=0; S.cd['${evId}']=0;
+    }
+    ${seed}
     const seen=[]; let last='', started=false, maxZ=0, scared=0;
     const t0=performance.now();
     while (performance.now()-t0 < ${ms}) {
