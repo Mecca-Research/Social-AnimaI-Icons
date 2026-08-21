@@ -3869,7 +3869,13 @@ defineEthogram("hedgehog", {
             // 3.2px right and 4.1px below his own anchor. Both halves of
             // that are read off the two drawings rather than tuned by eye,
             // so redrawing either moves this with it.
-            pick: (a, c) => hogAim(a, c, "log", 7 - HOG_DIVE_DX, -15.5 - HOG_DIVE_DY, "rot"),
+            // -31.5, not -15.5: ForageLayer maps a site's local y to
+            // `py - (16 - y) * s`, so a LOCAL coordinate reaches the stage as
+            // (y - 16). The hole is drawn at local -15.5, which is -31.5 in
+            // the units this offset is in. Passing the raw local number put
+            // him exactly 16px low — head beside the hole instead of down it,
+            // and standing against the log's face rather than on its back.
+            pick: (a, c) => hogAim(a, c, "log", 7 - HOG_DIVE_DX, -31.5 - HOG_DIVE_DY, "rot"),
           },
           begin(a, c) {
             a.vx = 0; a.vy = 0; a._faceDir = 1;
