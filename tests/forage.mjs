@@ -324,7 +324,11 @@ await page.waitForTimeout(400);
       for (let k=0;k<50 && g._wet===undefined;k++) await new Promise(r=>setTimeout(r,50));
       return !!g._wet; };
     const inside = w.pads[0];                       // a lily pad is water by construction
-    let lo={x:inside.x,y:inside.y}, hi={x:.5*b.w,y:.85*b.h};   // the sward is dry by construction
+    // ...and the far end is dry by construction too, but it is no longer the
+    // sward: that moved east to the lake's south shore this release. It is
+    // the bottom-centre open ground, which is as far from the lake as the
+    // stage goes and is where the lone spruce stands.
+    let lo={x:inside.x,y:inside.y}, hi={x:.5*b.w,y:.85*b.h};
     if (!(await wet(lo.x,lo.y))) return null;
     for (let i=0;i<14;i++){
       const m={x:(lo.x+hi.x)/2, y:(lo.y+hi.y)/2};

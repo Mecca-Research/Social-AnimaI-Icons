@@ -2901,18 +2901,30 @@ WORLDS.forest.dam = DAM_PLAN;
 // So the lawn moved EAST, out from under the spire and around to the lake's
 // southern shore, which is where a grazing goose belongs anyway: he steps
 // off the grass straight into the water he dabbles in. This rectangle was
-// picked by measurement, not by eye — swept against the six trees' painted
-// crowns, the four mud ellipses, the twenty-one forage sites and the drawn
-// shoreline at 1008x700, 1264x732, 1350x700, 1424x832, 1600x820, 1904x1012,
-// 1000x800, 1240x1000, 900x620, 1440x900, 1280x720 and 1920x1080. Worst case
-// across all twelve: NO part of it under any crown, 11% on mud (which
-// `grassAt` already refuses stride by stride), and never nearer the drawn
-// shore than rho 1.09.
+// picked by MEASUREMENT and not by eye — swept against the six trees'
+// painted crowns, the four mud ellipses, the twenty-one forage sites and
+// the drawn shoreline at fourteen stage shapes from 900x620 to 1920x1080.
+// Worst case across all of them: NO part of it under any crown, 2% on mud
+// (which `grassAt` already refuses stride by stride), and never nearer the
+// drawn shore than rho 1.09.
+//
+// The box swept is the BIRD'S, not a point — `a.r * 1.35` out each way and
+// `a.r * 2` of him above the ground line, which at his size is 39 x 57px.
+// The first attempt at this rectangle used a 22 x 48 guess instead and came
+// back clear when it was not; the suite, which asks the world for the same
+// box the ethogram grazes by, is what caught it.
+//
+// It is SHALLOW — .08 of the stage, about 75px on a common window and 50 on
+// a short one, against a 46px grazing stride. That is the shape of the
+// grass here rather than a choice: the lake's southern shore is above it and
+// the big east mud ellipse below. On a short window he will graze ALONG the
+// verge rather than across it, which is what `swardHeading`'s scaled margin
+// is there to allow — a flat margin left him rimmed on every stride.
 //
 // Held in fractions and reached through `def`, like the trees and the
 // forage, so another world can hand him a different field or none at all
 // — with no sward the appetite simply never finds anywhere to go.
-const GOOSE_SWARD = { x0: 0.60, x1: 0.74, y0: 0.52, y1: 0.61 };
+const GOOSE_SWARD = { x0: 0.62, x1: 0.76, y0: 0.52, y1: 0.60 };
 WORLDS.forest.sward = GOOSE_SWARD;
 // ...and on the world def as well, beside the trees, the sward and the dam.
 // The anchors are world geometry: invisible, but fixed for the life of the

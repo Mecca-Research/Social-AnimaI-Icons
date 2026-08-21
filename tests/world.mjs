@@ -394,9 +394,14 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     const S = w.def.sward, T = w.def.trees || [], C = w.__crowns;
     if (!S || !C) return { missing: true };
     const SIZES = [[1008,700],[1264,732],[1350,700],[1424,832],[1600,820],[1904,1012],
-                   [1000,800],[1240,1000],[900,620],[1440,900],[1280,720],[1920,1080]];
-    // a goose's own box, from the biggest radius any agent carries
-    const rr = Math.max(...w.agents.map(a => a.r), 18);
+                   [1000,800],[1240,1000],[900,620],[1440,900],[1280,720],[1920,1080],
+                   [960,600],[1120,640]];
+    // The GOOSE'S own box, and his alone: inCrown builds it from the grazing
+    // bird's own r, so a check built from the biggest radius on the map is
+    // asking whether a BEAR could graze here, which is a question nobody is
+    // going to ask. Critter draws the 120-unit sprite at r * 2.7.
+    const g = w.agents.find(a => a.species === 'goose');
+    const rr = g ? g.r : 28.6;
     const hw = rr * 1.35, up = rr * 2;
     let worst = 0, worstAt = '';
     for (const [W, H] of SIZES) {
@@ -418,7 +423,7 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
   })(window.__saiWorld)`);
   chk(!r.missing && r.worst === 0, 'no part of the sward is under a painted crown',
     r.missing ? 'the world hands over no sward or no crown boxes'
-      : r.worst === 0 ? `x ${r.sward} clear at all twelve stage shapes`
+      : r.worst === 0 ? `x ${r.sward} clear at all fourteen stage shapes`
       : `${(100 * r.worst).toFixed(0)}% under a crown at ${r.worstAt}`);
 }
 
@@ -428,20 +433,23 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
 // and fell to the base 5s/0s animation â€” two big drift logs rocking in exact
 // lockstep on open water, which is the one pairing that reads as machinery.
 {
-  const r = await page.evaluate(`(() => {
+  const r = await page.evaluate(`(w => {
     const els = [...document.querySelectorAll('.sai-water-pad')];
     const cls = els.map(e => [...e.classList].find(c => c.startsWith('pad-')) || 'NONE');
     const st = els.map(e => { const s = getComputedStyle(e);
       return s.animationDuration + '/' + s.animationDelay; });
-    // a log is the taller box: PadLayer draws logs at height 40
-    const isLog = els.map(e => (e.closest('svg')?.getAttribute('height') | 0) === 40);
-    const logPhases = st.filter((_, i) => isLog[i]);
-    return { n: els.length, cls, unnamed: cls.filter(c => c === 'NONE').length,
-             logs: logPhases.length, logDistinct: new Set(logPhases).size,
-             allDistinct: new Set(st).size };
-  })()`);
-  chk(r.n > 0 && r.unnamed === 0, 'every float is dealt a bob phase',
-    `${r.n} floats, ${r.unnamed} with no pad- class`);
+    // WHICH floats are logs comes off the world, not off the drawing. The
+    // first version of this read the svg's height and called 40 a log â€”
+    // and the rp 12 lily pad is drawn 40 tall too, so it counted five logs
+    // and failed a fix that was correct. PadLayer maps its specs in order,
+    // so the DOM order and w.pads are index-aligned.
+    const logPhases = st.filter((_, i) => w.pads && w.pads[i] && w.pads[i].log);
+    return { n: els.length, pads: (w.pads || []).length,
+             unnamed: cls.filter(c => c === 'NONE').length,
+             logs: logPhases.length, logDistinct: new Set(logPhases).size };
+  })(window.__saiWorld)`);
+  chk(r.n > 0 && r.n === r.pads && r.unnamed === 0, 'every float is dealt a bob phase',
+    `${r.n} drawn against ${r.pads} in the world, ${r.unnamed} with no pad- class`);
   chk(r.logs > 0 && r.logDistinct === r.logs, 'and no two drift logs rock in step',
     `${r.logs} logs on ${r.logDistinct} distinct phases`);
 }

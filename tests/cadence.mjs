@@ -93,7 +93,7 @@
  *     nut tree -> its nearest cache        348 px
  *     berry bush -> lake at rho .93        209 px
  *     fruiting trunk -> lake at rho .93    404 px   (NOT the same walk)
- *     shore band -> sward centre           293 px   (he sets off from ashore)
+ *     shore band -> sward centre           289 px   (he sets off from ashore)
  *     swim disc -> shallow band             95 px
  *     nearest berry within .34w (fox)      192 px
  *     fox's own grass tuft                  57 px   (rand(34,80), mean 57)
@@ -210,11 +210,11 @@
  *                                                        TOTAL   16.4
  *
  * ---- GOOSE ----------------------------------------------------------
- * graze     walk (293-20)/54.5                                   5.0
+ * graze     walk (289-20)/54.5                                   4.9
  *           _cropN round(rand(10,16)) -> 13 head-downs at
  *             CROP_HEAD_DOWN 1450 and 12 strides between them
  *             at CROP_STRIDE 540: 18850 + 6480                   25.3
- *                                                        TOTAL   30.3
+ *                                                        TOTAL   30.2
  * dabble    paddle to the band (95-10)/66.3, wet                  1.3
  *           _dabN round(rand(3,5)) -> 4 cycles of
  *             DABBLE_DOWN 2800 + DABBLE_UP 1700                  18.0
@@ -270,7 +270,7 @@ const FEEDING = {
   raccoon:  { berry: 24.1 },
   fox:      { scrump: 7.4 },
   hedgehog: { roots: 12.7, logs: 16.4 },
-  goose:    { graze: 30.3, dabble: 19.3 },
+  goose:    { graze: 30.2, dabble: 19.3 },
 };
 
 const duty = await page.evaluate(`(feeding => {
