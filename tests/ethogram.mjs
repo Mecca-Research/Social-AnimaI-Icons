@@ -73,8 +73,19 @@ chk(reg.domains.land.share === 0.70 && reg.domains.water.share === 0.30,
   chk(all, 'ethogram states are busy', `intent roll skipped in ${Object.entries(r).filter(([,v])=>v).map(([k])=>k).join(',')}`);
 }
 
-// ---- tree event: 60% on approach, 50/50 split, shared cooldown ----
+// ---- tree event: the ethogram's own chance on approach, 50/50 split ----
+// The window is READ OFF THE EVENT, not written down here. It used to be a
+// flat (0.42, 0.78) centred on 60% — which is what the chance was when this
+// was written. It has since been retuned to 0.50 and nobody moved the
+// window, leaving its lower edge 1.24 standard deviations below the true
+// mean: a correct build failed this about one run in nine, and did it while
+// reporting a number that looks like a behaviour change. Three sigma of a
+// 60-flip binomial is +-19 points, so that is the tolerance, and it now
+// tracks the dial instead of a memory of where the dial used to be.
 {
+  const want = await page.evaluate(
+    `window.__saiEtho.ETHOGRAM.bear.events.find(e => e.id === 'tree').chance`);
+  const sd = Math.sqrt(want * (1 - want) / 60);
   let trig=0, rub=0, climb=0;
   for (let i=0;i<60;i++){
     const r = await page.evaluate(`(async w => { const b=w.agents.find(a=>a.species==='bear');
@@ -89,7 +100,9 @@ chk(reg.domains.land.share === 0.70 && reg.domains.water.share === 0.30,
       const s=b.state; b.state='wander'; b.z=0; return s; })(window.__saiWorld)`.replace('IDX', String(i)));
     if (r==='treerub'){trig++;rub++;} else if (r==='treeclimb'){trig++;climb++;}
   }
-  chk(trig/60 > 0.42 && trig/60 < 0.78, 'tree trigger 60%', `${trig}/60 = ${Math.round(100*trig/60)}%`);
+  chk(Math.abs(trig/60 - want) < 3 * sd, `tree trigger ${Math.round(100*want)}%`,
+    `${trig}/60 = ${Math.round(100*trig/60)}%, against ${Math.round(100*want)}% ` +
+    `+-${Math.round(300*sd)} (3 sigma at n=60)`);
   chk(rub>0 && climb>0, 'rub/climb variants 50/50', `rub ${rub} vs climb ${climb}`);
 }
 

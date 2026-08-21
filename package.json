@@ -1,7 +1,7 @@
 {
   "name": "social-animai-icons",
   "private": true,
-  "version": "0.36.0",
+  "version": "0.37.0",
   "type": "module",
   "description": "An interactive, emergent 'living desktop' of animal icons that wander, socialize, argue, and help each other.",
   "scripts": {
@@ -13,7 +13,8 @@
     "test:gait": "node tests/gait.mjs",
     "test:cadence": "node tests/cadence.mjs",
     "test:world": "node tests/world.mjs",
-    "test:parse": "node scripts/checktests.mjs"
+    "test:parse": "node scripts/checktests.mjs",
+    "test:sizes": "node tests/sizes.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

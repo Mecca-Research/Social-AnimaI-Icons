@@ -2804,6 +2804,15 @@ body {
 /* a bird standing in the lake casts no shadow on the forest floor */
 .sai-sprite[data-state="dabble"] .sai-crit--goose .sai-crit-shadow,
 .sai-sprite[data-state="dabblelift"] .sai-crit--goose .sai-crit-shadow{ opacity:0; animation:none; }
+/* ...and the shanks are UNDER it. They run y 90-102 against a waterline
+   that crosses them at about 89.7, so there is no part of a leg above the
+   surface to draw: the old pose left them showing through the lens on the
+   argument that standing on the bottom is what separates a dabbler from a
+   swimmer, which is true and was still a pair of feet visible through a
+   foot of water. The stern-up tilt and the lens carry that read instead.
+   Same mechanism the generic swim rig uses on every other species. */
+.sai-sprite[data-state="dabble"] .sai-crit--goose .sai-crit-leg,
+.sai-sprite[data-state="dabblelift"] .sai-crit--goose .sai-crit-leg{ opacity:0; }
 .dab-weed{ display:none; }
 .sai-sprite[data-carry="weed"] .sai-crit--goose .dab-weed{ display:inline; }
 
@@ -2885,7 +2894,8 @@ body {
    Every rule is scoped to the hedgehog. State names are namespaced inside
    his ethogram and not in the DOM, and "rootdig" is exactly the kind of
    name a second species will want one day. */
-.sai-crit-rootdig, .sai-crit-rootbore, .sai-crit-logpose{ display:none; }
+.sai-crit-rootdig, .sai-crit-rootbore, .sai-crit-logpose,
+.sai-crit-underpose{ display:none; }
 
 /* ---- the cast about (hhsnuff): the one beat that shows HOW he finds
    anything. Deliberately on the normal rig — he is stood square on four
@@ -3026,6 +3036,46 @@ body {
    his feet is wrong for the whole bout and is dimmed rather than moved */
 .sai-sprite[data-state="logdive"] .sai-crit--hedgehog .sai-crit-shadow,
 .sai-sprite[data-state="logchew"] .sai-crit--hedgehog .sai-crit-shadow{ animation:none; opacity:.12; }
+
+/* ---- 4. UNDER SOUND TIMBER (logunder) ----
+   The other way into dead wood. Nothing is drawn cut off here: what hides
+   his head is the log's own near edge, painted over him by
+   ForageCanopyLayer at zIndex 12 — the first pose in this file that does
+   not have to carry the thing that occludes it. ---- */
+.sai-sprite[data-state="logunder"] .sai-crit--hedgehog .sai-crit-underpose{ display:inline; }
+.sai-sprite[data-state="logunder"] .sai-crit--hedgehog .sai-crit-body,
+.sai-sprite[data-state="logunder"] .sai-crit--hedgehog .sai-crit-head,
+.sai-sprite[data-state="logunder"] .sai-crit--hedgehog .sai-crit-leg{ display:none; }
+/* he is on the ground for this one, not up on the timber, so the shadow
+   stays — it is the difference between the two log bouts at a glance */
+.sai-sprite[data-state="logunder"] .sai-crit--hedgehog .sai-crit-shadow{ opacity:.3; }
+/* the shove: short, repeated, and going nowhere. A hedgehog under a log is
+   not burrowing, he is levering — push, ease off, push again */
+.sai-sprite[data-state="logunder"] .sai-crit--hedgehog .lu-front{
+  animation:sai-hh-shove 1.05s ease-in-out infinite;
+  transform-box:fill-box; transform-origin:20% 60%; }
+@keyframes sai-hh-shove{
+  0%,100%{transform:translate(0,0) rotate(0deg);}
+  38%{transform:translate(3.2px,1.1px) rotate(2.4deg);}
+  62%{transform:translate(2.2px,.6px) rotate(1.2deg);}
+}
+.sai-sprite[data-state="logunder"] .sai-crit--hedgehog .lu-legs{
+  animation:sai-hh-brace 1.05s ease-in-out infinite; }
+@keyframes sai-hh-brace{
+  0%,100%{transform:translate(0,0);}
+  38%{transform:translate(-1.6px,.8px);}
+}
+.sai-sprite[data-state="logunder"] .sai-crit--hedgehog .lu-litter{
+  animation:sai-hh-litter 1.05s ease-in-out infinite; }
+@keyframes sai-hh-litter{
+  0%,100%{transform:translate(0,0); opacity:.85;}
+  38%{transform:translate(2.6px,-1px); opacity:1;}
+}
+@media (prefers-reduced-motion:reduce){
+  .sai-sprite[data-state="logunder"] .sai-crit--hedgehog .lu-front,
+  .sai-sprite[data-state="logunder"] .sai-crit--hedgehog .lu-legs,
+  .sai-sprite[data-state="logunder"] .sai-crit--hedgehog .lu-litter{ animation:none; }
+}
 
 /* going in: not a push but a worming, so the body travels along its own
    axis — down and forward together — rather than nodding */

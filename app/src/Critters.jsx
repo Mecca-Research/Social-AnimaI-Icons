@@ -1106,7 +1106,17 @@ function GooseDraw({ uid }) {
   const F = ["#a5967f", "#8a7a64", "#6e5f4c"], breast = "#cfc4ae", white = "#f4f2ec", dark = "#1b1d20", shank = "#22262a", ink = "#141518";
   return (
     <g transform="translate(60 106) scale(1.05) translate(-60 -106)">
-      <defs><Fur id={`${uid}f`} c={F} /></defs>
+      <defs>
+        <Fur id={`${uid}f`} c={F} />
+        {/* THE WATERLINE, as a clip rather than as a tint. Its edge is the
+            SAME curve `dab-water` draws as the meniscus — one line, used
+            twice: once to cut what is under it and once to draw where it
+            cuts. Move one and move the other or the goose develops a
+            second, invisible surface a few px off the visible one. */}
+        <clipPath id={`${uid}air`}>
+          <path d="M -40 -40 L 160 -40 L 160 95 L 114 95 C 92 88 22 88 2 94 L -40 94 Z" />
+        </clipPath>
+      </defs>
       {/* The wake is the whole argument for water factor 1.25: on land he is
           a set of moving parts and on the water he is one shape being carried,
           and a shape with no moving parts needs something else to say it is
@@ -1205,14 +1215,24 @@ function GooseDraw({ uid }) {
       </g>
 
       {/* DABBLING POSE: head and neck driven straight down through the
-          surface, bill working the roots. Drawn rather than posed for the
-          same reason as the crop, and for one more — everything under the
-          waterline has to be painted BEFORE the water so the surface passes
-          over it. `ownsWater` on the event keeps the generic swimming rig
-          off, which leaves the legs showing through the lens: that is the
-          whole point of the pose, since standing on the bottom is exactly
-          what separates a dabbling goose from a swimming one. */}
+          surface, bill working the roots.
+          
+          The surface used to be a TINT: a translucent lens painted over the
+          submerged parts so they read "as submerged rather than as missing".
+          They did not — at .42 opacity you watched a whole head and both
+          feet carry on being visible underwater, which is the one thing a
+          surface is for. Water is not a filter you see through at this
+          scale; it is an edge things go behind.
+          
+          So the neck is CLIPPED at the waterline now, and the lens has the
+          job it can actually do: colour and movement on the surface itself.
+          The clip is on a static wrapper and not on `dab-neck`, because
+          `dab-neck` is the thing being animated — clip the animated element
+          and the cut travels down with the head, which is a head that never
+          submerges. Clipping the parent leaves the surface where the water
+          is and slides the goose through it. */}
       <g className="sai-crit-dabblepose">
+        <g clipPath={`url(#${uid}air)`}>
         <g className="dab-neck">
           <path d="M 70 74 C 76 70 86 74 92 82 C 97 89 99 95 99 100"
             stroke={dark} strokeWidth="11.5" fill="none" strokeLinecap="round" />
@@ -1231,12 +1251,15 @@ function GooseDraw({ uid }) {
             <ellipse cx="113" cy="110" rx="2.6" ry="1.8" fill="#cbb98a" opacity=".8" transform="rotate(-18 113 110)" />
           </g>
         </g>
-        {/* THE SURFACE, over everything beneath it. The lens is translucent
-            so the submerged neck and the shanks read as submerged rather
-            than as missing, and the meniscus is the bright line where the
-            water actually cuts the feathers. */}
+        </g>
+        {/* THE SURFACE. Not an occluder any more — the clip above does that
+            — so this is what it always should have been: the colour of the
+            water over his floating half, the bright line where it cuts the
+            feathers, and the rings going out from where his head went in.
+            The lens can be heavier now that nothing is trying to be seen
+            through it. */}
         <g className="dab-water">
-          <ellipse cx="58" cy="97" rx="58" ry="12.5" fill="#2f7c9b" opacity=".42" />
+          <ellipse cx="58" cy="97" rx="58" ry="12.5" fill="#2f7c9b" opacity=".55" />
           <path d="M 2 94 C 22 88 92 88 114 95" stroke="#dff3fb" strokeWidth="2" fill="none"
             strokeLinecap="round" opacity=".55" />
           <g className="dab-rings">
@@ -2119,11 +2142,20 @@ function HedgehogDraw({ uid }) {
     spikes.push(<path key={i} d={`M ${x0} ${y0} L ${x1} ${y1} L ${x2} ${y2} Z`} fill={i % 2 ? spikeA : spikeB} />);
   }
   return (
-    // Drawn to 1.52 rather than the 0.86 it had. Every other species fills
-    // most of its 120 box; this one filled about a third of it, so however
-    // its radius was set it came out roughly a quarter the squirrel's on
-    // screen — an animal that is heavier and rounder than a squirrel in life.
-    <g transform="translate(60 106) scale(1.52) translate(-60 -106)">
+    // 0.95, having been 0.86 and then — briefly and much too far — 1.52.
+    //
+    // The 1.52 was the right instinct aimed at the wrong lever. He really was
+    // coming out a quarter of the squirrel, but the cause was his RADIUS, and
+    // inflating the art to compensate made him fill 0.98 of his own box while
+    // every other species sits between 0.47 and 0.86. That is not a drawing
+    // that fills its box, it is a drawing wearing its box: it left him as
+    // wide as a fox at a fourteenth of a fox's body length, and it forced his
+    // radius — which is also his hit target and his collision circle — down
+    // to 11.6 to get the size back.
+    //
+    // Radius carries size now (see SpeciesProfile: size = apparent / (fill *
+    // 2.7)), so this only has to put his coverage back in the normal band.
+    <g transform="translate(60 106) scale(0.95) translate(-60 -106)">
       <defs><Fur id={`${uid}f`} c={F} /></defs>
       <Leg x={44} top={90} len={13} w={6} color={F[2]} cls="bl" />
       <Leg x={72} top={90} len={13} w={6} color={F[2]} cls="fl" />
@@ -2319,21 +2351,46 @@ function HedgehogDraw({ uid }) {
           the hole he went into, and drawing the log twice would let the
           two halves drift apart. `.lp-diver` and `.lp-sitter` are the
           only parts that swap. */}
-      <g className="sai-crit-logpose">
-        <g className="lp-log">
-          <ellipse cx="58" cy="99" rx="47" ry="6" fill="#1a0e04" opacity=".22" />
-          <rect x="14" y="62" width="92" height="37" rx="18" fill="#402c19" />
-          <rect x="14" y="62" width="92" height="15" rx="7.5" fill="#5b3f26" />
-          <path d="M 22 66 C 44 62 76 62 98 66 C 78 71 40 71 22 66 Z" fill="#4e9c5f" opacity=".5" />
-          <path d="M 24 84 C 46 88 72 88 94 83" stroke="#2a1c10" strokeWidth="1.8" fill="none" strokeLinecap="round" opacity=".5" />
-          <path d="M 26 92 C 48 95 70 95 92 91" stroke="#2a1c10" strokeWidth="1.4" fill="none" strokeLinecap="round" opacity=".4" />
-          <ellipse cx="104" cy="80" rx="7" ry="17" fill="#6b4a2a" />
-          <ellipse cx="104" cy="80" rx="4.4" ry="11" fill="#402c19" opacity=".7" />
-          <ellipse cx="104" cy="80" rx="2" ry="5" fill="#6b4a2a" opacity=".6" />
+            {/* NOSING UNDER SOUND TIMBER. The other way into dead wood, and the
+          only one a log with no hole in it offers: head and shoulders in
+          under the near edge, rump up and out, back legs braced against the
+          push. He carries no log here either — the lip drawn over him by
+          ForageCanopyLayer is the log's own front face, and it is what his
+          head disappears behind. */}
+      <g className="sai-crit-underpose">
+        <g className="lu-front">
+          {/* shoulders and neck driving forward and slightly down */}
+          <path d="M 52 60 C 66 58 78 64 84 74 C 74 79 60 76 52 70 Z" fill={F[2]} />
+          <ellipse cx="46" cy="64" rx="21" ry="13.5" fill={`url(#${uid}f)`} transform="rotate(-6 46 64)" />
         </g>
-        {/* the rot hole, and its near rim painted again over him below */}
-        <ellipse className="lp-hole" cx="68" cy="68" rx="13.5" ry="7" fill="#1b1109" />
-
+        <g className="lu-spines">
+          {spikes}
+        </g>
+        {/* the rump, up and clear, with the hind feet set wide for the shove */}
+        <ellipse cx="34" cy="72" rx="17" ry="14" fill={`url(#${uid}f)`} />
+        <g className="lu-legs">
+          <rect x="24" y="84" width="6.5" height="15" rx="3.2" fill={F[2]} />
+          <rect x="40" y="86" width="6.5" height="13" rx="3.2" fill={F[2]} />
+          <path d="M 22 99 l -3.4 2.6 M 27.5 99.4 l 0 3 M 32 99 l 3.4 2.6"
+            stroke={F[2]} strokeWidth="1.7" fill="none" strokeLinecap="round" />
+        </g>
+        {/* litter he is pushing aside */}
+        <g className="lu-litter">
+          <ellipse cx="76" cy="88" rx="7" ry="2.6" fill="#6d5030" opacity=".85" />
+          <ellipse cx="88" cy="90" rx="5.4" ry="2.2" fill="#5b4327" opacity=".8" />
+        </g>
+      </g>
+      <g className="sai-crit-logpose">
+        {/* NO TIMBER. This pose used to paint an entire section of log
+            around him — trunk, moss, bark lines, end rings, the rot hole
+            and its rim — because the sprite draws at zIndex 10 and the
+            forage sites at 2, so the world's own log could never cover any
+            part of him. A whole second log had to exist inside the animal
+            for his head to be able to go into one.
+            The world can occlude him now: the log body stays under him at
+            2 and its rim is drawn again over him at 12 by
+            ForageCanopyLayer, so what takes his head off is the hole he is
+            actually standing at. He is just an animal here. */}
         <g className="lp-diver">
           {/* shoulders going down the hole. Painted before the rim so
               the rim is what cuts him off, not a guessed edge */}
@@ -2393,7 +2450,7 @@ function HedgehogDraw({ uid }) {
         </g>
 
         {/* the near rim, over whichever of the two is showing */}
-        <path className="lp-rim" d="M 54.5 68 C 56 73 62 76 68 76 C 74 76 80 73 81.5 68 C 80 71.4 74 73.6 68 73.6 C 62 73.6 56 71.4 54.5 68 Z" fill="#6b4a2a" />
+
         {/* what he disturbed, leaving by the nearest exit */}
         <g className="lp-bugs">
           <ellipse cx="80" cy="72" rx="2.6" ry="1.7" fill="#241a10" />

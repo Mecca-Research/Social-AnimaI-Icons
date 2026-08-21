@@ -501,6 +501,107 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
             : `${r.pits} pits, all clear of all ${(await page.evaluate('window.__saiWorld.forage.length'))} sites`);
 }
 
+// ==================== the forest has depth now ====================
+// Trunks paint at 2 and animals at 10, so for three releases an animal
+// never went behind anything and the canopy at 12 was the only depth in
+// the world. That is why three animations ended up faking their own
+// occlusion. An animal whose feet are above a trunk's base and whose body
+// crosses the bark now drops under it — EXCEPT inside the tree's own reach,
+// where every trunk behavior in the world stands its subject, and where it
+// is touching the tree rather than standing behind it.
+{
+  const r = await page.evaluate(`(async w => {
+    const b = w.bounds, t = w.def.trees[0];
+    const tx = t.x * b.w, ty = t.y * b.h;
+    const a = w.agents.find(x => x.species === 'fox');
+    if (!a) return { none: 'no fox' };
+    for (const o of w.agents) { o.state = 'idle'; o.vx = o.vy = 0;
+      o.idleUntil = performance.now() + 900000;
+      o.noEventUntil = performance.now() + 900000; }
+    // asked of the world by AGENT ID. Finding the node by its inline left:
+    // also matches every trunk and bush standing at the same x, which is
+    // how the first version of this check came back reading zIndex 2 — a
+    // tree's — and called the feature broken.
+    if (!w.__iconOf) return { none: 'the world hands out no icon lookup' };
+    const z = () => { const n = w.__iconOf(a.id); return n ? n.style.zIndex : '?'; };
+    const put = async (x, y) => { a.x = x; a.y = y;
+      await new Promise(r => setTimeout(r, 400)); return z(); };
+    return {
+      tree: { x: Math.round(tx), y: Math.round(ty), s: t.s },
+      behind:  await put(tx, ty - 160),        // up the screen, across the bark
+      atTree:  await put(tx - 40, ty - 55),    // where the bear rubs
+      inFront: await put(tx, ty + 40),         // nearer the viewer
+      beside:  await put(tx + 180, ty - 160),  // above it but clear of the bark
+    };
+  })(window.__saiWorld)`);
+  if (r.none) chk(false, 'an animal can go behind a trunk', r.none);
+  else {
+    chk(r.behind === '1', 'an animal up the screen goes behind the trunk',
+      `zIndex ${r.behind} at 160px above the base, on the bark line`);
+    chk(r.inFront === '10', 'and one nearer the viewer stays in front',
+      `zIndex ${r.inFront} at 40px below the base`);
+    chk(r.atTree === '10', 'an animal AT the tree is touching it, not behind it',
+      `zIndex ${r.atTree} at the spot every trunk behavior stands its subject`);
+    chk(r.beside === '10', 'and one that never crosses the bark is unaffected',
+      `zIndex ${r.beside} at 180px to the side`);
+  }
+}
+
+// ==================== four logs, two kinds ====================
+// The two the background used to draw are real sites now. They were in the
+// background's own viewBox, which is preserveAspectRatio="slice", so they
+// slid across the map as the window changed shape — nothing could be placed
+// against them and nothing could touch them.
+{
+  const r = await page.evaluate(`(w => {
+    const logs = (w.forage || []).filter((f) => f.kind === 'log');
+    const kinds = logs.map((f) => f.logType || 'rot').sort();
+    const b = w.bounds;
+    let worstTrunk = Infinity, worstPair = Infinity;
+    for (const f of logs) {
+      for (const t of (w.def.trees || []))
+        worstTrunk = Math.min(worstTrunk, Math.hypot(f.px - t.x * b.w, f.py - t.y * b.h));
+      for (const g of (w.forage || [])) if (g !== f)
+        worstPair = Math.min(worstPair, Math.hypot(f.px - g.px, f.py - g.py));
+    }
+    return { n: logs.length, kinds: kinds.join(','),
+             rot: kinds.filter((k) => k === 'rot').length,
+             mossy: kinds.filter((k) => k === 'mossy').length,
+             worstTrunk: Math.round(worstTrunk), worstPair: Math.round(worstPair) };
+  })(window.__saiWorld)`);
+  chk(r.n === 4, 'four logs in the wood', `${r.n}: ${r.kinds}`);
+  chk(r.rot === 2 && r.mossy === 2, 'two of each kind',
+    `${r.rot} rotten, ${r.mossy} sound`);
+  chk(r.worstTrunk >= 96, 'no log stands inside a trunk',
+    `nearest is ${r.worstTrunk}px from one`);
+  chk(r.worstPair >= 96, 'and none of them is on top of another site',
+    `nearest other site is ${r.worstPair}px away`);
+}
+
+// ==================== the reeds are off the tree ====================
+// Three tall tufts stood on and above the ground the west-high tree moved
+// into — a tree growing out of a clump of rushes. Held out by BG_KEEPOUT
+// rather than by deleting three generated items, because the generator is
+// seeded and changing the count shuffles every tuft after it.
+{
+  const r = await page.evaluate(`(w => {
+    const svg = document.querySelector('svg.sai-bg-svg');
+    const tufts = [];
+    for (const g of svg.querySelectorAll('g')) {
+      const t = g.getAttribute('transform') || '';
+      const m = t.match(/translate\\(([-\\d.]+)\\s+([-\\d.]+)\\)/);
+      if (!m) continue;
+      if (!g.querySelector('path[fill*="grassGrad"]')) continue;
+      tufts.push([+m[1], +m[2]]);
+    }
+    // the box the west-high tree now occupies, in the background's viewBox
+    const inBox = tufts.filter(([x, y]) => x > 120 && x < 290 && y > 190 && y < 330);
+    return { n: tufts.length, inBox: inBox.length, where: inBox.map(t => t.join(',')).join(' ') };
+  })(window.__saiWorld)`);
+  chk(r.inBox === 0, 'no reeds left where the west-high tree now stands',
+    r.inBox ? `still there: ${r.where}` : `${r.n} tufts, none in the tree's ground`);
+}
+
 chk(errs.length === 0, 'no JS errors', errs.length ? errs[0] : 'clean');
 console.log(`\n${fail.length ? 'FAIL ' + fail.length : 'ALL PASS'} (${pass.length} passed)`);
 await browser.close();
