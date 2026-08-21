@@ -297,11 +297,21 @@ await page.waitForTimeout(400);
   // sample the claim WHILE he is on it — chain() runs to completion and the
   // claim is released on the way out, so checking afterwards proves nothing
   const onLog = await page.evaluate(`(async w => { const t=w.agents.find(a=>a.species==='turtle');
-    t._eth=null; t.state='wander'; t.intent='wander';
-    t.x=.60*w.bounds.w; t.y=.34*w.bounds.h;
+    t.state='wander'; t.intent='wander';
+    // Seeded beside a LOG and the claims cleared, for the same reason the
+    // check above it says: his progress is frame-based and the give-up is
+    // wall-clock, so a seed out in open water is a stopwatch race and not a
+    // question about what he chooses. The old seed was a fixed point in the
+    // middle of the lake and it read "never sat" about one run in three.
+    for (const p of w.pads) p.userId=null;
+    const L=w.pads.filter(p=>p.log); const p0=L[0]||w.pads[0];
+    t.x=p0.x-30; t.y=p0.y-20;
     t.intentUntil=performance.now()+900000; t.noEventUntil=performance.now()+900000;
-    for (let k=0;k<40 && !t._eth;k++) await new Promise(r=>setTimeout(r,25));
+    // cleaned, not dropped — see chain()
+    if (!t._eth) for (let k=0;k<40 && !t._eth;k++) await new Promise(r=>setTimeout(r,25));
     const S=t._eth;
+    if (S) { if (S.claim) { S.claim.userId=null; S.claim=null; }
+             S.goal=null; S.goalUntil=0; S.near={}; S.dwelt={}; }
     for (let i=0;i<1400;i++){
       await new Promise(r=>setTimeout(r,90));
       if (t.state==='wander'){ S.seekAt['float']=0; S.cd['float']=0; }
