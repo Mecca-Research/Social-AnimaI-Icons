@@ -109,9 +109,19 @@ if (await page.evaluate(`!!window.__saiEtho.ETHOGRAM.raccoon`)) {
   // across the map — so a single run is a draw on the give-up timer as much
   // as on the behavior. Seeded beside a bush so the two ground variants are
   // short; the tree one is what occasionally needs the retry.
+  // Seeded BETWEEN a berry bush and a fruiting trunk, not beside a bush.
+  // Two of the three variants set off for a bush and the third for a trunk,
+  // the bushes and the trunks are not in the same place, and the walk-there
+  // legs are frame-driven against a wall-clock give-up — so a seed that is
+  // short for one is a coin flip for the other, and the tree draw (weight 3
+  // of 7) failed about one run in four. The midpoint is short for both.
   const racSeed = `{ let n=null,d=1e9; for (const f of w.forage){ if(f.kind!=='berry') continue;
        const q=Math.hypot(f.px-a.x,f.py-a.y); if(q<d){d=q;n=f;} }
-     if(n){ a.x=n.px-38; a.y=n.py+28; } }`;
+     let t=null,td=1e9; for (const x of (w.def.trees||[])){ if(x.fruit===false) continue;
+       const tx=x.x*w.bounds.w, ty=x.y*w.bounds.h;
+       const q=Math.hypot(tx-a.x,ty-a.y); if(q<td){td=q;t={x:tx,y:ty};} }
+     if(n&&t){ a.x=(n.px+t.x)/2; a.y=(n.py+t.y)/2; }
+     else if(n){ a.x=n.px-38; a.y=n.py+28; } }`;
   let r = await chain('raccoon', 'berry', 120000, racSeed);
   for (let k = 0; k < 2 && !/racwash|raceat/.test(r.chain); k++)
     r = await chain('raccoon', 'berry', 120000, racSeed);
@@ -356,8 +366,26 @@ await page.waitForTimeout(400);
     const dx=inside.x-lo.x, dy=inside.y-lo.y, d=Math.hypot(dx,dy)||1;
     return { x: lo.x + dx/d*45, y: lo.y + dy/d*45 }; })(window.__saiWorld)`);
   chk(!!seed, 'the waterline can be found', seed ? `margin at ${Math.round(seed.x)},${Math.round(seed.y)}` : 'pad[0] read dry');
+  // ...and then he is placed ON a band the world says is dabblable, rather
+  // than at the margin he then has to swim along. shallowPoint starts from
+  // his OWN angle and fans out in 0.26 rad steps until a shore has room for
+  // him, so a goose already standing in a legal band gets a target a few px
+  // away; a goose at a margin whose own sector has no band gets one a third
+  // of the way round the lake, and an 18s give-up at this frame rate buys
+  // about three seconds of swimming. That was a 50/50 check.
+  const spot = await page.evaluate(`(w => {
+    if (!w.shallowBandAt || !w.lakePointAt) return null;
+    for (let k = 0; k < 48; k++) {
+      const t = (k / 48) * Math.PI * 2;
+      const band = w.shallowBandAt(t);
+      if (band) return w.lakePointAt(t, (band[0] + band[1]) / 2);
+    }
+    return null; })(window.__saiWorld)`);
+  chk(!!spot, 'the world names a dabblable band',
+    spot ? `band point at ${Math.round(spot.x)},${Math.round(spot.y)}` : 'no shore is both shallow and wide enough');
+  const at = spot || seed;
   const r = await chain('goose', 'dabble', 90000,
-    seed ? `a.x=${seed.x}; a.y=${seed.y};` : `a.x=.71*w.bounds.w; a.y=.28*w.bounds.h;`);
+    at ? `a.x=${at.x}; a.y=${at.y};` : `a.x=.71*w.bounds.w; a.y=.28*w.bounds.h;`);
   chk(/dabble/.test(r.chain), 'goose dabbles the shallows', r.chain);
 }
 {
@@ -481,6 +509,14 @@ for (const [ev, want, label] of [
       big.state='idle'; big.vx=big.vy=0;
       big.idleUntil=performance.now()+900000; big.noEventUntil=performance.now()+900000;
       big.x=h.x+30; big.y=h.y;
+      // An approach trigger fires on the RISING EDGE: the engine keeps
+      // S.near[id] and only offers the event when a threat that was absent
+      // becomes present. Holding one beside him therefore gives exactly ONE
+      // offer for the whole forty seconds — and curl takes 85% of them, so
+      // one run in seven watched a hedgehog stand there being brave. The
+      // edge is re-armed each pass, and the 4s miss cooldown with it, so the
+      // check asks the question as many times as it has frames for.
+      h._eth.near['curl'] = false; h._eth.cd['curl'] = 0;
       seen.add(h.state);
       if (seen.has('hogball')) break;
     }

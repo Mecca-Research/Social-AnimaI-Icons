@@ -1671,6 +1671,14 @@ export default function SocialAnimalsRPG() {
       // the drawing, and must not carry its own copy of the drawing.
       W.__siteHalf = FORAGE_SITE_HALF;
       W.__pitHalf = PIT_HALF_PX;
+      // ...and the shoreline band itself, so a suite can put an animal ON a
+      // legal dabbling spot instead of somewhere it then has to swim to. The
+      // goose's plunge check is about the plunge; its walk-there leg is
+      // covered four times over elsewhere, and at headless frame rates an
+      // 18s give-up buys only a few seconds of swimming, so a seed that has
+      // to cross any water at all is a coin flip rather than a check.
+      W.shallowBandAt = (t) => shallowBandAt(W.bounds, t);
+      W.lakePointAt = (t, rho) => lakePoint(W.bounds, t, rho);
       W.__sep = (a, b) => separatePair(W, a, b, W, false);
       W.__cool = (a, ms) => enterCooldown(a, ms);
       // ...and the two halves of a drag, so a suite can exercise the release
