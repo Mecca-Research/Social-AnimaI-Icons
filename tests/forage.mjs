@@ -24,10 +24,25 @@ await page.waitForTimeout(2500);
 const pass = [], fail = [];
 const chk = (ok, l, d) => { (ok?pass:fail).push(`${l} — ${d}`); console.log(`${ok?'  ✔':'  ✘'} ${l} — ${d}`); };
 
-const park = `(w => { for (const c of w.agents) { c.x=.62*w.bounds.w; c.y=.72*w.bounds.h; c.vx=c.vy=0;
-  c.state='idle'; c.idleUntil=performance.now()+900000; c.intentUntil=performance.now()+900000;
-  c.noEventUntil=performance.now()+900000; c.z=0; c._faceDir=0; c._carry=null; c._eth=null; }
-  for (const f of (w.forage||[])) f.userId=null; })(window.__saiWorld)`;
+// Everyone EXCEPT the subject, held still. Muzzling the subject's own
+// events is not enough isolation, because two things reach him from
+// outside his ethogram entirely and neither reads a cooldown:
+//
+//   the RESCUE — a friend arriving at a fight makes the opponent flee, and
+//   the squirrel's flee IS his zig-zag bolt, spliced in from the world side
+//   so a scare down the fight path cannot look tamer than one down the
+//   alarm path;
+//   the MUSK — the skunk's cloud is geometry-as-physics and sprays anything
+//   standing in the cone, by design, cooldown or no cooldown.
+//
+// Both need a fight somewhere on the map, so the isolation that removes
+// them is "nobody else is doing anything". Positions are left alone: moving
+// thirteen animals to one spot is how you put one in the lake or on top of
+// a site somebody's claim is about to be measured against.
+const stillness = (subject) => `for (const o of w.agents) { if (o.species==='${subject}') continue;
+  o.state='idle'; o.vx=o.vy=0; o.targetId=null; o.z=0;
+  o.idleUntil=performance.now()+900000; o.intentUntil=performance.now()+900000;
+  o.noEventUntil=performance.now()+900000; }`;
 
 const world = await page.evaluate(`(w => ({ forage: (w.forage||[]).length,
   kinds: [...new Set((w.forage||[]).map(f=>f.kind))].sort().join(','),
@@ -44,6 +59,7 @@ chk(world.eth.includes('squirrel'), 'squirrel has an ethogram', world.eth);
 // force a species' event to fire now, and report the state chain it walks
 async function chain(species, evId, ms = 60000, seed = '') {
   return page.evaluate(`(async w => { const a=w.agents.find(x=>x.species==='${species}');
+    ${stillness(species)}
     a._eth=null; a.state='wander'; a.intent='wander'; a.z=0; a._carry=null;
     a.x=.30*w.bounds.w; a.y=.45*w.bounds.h;
     a.intentUntil=performance.now()+900000; a.noEventUntil=performance.now()+900000;
@@ -58,6 +74,7 @@ async function chain(species, evId, ms = 60000, seed = '') {
       // This tests whether the event WORKS, not how often it comes round —
       // the cadence is a separate question and a separate check.
       if (!started) {
+        ${stillness(species)}
         // Muzzle every event this species OWNS, off the ethogram's own event
         // list — not the keys that happen to be present in S.cd/S.seekAt.
         //
