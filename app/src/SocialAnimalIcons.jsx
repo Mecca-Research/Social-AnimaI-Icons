@@ -248,9 +248,28 @@ function shallowBandAt(bounds, t) {
 // line at 117px — because the bear treats every entry in this list
 // identically: a species that closed its boughs somewhere else would
 // give him one tree he climbs wrong.
+// EVERY POSITION HERE IS SOLVED, NOT PLACED. The four rules a trunk has to
+// keep are the ones the world already enforces elsewhere, and each of them
+// was learned from a bug:
+//   1. no forage site within TREE_REACH (96px) of the trunk — a site closer
+//      than that cannot be worked without the tree taking the animal instead
+//   2. the WEST working spots stay out of the lake, at every radius that
+//      works a trunk — v0.36's "a tree stood in the lake"
+//   3. no crown over the goose's sward — v0.36's "56% of the lawn"
+//   4. on the map, and no nearer another trunk than the world's own
+//      tightest pair
+// checked at twelve stage shapes. The two extreme short windows (900x620,
+// 960x600) are excluded: the world already ships violations at those and
+// solving for them freezes every tree where it stands.
 const FOREST_TREES = [
-  { x: .095, y: .620, s: 1.38,  kind: "oak"  }, // west, low
-  { x: .078, y: .358, s: 1.176, kind: "oak"  }, // west, high
+  // Down and right, past the surface root at (.185,.690). It could not move
+  // a LITTLE right: it already sat 103px from that root's 96px ring, so any
+  // step toward it broke rule 1 — the only way right was to go far enough
+  // down to clear the root's latitude entirely.
+  { x: .125, y: .800, s: 1.38,  kind: "oak"  }, // west, low
+  // Right, into the open ground it was asked for. The three grass tufts
+  // that stood on and above the old spot are gone — see BG_KEEPOUT.
+  { x: .168, y: .315, s: 1.176, kind: "oak"  }, // west, high
   // Moved from (.898,.480) — its west face was over the lake. Every trunk
   // behavior works a trunk from the WEST and stands its subject a sprite-foot
   // north of the anchor, and at the old spot that put the bear's back scratch
@@ -258,9 +277,17 @@ const FOREST_TREES = [
   // shore, so they played the swimming rig while rearing against a trunk on
   // dry land, and the bear's domain flipped to water for the whole bout.
   // Here the same two spots measure rho 1.16 and 1.11.
-  { x: .920, y: .535, s: 1.44,  kind: "oak"  }, // east flank, above the forage
-  { x: .910, y: .700, s: 1.26,  kind: "oak"  }, // east flank, below it
-  { x: .262, y: .835, s: 1.26,  kind: "oak"  }, // bottom-left, off the log's high end
+  // These two dropped TOGETHER. Solved as a pair because each was the
+  // other's blocker: the lake tree could not come down past the one below
+  // it, and that one could not come down past the south-east larder's 96px
+  // rings. Moved one at a time they were stuck at 2% and 1.5%.
+  { x: .920, y: .575, s: 1.44,  kind: "oak"  }, // east flank, above the forage
+  { x: .890, y: .725, s: 1.26,  kind: "oak"  }, // east flank, below it
+  // UP, off the big fallen log — which has itself moved, out of the
+  // background and into the forage list as a real site. This is the drey
+  // tree: DREY_TREE is a rule, not an index, so the squirrel's nest follows
+  // it here without anything else being touched.
+  { x: .278, y: .775, s: 1.26,  kind: "oak"  }, // bottom-left, clear of the log
   // `fruit: false` retires a tree from bearing: no crop is drawn in its
   // crown, and the raccoon's trunk picker skips it rather than climbing a
   // conifer after berries that are not there.
@@ -771,8 +798,27 @@ const FORAGE_SITES = [
   // 1240x1000. Worst case across all eight: 103px to a trunk, 80px to a
   // plant site, and a 70px approach ring that never gets nearer the lake
   // than rho 1.78 (the spawn guard bites at 1.12).
-  { x: .400, y: .845, s: 1.00, kind: "log",  dir:  1 },
-  { x: .600, y: .775, s: 0.92, kind: "log",  dir: -1 },
+  //   `logType` is the second thing about a log, after where it is. Two
+  //   kinds of dead wood, and the hedgehog works them differently because
+  //   they offer different ways in:
+  //     rot    rotten through, with a hole in the top face — he goes in
+  //            head-first through the top
+  //     mossy  sound timber, no hole — he noses under the near edge instead
+  //   Both are drawn to the SAME 168px body so every clearance number in
+  //   the world (FORAGE_SITE_HALF, the pit rule, the trunk rings) keeps one
+  //   answer for "how wide is a log".
+  { x: .400, y: .845, s: 1.00, kind: "log", logType: "rot",   dir:  1 },
+  { x: .600, y: .775, s: 0.92, kind: "log", logType: "rot",   dir: -1 },
+  // ...and the two that used to be scenery. They were drawn inside the
+  // background's own viewBox, which is `preserveAspectRatio="slice"`: they
+  // slid across the map as the window changed shape, so nothing could ever
+  // be placed against them and nothing could touch them. Promoted to real
+  // sites, held in stage fractions like everything else, and solved for the
+  // same clearances — which is why they are not where they used to be. The
+  // top-centre band and the bottom-left corner were the only ground left
+  // that a 182px-wide object fits in.
+  { x: .500, y: .115, s: 0.95, kind: "log", logType: "mossy", dir:  1 },
+  { x: .135, y: .905, s: 0.80, kind: "log", logType: "mossy", dir: -1 },
   { x: .185, y: .690, s: 1.00, kind: "root", dir: -1 },
   { x: .170, y: .150, s: 0.90, kind: "root", dir: -1 },
   { x: .775, y: .700, s: 1.05, kind: "root", dir:  1 },
@@ -862,7 +908,41 @@ function ForageLayer({ bounds, sites }) {
                   stroke="#3f7c4a" strokeWidth="1.8" fill="none" strokeLinecap="round" opacity=".9" />
               </>
             )}
-            {f.kind === "log" && (
+            {f.kind === "log" && (f.logType || "rot") === "mossy" && (
+              <g transform={`scale(${f.dir || 1} 1)`}>
+                {/* SOUND timber, and that is the whole difference. No rot
+                    hole in the top face, so nothing goes in through the
+                    top; what the hedgehog works is the gap UNDER the near
+                    edge, where the leaf litter piles and the beetles are.
+                    Same 168px body as the rotten one so every clearance
+                    number in the world keeps one answer for "how wide is a
+                    log", and both ends closed with ring faces because this
+                    one has not broken open. */}
+                <rect x="-84" y="-23" width="168" height="33" rx="16.5" fill="#4a3520" />
+                <rect x="-84" y="-23" width="168" height="14" rx="7" fill="#66492c" />
+                {/* the moss cap: this log has been down long enough to grow
+                    a back, which is what tells it apart at a glance */}
+                <path d="M -78 -21 C -40 -27 40 -27 78 -21 C 40 -15 -40 -15 -78 -21 Z"
+                  fill="#4e9c5f" opacity=".55" />
+                <path d="M -66 -24 C -40 -28 -10 -28 8 -25" stroke="#63b877" strokeWidth="2.4"
+                  fill="none" strokeLinecap="round" opacity=".5" />
+                <path d="M -70 0 C -30 5 30 5 70 0" stroke="#2a1c10" strokeWidth="1.7"
+                  fill="none" strokeLinecap="round" opacity=".45" />
+                <path d="M -62 6 C -24 10 24 10 62 6" stroke="#2a1c10" strokeWidth="1.3"
+                  fill="none" strokeLinecap="round" opacity=".35" />
+                {/* both ends still ringed — nothing has snapped off it */}
+                <ellipse cx="-84" cy="-6.5" rx="6.4" ry="16.5" fill="#6b4a2a" />
+                <ellipse cx="-84" cy="-6.5" rx="4" ry="10.6" fill="#402c19" opacity=".7" />
+                <ellipse cx="84" cy="-6.5" rx="6.4" ry="16.5" fill="#6b4a2a" />
+                <ellipse cx="84" cy="-6.5" rx="4" ry="10.6" fill="#402c19" opacity=".7" />
+                <ellipse cx="84" cy="-6.5" rx="1.8" ry="4.8" fill="#6b4a2a" opacity=".6" />
+                {/* leaf litter drifted against the near edge — the gap he
+                    puts his head into, and a sign of where it is */}
+                <path d="M -52 9 C -44 5 -34 5 -27 9 M -14 10 C -6 6 4 6 11 10 M 26 9 C 34 5 44 5 51 9"
+                  stroke="#6d5030" strokeWidth="3.2" fill="none" strokeLinecap="round" opacity=".8" />
+              </g>
+            )}
+            {f.kind === "log" && (f.logType || "rot") === "rot" && (
               <g transform={`scale(${f.dir || 1} 1)`}>
                 {/* A big fallen trunk, mossed on the weather side and rotten
                     through the middle. The hole in the top face is the point
@@ -1204,6 +1284,47 @@ function ForageCanopyLayer({ bounds, sites, worldRef }) {
   if (!w || !h) return null;
   return (
     <>
+      {/* THE OVER-LAYER, and the reason three animations stopped faking
+          their own occlusion. A log has to be UNDER the animal working it
+          (he is standing on it, or in front of it) and OVER one part of him
+          at the same moment — the rim of the hole his head goes down, or
+          the near edge he pushes his nose beneath. One zIndex cannot do
+          both, which is exactly why the hedgehog's pose used to paint an
+          entire log of its own around him.
+          So the log body stays at 2, under him, and the ONE piece that has
+          to cut him is drawn again here at 12. Same anchor and same
+          transform as ForageLayer, so it lands on its own log by
+          construction rather than by a matching pair of magic numbers. */}
+      {sites.map((f, i) => (f.kind !== "log" ? null : (
+        <div key={"log" + i}
+          style={{ position: "absolute", left: f.x * w, top: f.y * h, zIndex: 12,
+            pointerEvents: "none", transform: `translate(-50%,-100%) scale(${f.s})`,
+            transformOrigin: "50% 100%" }}>
+          <svg width="96" height="104" viewBox="-48 -88 96 104" style={{ display: "block", overflow: "visible" }}>
+            <g transform={`scale(${f.dir || 1} 1)`}>
+              {(f.logType || "rot") === "rot" ? (
+                /* the near rim of the rot hole: he goes down through it and
+                   this is the edge that takes his head off */
+                <path d="M -6 -15.5 C -4.6 -10.6 1.2 -8 7 -8 C 12.8 -8 18.6 -10.6 20 -15.5
+                         C 18.6 -12.1 12.8 -10 7 -10 C 1.2 -10 -4.6 -12.1 -6 -15.5 Z"
+                  fill="#6b4a2a" />
+              ) : (
+                /* the near edge of sound timber, with the litter banked
+                   against it: he pushes his head under here and it is the
+                   log's own front face that hides it */
+                <>
+                  <path d="M -84 -6.5 C -84 2 -80 8.5 -70 9.6 C -30 12.6 30 12.6 70 9.6
+                           C 80 8.5 84 2 84 -6.5 C 84 3.4 80 8 70 6.4 C 30 3.4 -30 3.4 -70 6.4
+                           C -80 8 -84 3.4 -84 -6.5 Z" fill="#3d2b19" />
+                  <path d="M -52 9 C -44 5.4 -34 5.4 -27 9 M -14 10 C -6 6.4 4 6.4 11 10
+                           M 26 9 C 34 5.4 44 5.4 51 9"
+                    stroke="#6d5030" strokeWidth="3" fill="none" strokeLinecap="round" opacity=".9" />
+                </>
+              )}
+            </g>
+          </svg>
+        </div>
+      )))}
       {sites.map((f, i) => (f.kind !== "nut" ? null : (
         <div key={i} className="forage-canopy" data-shake=""
           ref={(el) => { if (el) refs.current.set(i, el); else refs.current.delete(i); }}
@@ -1994,19 +2115,25 @@ function ForestScene() {
       ferns.push({ x, y, s, rot: rand(-8, 8), delay: (rand(0, 5)).toFixed(2), dur: (5 + rand(0, 3)).toFixed(2) });
     }
 
+    // Ground the scenery is NOT allowed to grow on, in the background's own
+    // viewBox. The tall tufts read as reeds, and three of them stood on and
+    // above the spot the west-high tree moved into — a tree growing out of a
+    // clump of rushes. Held here rather than by deleting three generated
+    // items, because the generator is seeded: change the count and every
+    // tuft after it moves.
+    const keepOut = (x, y) => BG_KEEPOUT.some(
+      (k) => x > k.x0 && x < k.x1 && y > k.y0 && y < k.y1);
     const grass = [];
     for (let i = 0; i < 8; i++) {
-      grass.push({
-        x: rand(60, 1140), y: rand(400, 760), s: rand(0.7, 1.25),
-        rot: rand(-6, 6), delay: rand(0, 5).toFixed(2), dur: (4 + rand(0, 2.5)).toFixed(2),
-      });
+      const gx = rand(60, 1140), gy = rand(400, 760), gs = rand(0.7, 1.25);
+      const gr = rand(-6, 6), gd = rand(0, 5).toFixed(2), gu = (4 + rand(0, 2.5)).toFixed(2);
+      if (!keepOut(gx, gy)) grass.push({ x: gx, y: gy, s: gs, rot: gr, delay: gd, dur: gu });
     }
     // extra tufts for the once-empty upper clearings (kept left of the lake)
     for (let i = 0; i < 6; i++) {
-      grass.push({
-        x: rand(40, 560), y: rand(110, 380), s: rand(0.6, 1.05),
-        rot: rand(-6, 6), delay: rand(0, 5).toFixed(2), dur: (4 + rand(0, 2.5)).toFixed(2),
-      });
+      const gx = rand(40, 560), gy = rand(110, 380), gs = rand(0.6, 1.05);
+      const gr = rand(-6, 6), gd = rand(0, 5).toFixed(2), gu = (4 + rand(0, 2.5)).toFixed(2);
+      if (!keepOut(gx, gy)) grass.push({ x: gx, y: gy, s: gs, rot: gr, delay: gd, dur: gu });
     }
 
     const clovers = [];
@@ -2220,31 +2347,17 @@ function ForestScene() {
           ))}
         </g>
 
-        {/* fallen log + mushrooms */}
-        <g transform="translate(190 620) rotate(-11)" filter="url(#sai-bg-soft)">
-          <rect x="-150" y="-26" width="300" height="52" rx="26" fill="url(#sai-bg-logGrad)" />
-          <g filter="url(#sai-bg-rough)" opacity="0.5">
-            <rect x="-150" y="-28" width="300" height="18" rx="9" fill="#4e9c5f" />
-          </g>
-          <ellipse cx="150" cy="0" rx="15" ry="26" fill="#6b4a2a" />
-          <ellipse cx="150" cy="0" rx="10" ry="18" fill="#402c19" opacity="0.7" />
-          <ellipse cx="150" cy="0" rx="5" ry="9" fill="#6b4a2a" opacity="0.6" />
-          <path d="M-140 -6 Q 0 -2 140 -8" stroke="#2a1c10" strokeWidth="2" fill="none" opacity="0.5" />
-          <path d="M-140 8 Q 0 12 130 6" stroke="#2a1c10" strokeWidth="2" fill="none" opacity="0.4" />
-        </g>
+        {/* The two fallen logs that used to lie here are gone from the
+            background — they are FORAGE SITES now, drawn in ForageLayer in
+            stage fractions like every other object an animal can touch.
+            Scenery in this viewBox slides across the map as the window
+            changes shape, which is fine for a mushroom and impossible for
+            something a hedgehog has to walk to. The mushrooms stay: nothing
+            interacts with them. */}
         <g transform="translate(120 690) scale(0.9)"><SaiBgMushroom /></g>
         <g transform="translate(280 700) scale(0.7)"><SaiBgMushroom cap="url(#sai-bg-capGrad)" /></g>
 
-        {/* upper clearing: a second smaller mossy log + mushrooms */}
-        <g transform="translate(330 195) rotate(7) scale(0.62)" filter="url(#sai-bg-soft)">
-          <rect x="-150" y="-26" width="300" height="52" rx="26" fill="url(#sai-bg-logGrad)" />
-          <g filter="url(#sai-bg-rough)" opacity="0.5">
-            <rect x="-150" y="-28" width="300" height="18" rx="9" fill="#4e9c5f" />
-          </g>
-          <ellipse cx="150" cy="0" rx="15" ry="26" fill="#6b4a2a" />
-          <ellipse cx="150" cy="0" rx="10" ry="18" fill="#402c19" opacity="0.7" />
-          <path d="M-140 -6 Q 0 -2 140 -8" stroke="#2a1c10" strokeWidth="2" fill="none" opacity="0.5" />
-        </g>
+        {/* ...and the same for the upper clearing's log. */}
         <g transform="translate(90 150) scale(0.8)"><SaiBgMushroom /></g>
         <g transform="translate(490 300) scale(0.65)"><SaiBgMushroom cap="url(#sai-bg-capGrad)" /></g>
 
@@ -2965,6 +3078,13 @@ WORLDS.forest.caches = CACHE_SPOTS;
 // feDisplacementMap has scale="40". Displacement is scale * (C - 0.5) with
 // C in 0..1, so the painted edge can bulge up to 20 viewBox units past the
 // ellipse written below. EARTH_FUZZ is that bound, not an estimate.
+// Where the background may not grow anything. In its OWN viewBox, because
+// that is where the scenery is placed; the tree that cleared these is held
+// in stage fractions, so the box is drawn generously rather than derived —
+// the two coordinate systems only line up at one window shape.
+const BG_KEEPOUT = [
+  { x0: 120, y0: 190, x1: 290, y1: 330 },   // the west-high tree's new ground
+];
 const BG_VB = { w: 1200, h: 800 };
 const EARTH_FUZZ = 20;
 const BARE_EARTH = [

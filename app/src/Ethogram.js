@@ -3689,9 +3689,51 @@ defineEthogram("beaver", {
  * timber with his own drawn wood on top of the drawn wood underneath.
  * The offset rides in the goal so the engine still claims the real site.
  */
-function hogAim(a, c, kind, dx, dy) {
-  const f = nearestSite(a, c, kind);
-  return f ? { x: f.px + dx, y: f.py + dy, site: f } : null;
+function hogAim(a, c, kind, dx, dy, want) {
+  // its own scan rather than nearestSite(), because a log now has a TYPE
+  // and the two variants below must not pick each other's: a hedgehog
+  // diving head-first into sound timber has nowhere to go.
+  let f = null, bd = Infinity;
+  for (const q of c.world.forage || []) {
+    if (q.kind !== kind || (q.userId && q.userId !== a.id)) continue;
+    if (want && (q.logType || "rot") !== want) continue;
+    const d = Math.hypot(q.px - a.x, q.py - a.y);
+    if (d < bd) { bd = d; f = q; }
+  }
+  if (!f) return null;
+  // SCALED by the site's own `s` and MIRRORED by its `dir`. It used to be
+  // neither: a flat offset in stage px, applied the same way to a site drawn
+  // at 1.00 facing right and one drawn at 0.92 facing left. The first log
+  // lined up to half a pixel and the second was 13px out along its own axis,
+  // which is what you get for writing a number that only holds for one site
+  // and then adding a second. The raccoon's own log picker has always done
+  // this; the hedgehog's never did.
+  const d = f.dir || 1, sc = f.s || 1;
+  return { x: f.px + dx * sc * d, y: f.py + dy * sc, site: f };
+}
+
+/**
+ * WHERE HIS HEAD IS, in stage px from his own anchor, when he is down a
+ * hole. Read off the two drawings that decide it and not tuned by eye:
+ * `.lp-diver` puts his head at pose (68, 68); HedgehogDraw's wrapper is
+ * `translate(60 106) scale(0.95) translate(-60 -106)`, so that is svg
+ * (67.6, 69.9); and Critter draws the 120-unit box at r * 2.7, which at his
+ * radius is 0.416 stage px per svg unit. (67.6-60, 69.9-60) * 0.416.
+ */
+const HOG_DIVE_DX = 3.2, HOG_DIVE_DY = 4.1;
+
+/** both log bouts run the same clock: get in, come out with something */
+function driveHogLog(a, c) {
+  a.vx = 0; a.vy = 0;
+  if (a.state === "logdive" || a.state === "logunder") {
+    if (c.now < a.stateUntil) return;
+    a._carry = "grub";                 // he backs out with it in his jaws
+    a.state = "logchew"; a.stateUntil = c.now + c.rand(2600, 3600);
+    return;
+  }
+  if (c.now < a.stateUntil) return;
+  a._faceDir = 0;
+  endEvent(a, c, { reroll: true, quiet: 1200, stop: true });
 }
 
 /**
@@ -3810,33 +3852,54 @@ defineEthogram("hedgehog", {
     {
       id: "logs", domain: "land", trigger: "seek",
       every: [80000, 130000], chance: 0.45, miss: 14000, cool: 30000,
-      states: ["logdive", "logchew"],
-      goto: {
-        state: "hhtolog", within: 13, giveUp: 24000, none: 10000, lost: 10000,
-        urgency: 0.30,     // a longer walk, and nothing at the end of it is running away
-        // 25px NORTH of the marker. That is not a stylistic offset: it is
-        // what lands the top face of the log he carries in his own pose on
-        // the top face of the log drawn at the site, so the two read as one
-        // piece of wood. See the note in the pose art.
-        pick: (a, c) => hogAim(a, c, "log", 0, -25),
-      },
-      begin(a, c) {
-        a.vx = 0; a.vy = 0;
-        a._faceDir = 1;
-        a.state = "logdive"; a.stateUntil = c.now + c.rand(4400, 6200);
-      },
-      drive(a, c, S) {
-        a.vx = 0; a.vy = 0;
-        if (a.state === "logdive") {
-          if (c.now < a.stateUntil) return;
-          a._carry = "grub";                 // he backs out with it in his jaws
-          a.state = "logchew"; a.stateUntil = c.now + c.rand(2600, 3600);
-          return;
-        }
-        if (c.now < a.stateUntil) return;
-        a._faceDir = 0;
-        endEvent(a, c, { reroll: true, quiet: 1200, stop: true });
-      },
+      // TWO WAYS INTO DEAD WOOD, because there are two kinds of it. He no
+      // longer brings his own log to either: the world's log is the log, and
+      // the piece of it that has to cover him is drawn over him by
+      // ForageCanopyLayer. See the note on `logType` in FORAGE_SITES.
+      variants: [
+        {
+          // ROTTEN: a hole through the top face, and he goes down it.
+          id: "logdive", w: 1, states: ["logdive", "logchew"],
+          goto: {
+            state: "hhtolog", within: 13, giveUp: 24000, none: 10000, lost: 10000,
+            urgency: 0.30,   // a longer walk, and nothing at the end is running away
+            // Stand so HIS head lands in the site's OWN hole. The hole is
+            // drawn at local (7, -15.5); his head goes down at pose (68,68),
+            // which the 0.95 wrapper and the r*2.7/120 sprite scale put
+            // 3.2px right and 4.1px below his own anchor. Both halves of
+            // that are read off the two drawings rather than tuned by eye,
+            // so redrawing either moves this with it.
+            pick: (a, c) => hogAim(a, c, "log", 7 - HOG_DIVE_DX, -15.5 - HOG_DIVE_DY, "rot"),
+          },
+          begin(a, c) {
+            a.vx = 0; a.vy = 0; a._faceDir = 1;
+            a.state = "logdive"; a.stateUntil = c.now + c.rand(4400, 6200);
+          },
+          drive: driveHogLog,
+        },
+        {
+          // SOUND: no way in through the top, so he works the gap UNDER the
+          // near edge, where the litter banks up and the beetles are. The
+          // log's own front face is what hides his head.
+          // `logchew` is declared by the dive variant alone. Both bouts end
+          // in it and both are driven by driveHogLog, but a state may only
+          // be claimed once — the engine throws otherwise, which is how this
+          // was caught rather than shipped.
+          id: "logunder", w: 1, states: ["logunder"],
+          goto: {
+            state: "hhtoedge", within: 13, giveUp: 24000, none: 10000, lost: 10000,
+            urgency: 0.30,
+            // a third of the way along the near edge, and low enough that
+            // his muzzle is under the lip drawn at local y -6.5..+12
+            pick: (a, c) => hogAim(a, c, "log", -26, 9, "mossy"),
+          },
+          begin(a, c) {
+            a.vx = 0; a.vy = 0; a._faceDir = 1;
+            a.state = "logunder"; a.stateUntil = c.now + c.rand(4400, 6200);
+          },
+          drive: driveHogLog,
+        },
+      ],
     },
     {
       id: "curl", domain: "land", trigger: "approach",
