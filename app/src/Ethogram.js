@@ -3903,9 +3903,17 @@ defineEthogram("hedgehog", {
           // the cast-about is claimed here and shared with the bore below
           states: ["hhsnuff", "rootdig"],
           goto: { state: "hhtoroot", ...HOG_TOROOT,
-            // west of the root and a touch below it, so he ends the walk
-            // already on the side he digs from and facing the right way
-            pick: (a, c) => hogAim(a, c, "root", -34, 4) },
+            // HIS SNOUT INTO THE WORLD'S OWN GAP. ForageLayer paints two dark
+            // openings under the root; the western one is local x -32..-12,
+            // y -6..+7, so its middle is local (-22, 0). ForageLayer maps a
+            // local y to py + (y - 16) * s, so that is (px - 22*s*dir,
+            // py - 16*s), and the offsets above put his nose there rather
+            // than his anchor.
+            // local y +6 and not 0: the gap is drawn -6..+7, and putting his
+            // snout at its MIDDLE left only six pixels of him below the wood
+            // — a hedgehog buried in a root rather than digging under one.
+            // At +6 his rump clears the lower lip by half his own body.
+            pick: (a, c) => hogAim(a, c, "root", -22 - HOG_DIG_DX, 6 - 16 - HOG_DIG_DY) },
           begin(a, c) { hogCast(a, c, "rootdig"); },
           drive: driveHogRoot,
         },
@@ -3917,10 +3925,12 @@ defineEthogram("hedgehog", {
           id: "hogbore", w: 1,
           states: ["rootbore"],
           goto: { state: "hhtobore", ...HOG_TOROOT,
-            // a body length in FRONT of the marker — nearer the camera —
-            // so the root is between him and the rest of the map and his
-            // own drawn root lands over the site's, not beside it
-            pick: (a, c) => hogAim(a, c, "root", -2, 8) },
+            // ...and the EASTERN opening, local x 18..40, y -12..+3, middle
+            // (29, -5) -> (px + 29*s*dir, py - 21*s). Two variants, two
+            // holes: they are drawn in different places, so the pair never
+            // works the same spot and the root reads as having more than one
+            // way under it.
+            pick: (a, c) => hogAim(a, c, "root", 24 - HOG_BORE_DX, -21 - HOG_BORE_DY) },
           begin(a, c) { hogCast(a, c, "rootbore"); },
           drive: driveHogRoot,
         },
@@ -4160,6 +4170,18 @@ const OWL_DOWN_MS = 1250;
  */
 const OWL_SPRITE_PX = 2.7;
 const ROOST_FOOT = (104.12 - 60) / 120;   // clamped toes below the sprite centre
+
+/**
+ * WHERE HIS SNOUT IS at a root, in stage px from his own anchor, by the same
+ * arithmetic as HOG_DIVE_*: rootdig's nose sits at pose (79, 94), the wrapper
+ * is translate(60 106) scale(0.95) translate(-60 -106) so that is svg
+ * (78.05, 94.6), and Critter draws the 120-unit box at r * 2.7 -> 0.421 stage
+ * px per unit. rootbore is the other view: his head is already inside, at the
+ * old socket's pose (58, 62) -> svg (58.1, 64.2), which is all but his own
+ * anchor.
+ */
+const HOG_DIG_DX = 7.6, HOG_DIG_DY = 14.6;      // rootdig, snout
+const HOG_BORE_DX = -0.8, HOG_BORE_DY = 1.8;    // rootbore, head
 
 /** How far out he glides when he leaves the nest. See owlLanding(). */
 const OWL_GLIDE_OUT = 86;

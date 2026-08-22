@@ -901,7 +901,13 @@ const FORAGE_SITES = [
   // 1008x700, 112 vs 81 at 900x620, 182 vs 131 at 1500x940).
   { x: .210, y: .950, s: 0.80, kind: "log", logType: "mossy", dir: -1 },
   { x: .185, y: .690, s: 1.00, kind: "root", dir: -1 },
-  { x: .170, y: .150, s: 0.90, kind: "root", dir: -1 },
+  // Out of the spruce. At (.170,.150) this root was drawn straight through
+  // the west-high conifer's crown and read as a log lying behind it — the
+  // one arch on the map you could not tell from a fallen trunk, in the one
+  // place a trunk had no business being. Moved right and up onto the open
+  // ground above the north berry arc: 171px of clearance, the roomiest spot
+  // in that corner at all nine stage shapes.
+  { x: .385, y: .070, s: 0.90, kind: "root", dir: -1 },
   { x: .775, y: .700, s: 1.05, kind: "root", dir:  1 },
 ];
 const FORAGE_REACH = 26;   // how close counts as "at" a site
@@ -924,20 +930,30 @@ const FORAGE_REACH = 26;   // how close counts as "at" a site
 // trunks and forage at 2, well under the animals at 10. Nothing walks behind
 // a fern, and nothing has to.
 const PLANTS = [
-  { x: .050, y: .050, s: 1.10, kind: "fern" },
-  { x: .050, y: .300, s: 1.25, kind: "fern" },
-  { x: .050, y: .520, s: 1.05, kind: "reed" },
-  { x: .050, y: .690, s: 1.20, kind: "fern" },
-  { x: .080, y: .960, s: 1.00, kind: "reed" },
-  { x: .150, y: .480, s: 1.15, kind: "fern" },
-  { x: .320, y: .630, s: 1.00, kind: "reed" },
-  { x: .510, y: .560, s: 1.10, kind: "fern" },
-  { x: .590, y: .520, s: 0.95, kind: "reed" },
-  { x: .800, y: .050, s: 1.05, kind: "reed" },
-  { x: .890, y: .050, s: 1.15, kind: "fern" },
-  { x: .950, y: .150, s: 1.00, kind: "reed" },
-  { x: .850, y: .940, s: 1.20, kind: "fern" },
-  { x: .950, y: .960, s: 1.05, kind: "reed" },
+  // ON THE LAKE, and nowhere else. Scattered across the map they were
+  // fourteen small green shapes competing with fourteen animals for the
+  // eye; gathered onto one shoreline they are a habitat, and a fern or a
+  // rush is a thing that grows where the ground is wet anyway.
+  //
+  // Swept round the shore rather than placed: each is the first radius
+  // outward from the waterline, at its own angle, that clears every trunk,
+  // every site's drawn art, the goose's sward and the screen edges at nine
+  // stage shapes — and stays inside rho 1.62, so it still reads as
+  // lakeside rather than as something standing in a field near a lake. The
+  // TOP and BOTTOM arcs are sampled twice as densely as the flanks. The
+  // west shore returns nothing at all, correctly: the clearing's own sites
+  // own that ground.
+  { x: .641, y: .056, s: 1.05, kind: "reed" },   // top shore, -107deg
+  { x: .746, y: .044, s: 1.20, kind: "reed" },   // -81
+  { x: .792, y: .070, s: 1.00, kind: "fern" },   // -69
+  { x: .832, y: .102, s: 1.15, kind: "reed" },   // -56
+  { x: .875, y: .128, s: 1.05, kind: "fern" },   // -43
+  { x: .924, y: .157, s: 1.10, kind: "fern" },   // east flank, -30
+  { x: .949, y: .378, s: 1.00, kind: "reed" },   // 22
+  { x: .861, y: .469, s: 1.15, kind: "reed" },   // bottom shore, 51
+  { x: .599, y: .561, s: 1.00, kind: "fern" },   // 111
+  { x: .585, y: .496, s: 1.20, kind: "reed" },   // 120
+  { x: .545, y: .486, s: 1.10, kind: "fern" },   // 129
 ];
 
 function PlantLayer({ bounds }) {
@@ -1438,6 +1454,39 @@ function ForageCanopyLayer({ bounds, sites, worldRef }) {
           to cut him is drawn again here at 12. Same anchor and same
           transform as ForageLayer, so it lands on its own log by
           construction rather than by a matching pair of magic numbers. */}
+      {/* THE ROOT'S NEAR HALF, and the second animation to stop bringing its
+          own timber. His two root poses drew a whole surface root apiece —
+          rootdig a pair of tapered slabs down his right, rootbore a
+          three-ellipse mass with a cavity and a two-piece lower lip — and
+          for the same reason the log pose did: the site paints at 2 and he
+          paints at 10, so the root he walked to could never cover his snout.
+          This is the bottom half of the SAME stroke ForageLayer draws, on
+          the same anchor and the same transform, so it lands on its own root
+          by construction. He goes under it; his rump stays out in front of
+          the body at 2. */}
+      {sites.map((f, i) => (f.kind !== "root" ? null : (
+        <div key={"root" + i}
+          style={{ position: "absolute", left: f.x * w, top: f.y * h, zIndex: 12,
+            pointerEvents: "none", transform: `translate(-50%,-100%) scale(${f.s})`,
+            transformOrigin: "50% 100%" }}>
+          <svg width="96" height="104" viewBox="-48 -88 96 104" style={{ display: "block", overflow: "visible" }}>
+            <g transform={`scale(${f.dir || 1} 1)`}>
+              {/* the same centre line, dropped half a stroke and drawn half as
+                  thick: the lower lip of the root and nothing above it. Any
+                  more and the animal vanishes into the wood instead of under
+                  its edge, which is the mistake the mossy log's lip made
+                  first time round. */}
+              <path d="M -54 4 C -40 2 -32 -10 -20 -14 C -8 -18 2 -12 12 -14 C 22 -16 30 -24 42 -22 C 48 -21 52 -16 54 -10"
+                transform="translate(0 6.0)"
+                stroke="#54391f" strokeWidth="5.8" fill="none" strokeLinecap="round" />
+              {/* the litter banked on the near side rides over with it */}
+              <path d="M -50 6 l 7 -5 M -44 7 l 6 -6 M 44 4 l 7 -5 M 50 5 l 5 -6"
+                stroke="#8a6a3a" strokeWidth="2" fill="none" strokeLinecap="round" opacity=".8" />
+            </g>
+          </svg>
+        </div>
+      )))}
+
       {sites.map((f, i) => (f.kind !== "log" ? null : (
         <div key={"log" + i}
           style={{ position: "absolute", left: f.x * w, top: f.y * h, zIndex: 12,
