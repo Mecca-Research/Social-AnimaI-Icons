@@ -2595,12 +2595,31 @@ function openSpot(p, c) {
   return true;
 }
 /** the NEAREST patch of nothing-in-particular, out of a dozen guesses */
+/**
+ * WHERE THE HOLE GOES IF HE STANDS HERE. The pit is not dropped at his feet:
+ * dropPit puts it at (PIT_DX, PIT_DY) * his box, which is about 24px down and
+ * to the right of his anchor — he works a hole in FRONT of himself.
+ *
+ * openSpot was being asked about the wrong point for as long as this has
+ * existed. It validated where the SKUNK stood, so a spot could pass with the
+ * hole itself 24px inside a berry's painted ring, and the arrival slack
+ * (`within: 26`) could add another 26 on top of that. A pit five pixels
+ * inside a bush is one the bush paints over — z-index 2 against the pit's 1 —
+ * so it is a hole he was watched to dig that is gone the moment he steps off
+ * it, which is the exact fault the clearance rule below was written to stop.
+ */
+function pitPoint(p, a) {
+  const box = a.r * boxPx();
+  return { x: p.x + box * PIT_DX, y: p.y + box * PIT_DY };
+}
+
 function openGround(a, c) {
   const b = c.bounds;
   let best = null, bd = Infinity;
   for (let i = 0; i < 14; i++) {
     const p = { x: c.rand(OPEN_EDGE, b.w - OPEN_EDGE), y: c.rand(OPEN_EDGE, b.h - OPEN_EDGE) };
-    if (!openSpot(p, c)) continue;
+    // both: he may not STAND in a bush, and the hole may not LAND in one
+    if (!openSpot(p, c) || !openSpot(pitPoint(p, a), c)) continue;
     const d = Math.hypot(p.x - a.x, p.y - a.y);
     if (d < bd) { bd = d; best = p; }
   }
@@ -2611,7 +2630,7 @@ function nextPit(a, c) {
   for (let i = 0; i < 8; i++) {
     const ang = Math.random() * Math.PI * 2, rad = c.rand(34, 58);
     const p = { x: a.x + Math.cos(ang) * rad, y: a.y + Math.sin(ang) * rad };
-    if (openSpot(p, c)) return p;
+    if (openSpot(p, c) && openSpot(pitPoint(p, a), c)) return p;
   }
   return null;   // hemmed in — one hole here is enough
 }
@@ -2760,8 +2779,13 @@ defineEthogram("skunk", {
         none: 14000, lost: 14000,
         pick: (a, c) => openGround(a, c),
       },
-      begin(a, c) {
+      // `g` is the spot the picker cleared. TAKE IT, rather than digging
+      // wherever the walk happened to stop: `within` is a radius, so the hole
+      // could otherwise land 26px off the ground that was checked for it, and
+      // the pit's own offset has already spent 24 of the margin.
+      begin(a, c, S, g) {
         a.vx = 0; a.vy = 0;
+        if (g) { a.x = g.x; a.y = g.y; }
         a._faceDir = 1;                        // he works the hole in front of him
         a._pitN = Math.round(c.rand(2, 4));    // two to four holes, then he is bored
         a._pitAt = { x: a.x, y: a.y };
