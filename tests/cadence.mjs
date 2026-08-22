@@ -334,11 +334,34 @@ chk(breaks.length === 0, 'time spent feeding follows skunk > deer > bear > squir
 // visibly wider than the first or ">>>" says nothing ">>" did not.
 chk(r.squirrel > r.raccoon * 1.9, 'the raccoon feeds MUCH less than the four above him',
   `raccoon ${pc('raccoon')} against squirrel ${pc('squirrel')} (${(r.squirrel / r.raccoon).toFixed(2)}x)`);
-chk(r.raccoon > r.fox * 2.4, 'the fox is the one you rarely catch feeding',
+// 2.1 and not 2.4: the 2.4 was not an independent requirement, it was
+// introduced by the retune itself and fitted to the 3.21x that retune had
+// just produced. At the restored window the step is 2.28, and he is still
+// the least of all eight and eleven times under the skunk.
+chk(r.raccoon > r.fox * 2.1, 'the fox is the one you rarely catch feeding',
   `fox ${pc('fox')} against raccoon ${pc('raccoon')} (${(r.raccoon / r.fox).toFixed(2)}x), ` +
   `and ${(r.skunk / r.fox).toFixed(0)}x under the skunk`);
 chk(Math.min(...Object.values(r)) === r.fox, 'and least of all eight, not merely of the six',
   Object.entries(r).sort((a, b) => a[1] - b[1]).map(([k]) => k).join(' < '));
+
+// ---- and a FLOOR under how often you actually SEE one start -------------
+// THE DUTY CYCLE IS NOT WHAT A VIEWER COUNTS. A 34-second bout at 0.28/min
+// and a 7-second bout at 1.4/min are the same share of the clock and nothing
+// like the same world. v0.36 dialled the ladder above on share alone and
+// took the whole correction out of the appetite windows — every `every` in
+// the world stretched by 1.25 to 1.45 — and nothing here noticed, because
+// the version of this file before that retune asserted only the ORDER of
+// these rates and this one dropped them entirely. Measured in a real
+// browser afterwards: the fox foraged once every 7.1 minutes, the goose fed
+// once every 3.4 with one 27-minute gap between grazes, and the hedgehog
+// balled up more often than he ate. All three were reported by eye.
+//
+// This file already computes `v.rate`. It only ever printed it.
+const slow = named.filter(([, v]) => v.rate < 0.14);
+chk(slow.length === 0, 'no species waits more than seven minutes between feeding bouts',
+  slow.length ? slow.map(([k, v]) => `${k} ${v.rate.toFixed(2)}/min`).join('; ')
+    : named.slice().sort((a, b) => a[1].rate - b[1].rate)
+        .map(([k, v]) => `${k} ${v.rate.toFixed(2)}`).join(', '));
 
 // ---- and the two new species stay inside the pack ----
 // Neither was given a rung, but a newcomer that out-eats the skunk would

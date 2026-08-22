@@ -2987,7 +2987,13 @@ defineEthogram("fox", {
     // is the whole point of him.
     {
       id: "scrump", domain: "land", trigger: "seek",
-      every: [112000, 170000],
+      // Back to v0.35's window. v0.36 stretched this to [112000,170000] to
+      // hit a share-of-clock target, and `every` is the ONLY dial that sets
+      // how often a bout starts -- which is the one thing a viewer counts
+      // and the one thing no suite asserted. One scrump every 7.1 minutes
+      // measured; this is one every 5.1, and he is still the least of all
+      // eight by a factor of two.
+      every: [78000, 122000],
       // A third of the urges taken. Half would put him level with the deer's
       // graze, and he is meant to be the one you notice feeding least.
       chance: 0.35,
@@ -3074,7 +3080,13 @@ defineEthogram("fox", {
     // minutes, two barks to every scream. `chance` is the dial.
     {
       id: "matecall", domain: "land", trigger: "seek",
-      every: [64000, 104000], chance: 0.60, cool: 26000,
+      // One call every 4.9 minutes measured, which is inside this block's own
+      // design target and still too rare to read as a habit — the complaint
+      // was that he has gone quiet, and at five-minute gaps he has. The
+      // throttle stays on the company test (`hold`, which kills 57% of armed
+      // calls) rather than on the window, which is where this block already
+      // says it belongs. 0.332 calls/min: one every three minutes.
+      every: [52000, 80000], chance: 0.85, cool: 26000,
       // The pause is him stopping and drawing the breath. `hold` drops the
       // whole thing if anything walks up inside it: a fox with company has
       // nothing to advertise, and a scream delivered into a deer's ear reads
@@ -3882,7 +3894,7 @@ defineEthogram("hedgehog", {
     // world's hungriest forager and should stay so.
     {
       id: "roots", domain: "land", trigger: "seek",
-      every: [66000, 106000], chance: 0.55, miss: 11000, cool: 26000,
+      every: [52000, 86000], chance: 0.55, miss: 11000, cool: 26000,
       variants: [
         {
           // UNDER IT — the classic: side on, rump up, snout jammed into
@@ -3925,7 +3937,7 @@ defineEthogram("hedgehog", {
     // the one place in this world where two sprites overlap.
     {
       id: "logs", domain: "land", trigger: "seek",
-      every: [80000, 130000], chance: 0.45, miss: 14000, cool: 30000,
+      every: [58000, 96000], chance: 0.45, miss: 14000, cool: 30000,
       // TWO WAYS INTO DEAD WOOD, because there are two kinds of it. He no
       // longer brings his own log to either: the world's log is the log, and
       // the piece of it that has to cover him is drawn over him by
@@ -3999,7 +4011,16 @@ defineEthogram("hedgehog", {
       // Not 1. A hedgehog that has spent a season next to the same deer
       // stops paying it much attention, and a defence that fires every
       // single time reads as a tripwire rather than as nerve.
-      chance: 0.85,
+      //
+      // ...and 0.60, not 0.85, because MEASURED AGAINST HIS OWN FEEDING it
+      // was winning. 0.749 curls a minute against 0.641 feeding bouts, 11.5%
+      // of his clock rolled in a ball against 8.5% with his nose in food:
+      // the commonest thing he did on screen was stop being a hedgehog. The
+      // curl was never retuned; v0.36 shortened the food side under it. This
+      // rate is linear in `chance` (miss 4000 and cool 6000 are both far
+      // under the 80s mean gap between approach edges, so neither gates it),
+      // so 0.60 is 0.529 curls a minute against 0.829 feeding bouts.
+      chance: 0.60,
       miss: 4000, cool: 6000,
       near: (a, c) => hogThreat(a, c, HOG_ALARM),
       states: ["hogcurl", "hogball", "hoguncurl"],
