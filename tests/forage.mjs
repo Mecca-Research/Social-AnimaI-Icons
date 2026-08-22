@@ -206,8 +206,18 @@ if (await page.evaluate(`!!window.__saiEtho.ETHOGRAM.deer`)) {
   chk(/strip/.test(r.chain), 'bear strips berries', r.chain);
 }
 {
-  const r = await chain('skunk', 'windfall', 120000);
-  chk(r.chain.split('>').length > 2, 'skunk gathers windfall', r.chain);
+  // Retried, the way the raccoon's is, because THE EMPTY-HANDED SNUFF IS A
+  // DESIGNED OUTCOME. He quarters the drip line for 9-13 seconds and each
+  // pass has a 40% chance of turning something up; four or five passes means
+  // roughly one bout in eight ends with nothing, which is the whole point of
+  // the event ("if the surface paid he would not spend his day on windfall").
+  // A fixture that runs one bout and demands a meal fails a correct build
+  // about one run in eight — and it did, reading floorsnuff>wander.
+  let r = await chain('skunk', 'windfall', 120000);
+  for (let k = 0; k < 2 && !/windfalleat/.test(r.chain); k++)
+    r = await chain('skunk', 'windfall', 120000);
+  chk(/floorsnuff/.test(r.chain) && /windfalleat\[/.test(r.chain),
+    'skunk gathers windfall', r.chain);
   // NOT a chain-length check, and the difference is the whole reason this
   // one went red. `scrape` declares exactly ONE state, so the longest chain
   // it can ever produce is wander>clawscrape>wander — and the fixture parks
