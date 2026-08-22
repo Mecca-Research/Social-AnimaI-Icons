@@ -476,8 +476,14 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     a.noEventUntil = performance.now() + 900000;
     for (let k = 0; k < 40 && !a._eth; k++) await new Promise(r => setTimeout(r, 25));
     const S = a._eth; if (!S) return { none: 'the skunk never got an ethogram' };
+    // The budget is a CEILING, not a duration: the loop leaves the moment it
+    // has its three pits, which is most of a minute early on a healthy run.
+    // Raising it costs nothing in the common case and buys out the rare slow
+    // one â€” this read "no pit was dug inside 120s" on a build that digs three
+    // in well under that on two runs either side of it. A check that reports
+    // it never got to ask is not a failure of the thing it is checking.
     const t0 = performance.now();
-    while (performance.now() - t0 < 120000 && (w.pits || []).length < 3) {
+    while (performance.now() - t0 < 300000 && (w.pits || []).length < 3) {
       await new Promise(r => setTimeout(r, 90));
       if (a.state === 'wander') {              // keep the dig due, everything else muzzled
         const t = performance.now();
@@ -754,6 +760,89 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     `${r.cups} cup halves for ${r.pines} conifers`);
 }
 
+// ==================== the beaver's dam ====================
+// A hundred logs, four courses of arch across the lake's west end and a
+// dome of straight crossing courses inside it, and every one of them is
+// LAND. These are geometry checks asked of the world's own land test, so
+// they hold at whatever stage shape the browser happens to give them.
+{
+  const r = await page.evaluate(`(async (w) => {
+    const B = w.bounds;
+    const logs = w.damLogsAt();
+    w.damCount = logs.length;                    // finish the dam for the test
+    // DAM_PLACED is refreshed from world.damCount at the head of a frame, so
+    // the land test does not know about the timber until one has run
+    for (let i = 0; i < 3; i++)
+      await new Promise(r => requestAnimationFrame(() => setTimeout(r, 25)));
+    // every drawn log is land, at its own centre
+    let wetLogs = 0;
+    for (const L of logs) if (w.inWaterAt(L.x, L.y)) wetLogs++;
+    // how much of the lake it takes, and whether any water is walled off
+    const N = 220, idx = (i, j) => j * N + i;
+    const open = new Uint8Array(N * N), seen = new Uint8Array(N * N);
+    let lake = 0, dam = 0;
+    for (let i = 0; i < N; i++) for (let j = 0; j < N; j++) {
+      const x = B.w * i / (N - 1), y = B.h * j / (N - 1);
+      if (w.lakeRhoAt(x, y) >= 1.0) continue;
+      lake++;
+      if (w.onDamAt(x, y)) dam++; else open[idx(i, j)] = 1;
+    }
+    let seed = -1;
+    for (let i = N - 1; i >= 0 && seed < 0; i--) for (let j = 0; j < N; j++)
+      if (open[idx(i, j)]) { seed = idx(i, j); break; }
+    const st = [seed]; seen[seed] = 1; let reached = 1;
+    while (st.length) { const k = st.pop(), i = k % N, j = (k / N) | 0;
+      for (const d of [[1,0],[-1,0],[0,1],[0,-1]]) {
+        const a = i + d[0], c = j + d[1];
+        if (a < 0 || c < 0 || a >= N || c >= N) continue;
+        const m = idx(a, c);
+        if (open[m] && !seen[m]) { seen[m] = 1; reached++; st.push(m); } } }
+    let openTotal = 0; for (let k = 0; k < N * N; k++) if (open[k]) openTotal++;
+    w.damCount = 0;                              // put the world back
+    return { n: logs.length, wetLogs, pct: +(dam / lake * 100).toFixed(1),
+             pockets: openTotal - reached, cells: openTotal + dam };
+  })(window.__saiWorld)`);
+  chk(r.n === 100, 'the beaver stacks a hundred logs', `${r.n} in the plan`);
+  chk(r.wetLogs === 0, 'every placed log is land and not water',
+    `${r.n - r.wetLogs}/${r.n} logs report dry`);
+  chk(r.pct > 15 && r.pct < 25, 'the structure takes about a fifth of the lake',
+    `${r.pct}% of ${r.cells} sampled lake cells`);
+  // A pocket of one or two sample cells is the grid landing in a seam
+  // narrower than the grid, not water: the cells here are 7x4px and the
+  // smallest animal in the world is 44px across.
+  chk(r.pockets <= 4, 'no water is walled off behind it',
+    `${r.pockets} orphan cells of ${r.cells}`);
+}
+
+// THE RACCOON WASHES IN THE WATER TILE AGAINST THE BANK. He used to take the
+// deeper three quarters of his standing band; he now takes the shallow tenth
+// to third of it, which is the tile touching the ground tile. The checks
+// above already prove the POSE stays off the mud at every angle â€” what this
+// one adds is that the shallow end he now aims at is genuinely WATER, since
+// wading to the very lip is only correct if the lip is still wet.
+{
+  const r = await page.evaluate(`(w => {
+    const dry = [], onTimber = [], angles = [];
+    for (let t = Math.PI / 3; t <= Math.PI * 2 / 3 + 1e-9; t += 0.06) {
+      const band = w.douseBandAt(t);
+      if (!band) continue;
+      angles.push(Math.round(t * 180 / Math.PI));
+      // the shallowest tenth in from the lip, which is where he now stands
+      const rho = band[1] - (band[1] - band[0]) * 0.10;
+      const p = w.lakePointAt(t, rho);
+      if (!w.inWaterAt(p.x, p.y)) dry.push(Math.round(t * 180 / Math.PI));
+      if (w.onDamAt(p.x, p.y)) onTimber.push(Math.round(t * 180 / Math.PI));
+    }
+    return { n: angles.length, dry, onTimber, angles: angles.slice(0, 8) };
+  })(window.__saiWorld)`);
+  chk(r.n > 0 && r.dry.length === 0,
+    'the raccoon wades to the lip and the lip is still water',
+    r.dry.length ? `dry at ${r.dry.join(', ')} deg`
+                 : `${r.n} south-shore angles, all wet at the shallow end`);
+  chk(r.onTimber.length === 0, 'and never onto the beaver\'s timber',
+    r.onTimber.length ? `on logs at ${r.onTimber.join(', ')} deg` : `${r.n} angles clear`);
+}
+
 // ==================== the bluff has elevation ====================
 // The brief drew a line across the left margin and said: below it you walk
 // in, above it you leap. These checks ask the terrain for its own answers
@@ -825,8 +914,12 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
 // wandering cannot carry him off the rock mid-test.
 {
   const r = await page.evaluate(`(async (w) => {
-    const B = w.bounds, out = {}, R = w.__rock.breaks, xPm = 40, X = xPm / 1000 * B.w;
-    const lineY = (nm) => { const L = R[nm]; let i = 0;
+    // The riser is met at xPm 40. The CLIFF is met at 70, which is clear of
+    // the cave mouth (x 0..50): at 40 the animal starts inside the room and
+    // the test measures whether he can walk to the back of it, not whether
+    // he can take the face.
+    const B = w.bounds, out = {}, R = w.__rock.breaks;
+    const lineY = (nm, xPm) => { const L = R[nm]; let i = 0;
       while (i < L.length - 2 && L[i + 1][0] < xPm) i++;
       const a = L[i], b = L[i + 1] || L[i];
       const f = b[0] === a[0] ? 0 : (xPm - a[0]) / (b[0] - a[0]);
@@ -834,9 +927,10 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     const frame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 20)));
     const park = (o) => { o.x = -900; o.y = -900; o.state = 'idle';
       o.idleUntil = performance.now() + 9e6; o.noEventUntil = performance.now() + 9e6; };
-    const run = async (nm, lvl, y0, vy, n) => {
+    const run = async (nm, lvl, xPm, y0, vy, n) => {
       const a = w.agents.find(x => x.species === nm);
       if (!a) return null;
+      const X = xPm / 1000 * B.w;
       for (const o of w.agents) if (o !== a) park(o);
       a.state = 'wander'; a.z = 0; a.dragging = false;
       a.x = X; a.y = y0; a._lvl = lvl; a._rockHop = null; a._rockHopEnd = 0;
@@ -850,14 +944,15 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
       const lvlEnd = a._lvl; park(a);
       return { lvl: lvlEnd, seen: [...seen].sort().join('') };
     };
-    const riser = lineY('T1') + 8, cliff = lineY('B1') + 8, plateau = lineY('L1') + 30;
-    out.foxRiser = await run('fox', 0, riser, -70, 10);
-    out.turtleRiser = await run('turtle', 0, riser, -70, 10);
-    out.foxCliff = await run('fox', 1, cliff, -70, 10);        // jumps it
-    out.cougarCliff = await run('cougar', 1, cliff, -70, 10);   // climbs it
-    out.bearCliff = await run('bear', 1, cliff, -70, 10);       // does neither
-    out.owlDown = await run('owl', 2, plateau, 70, 14);
-    out.cougarDown = await run('cougar', 2, plateau, 70, 14);
+    const riser = lineY('T1', 40) + 8, cliff = lineY('B1', 70) + 8,
+          plateau = lineY('L1', 70) + 30;
+    out.foxRiser = await run('fox', 0, 40, riser, -70, 10);
+    out.turtleRiser = await run('turtle', 0, 40, riser, -70, 10);
+    out.foxCliff = await run('fox', 1, 70, cliff, -70, 10);        // jumps it
+    out.cougarCliff = await run('cougar', 1, 70, cliff, -70, 10);  // climbs it
+    out.bearCliff = await run('bear', 1, 70, cliff, -70, 10);      // does neither
+    out.owlDown = await run('owl', 2, 70, plateau, 70, 14);
+    out.cougarDown = await run('cougar', 2, 70, plateau, 70, 14);
     return out;
   })(window.__saiWorld)`);
   chk(r.foxRiser && r.foxRiser.lvl === 1 && r.turtleRiser && r.turtleRiser.lvl === 0,

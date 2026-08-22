@@ -107,11 +107,21 @@ chk(reg.domains.land.share === 0.70 && reg.domains.water.share === 0.30,
 }
 
 // ---- fish event: 30% on a fresh entry into the water ----
+//
+// A RATE MEASURED ON 80 SAMPLES CANNOT BE JUDGED TO BETTER THAN 80 SAMPLES.
+// At p=0.30 one sigma is 4.1 entries, so a window tight enough to catch a
+// real halving of the rate sits about 2.6 sigma out and fails roughly one
+// run in a hundred — which it duly did, reading 15% on a build that measures
+// 29% over 400 entries. Widening the window would have made it accept the
+// regression it exists to catch, so instead it takes a SECOND sample when
+// the first lands outside, and judges the two pooled against a window sized
+// for the pooled n. The common case costs nothing extra, a real 15% fails
+// both halves, and the flake rate goes from 1-in-100 to about 1-in-100,000.
 {
-  const r = await page.evaluate(`(async w => { ${FRAMES}
+  const sample = async (n) => await page.evaluate(`(async w => { ${FRAMES}
     const b=w.agents.find(a=>a.species==='bear');
     let entries=0, bouts=0;
-    for (let i=0;i<80;i++){
+    for (let i=0;i<${n};i++){
       b.state='wander'; b.intent='wander'; b.z=0; b._eth=null; b.vx=0; b.vy=0;
       // Dry, and 210px clear of every trunk. It used to be (.30,.80), which
       // the bottom-left tree added in v0.34 now stands 66px from — inside the
@@ -136,8 +146,20 @@ chk(reg.domains.land.share === 0.70 && reg.domains.water.share === 0.30,
         if (b.state.startsWith('fish')) bouts++; }
       b.state='wander'; }
     return { entries, bouts }; })(window.__saiWorld)`);
-  const rate = r.bouts / r.entries;
-  chk(rate > 0.18 && rate < 0.45, 'fish on entry 30%', `${r.bouts}/${r.entries} entries = ${Math.round(100*rate)}%`);
+
+  let r = await sample(80), pooled = false;
+  let rate = r.bouts / r.entries;
+  if (!(rate > 0.18 && rate < 0.45)) {                   // borderline: buy more n
+    const r2 = await sample(80);
+    r = { entries: r.entries + r2.entries, bouts: r.bouts + r2.bouts };
+    rate = r.bouts / r.entries; pooled = true;
+  }
+  // 3.3 sigma at whichever n we ended up with, around the declared 0.30
+  const sd = Math.sqrt(0.30 * 0.70 / r.entries);
+  chk(Math.abs(rate - 0.30) < 3.3 * sd, 'fish on entry 30%',
+    `${r.bouts}/${r.entries} entries = ${Math.round(100 * rate)}%` +
+    `, against 30% +-${Math.round(330 * sd)} (3.3 sigma at n=${r.entries})` +
+    (pooled ? ' [pooled after a borderline first sample]' : ''));
 }
 
 // ---- the fishing chain still runs end to end ----
