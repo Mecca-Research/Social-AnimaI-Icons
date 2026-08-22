@@ -2595,12 +2595,31 @@ function openSpot(p, c) {
   return true;
 }
 /** the NEAREST patch of nothing-in-particular, out of a dozen guesses */
+/**
+ * WHERE THE HOLE GOES IF HE STANDS HERE. The pit is not dropped at his feet:
+ * dropPit puts it at (PIT_DX, PIT_DY) * his box, which is about 24px down and
+ * to the right of his anchor — he works a hole in FRONT of himself.
+ *
+ * openSpot was being asked about the wrong point for as long as this has
+ * existed. It validated where the SKUNK stood, so a spot could pass with the
+ * hole itself 24px inside a berry's painted ring, and the arrival slack
+ * (`within: 26`) could add another 26 on top of that. A pit five pixels
+ * inside a bush is one the bush paints over — z-index 2 against the pit's 1 —
+ * so it is a hole he was watched to dig that is gone the moment he steps off
+ * it, which is the exact fault the clearance rule below was written to stop.
+ */
+function pitPoint(p, a) {
+  const box = a.r * boxPx();
+  return { x: p.x + box * PIT_DX, y: p.y + box * PIT_DY };
+}
+
 function openGround(a, c) {
   const b = c.bounds;
   let best = null, bd = Infinity;
   for (let i = 0; i < 14; i++) {
     const p = { x: c.rand(OPEN_EDGE, b.w - OPEN_EDGE), y: c.rand(OPEN_EDGE, b.h - OPEN_EDGE) };
-    if (!openSpot(p, c)) continue;
+    // both: he may not STAND in a bush, and the hole may not LAND in one
+    if (!openSpot(p, c) || !openSpot(pitPoint(p, a), c)) continue;
     const d = Math.hypot(p.x - a.x, p.y - a.y);
     if (d < bd) { bd = d; best = p; }
   }
@@ -2611,7 +2630,7 @@ function nextPit(a, c) {
   for (let i = 0; i < 8; i++) {
     const ang = Math.random() * Math.PI * 2, rad = c.rand(34, 58);
     const p = { x: a.x + Math.cos(ang) * rad, y: a.y + Math.sin(ang) * rad };
-    if (openSpot(p, c)) return p;
+    if (openSpot(p, c) && openSpot(pitPoint(p, a), c)) return p;
   }
   return null;   // hemmed in — one hole here is enough
 }
@@ -2760,8 +2779,13 @@ defineEthogram("skunk", {
         none: 14000, lost: 14000,
         pick: (a, c) => openGround(a, c),
       },
-      begin(a, c) {
+      // `g` is the spot the picker cleared. TAKE IT, rather than digging
+      // wherever the walk happened to stop: `within` is a radius, so the hole
+      // could otherwise land 26px off the ground that was checked for it, and
+      // the pit's own offset has already spent 24 of the margin.
+      begin(a, c, S, g) {
         a.vx = 0; a.vy = 0;
+        if (g) { a.x = g.x; a.y = g.y; }
         a._faceDir = 1;                        // he works the hole in front of him
         a._pitN = Math.round(c.rand(2, 4));    // two to four holes, then he is bored
         a._pitAt = { x: a.x, y: a.y };
@@ -3903,9 +3927,17 @@ defineEthogram("hedgehog", {
           // the cast-about is claimed here and shared with the bore below
           states: ["hhsnuff", "rootdig"],
           goto: { state: "hhtoroot", ...HOG_TOROOT,
-            // west of the root and a touch below it, so he ends the walk
-            // already on the side he digs from and facing the right way
-            pick: (a, c) => hogAim(a, c, "root", -34, 4) },
+            // HIS SNOUT INTO THE WORLD'S OWN GAP. ForageLayer paints two dark
+            // openings under the root; the western one is local x -32..-12,
+            // y -6..+7, so its middle is local (-22, 0). ForageLayer maps a
+            // local y to py + (y - 16) * s, so that is (px - 22*s*dir,
+            // py - 16*s), and the offsets above put his nose there rather
+            // than his anchor.
+            // local y +6 and not 0: the gap is drawn -6..+7, and putting his
+            // snout at its MIDDLE left only six pixels of him below the wood
+            // — a hedgehog buried in a root rather than digging under one.
+            // At +6 his rump clears the lower lip by half his own body.
+            pick: (a, c) => hogAim(a, c, "root", -22 - HOG_DIG_DX, 6 - 16 - HOG_DIG_DY) },
           begin(a, c) { hogCast(a, c, "rootdig"); },
           drive: driveHogRoot,
         },
@@ -3917,10 +3949,12 @@ defineEthogram("hedgehog", {
           id: "hogbore", w: 1,
           states: ["rootbore"],
           goto: { state: "hhtobore", ...HOG_TOROOT,
-            // a body length in FRONT of the marker — nearer the camera —
-            // so the root is between him and the rest of the map and his
-            // own drawn root lands over the site's, not beside it
-            pick: (a, c) => hogAim(a, c, "root", -2, 8) },
+            // ...and the EASTERN opening, local x 18..40, y -12..+3, middle
+            // (29, -5) -> (px + 29*s*dir, py - 21*s). Two variants, two
+            // holes: they are drawn in different places, so the pair never
+            // works the same spot and the root reads as having more than one
+            // way under it.
+            pick: (a, c) => hogAim(a, c, "root", 24 - HOG_BORE_DX, -21 - HOG_BORE_DY) },
           begin(a, c) { hogCast(a, c, "rootbore"); },
           drive: driveHogRoot,
         },
@@ -4160,6 +4194,18 @@ const OWL_DOWN_MS = 1250;
  */
 const OWL_SPRITE_PX = 2.7;
 const ROOST_FOOT = (104.12 - 60) / 120;   // clamped toes below the sprite centre
+
+/**
+ * WHERE HIS SNOUT IS at a root, in stage px from his own anchor, by the same
+ * arithmetic as HOG_DIVE_*: rootdig's nose sits at pose (79, 94), the wrapper
+ * is translate(60 106) scale(0.95) translate(-60 -106) so that is svg
+ * (78.05, 94.6), and Critter draws the 120-unit box at r * 2.7 -> 0.421 stage
+ * px per unit. rootbore is the other view: his head is already inside, at the
+ * old socket's pose (58, 62) -> svg (58.1, 64.2), which is all but his own
+ * anchor.
+ */
+const HOG_DIG_DX = 7.6, HOG_DIG_DY = 14.6;      // rootdig, snout
+const HOG_BORE_DX = -0.8, HOG_BORE_DY = 1.8;    // rootbore, head
 
 /** How far out he glides when he leaves the nest. See owlLanding(). */
 const OWL_GLIDE_OUT = 86;

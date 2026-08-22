@@ -901,7 +901,13 @@ const FORAGE_SITES = [
   // 1008x700, 112 vs 81 at 900x620, 182 vs 131 at 1500x940).
   { x: .210, y: .950, s: 0.80, kind: "log", logType: "mossy", dir: -1 },
   { x: .185, y: .690, s: 1.00, kind: "root", dir: -1 },
-  { x: .170, y: .150, s: 0.90, kind: "root", dir: -1 },
+  // Out of the spruce. At (.170,.150) this root was drawn straight through
+  // the west-high conifer's crown and read as a log lying behind it — the
+  // one arch on the map you could not tell from a fallen trunk, in the one
+  // place a trunk had no business being. Moved right and up onto the open
+  // ground above the north berry arc: 171px of clearance, the roomiest spot
+  // in that corner at all nine stage shapes.
+  { x: .385, y: .070, s: 0.90, kind: "root", dir: -1 },
   { x: .775, y: .700, s: 1.05, kind: "root", dir:  1 },
 ];
 const FORAGE_REACH = 26;   // how close counts as "at" a site
@@ -924,20 +930,33 @@ const FORAGE_REACH = 26;   // how close counts as "at" a site
 // trunks and forage at 2, well under the animals at 10. Nothing walks behind
 // a fern, and nothing has to.
 const PLANTS = [
-  { x: .050, y: .050, s: 1.10, kind: "fern" },
-  { x: .050, y: .300, s: 1.25, kind: "fern" },
-  { x: .050, y: .520, s: 1.05, kind: "reed" },
-  { x: .050, y: .690, s: 1.20, kind: "fern" },
-  { x: .080, y: .960, s: 1.00, kind: "reed" },
-  { x: .150, y: .480, s: 1.15, kind: "fern" },
-  { x: .320, y: .630, s: 1.00, kind: "reed" },
-  { x: .510, y: .560, s: 1.10, kind: "fern" },
-  { x: .590, y: .520, s: 0.95, kind: "reed" },
-  { x: .800, y: .050, s: 1.05, kind: "reed" },
-  { x: .890, y: .050, s: 1.15, kind: "fern" },
-  { x: .950, y: .150, s: 1.00, kind: "reed" },
-  { x: .850, y: .940, s: 1.20, kind: "fern" },
-  { x: .950, y: .960, s: 1.05, kind: "reed" },
+  // ON THE LAKE, and nowhere else. Scattered across the map they were
+  // fourteen small green shapes competing with fourteen animals for the
+  // eye; gathered onto one shoreline they are a habitat, and a fern or a
+  // rush is a thing that grows where the ground is wet anyway.
+  //
+  // Swept round the shore rather than placed: each is the first radius
+  // outward from the waterline, at its own angle, that clears every trunk,
+  // every site's drawn art, the goose's sward and the screen edges at nine
+  // stage shapes — and sits between rho 1.14 and 1.80: past the mud liner,
+  // which runs 1.00 to 1.08, so nothing is standing in the water or on the
+  // wet, and still close enough to read as lakeside rather than as something
+  // in a field near a lake. The
+  // TOP and BOTTOM arcs are sampled twice as densely as the flanks. The
+  // west shore returns nothing at all, correctly: the clearing's own sites
+  // own that ground.
+  { x: .630, y: .050, s: 1.05, kind: "reed" },   // top shore, -109deg
+  { x: .768, y: .042, s: 1.20, kind: "reed" },   // -76
+  { x: .798, y: .062, s: 1.00, kind: "fern" },   // -68
+  { x: .825, y: .084, s: 1.15, kind: "reed" },   // -60
+  { x: .860, y: .109, s: 0.95, kind: "fern" },   // -49
+  { x: .891, y: .126, s: 1.10, kind: "reed" },   // -40
+  { x: .929, y: .149, s: 1.05, kind: "fern" },   // east flank, -31
+  { x: .952, y: .397, s: 1.00, kind: "reed" },   // 26
+  { x: .856, y: .483, s: 1.15, kind: "reed" },   // bottom shore, 54
+  { x: .599, y: .555, s: 1.00, kind: "fern" },   // 112
+  { x: .592, y: .507, s: 1.20, kind: "reed" },   // 118
+  { x: .551, y: .500, s: 1.10, kind: "fern" },   // 126
 ];
 
 function PlantLayer({ bounds }) {
@@ -1438,6 +1457,39 @@ function ForageCanopyLayer({ bounds, sites, worldRef }) {
           to cut him is drawn again here at 12. Same anchor and same
           transform as ForageLayer, so it lands on its own log by
           construction rather than by a matching pair of magic numbers. */}
+      {/* THE ROOT'S NEAR HALF, and the second animation to stop bringing its
+          own timber. His two root poses drew a whole surface root apiece —
+          rootdig a pair of tapered slabs down his right, rootbore a
+          three-ellipse mass with a cavity and a two-piece lower lip — and
+          for the same reason the log pose did: the site paints at 2 and he
+          paints at 10, so the root he walked to could never cover his snout.
+          This is the bottom half of the SAME stroke ForageLayer draws, on
+          the same anchor and the same transform, so it lands on its own root
+          by construction. He goes under it; his rump stays out in front of
+          the body at 2. */}
+      {sites.map((f, i) => (f.kind !== "root" ? null : (
+        <div key={"root" + i}
+          style={{ position: "absolute", left: f.x * w, top: f.y * h, zIndex: 12,
+            pointerEvents: "none", transform: `translate(-50%,-100%) scale(${f.s})`,
+            transformOrigin: "50% 100%" }}>
+          <svg width="96" height="104" viewBox="-48 -88 96 104" style={{ display: "block", overflow: "visible" }}>
+            <g transform={`scale(${f.dir || 1} 1)`}>
+              {/* the same centre line, dropped half a stroke and drawn half as
+                  thick: the lower lip of the root and nothing above it. Any
+                  more and the animal vanishes into the wood instead of under
+                  its edge, which is the mistake the mossy log's lip made
+                  first time round. */}
+              <path d="M -54 4 C -40 2 -32 -10 -20 -14 C -8 -18 2 -12 12 -14 C 22 -16 30 -24 42 -22 C 48 -21 52 -16 54 -10"
+                transform="translate(0 6.0)"
+                stroke="#54391f" strokeWidth="5.8" fill="none" strokeLinecap="round" />
+              {/* the litter banked on the near side rides over with it */}
+              <path d="M -50 6 l 7 -5 M -44 7 l 6 -6 M 44 4 l 7 -5 M 50 5 l 5 -6"
+                stroke="#8a6a3a" strokeWidth="2" fill="none" strokeLinecap="round" opacity=".8" />
+            </g>
+          </svg>
+        </div>
+      )))}
+
       {sites.map((f, i) => (f.kind !== "log" ? null : (
         <div key={"log" + i}
           style={{ position: "absolute", left: f.x * w, top: f.y * h, zIndex: 12,
@@ -2089,6 +2141,10 @@ export default function SocialAnimalsRPG() {
       {/* Stage — the active world */}
       <div ref={stageRef} className="relative rounded-2xl border border-emerald-900/60 overflow-hidden min-h-0 shadow-xl shadow-black/40" style={{ background: WORLDS[worldKey].bg }}>
         {worldKey === "forest" && <ForestScene />}
+        {/* the west bluff. Stage-anchored rather than background art,
+            and rendered before PlantLayer so the left-margin ferns come
+            down in front of the stone: see RockLayer. */}
+        {worldKey === "forest" && snapshot.bounds.w > 0 && <RockLayer bounds={snapshot.bounds} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <Lake bounds={snapshot.bounds} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <PlantLayer bounds={snapshot.bounds} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <TreeLayer bounds={snapshot.bounds} part="trunk" />}
@@ -2112,6 +2168,656 @@ export default function SocialAnimalsRPG() {
         {worldKey === "forest" && snapshot.bounds.w > 0 && <ForageCanopyLayer bounds={snapshot.bounds} sites={FORAGE_SITES} worldRef={worldRef} />}
       </div>
     </div>
+  );
+}
+
+/* ---------------- The west bluff ---------------- */
+/**
+ * A GREY ROCK FORMATION DOWN THE LEFT MARGIN, and only the BOTTOM of one.
+ * The mass runs off the left edge and off the top of the stage; what is on
+ * screen is its last two steps — an upper plateau with a tall cliff under
+ * it, and a broad lower shelf standing out in front of that — with a cave
+ * mouth cut into the cliff and a talus of fallen rock spilling out of the
+ * bottom of the frame. Nothing interacts with it and nothing ever will:
+ * animals walk in front of it, at z-index 10 over this layer's 1.
+ *
+ * WHY THIS IS A STAGE LAYER AND NOT BACKGROUND ART, which is a question
+ * this world has now answered three times.
+ *
+ * ForestScene's viewBox is preserveAspectRatio="xMidYMid slice", so what is
+ * drawn in it SLIDES relative to everything held in stage fractions as the
+ * window changes shape. The scenery logs came out of it in v0.37 and the
+ * ferns and reeds in v0.38 for exactly that reason. The tempting argument
+ * for putting rocks back INTO it is real: they are decoration nothing can
+ * touch, and at every aspect wider than the background's own 3:2 that
+ * viewBox's x=0 IS the left edge of the stage — so horizontally they would
+ * be anchored where they need to be for free, and they would pick up the
+ * vignette, the grain and the god-rays without being asked.
+ *
+ * Three things kill it:
+ *   1. VERTICALLY they would still slide. `slice` pins the CENTRE, so a
+ *      background y drifts by up to 9% of the stage height across the
+ *      shapes this world is checked at — a viewBox y of 600 lands at .762
+ *      of the stage at 1008x700 and at .851 at 1600x820. The formation's
+ *      foot has to stay off the west-low oak's root plate, and 9% of the
+ *      height is most of the gap it has to do that in.
+ *   2. Below a 3:2 window that viewBox's x=0 walks OFF the left of the
+ *      stage. The one thing the background was going to give — an edge
+ *      anchor — is the first thing it loses, and it loses it on exactly
+ *      the shapes where the left margin is tightest.
+ *   3. (This one has expired, and is kept because it is the reason the
+ *      choice was easy at the time: four of PLANTS' ferns then stood at
+ *      x .050 and .080, ON this rock, and being stage-anchored meant they
+ *      could be composed with. Every plant has since moved to the lake
+ *      shore. Arguments 1 and 2 are what still decide it.)
+ *
+ * What argument 1 called "for free" is taken by hand instead, at the bottom
+ * of this layer: ForestScene's OWN sai-bg-vig and sai-bg-grain are painted
+ * over the formation, clipped to its silhouette. SVG resolves url(#id)
+ * across the document — the same trick PlantLayer uses for the fern
+ * gradients — so that is literally the background's vignette and the
+ * background's grain, not an imitation of them. The god-rays are the one
+ * thing given up, and giving them up is free: a shaft of light that stops
+ * at a cliff is better than one that shines through it.
+ *
+ * GEOMETRY IS IN PER-MILLE OF THE STAGE — x of the width, y of the height —
+ * so every clearance here is a constant instead of a function of the window.
+ * The right edge never passes 116 (11.6% of the stage width), and it is back
+ * inside 96 by y 600, where the west-low oak's bole starts to matter, and
+ * inside 51 by y 800, where its root plate does. MEASURED gaps between this
+ * layer's painted edge and each named object's painted art, at 1008x700
+ * (stage 992x632), 1500x940 (1484x872) and 1920x1080 (1904x1012):
+ *
+ *                                        992x632   1484x872   1904x1012
+ *   pine  (.168,.315)  bole + root plate    +21px      +51px       +77px
+ *   pine  (.168,.315)  crown                +18px      +50px       +82px
+ *   root  (.170,.150)  art                  +16px      +54px       +87px
+ *   shrub (.225,.455)  art                  +78px     +132px      +178px
+ *   root  (.185,.690)  art                  +28px      +74px      +113px
+ *   oak   (.125,.800)  root plate           +21px      +57px       +88px
+ *   oak   (.125,.800)  buttress             +26px      +62px       +93px
+ *   oak   (.125,.800)  bole                  +5px      +30px       +43px
+ *   log   (.210,.950)  art                  +93px     +176px      +246px
+ *   fern  (.150,.480)  fronds               +11px      +27px       +42px
+ *   lake               west shore          +354px     +529px      +679px
+ *
+ * TWO THINGS SHARE GROUND WITH IT, and both of them are the west-low oak's
+ * CANOPY: its crown (-79 / -75 / -71px) and the two limbs that reach out
+ * from under the crown (-46 / -20 / -3px). Both are painted in FIXED px, so
+ * on a 992-wide stage the crown reaches .036 of the width — clearing it
+ * would cost the entire left margin and there would be no formation left.
+ * The crown paints at z-index 12 and the limbs at 2, both over this rock, so
+ * what the overlap actually looks like is oak boughs hanging in front of a
+ * rock face. That is a picture, not a collision.
+ * The one number that goes NEGATIVE anywhere else is the oak's bole at
+ * 884x552 (-7px), a window squatter than any this world is checked at: the
+ * bole's top rises as the stage shortens, and at that shape it grazes the
+ * riser's east corner. A tree trunk drawn over the corner of a cliff is,
+ * again, depth rather than damage.
+ *
+ * HOW IT IS DRAWN, after four passes. The first came out as putty, the
+ * second as a barrel, the third as folded paper and the fourth as mud, and
+ * each of those was a different lesson:
+ *   - Rock reads through STRAIGHT EDGES AND CORNERS. Every outline here is
+ *     a polyline; the only curves in the drawing are moss and litter.
+ *   - A terrace is a BLOCK, not a sheet, so each one shows a dark east side
+ *     face where its floor turns the corner and goes down.
+ *   - The break lines CONVERGE as they descend — the plateau's back edge
+ *     falls at 0.86 across the frame and the shelf's lip at 0.28. Parallel
+ *     lines read as a barrel.
+ *   - FEW, BIG SHAPES. This whole formation is about 165px wide on a
+ *     1500px window. Pass four had seepage stains, a chimney, grit and
+ *     lichen in it and every one of them turned to noise at that size. The
+ *     register is the fallen logs in ForageLayer: four flat tones, one
+ *     moss cap, a couple of dark cracks, and a clean silhouette.
+ *
+ * HOW IT IS LIT. The forest is lit from the upper left (the god-rays, the
+ * oak boughs and the spruce whorls all agree) and its left edge is the
+ * darkest part of the map, which is why the rock was asked for here. So:
+ *   - FLOORS are the lightest thing in the drawing and FACES are near the
+ *     darkest. That gap, and not the outline, is what makes a step read as
+ *     a step you could point at.
+ *   - Every floor carries the CAST SHADOW of the wall standing behind it,
+ *     banked along its back edge and fading forward. One dark band on the
+ *     shelf does more for the elevation than every fracture line here.
+ *   - Lips get a warm rim off the same #ffe9ad the god-rays are made of;
+ *     undersides get a hard occlusion shadow immediately below it.
+ *   - One dapple of canopy light lands on the shelf in front of the cave,
+ *     because the eye has to be told where to look and the cave is it.
+ *   - The greys are greened, not neutral. A neutral grey in this palette
+ *     reads as a hole cut in the picture; the only light a shaded face gets
+ *     in a wood is bounced off leaves, so the shadows go toward #2f6b45 and
+ *     the lit floors keep a little of the ochre out of sai-bg-stemGrad.
+ */
+function RockLayer({ bounds }) {
+  const { w, h } = bounds;
+  const g = React.useMemo(() => {
+    // per-mille of the stage -> px. x of the width, y of the height.
+    const X = (u) => +(u * w / 1000).toFixed(1);
+    const Y = (v) => +(v * h / 1000).toFixed(1);
+    const P = (u, v) => X(u) + " " + Y(v);
+    const line = (pts) => {
+      let s = "M " + P(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) s += " L " + P(pts[i][0], pts[i][1]);
+      return s;
+    };
+    const poly = (pts) => line(pts) + " Z";
+    const rev = (pts) => pts.slice().reverse();
+
+    // THE FOUR BREAK LINES, written left to right. A terrace is the band
+    // between two of them: the line above is where its floor starts at the
+    // foot of a wall, the line below is the lip it falls off. They kink,
+    // and they CONVERGE — 0.86 of fall across the frame at the top, 0.28 at
+    // the bottom — which is what stops the stack reading as a barrel.
+    //   L0  back of the upper plateau: the foot of the mass that carries on
+    //       up off the top of the stage
+    //   L1  the cliff top, which is the plateau's lip
+    //   B1  the cliff's foot, which is the back of the lower shelf
+    //   L2  the shelf's lip
+    //   T1  the foot of the lower riser, where stone gives out into talus
+    const L0 = [[-90, 60], [-48, 96], [-14, 128], [16, 148], [50, 172], [86, 188]];
+    const L1 = [[-90, 178], [-48, 206], [-6, 232], [26, 248], [62, 262], [100, 268]];
+    const B1 = [[-90, 352], [-44, 376], [-2, 398], [30, 410], [66, 424], [105, 432]];
+    const L2 = [[-90, 480], [-40, 502], [4, 518], [42, 528], [80, 534], [114, 536]];
+    const T1 = [[-90, 578], [-38, 600], [6, 616], [40, 626], [66, 632], [84, 636]];
+
+    // the right-hand profile, top to bottom. A WEDGE, and that is the whole
+    // trick: 106 wide where it leaves the top of the frame, pinched to 86
+    // at the neck, then stepping out to 100, 105 and 116 as it descends,
+    // and back in to 84 below the shelf. A mass that widens as it comes
+    // down is a mass whose top is somewhere above the window.
+    const EDGE_UP = [[106, -60], [104, 44], [98, 92], [92, 140], [86, 188]];
+    const EDGE_PLAT = [[86, 188], [96, 204], [100, 268]];
+    const EDGE_CLIFF = [[100, 268], [107, 306], [102, 372], [105, 432]];
+    const EDGE_SHELF = [[105, 432], [113, 448], [116, 474], [114, 536]];
+    const EDGE_RISER = [[114, 536], [106, 566], [96, 600], [84, 636]];
+    // ...and the talus, which runs off the BOTTOM of the frame as well. It
+    // narrows the whole way down: past y 700 the west-low oak's root plate
+    // is the neighbour and nothing here may pass x 48.
+    const FOOT = [[84, 636], [74, 686], [58, 740], [44, 800], [36, 872],
+                  [28, 950], [20, 1010], [-90, 1010]];
+
+    const outline = poly([[-90, -60]].concat(EDGE_UP, EDGE_PLAT.slice(1),
+      EDGE_CLIFF.slice(1), EDGE_SHELF.slice(1), EDGE_RISER.slice(1), FOOT.slice(1)));
+    const upper = poly([[-90, -60]].concat(EDGE_UP, rev(L0).slice(1)));
+    const plateau = poly(L0.concat(EDGE_PLAT.slice(1), rev(L1).slice(1)));
+    const cliff = poly(L1.concat(EDGE_CLIFF.slice(1), rev(B1).slice(1)));
+    const shelf = poly(B1.concat(EDGE_SHELF.slice(1), rev(L2).slice(1)));
+    const riser = poly(L2.concat(EDGE_RISER.slice(1), rev(T1).slice(1)));
+    const talus = poly(T1.concat(FOOT.slice(1)));
+
+    // THE EAST SIDE FACES. Where a floor runs out at the right-hand end of
+    // the formation it turns a corner and goes down, and that dark corner
+    // is the difference between a block of stone and a sheet of card laid
+    // against a wall.
+    const plateauSide = poly([[66, 176], [86, 188], [96, 204], [100, 268], [86, 258], [72, 232]]);
+    const shelfSide = poly([[86, 428], [105, 432], [113, 448], [116, 474], [114, 536],
+                            [100, 522], [96, 470]]);
+
+    // FACETS. A rock face is not a gradient, it is a mosaic of planes that
+    // each take the light differently. Clipped to their band, so the outer
+    // edges are the band's own edges and never a straight cut; drawn
+    // oversize on purpose and let the clip do the trimming.
+    const cliffFacets = [
+      { d: poly([[-100, 168], [-58, 196], [-52, 390], [-100, 364]]), f: "#616758" },
+      { d: poly([[-58, 196], [-22, 222], [-16, 406], [-52, 390]]), f: "#44493e" },
+      { d: poly([[-22, 222], [14, 244], [20, 420], [-16, 406]]), f: "#6c7362" },
+      { d: poly([[14, 244], [48, 258], [54, 430], [20, 420]]), f: "#4c5246" },
+      { d: poly([[48, 258], [112, 264], [114, 444], [54, 430]]), f: "#3a3f35" },
+    ];
+    const riserFacets = [
+      { d: poly([[-100, 470], [-48, 498], [-42, 614], [-100, 586]]), f: "#666d5c" },
+      { d: poly([[-48, 498], [4, 518], [10, 624], [-42, 614]]), f: "#3a3f36" },
+      { d: poly([[4, 518], [56, 530], [62, 634], [10, 624]]), f: "#616858" },
+      { d: poly([[56, 530], [124, 530], [120, 606], [62, 634]]), f: "#31362e" },
+    ];
+    const upperFacets = [
+      { d: poly([[-100, -70], [-36, -70], [-28, 108], [-100, 74]]), f: "#3a3f35" },
+      { d: poly([[-36, -70], [26, -70], [32, 160], [-28, 108]]), f: "#292e28" },
+      { d: poly([[26, -70], [118, -70], [110, 46], [100, 116], [86, 190], [32, 160]]), f: "#3c4137" },
+    ];
+    // FLOOR facets: the same idea, gentler. A floor with one gradient on it
+    // is a sheet of paper.
+    const plateauFacets = [
+      { d: poly([[-100, 40], [-46, 84], [-40, 222], [-100, 182]]), f: "#d2d1b4", o: 0.4 },
+      { d: poly([[-4, 132], [26, 154], [32, 258], [0, 242]]), f: "#8e9079", o: 0.4 },
+    ];
+    const shelfFacets = [
+      { d: poly([[-100, 330], [-40, 368], [-34, 512], [-100, 478]]), f: "#c9c8ac", o: 0.38 },
+      { d: poly([[4, 398], [40, 416], [44, 530], [8, 520]]), f: "#888a75", o: 0.38 },
+    ];
+
+    // BLOCKS. Slabs that came off the cliff and are lying on the shelf. A
+    // wedge with a lit top and two darker sides is the smallest complete
+    // statement of "this is stone", and between the ferns and the whole
+    // formation these are the only thing that gives the mass a size.
+    const mkBlock = (x, y, s) => ({
+      top: poly([[x, y], [x + 15 * s, y - 6 * s], [x + 30 * s, y + 2 * s], [x + 14 * s, y + 9 * s]]),
+      west: poly([[x, y], [x + 14 * s, y + 9 * s], [x + 13 * s, y + 26 * s], [x - 1 * s, y + 16 * s]]),
+      east: poly([[x + 14 * s, y + 9 * s], [x + 30 * s, y + 2 * s], [x + 29 * s, y + 19 * s], [x + 13 * s, y + 26 * s]]),
+    });
+    const blocks = [mkBlock(52, 458, 1.25), mkBlock(16, 488, 0.8), mkBlock(-58, 430, 0.95)];
+
+    // THE CAVE. Cut into the cliff and not into the shelf under it, with
+    // its floor a shade BELOW B1 so the mouth sits ON the shelf rather than
+    // hovering over it. Off centre on purpose — tucked into the re-entrant
+    // left of the cliff's nose, where an overhang would actually survive.
+    // Angular like the rest, and taller on the left than the right, so it
+    // is a break in the rock and not a drawn arch.
+    const cave = poly([[-10, 424], [-12, 380], [-4, 336], [12, 312], [34, 306],
+                       [48, 322], [53, 356], [54, 396], [52, 426], [28, 434],
+                       [4, 432]]);
+    // the lintel: the slab that overhangs the mouth. Its lit top edge and
+    // the hard shadow under it are what make a cave entrance rather than a
+    // black shape painted on a wall.
+    const lintelTop = [[-24, 356], [-12, 304], [12, 278], [42, 272], [60, 294], [66, 330], [67, 370]];
+    const lintel = poly(lintelTop.concat([[56, 336], [44, 310], [22, 300], [0, 314], [-16, 340]]));
+
+    // A LOOSE STONE. Angular, not an ellipse: seven points off a ring with a
+    // fixed hash on the radius, so the same stone is the same stone at every
+    // window shape, plus a top facet shifted up-left into the light.
+    const wob = (s, i) => {
+      const t = Math.sin(s * 12.9898 + i * 78.233) * 43758.5453;
+      return 0.74 + 0.32 * (t - Math.floor(t));
+    };
+    const stone = (cx, cy, rx, ry, s, k) => {
+      const pts = [];
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 7) * Math.PI * 2 + s;
+        pts.push([cx + Math.cos(a) * rx * wob(s, i) * k, cy + Math.sin(a) * ry * wob(s, i + 3) * k]);
+      }
+      return poly(pts);
+    };
+    // Boulders in the talus. FEW AND BIG: a dozen pebbles at this scale read
+    // as litter, and the whole point of these is to be the thing that says
+    // how large the cliff behind them is. Nothing passes x 48.
+    const stones = [
+      [-56, 650, 27, 13, 1.1], [-2, 690, 22, 11, 2.3], [34, 668, 15, 7, 0.4],
+      [-70, 736, 23, 11, 1.7], [-14, 772, 26, 13, 2.8], [26, 742, 14, 7, 0.9],
+      [-50, 840, 25, 12, 3.6], [8, 872, 20, 10, 2.1], [-28, 946, 23, 11, 1.4],
+      [22, 930, 14, 7, 0.6],
+      // the two that broke off the shelf's nose and stopped short of the
+      // skirt. They are the only thing here that steps outside the outline,
+      // which is what keeps the east edge from reading as a ruled line.
+      [84, 608, 17, 8, 2.9], [76, 668, 16, 8, 1.3],
+    ].map((s) => ({
+      body: stone(s[0], s[1], s[2], s[3], s[4], 1),
+      lit: stone(s[0] - s[2] * 0.3, s[1] - s[3] * 0.38, s[2], s[3], s[4], 0.56),
+      sx: s[0], sy: s[1], rx: s[2], ry: s[3],
+    }));
+
+    // flat chips of rock lying in the talus. Laid on a jittered grid down
+    // the slope, three tones, and every one of them a straight-edged sliver
+    // — the same read as the courses of a scree cone.
+    const chips = [];
+    const chipTone = ["#6e7565", "#535a4d", "#848b76"];
+    for (let i = 0; i < 34; i++) {
+      const t = i / 33;
+      const yy = 648 + t * 350 + (wob(i * 1.7, 2) - 0.9) * 40;
+      const half = 58 - t * 26;          // the cone narrows as it falls
+      const xx = -86 + wob(i * 2.3, 1) * (half + 86) * 1.6;
+      if (xx > 44 - t * 14) continue;    // nothing near the oak's root plate
+      const rw = (7 + wob(i, 4) * 9) * (1 - t * 0.3);
+      const rh = rw * 0.38;
+      const sk = (wob(i, 5) - 0.9) * 0.9;
+      chips.push({
+        d: poly([[xx - rw, yy + rh * sk], [xx - rw * 0.4, yy - rh], [xx + rw * 0.8, yy - rh * 0.6],
+                 [xx + rw, yy + rh * 0.7], [xx - rw * 0.2, yy + rh]]),
+        f: chipTone[i % 3],
+      });
+    }
+
+    return { outline, upper, plateau, cliff, shelf, riser, talus, cave, lintel, chips,
+             plateauSide, shelfSide,
+             L0: line(L0), L1: line(L1), B1: line(B1), L2: line(L2), T1: line(T1),
+             lintelTop: line(lintelTop),
+             cliffFacets, riserFacets, upperFacets, plateauFacets, shelfFacets,
+             blocks, stones, poly, line, X, Y, P };
+  }, [w, h]);
+
+  if (!w || !h) return null;
+  const { X, Y, P, poly, line } = g;
+  return (
+    <svg width={w} height={h} viewBox={"0 0 " + w + " " + h} aria-hidden="true"
+      style={{ position: "absolute", inset: 0, zIndex: 1, pointerEvents: "none", overflow: "hidden" }}>
+      <defs>
+        {/* FLOORS. They see the sky, so they are the lightest thing here,
+            and they keep a little ochre because the light is warm. */}
+        <linearGradient id="sairock-plateau" x1="0" y1="0" x2="0.3" y2="1">
+          <stop offset="0" stopColor="#c3c2a8" />
+          <stop offset="0.55" stopColor="#a8a78e" />
+          <stop offset="1" stopColor="#84866f" />
+        </linearGradient>
+        <linearGradient id="sairock-shelf" x1="0" y1="0" x2="0.25" y2="1">
+          <stop offset="0" stopColor="#9d9e86" />
+          <stop offset="0.5" stopColor="#b5b49b" />
+          <stop offset="1" stopColor="#7e8171" />
+        </linearGradient>
+        {/* FACES. Green-grey and much darker: in a wood the only light a
+            shaded face gets is bounced off leaves. */}
+        <linearGradient id="sairock-cliff" x1="0" y1="0" x2="0.15" y2="1">
+          <stop offset="0" stopColor="#3f443a" />
+          <stop offset="0.4" stopColor="#5c6255" />
+          <stop offset="1" stopColor="#353a33" />
+        </linearGradient>
+        <linearGradient id="sairock-riser" x1="0" y1="0" x2="0.15" y2="1">
+          <stop offset="0" stopColor="#41463c" />
+          <stop offset="0.45" stopColor="#626859" />
+          <stop offset="1" stopColor="#2f342d" />
+        </linearGradient>
+        <linearGradient id="sairock-upper" x1="0" y1="0" x2="0.3" y2="1">
+          <stop offset="0" stopColor="#2d322c" />
+          <stop offset="0.6" stopColor="#393e35" />
+          <stop offset="1" stopColor="#272c26" />
+        </linearGradient>
+        {/* the talus has to hand the stone over to the forest floor, so it
+            ends on the same browns as sai-bg-earth */}
+        <linearGradient id="sairock-talus" x1="0.3" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#6b6c50" />
+          <stop offset="0.4" stopColor="#585037" />
+          <stop offset="1" stopColor="#3d2c1a" />
+        </linearGradient>
+        {/* THE CAVE INTERIOR. Not a black shape: the threshold still catches
+            a little raking light and it falls away up and back into the
+            hill, so the darkest part of the opening is its top-back corner,
+            under the lintel. */}
+        <radialGradient id="sairock-cave" cx="0.4" cy="0.96" r="1.02">
+          <stop offset="0" stopColor="#6a5f45" />
+          <stop offset="0.14" stopColor="#2c2b22" />
+          <stop offset="0.4" stopColor="#0e100c" />
+          <stop offset="0.7" stopColor="#040705" />
+          <stop offset="1" stopColor="#020403" />
+        </radialGradient>
+        {/* the cast shadow a wall throws along the back of the floor in
+            front of it — the single element that makes a step a step */}
+        <linearGradient id="sairock-castfloor" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stopColor="#080e0a" stopOpacity="0.85" />
+          <stop offset="0.5" stopColor="#080e0a" stopOpacity="0.3" />
+          <stop offset="1" stopColor="#080e0a" stopOpacity="0" />
+        </linearGradient>
+        {/* the warm light off the upper left, the dapple that lands on the
+            shelf in front of the cave, and the green the forest floor throws
+            back up at the bottom of the mass */}
+        <linearGradient id="sairock-warm" x1="0" y1="0" x2="0.8" y2="1">
+          <stop offset="0" stopColor="#ffe9ad" stopOpacity="0.26" />
+          <stop offset="0.5" stopColor="#ffd27a" stopOpacity="0.05" />
+          <stop offset="1" stopColor="#ffd27a" stopOpacity="0" />
+        </linearGradient>
+        <radialGradient id="sairock-dapple" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stopColor="#ffe9ad" stopOpacity="0.55" />
+          <stop offset="0.55" stopColor="#ffd27a" stopOpacity="0.18" />
+          <stop offset="1" stopColor="#ffd27a" stopOpacity="0" />
+        </radialGradient>
+        <linearGradient id="sairock-bounce" x1="0" y1="1" x2="0" y2="0">
+          <stop offset="0" stopColor="#2f6b45" stopOpacity="0.5" />
+          <stop offset="1" stopColor="#2f6b45" stopOpacity="0" />
+        </linearGradient>
+        <filter id="sairock-cast" x="-40%" y="-40%" width="200%" height="200%">
+          <feDropShadow dx={X(11)} dy={Y(9)} stdDeviation={X(10)} floodColor="#04120a" floodOpacity="0.6" />
+        </filter>
+        <filter id="sairock-soft" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation={X(5)} />
+        </filter>
+        <filter id="sairock-hair" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation={X(1.5)} />
+        </filter>
+        <clipPath id="sairock-clipAll"><path d={g.outline} /></clipPath>
+        <clipPath id="sairock-clipUpper"><path d={g.upper} /></clipPath>
+        <clipPath id="sairock-clipCliff"><path d={g.cliff} /></clipPath>
+        <clipPath id="sairock-clipRiser"><path d={g.riser} /></clipPath>
+        <clipPath id="sairock-clipShelf"><path d={g.shelf} /></clipPath>
+        <clipPath id="sairock-clipPlateau"><path d={g.plateau} /></clipPath>
+        <clipPath id="sairock-clipCave"><path d={g.cave} /></clipPath>
+        <clipPath id="sairock-clipTalus"><path d={g.talus} /></clipPath>
+      </defs>
+
+      {/* what the mass throws onto the forest floor: down and to the right
+          of it, because the light is up and to the left */}
+      <path d={g.outline} fill="#04120a" opacity="0.5" filter="url(#sairock-cast)" />
+
+      {/* ---- the bands, back to front ---- */}
+      <path d={g.upper} fill="url(#sairock-upper)" />
+      <path d={g.plateau} fill="url(#sairock-plateau)" />
+      <path d={g.cliff} fill="url(#sairock-cliff)" />
+      <path d={g.shelf} fill="url(#sairock-shelf)" />
+      <path d={g.riser} fill="url(#sairock-riser)" />
+      <path d={g.talus} fill="url(#sairock-talus)" />
+
+      {/* the mass above the plateau: furthest back, so darkest, and it loses
+          the warm rim entirely. Faceted anyway — a flat silhouette up here
+          would read as a hole in the canopy. */}
+      <g clipPath="url(#sairock-clipUpper)">
+        {g.upperFacets.map((f, i) => <path key={"uf" + i} d={f.d} fill={f.f} />)}
+        <g stroke="#4a4f43" strokeWidth={X(1.8)} fill="none" opacity="0.65">
+          <path d={line([[-100, 6], [-40, 32], [10, 64], [56, 102]])} />
+          <path d={line([[-100, -40], [-30, -12], [30, 20], [92, 50]])} />
+        </g>
+      </g>
+
+      {/* ---- the upper plateau ---- */}
+      <g clipPath="url(#sairock-clipPlateau)">
+        {g.plateauFacets.map((f, i) => <path key={"pf" + i} d={f.d} fill={f.f} opacity={f.o} />)}
+        {/* the shadow of whatever stands on it out of frame */}
+        <path d={poly([[-100, 30], [-46, 76], [12, 130], [60, 180], [60, 246], [-100, 176]])}
+          fill="url(#sairock-castfloor)" />
+        <path d={g.L0} fill="none" stroke="#0d120c" strokeWidth={X(4)} opacity="0.6" />
+        <path d={line([[-100, 118], [-52, 150], [-14, 176], [6, 186], [16, 178], [40, 198], [68, 212]])}
+          fill="none" stroke="#a5a78e" strokeWidth={X(1.6)} opacity="0.4" />
+        {/* moss banked in the angle at the back, where the run-off goes */}
+        <path d={line([[-100, 66], [-48, 106], [-14, 136], [12, 154], [32, 172]]) +
+                 " C " + P(14, 190) + " " + P(-32, 158) + " " + P(-100, 110) + " Z"}
+          fill="#2f6b45" opacity="0.62" />
+        <path d={line([[-92, 86], [-46, 124], [-10, 152], [18, 170]])}
+          fill="none" stroke="#4e9c5f" strokeWidth={X(2.4)} strokeLinecap="round" opacity="0.35" />
+      </g>
+      {/* the plateau's east corner, turning down out of the light */}
+      <path d={g.plateauSide} fill="#3f443a" />
+
+      {/* ---- the cliff ---- */}
+      <g clipPath="url(#sairock-clipCliff)">
+        {g.cliffFacets.map((f, i) => <path key={"cf" + i} d={f.d} fill={f.f} />)}
+        {/* the occlusion band right under the plateau's overhang */}
+        <path d={poly([[-100, 172], [-48, 200], [-6, 226], [22, 240], [50, 254], [112, 262],
+                       [112, 300], [50, 288], [22, 276], [-6, 262], [-48, 238], [-100, 210]])}
+          fill="#070b06" opacity="0.6" />
+        {/* THE BIG DIAGONAL. One fracture running clean across the face and
+            out of frame at both ends: the cheapest and most convincing way
+            to say this piece of rock is part of a bigger one. */}
+        <path d={line([[-100, 222], [-46, 270], [10, 298], [58, 308], [114, 302]])}
+          fill="none" stroke="#0f130e" strokeWidth={X(3.4)} opacity="0.7" strokeLinejoin="round" />
+        <path d={line([[-100, 216], [-46, 264], [10, 292], [58, 302], [114, 296]])}
+          fill="none" stroke="#bcc0a2" strokeWidth={X(1.5)} opacity="0.3" strokeLinejoin="round" />
+        {/* three columnar joints, and no more: dark cleft, lit west lip */}
+        <g strokeLinecap="butt" fill="none">
+          <g stroke="#0e120d" strokeWidth={X(2.8)} opacity="0.7">
+            <path d={line([[-58, 194], [-54, 296], [-52, 390]])} />
+            <path d={line([[-22, 220], [-19, 316], [-16, 406]])} />
+            <path d={line([[48, 256], [51, 344], [54, 430]])} />
+          </g>
+          <g stroke="#bcc0a2" strokeWidth={X(1.5)} opacity="0.34">
+            <path d={line([[-56, 194], [-52, 296], [-50, 390]])} />
+            <path d={line([[-20, 220], [-17, 316], [-14, 406]])} />
+            <path d={line([[50, 256], [53, 344], [56, 430]])} />
+          </g>
+        </g>
+        {/* the green the shelf below bounces back into its foot */}
+        <rect x="0" y={Y(340)} width={X(130)} height={Y(100)} fill="url(#sairock-bounce)" opacity="0.45" />
+      </g>
+      {/* the lip: hard occlusion under the plateau's overhang, warm rim on
+          top of it. Outside the clip so the rim is not shaved off. */}
+      <path d={g.L1} fill="none" stroke="#080c07" strokeWidth={X(7)} opacity="0.7"
+        strokeLinejoin="round" transform={"translate(0," + Y(4) + ")"} />
+      <path d={g.L1} fill="none" stroke="#f2e8c4" strokeWidth={X(2.4)} opacity="0.62"
+        strokeLinejoin="round" transform={"translate(0," + Y(-1.5) + ")"} />
+
+      {/* ---- the lower shelf ---- */}
+      <g clipPath="url(#sairock-clipShelf)">
+        {g.shelfFacets.map((f, i) => <path key={"sf" + i} d={f.d} fill={f.f} opacity={f.o} />)}
+        {/* THE CLIFF'S SHADOW ON IT — the biggest single reason this reads
+            as two levels and not as a pattern */}
+        <path d={poly([[-100, 340], [-44, 366], [-2, 390], [28, 402], [58, 416], [104, 426],
+                       [108, 518], [-100, 450]])}
+          fill="url(#sairock-castfloor)" />
+        <path d={g.B1} fill="none" stroke="#0b100a" strokeWidth={X(5)} opacity="0.65" />
+        {/* THE DAPPLE. Canopy light landing on the shelf right in front of
+            the mouth, because the eye has to be told where to look. */}
+        <ellipse cx={X(38)} cy={Y(478)} rx={X(58)} ry={Y(42)} fill="url(#sairock-dapple)" />
+        <path d={line([[-100, 424], [-46, 450], [0, 470], [40, 482], [80, 492], [118, 496]])}
+          fill="none" stroke="#989b86" strokeWidth={X(1.6)} opacity="0.4" />
+        {/* moss creeping in from the shaded left and thinning toward the light */}
+        <path d={line([[-100, 356], [-44, 382], [-2, 406], [26, 420]]) +
+                 " C " + P(8, 450) + " " + P(-34, 430) + " " + P(-100, 400) + " Z"}
+          fill="#2f6b45" opacity="0.52" />
+      </g>
+      {/* the shelf's east corner, and its lip */}
+      <path d={g.shelfSide} fill="#3a3f35" />
+      <path d={g.L2} fill="none" stroke="#080c07" strokeWidth={X(6)} opacity="0.68"
+        strokeLinejoin="round" transform={"translate(0," + Y(4) + ")"} />
+      <path d={g.L2} fill="none" stroke="#f2e8c4" strokeWidth={X(2.2)} opacity="0.58"
+        strokeLinejoin="round" transform={"translate(0," + Y(-1.5) + ")"} />
+
+      {/* ---- THE CAVE ---- */}
+      <path d={g.lintel} fill="#6d7363" />
+      <path d={g.lintelTop} fill="none" stroke="#d8d5b6" strokeWidth={X(2.6)} opacity="0.65" strokeLinejoin="round" />
+      <path d={g.cave} fill="#080b08" />
+      <path d={g.cave} fill="url(#sairock-cave)" />
+      <g clipPath="url(#sairock-clipCave)">
+        {/* the roof is the deepest dark in the picture — the part of the
+            opening the lintel keeps every scrap of light off. The floor is
+            the part that gets some. Without both, the mouth is a hole cut
+            in paper. */}
+        <ellipse cx={X(22)} cy={Y(312)} rx={X(48)} ry={Y(44)} fill="#020403" opacity="0.92" filter="url(#sairock-soft)" />
+        <ellipse cx={X(24)} cy={Y(432)} rx={X(36)} ry={Y(15)} fill="#8b8062" opacity="0.5" filter="url(#sairock-soft)" />
+        <ellipse cx={X(14)} cy={Y(425)} rx={X(19)} ry={Y(8)} fill="#a89d82" opacity="0.24" filter="url(#sairock-soft)" />
+        {/* two blocks on the threshold, in silhouette against it */}
+        <path d={poly([[2, 430], [8, 418], [18, 417], [23, 427], [14, 433]])} fill="#080b08" />
+        <path d={poly([[34, 431], [40, 421], [47, 422], [49, 430], [41, 435]])} fill="#080b08" />
+      </g>
+      {/* the hard shadow the lintel throws down its own face */}
+      <path d={line([[-16, 378], [-6, 326], [16, 302], [40, 296], [56, 316], [62, 340], [63, 376]]) +
+               " L " + P(54, 344) + " L " + P(42, 320) + " L " + P(22, 314) +
+               " L " + P(4, 324) + " L " + P(-8, 346) + " Z"}
+        fill="#080b08" opacity="0.65" filter="url(#sairock-hair)" />
+
+      {/* fallen blocks on the shelf */}
+      {g.blocks.map((b, i) => (
+        <g key={"blk" + i}>
+          <path d={b.east} fill="#3c4137" />
+          <path d={b.west} fill="#5d6354" />
+          <path d={b.top} fill="#c5c3a8" />
+          <path d={b.top} fill="url(#sairock-warm)" />
+        </g>
+      ))}
+
+      {/* ---- the lower riser ---- */}
+      <g clipPath="url(#sairock-clipRiser)">
+        {g.riserFacets.map((f, i) => <path key={"rf" + i} d={f.d} fill={f.f} />)}
+        <path d={poly([[-100, 470], [-40, 494], [4, 510], [40, 520], [76, 526], [118, 530],
+                       [118, 560], [76, 560], [40, 552], [4, 542], [-40, 524], [-100, 500]])}
+          fill="#070b06" opacity="0.5" />
+        <g strokeLinecap="butt" fill="none">
+          <g stroke="#0e120d" strokeWidth={X(2.6)} opacity="0.65">
+            <path d={line([[-48, 496], [-42, 614]])} />
+            <path d={line([[4, 516], [10, 624]])} />
+            <path d={line([[56, 528], [62, 634]])} />
+          </g>
+          <g stroke="#b8bb9c" strokeWidth={X(1.4)} opacity="0.32">
+            <path d={line([[-46, 496], [-40, 614]])} />
+            <path d={line([[6, 516], [12, 624]])} />
+          </g>
+        </g>
+        <rect x="0" y={Y(560)} width={X(130)} height={Y(100)} fill="url(#sairock-bounce)" opacity="0.5" />
+      </g>
+
+      {/* ---- THE TALUS: broken rock and litter, running off the bottom of
+              the frame the way the mass runs off the top of it ---- */}
+      <g clipPath="url(#sairock-clipTalus)">
+        <path d={g.T1} fill="none" stroke="#111510" strokeWidth={X(4)} opacity="0.5" />
+        {/* the rubble itself: flat chips of the same rock, laid in
+            courses down the slope. Cheap, and it is what turns the skirt
+            from shadowed dirt into a heap of broken stone. */}
+        <g opacity="0.85">
+          {g.chips.map((c, i) => <path key={"ch" + i} d={c.d} fill={c.f} />)}
+        </g>
+        <g fill="#2f6b45" opacity="0.34">
+          <ellipse cx={X(-46)} cy={Y(706)} rx={X(46)} ry={Y(26)} />
+          <ellipse cx={X(-24)} cy={Y(890)} rx={X(42)} ry={Y(32)} />
+        </g>
+        <g stroke="#6d5030" strokeWidth={X(2.6)} fill="none" strokeLinecap="round" opacity="0.5">
+          <path d={"M " + P(-64, 682) + " C " + P(-50, 672) + " " + P(-32, 672) + " " + P(-20, 682)} />
+          <path d={"M " + P(-40, 790) + " C " + P(-26, 780) + " " + P(-8, 780) + " " + P(4, 790)} />
+          <path d={"M " + P(-70, 950) + " C " + P(-56, 940) + " " + P(-38, 940) + " " + P(-26, 950)} />
+        </g>
+        <rect x="0" y={Y(640)} width={X(120)} height={Y(400)} fill="url(#sairock-bounce)" opacity="0.4" />
+      </g>
+
+      {/* boulders in the talus: few and big, because a dozen pebbles at this
+          size read as litter and the job of these is to say how large the
+          cliff behind them is */}
+      <g>
+        {g.stones.map((s, i) => (
+          <g key={"sc" + i}>
+            <ellipse cx={X(s.sx + 2)} cy={Y(s.sy + s.ry * 0.62)} rx={X(s.rx * 1.1)} ry={Y(s.ry * 0.6)} fill="#0d2415" opacity="0.5" />
+            <path d={s.body} fill="#4e5447" />
+            <path d={s.lit} fill="#a0a48c" opacity="0.94" />
+          </g>
+        ))}
+      </g>
+
+      {/* grass rooted in the cracks along the lips and at the cliff's
+          foot. The junction between stone and anything else is where a
+          drawing gives itself away, and a few blades cost nothing. */}
+      <g stroke="#3f7c4a" fill="none" strokeLinecap="round" opacity="0.85">
+        <g strokeWidth={X(1.7)}>
+          <path d={line([[92, 268], [90, 252]])} /><path d={line([[95, 268], [97, 250]])} />
+          <path d={line([[98, 269], [103, 254]])} />
+          <path d={line([[104, 537], [102, 519]])} /><path d={line([[107, 537], [109, 520]])} />
+          <path d={line([[110, 538], [115, 524]])} />
+          <path d={line([[74, 534], [72, 518]])} /><path d={line([[77, 534], [79, 519]])} />
+          <path d={line([[16, 522], [14, 508]])} /><path d={line([[19, 522], [21, 507]])} />
+          <path d={line([[-2, 519], [-4, 505]])} />
+        </g>
+        <g strokeWidth={X(1.5)} stroke="#4e9c5f" opacity="0.7">
+          <path d={line([[93, 267], [92, 256]])} />
+          <path d={line([[106, 536], [105, 524]])} />
+          <path d={line([[75, 533], [74, 522]])} />
+          <path d={line([[17, 521], [16, 511]])} />
+        </g>
+      </g>
+      {/* moss cushions in the angle where the cliff meets the shelf: the
+          wettest line on the whole formation, and the one place a drawing
+          of rock can afford to be soft */}
+      <g fill="#2f6b45" opacity="0.55">
+        <ellipse cx={X(-24)} cy={Y(400)} rx={X(22)} ry={Y(9)} />
+        <ellipse cx={X(64)} cy={Y(426)} rx={X(18)} ry={Y(8)} />
+      </g>
+      <g fill="#4e9c5f" opacity="0.35">
+        <ellipse cx={X(-28)} cy={Y(397)} rx={X(12)} ry={Y(5)} />
+        <ellipse cx={X(62)} cy={Y(423)} rx={X(10)} ry={Y(4)} />
+      </g>
+
+      {/* No fern pockets. This layer was drawn while PLANTS still put fronds
+          at x .050 and .080 — on the upper mass, the cliff, the shelf and the
+          talus — and each got a crack with soil in it so nothing grew out of
+          bare stone. Every plant has since moved to the lake shore, so the
+          pockets held nothing: four dark smudges on a rock face, which is
+          worse than no detail at all. The formation carries its own scale
+          instead, off the fallen blocks and the boulders in the talus. */}
+      {/* ---- integration, and the reason this layer can afford to be out of
+              the background at all ---- */}
+      <g clipPath="url(#sairock-clipAll)">
+        {/* the warm light off the upper left, kept to the top-left where the
+            rays actually come from */}
+        <rect x={X(-100)} y={Y(-70)} width={X(220)} height={Y(560)} fill="url(#sairock-warm)"
+          opacity="0.6" style={{ mixBlendMode: "screen" }} />
+        {/* ForestScene's OWN vignette and grain, resolved across the
+            document the same way PlantLayer resolves its fern gradients.
+            This is the background's darkness, not a copy of it, which is
+            what stops the formation reading as a cut-out. */}
+        <rect x="0" y="0" width={w} height={h} fill="url(#sai-bg-vig)" />
+        <rect x="0" y="0" width={w} height={h} filter="url(#sai-bg-grain)" opacity="0.5" style={{ mixBlendMode: "overlay" }} />
+      </g>
+    </svg>
   );
 }
 

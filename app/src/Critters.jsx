@@ -2209,17 +2209,24 @@ function HedgehogDraw({ uid }) {
           nor down a hole in a log, and the third pose is a view of him
           from BEHIND, which no rig anywhere in this file can produce.
 
-          Each pose carries its own timber. That is deliberate and not a
-          duplicate of the site art: the sprite paints at z-index 10 and
-          the forage sites at 2, so anything meant to hide his head has to
-          be inside the sprite or it paints behind him. The palettes are
-          the world's own bark colors so the two read as one piece of wood
-          where they overlap.
+          NOT ONE OF THEM CARRIES TIMBER ANY MORE, and that is the whole
+          history of this block. Each used to draw its own log or its own
+          root, because the sprite paints at z-index 10 and the forage sites
+          at 2 — so anything meant to hide his head had to be inside the
+          sprite or it painted behind him, and a second piece of wood had to
+          exist inside the animal for his snout to be able to go under one.
+          It was reported three times as "a new piece appears out of nowhere
+          and he interacts with that instead of the log", which is exactly
+          what it was.
+          ForageCanopyLayer draws the ONE piece that has to cut him — a rot
+          hole's rim, a sound log's near edge, a root's lower lip — again at
+          12, on the site's own anchor and transform. What his head goes
+          under is now the wood he walked to. These are just an animal.
 
           They carry NO scale of their own: HedgehogDraw's whole return
-          already sits inside the 1.52 group, so these are drawn in the
+          already sits inside the 0.95 group, so these are drawn in the
           same coordinates as the rest of him — ground at y 103, facing
-          right — and a wrapper here would put them at 2.3x.
+          right.
           ================================================================= */}
 
       {/* ---- 1. UNDER THE ROOT (rootdig) ----
@@ -2261,18 +2268,17 @@ function HedgehogDraw({ uid }) {
           <path d="M 67 99 l 3 1.8 M 64 100 l 1.4 2.4 M 60.4 99.6 l .2 2.6"
             stroke="#7a5a38" strokeWidth="1.3" strokeLinecap="round" fill="none" />
         </g>
-        {/* the root itself: one thick surface root sloping out of frame
-            at the top right and back into the ground at his nose */}
-        <g className="rd-root">
-          <path d="M 100 50 C 94 62 89 74 85 86 C 83 92 82 98 81.5 103 L 68 103 C 69 96 71 88 75 78 C 79 68 84 58 89 48 Z" fill="#5b3f26" />
-          <path d="M 89 48 C 84 58 79 68 75 78 C 71 88 69 96 68 103 L 73 103 C 74 95 77 87 81 77 C 85 67 89 57 93 47 Z" fill="#6f4f30" />
-          <ellipse cx="80" cy="88" rx="9.5" ry="6" fill="#5b3f26" transform="rotate(-24 80 88)" />
-          <path d="M 86 60 C 83 70 80 80 78 90" stroke="#402c19" strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".7" />
-          <path d="M 92 58 C 89 68 87 78 86 88" stroke="#402c19" strokeWidth="1.2" fill="none" strokeLinecap="round" opacity=".5" />
-          <path d="M 91 52 C 88 60 86 66 84 72" stroke="#3f7c4a" strokeWidth="3" fill="none" strokeLinecap="round" opacity=".6" />
-          {/* the dark under the root — his whole face is in here */}
-          <path d="M 68 103 C 69 96 71 90 74 85 C 77 90 79.5 96 80.5 103 Z" fill="#1b1109" opacity=".92" />
-        </g>
+        {/* NO ROOT. This pose used to paint a whole surface root down the
+            right of him — two tapered slabs, a knuckle, moss, bark lines and
+            the dark underneath — for the same reason the log pose used to
+            paint a log: the sprite draws at zIndex 10 and the forage sites at
+            2, so the world's own root could never cover any part of him, and
+            a second root had to exist inside the animal for his snout to be
+            able to go under one.
+            The world can occlude him now. The root body stays under him at 2
+            and its NEAR HALF is drawn again over him at 12 by
+            ForageCanopyLayer, so what his snout disappears beneath is the
+            root he actually walked to. He is just an animal here. */}
         {/* earth going back between his legs, laid out along the arc it
             travels so the CSS only has to run it along */}
         <g className="rd-dirt" fill="#4a331b">
@@ -2291,19 +2297,14 @@ function HedgehogDraw({ uid }) {
           rather than reused because a hedgehog seen end-on is a disc of
           spines, not the side crown pointing one way. */}
       <g className="sai-crit-rootbore">
-        {/* the root mass. Lumpy rather than slabbed: a big surface root
-            is a run of knuckles, and three overlapping ellipses read as
-            that far better than any one outline */}
-        <g className="rb-root">
-          <ellipse cx="34" cy="40" rx="31" ry="17" fill="#5b3f26" />
-          <ellipse cx="82" cy="38" rx="28" ry="16" fill="#5b3f26" />
-          <ellipse cx="58" cy="33" rx="27" ry="15" fill="#6f4f30" />
-          <path d="M 16 30 C 34 22 80 22 100 30" stroke="#3f7c4a" strokeWidth="4.5" fill="none" strokeLinecap="round" opacity=".55" />
-          <path d="M 20 44 C 40 52 76 52 96 44" stroke="#402c19" strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".55" />
-        </g>
-        {/* the cavity he has his head in, painted before him so his
-            shoulders enter it instead of sitting on top of it */}
-        <ellipse className="rb-socket" cx="58" cy="62" rx="14" ry="9" fill="#1b1109" />
+        {/* NO ROOT, NO SOCKET, NO LIP — see the note in rootdig above. All
+            three were this pose's own timber: a three-ellipse root mass, the
+            dark cavity his head sits in, and a lower lip in two pieces with a
+            gap between them for his shoulders. The world's root is all three
+            now. This is the one view of him nobody else in this file has —
+            from behind, head already in — and it works BECAUSE the thing over
+            his head is the site's own wood rather than a matching drawing
+            that has to be kept in step with it. */}
         <g className="rb-rump">
           <ellipse cx="58" cy="90" rx="24" ry="13" fill={`url(#${uid}f)`} />
           <g className="rb-spines">
@@ -2329,13 +2330,6 @@ function HedgehogDraw({ uid }) {
           <ellipse cx="83" cy="100" rx="7" ry="4" fill={F[1]} transform="rotate(18 83 100)" />
           <path d="M 89 102 l 3 2 M 85 103 l 1.4 2.4 M 80.6 103 l -.4 2.4"
             stroke="#7a5a38" strokeWidth="1.3" strokeLinecap="round" fill="none" />
-        </g>
-        {/* the root's lower lip, in two pieces with a gap between them.
-            The gap IS the picture: it is the only place his shoulders
-            are allowed through, so nothing has to be clipped */}
-        <g className="rb-lip">
-          <path d="M 6 42 C 22 58 36 62 48 62 L 48 71 C 30 71 12 60 6 42 Z" fill="#4a3220" />
-          <path d="M 110 42 C 94 58 80 62 68 62 L 68 71 C 86 71 104 60 110 42 Z" fill="#4a3220" />
         </g>
         <g className="rb-dirt" fill="#4a331b">
           <ellipse cx="26" cy="97" rx="3" ry="2.2" />
