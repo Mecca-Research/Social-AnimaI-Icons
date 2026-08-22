@@ -208,16 +208,24 @@ if (await page.evaluate(`!!window.__saiEtho.ETHOGRAM.deer`)) {
 {
   // Retried, the way the raccoon's is, because THE EMPTY-HANDED SNUFF IS A
   // DESIGNED OUTCOME. He quarters the drip line for 9-13 seconds and each
-  // pass has a 40% chance of turning something up; four or five passes means
-  // roughly one bout in eight ends with nothing, which is the whole point of
-  // the event ("if the surface paid he would not spend his day on windfall").
-  // A fixture that runs one bout and demands a meal fails a correct build
-  // about one run in eight — and it did, reading floorsnuff>wander.
+  // arrival at a probe has a 40% chance of turning something up, so a bout
+  // that finds nothing is the event working ("if the surface paid he would
+  // not spend his day on windfall"). A fixture that runs ONE bout and demands
+  // a meal fails a correct build — and it did, twice, reading
+  // floorsnuff>wander.
+  //
+  // SIX attempts, and the number is measured rather than picked: ten
+  // unforced bouts against this build ate in seven of them, so the headless
+  // empty rate is 30% and six independent tries miss with probability 0.07%.
+  // It is higher headless than it is for a viewer, and for a reason worth
+  // knowing — the snuff is a WALL-CLOCK window while the quartering is
+  // WALKING, and walking is dt-clamped at ~4fps, so he gets through far
+  // fewer probes here than he would at 60.
+  const ate = (c) => /floorsnuff/.test(c) && /windfalleat\[/.test(c);
   let r = await chain('skunk', 'windfall', 120000);
-  for (let k = 0; k < 2 && !/windfalleat/.test(r.chain); k++)
+  for (let k = 0; k < 5 && !ate(r.chain); k++)
     r = await chain('skunk', 'windfall', 120000);
-  chk(/floorsnuff/.test(r.chain) && /windfalleat\[/.test(r.chain),
-    'skunk gathers windfall', r.chain);
+  chk(ate(r.chain), 'skunk gathers windfall', r.chain);
   // NOT a chain-length check, and the difference is the whole reason this
   // one went red. `scrape` declares exactly ONE state, so the longest chain
   // it can ever produce is wander>clawscrape>wander — and the fixture parks
