@@ -78,6 +78,9 @@ async function chain(species, evId, ms = 60000, seed = '') {
   return page.evaluate(`(async w => { const a=w.agents.find(x=>x.species==='${species}');
     ${stillness(species)}
     a.state='wander'; a.intent='wander'; a.z=0; a._carry=null;
+    // NOTE for whoever reads a strange result here: this spot is the nut
+    // site at (.300,.450) to the pixel. An animal whose appetite wants a nut
+    // starts ON it, with no walk leg at all — see the skunk's scrape.
     a.x=.30*w.bounds.w; a.y=.45*w.bounds.h;
     a.intentUntil=performance.now()+900000; a.noEventUntil=performance.now()+900000;
     // The ethogram state is CLEANED, not dropped. Dropping it (a._eth=null)
@@ -203,10 +206,31 @@ if (await page.evaluate(`!!window.__saiEtho.ETHOGRAM.deer`)) {
   chk(/strip/.test(r.chain), 'bear strips berries', r.chain);
 }
 {
-  const r = await chain('skunk', 'windfall', 120000);
-  chk(r.chain.split('>').length > 2, 'skunk gathers windfall', r.chain);
+  // Retried, the way the raccoon's is, because THE EMPTY-HANDED SNUFF IS A
+  // DESIGNED OUTCOME. He quarters the drip line for 9-13 seconds and each
+  // pass has a 40% chance of turning something up; four or five passes means
+  // roughly one bout in eight ends with nothing, which is the whole point of
+  // the event ("if the surface paid he would not spend his day on windfall").
+  // A fixture that runs one bout and demands a meal fails a correct build
+  // about one run in eight — and it did, reading floorsnuff>wander.
+  let r = await chain('skunk', 'windfall', 120000);
+  for (let k = 0; k < 2 && !/windfalleat/.test(r.chain); k++)
+    r = await chain('skunk', 'windfall', 120000);
+  chk(/floorsnuff/.test(r.chain) && /windfalleat\[/.test(r.chain),
+    'skunk gathers windfall', r.chain);
+  // NOT a chain-length check, and the difference is the whole reason this
+  // one went red. `scrape` declares exactly ONE state, so the longest chain
+  // it can ever produce is wander>clawscrape>wander — and the fixture parks
+  // every animal at (.30,.45), which IS the nut site at (.300,.450). The
+  // skunk therefore spawns on top of his own target, the goto leg completes
+  // in nothing, and whether 'wander' is caught before the event fires is a
+  // coin flip on the first 90ms poll. Half the runs read clawscrape>wander
+  // and failed a build with nothing wrong with it.
+  //
+  // What matters about this event is that he scraped, at a site he went to.
+  // That is what is asserted.
   const r2 = await chain('skunk', 'scrape', 120000);
-  chk(r2.chain.split('>').length > 2, 'skunk scrapes soil', r2.chain);
+  chk(/clawscrape/.test(r2.chain), 'skunk scrapes soil', r2.chain);
 }
 {
   // Seeded beside a berry. The west thicket moved to the south-east this
@@ -446,10 +470,28 @@ await page.waitForTimeout(400);
   // about three seconds of swimming. That was a 50/50 check.
   const spot = await page.evaluate(`(w => {
     if (!w.shallowBandAt || !w.lakePointAt) return null;
+    const g = w.agents.find(a => a.species === 'goose');
+    // shallowPoint refuses a band point under a crown now — a bird under one
+    // paints at 10 against a canopy at 12, so he is feeding off screen. A
+    // fixture that still seeds him on one sends him a third of the way round
+    // the lake, and at 3.8fps headless an 18s give-up does not buy that swim.
+    const hidden = (x, y) => {
+      const hw = g.r * 1.35, up = g.r * 2;
+      for (const t of (w.def.trees || [])) {
+        const k = w.__crowns[t.kind]; if (!k) continue;
+        const tx = t.x * w.bounds.w, ty = t.y * w.bounds.h;
+        if (Math.abs(x - tx) > k.half * t.s + hw) continue;
+        const top = ty - k.topPx * t.s, bot = ty - k.botPx * t.s;
+        if (y > top && y - up < bot) return true;
+      }
+      return false;
+    };
     for (let k = 0; k < 48; k++) {
       const t = (k / 48) * Math.PI * 2;
       const band = w.shallowBandAt(t);
-      if (band) return w.lakePointAt(t, (band[0] + band[1]) / 2);
+      if (!band) continue;
+      const p = w.lakePointAt(t, (band[0] + band[1]) / 2);
+      if (!hidden(p.x, p.y)) return p;
     }
     return null; })(window.__saiWorld)`);
   chk(!!spot, 'the world names a dabblable band',

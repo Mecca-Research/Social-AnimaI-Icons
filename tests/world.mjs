@@ -33,14 +33,17 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
     scales: (w.def.trees || []).map(x => x.s),
   }))(window.__saiWorld)`);
   chk(t.n === 6, 'six trees stand in the forest', `${t.n}: ${t.kinds.join(',')}`);
+  // TWO conifers now. The west-high oak became one, which is a second
+  // silhouette and — because the nest is a rule over evergreens rather than
+  // an index — a second nest for the owl.
   const pines = t.kinds.filter(k => k === 'pine').length;
-  chk(pines === 1, 'exactly one of them is the lone species', `${pines} pine, ${t.n - pines} oak`);
-  // The lone tree is meant to be the biggest thing on the map, and by a
+  chk(pines === 2, 'two of them are evergreen', `${pines} pine, ${t.n - pines} oak`);
+  // The spruce is still meant to be the biggest thing on the map, and by a
   // margin you can see rather than one you have to measure.
-  const lone = t.scales[t.kinds.indexOf('pine')];
+  const pineS = t.scales.filter((_, i) => t.kinds[i] === 'pine');
   const rest = t.scales.filter((_, i) => t.kinds[i] !== 'pine');
-  chk(lone > Math.max(...rest) * 1.05, 'the lone tree is the biggest',
-    `${lone} against a largest oak of ${Math.max(...rest)}`);
+  chk(Math.max(...pineS) > Math.max(...rest) * 1.05, 'the spruce is the biggest tree',
+    `${Math.max(...pineS)} against a largest oak of ${Math.max(...rest)}`);
 }
 {
   // The south-east ground is the point of the move: three berries and two nut
@@ -501,49 +504,166 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
             : `${r.pits} pits, all clear of all ${(await page.evaluate('window.__saiWorld.forage.length'))} sites`);
 }
 
-// ==================== the forest has depth now ====================
-// Trunks paint at 2 and animals at 10, so for three releases an animal
-// never went behind anything and the canopy at 12 was the only depth in
-// the world. That is why three animations ended up faking their own
-// occlusion. An animal whose feet are above a trunk's base and whose body
-// crosses the bark now drops under it — EXCEPT inside the tree's own reach,
-// where every trunk behavior in the world stands its subject, and where it
-// is touching the tree rather than standing behind it.
+// ============================ the raccoon ============================
+// The same class of bug the dabble had, and the same test: not the anchor,
+// the DRAWING. His wash pose (racwet/racwash/racpaws are one group) reaches
+// 27px below the anchor and 29 to whichever side he faces, while a hundredth
+// of rho is worth 1.57px on the lake's SOUTH shore — so an anchor reading
+// "in the lake" still put every mark he paints on the mud liner, at rho
+// 1.087, past even its outer edge. Checked against the DRAWN shore (1.00),
+// not inWaterAt's 0.97, for the same reason the goose's is.
+//
+// And it has to be the BOTTOM shore: the douse angle used to be whatever
+// margin the fruit happened to leave him nearest to.
 {
-  const r = await page.evaluate(`(async w => {
-    const b = w.bounds, t = w.def.trees[0];
-    const tx = t.x * b.w, ty = t.y * b.h;
+  const r = await page.evaluate(`(w => {
+    if (!w.__douseReach || !w.douseBandAt) return { none: 'no douse band handed over' };
+    const R = w.__douseReach, b = w.bounds, bad = [], angles = [];
+    // every spot the picker can return, swept the way douseSpot sweeps it
+    for (let k = 0; k < 24; k++) {
+      const t = Math.PI / 2 + (k === 0 ? 0 : (k & 1 ? 1 : -1) * Math.ceil(k / 2) * 0.06);
+      if (t < Math.PI / 3 || t > Math.PI * 2 / 3) continue;
+      const band = w.douseBandAt(t); if (!band) continue;
+      angles.push(Math.round(t * 180 / Math.PI));
+      // the shallow EDGE of the band is the worst case he can be handed
+      for (const rho of [band[0], (band[0] + band[1]) / 2, band[1]]) {
+        const p = w.lakePointAt(t, rho);
+        for (const q of [[p.x - R.side, p.y], [p.x + R.side, p.y],
+                         [p.x, p.y + R.down], [p.x, p.y - R.up]]) {
+          const g = w.lakeRhoAt(q[0], q[1]);
+          // 1.000 exactly is the band's own definition: near is built so
+          // the pose's reach lands ON the drawn shore. Past it is the fault.
+          if (g > 1.002) bad.push('at ' + Math.round(t * 180 / Math.PI) + ' deg, a pose corner at rho ' + g.toFixed(3));
+        }
+      }
+    }
+    return { bad, angles, n: angles.length };
+  })(window.__saiWorld)`);
+  if (r.none) chk(false, 'the raccoon has somewhere to douse', r.none);
+  else {
+    chk(r.n > 0, 'the raccoon has bottom shore to stand in',
+      r.n ? `${r.n} usable angles: ${r.angles.join(', ')} deg` : 'no band anywhere on the south shore');
+    chk(r.bad.length === 0, 'and the douse pose stays off the mud at every one of them',
+      r.bad.length ? r.bad.slice(0, 3).join('; ')
+                   : `all four pose extremes inside the drawn waterline, across ${r.n} angles and both band edges`);
+  }
+}
+
+// ==================== the forest has depth now ====================
+// v0.37 shipped this rule and the big trunks still had animals walking up
+// them. The check could not see it: FOUR POINTS on ONE tree, and the single
+// one it expected to be behind — 160px above the anchor — sat 1.5px inside
+// the upper edge of a 65px window on a 143px trunk. It was the only stretch
+// of that bark the rule ever got right. The exception was TREE_REACH, the
+// radius at which the BEAR TAKES AN INTEREST: an unscaled 96px circle that
+// swallowed 68-75px of every trunk on the map.
+//
+// FOUR POINTS CANNOT TEST THE SHAPE OF A BOUNDARY. This walks the whole of
+// the drawn bark on EVERY tree and reports the line at which each one starts
+// hiding an animal, against the line its own work stands on — read off the
+// world's own metrics, so a rule that moves cannot leave a stale copy here
+// still passing.
+{
+  const r = await page.evaluate(`(w => {
     const a = w.agents.find(x => x.species === 'fox');
     if (!a) return { none: 'no fox' };
-    for (const o of w.agents) { o.state = 'idle'; o.vx = o.vy = 0;
-      o.idleUntil = performance.now() + 900000;
-      o.noEventUntil = performance.now() + 900000; }
-    // asked of the world by AGENT ID. Finding the node by its inline left:
-    // also matches every trunk and bush standing at the same x, which is
-    // how the first version of this check came back reading zIndex 2 — a
-    // tree's — and called the feature broken.
-    if (!w.__iconOf) return { none: 'the world hands out no icon lookup' };
-    const z = () => { const n = w.__iconOf(a.id); return n ? n.style.zIndex : '?'; };
-    const put = async (x, y) => { a.x = x; a.y = y;
-      await new Promise(r => setTimeout(r, 400)); return z(); };
-    return {
-      tree: { x: Math.round(tx), y: Math.round(ty), s: t.s },
-      behind:  await put(tx, ty - 160),        // up the screen, across the bark
-      atTree:  await put(tx - 40, ty - 55),    // where the bear rubs
-      inFront: await put(tx, ty + 40),         // nearer the viewer
-      beside:  await put(tx + 180, ty - 160),  // above it but clear of the bark
-    };
+    if (!w.__tree) return { none: 'the world hands out no trunk metrics' };
+    const T = w.__tree, b = w.bounds, out = [];
+    // ask the PREDICATE, not the renderer: one frame of layout per probe is
+    // 40 round trips through rAF, and the answer is the same one renderWorld
+    // reads off it.
+    const touch = (s) => T.basePx * s + a.r * 3.1 * T.standFeet + T.touchPad;
+    const behind = (x, y) => (w.def.trees || []).some((t) => {
+      const s = t.s || 1, tx = t.x * b.w, ty = t.y * b.h, up = ty - y;
+      return up > touch(s) && up <= T.canopyPx * s &&
+             Math.abs(x - tx) <= (T.trunkR + 2) * s + a.r * 1.35;
+    });
+    for (let i = 0; i < w.def.trees.length; i++) {
+      const t = w.def.trees[i], s = t.s || 1;
+      const tx = t.x * b.w, ty = t.y * b.h;
+      // the line the tree's own work stands on. EVERY trunk behavior pins
+      // a.y to (anchor - basePx*s - a pose foot) and carries the height on
+      // a.z, so nothing belonging to this tree is ever above it.
+      const work = T.basePx * s + a.r * 3.1 * T.standFeet;
+      let hides = null;
+      for (let up = Math.ceil(T.basePx * s); up <= T.canopyPx * s; up += 2)
+        if (behind(tx, ty - up)) { hides = up; break; }
+      out.push({ i, s, work: Math.round(work), hides,
+        onWork: behind(tx, ty - work),
+        atFoot: behind(tx, ty - T.basePx * s + 2),
+        beside: behind(Math.min(tx + 180, b.w - 30), ty - T.canopyPx * s * 0.6) });
+    }
+    return { out };
   })(window.__saiWorld)`);
   if (r.none) chk(false, 'an animal can go behind a trunk', r.none);
   else {
-    chk(r.behind === '1', 'an animal up the screen goes behind the trunk',
-      `zIndex ${r.behind} at 160px above the base, on the bark line`);
-    chk(r.inFront === '10', 'and one nearer the viewer stays in front',
-      `zIndex ${r.inFront} at 40px below the base`);
-    chk(r.atTree === '10', 'an animal AT the tree is touching it, not behind it',
-      `zIndex ${r.atTree} at the spot every trunk behavior stands its subject`);
-    chk(r.beside === '10', 'and one that never crosses the bark is unaffected',
-      `zIndex ${r.beside} at 180px to the side`);
+    const late = r.out.filter((t) => t.hides === null || t.hides > t.work + 18);
+    chk(late.length === 0, 'every trunk hides an animal from its own working line up',
+      late.length
+        ? late.map((t) => `tree ${t.i} (s ${t.s}) hides at ${t.hides === null ? 'never' : t.hides}, works at ${t.work}`).join('; ')
+        : r.out.map((t) => `${t.i}: ${t.hides} vs work ${t.work}`).join(', '));
+    const swallowed = r.out.filter((t) => t.onWork);
+    chk(swallowed.length === 0, 'and none of them swallows the animal working it',
+      swallowed.length ? swallowed.map((t) => `tree ${t.i}`).join('; ')
+        : 'six trunks, still on screen where every trunk behavior stands its subject');
+    const sunk = r.out.filter((t) => t.atFoot);
+    chk(sunk.length === 0, 'an animal at the foot of the bark is in front of it',
+      sunk.length ? sunk.map((t) => `tree ${t.i}`).join('; ') : 'six trunks');
+    const bad = r.out.filter((t) => t.beside);
+    chk(bad.length === 0, 'and one that never crosses the bark is unaffected',
+      bad.length ? bad.map((t) => `tree ${t.i}`).join('; ') : '180px to the side of six trunks');
+  }
+}
+
+// =============== ...and the timber has depth too ==================
+// The log body paints at 2 and the animals at 10, so an animal up the screen
+// of a log walked over the wood — 84% of a mossy log and 96% of a rotten one
+// had nothing above z-index 10 at all. ForageCanopyLayer was never a fix for
+// that: its over-layer is 8.7px of a 35.3px log, and its job is to cut the
+// animal in FRONT of the timber.
+//
+// The exception cannot be geometry, either. "On the log" and "behind the log"
+// are the same band: the hedgehog's dive puts him 35.6*s up with the log's
+// back at 43*s. The CLAIM says which, so this checks both readings of the
+// same spot.
+{
+  const r = await page.evaluate(`(w => {
+    const a = w.agents.find(x => x.species === 'fox');
+    if (!a) return { none: 'no fox' };
+    if (!w.__logBody) return { none: 'the world hands out no log metrics' };
+    const L = w.__logBody, HALF = w.__siteHalf.log, out = [];
+    const behind = (x, y, mine) => (w.forage || []).some((f) => {
+      if (f.kind !== 'log' || f.i === mine) return false;
+      const s = f.s || 1, up = f.py - y;
+      return up > L.nearPx * s && up <= L.topPx * s + a.r * 1.35 &&
+             Math.abs(x - f.px) <= HALF * s + a.r * 1.35;
+    });
+    for (const f of w.forage) {
+      if (f.kind !== 'log') continue;
+      const s = f.s || 1, mid = (L.nearPx + L.topPx) / 2 * s;
+      out.push({ i: f.i, type: f.logType || 'rot', s,
+        behind:  behind(f.px, f.py - mid, -1),
+        along:   behind(f.px + 60 * s, f.py - mid, -1),
+        inFront: behind(f.px, f.py + 20, -1),
+        beyond:  behind(f.px, f.py - L.topPx * s - a.r * 2, -1),
+        working: behind(f.px, f.py - mid, f.i) });
+    }
+    return { out };
+  })(window.__saiWorld)`);
+  if (r.none) chk(false, 'an animal can go behind a log', r.none);
+  else {
+    const show = (t) => `log ${t.i} (${t.type}, s ${t.s})`;
+    const thru = r.out.filter((t) => !t.behind || !t.along);
+    chk(thru.length === 0, 'an animal up the screen of a log goes behind the timber',
+      thru.length ? thru.map(show).join('; ')
+                  : `all ${r.out.length} logs, over the middle and 60px along`);
+    const lost = r.out.filter((t) => t.working);
+    chk(lost.length === 0, 'and the animal whose log it is stays on top of it',
+      lost.length ? lost.map(show).join('; ')
+                  : 'four logs, four claims, nobody swallowed by the wood he is working');
+    const near = r.out.filter((t) => t.inFront || t.beyond);
+    chk(near.length === 0, 'one in front of it, and one clear over its back, are unaffected',
+      near.length ? near.map(show).join('; ') : 'four logs');
   }
 }
 
@@ -578,28 +698,60 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
     `nearest other site is ${r.worstPair}px away`);
 }
 
-// ==================== the reeds are off the tree ====================
-// Three tall tufts stood on and above the ground the west-high tree moved
-// into — a tree growing out of a clump of rushes. Held out by BG_KEEPOUT
-// rather than by deleting three generated items, because the generator is
-// seeded and changing the count shuffles every tuft after it.
+// ============= the ferns and reeds hold their ground ==============
+// They used to be generated inside the background's viewBox, which is
+// `xMidYMid slice`: the short axis is cropped, so every one of them SLID
+// ACROSS THE MAP as the window changed shape. A fern clear of a trunk at one
+// aspect grew out of it at the next, and no amount of nudging them inside
+// that viewBox could fix it, because the thing they were in the way OF is
+// anchored differently. They are stage fractions now, like the logs, so the
+// question "is this plant in the way" finally has one answer.
 {
   const r = await page.evaluate(`(w => {
-    const svg = document.querySelector('svg.sai-bg-svg');
-    const tufts = [];
-    for (const g of svg.querySelectorAll('g')) {
-      const t = g.getAttribute('transform') || '';
-      const m = t.match(/translate\\(([-\\d.]+)\\s+([-\\d.]+)\\)/);
-      if (!m) continue;
-      if (!g.querySelector('path[fill*="grassGrad"]')) continue;
-      tufts.push([+m[1], +m[2]]);
+    const b = w.bounds, HALF = w.__siteHalf || {};
+    const out = [];
+    for (const d of document.querySelectorAll('div')) {
+      const t = d.style.transform || '';
+      if (t.indexOf('translate(-50%') !== 0 || d.style.zIndex !== '1') continue;
+      // the fern's leaflets are ellipses and the reed's blades are paths
+      if (!d.querySelector('[fill*="fernGrad"], [fill*="grassGrad"]')) continue;
+      out.push([parseFloat(d.style.left), parseFloat(d.style.top)]);
     }
-    // the box the west-high tree now occupies, in the background's viewBox
-    const inBox = tufts.filter(([x, y]) => x > 120 && x < 290 && y > 190 && y < 330);
-    return { n: tufts.length, inBox: inBox.length, where: inBox.map(t => t.join(',')).join(' ') };
+    const bad = [];
+    for (const [x, y] of out) {
+      for (const t of (w.def.trees || [])) {
+        const d = Math.hypot(x - t.x * b.w, y - t.y * b.h);
+        if (d < 34 * (t.s || 1) + 34) bad.push('a plant ' + Math.round(d) + 'px into a trunk');
+      }
+      for (const f of (w.forage || [])) {
+        const half = HALF[f.kind] || 32, s = f.s || 1;
+        if (Math.abs(x - f.px) < half * s + 34 && y - f.py > -130 && y - f.py < 46)
+          bad.push('a plant on the ' + f.kind);
+      }
+      if (w.lakeRhoAt(x, y) < 1.10) bad.push('a plant in the lake');
+    }
+    return { n: out.length, bad };
   })(window.__saiWorld)`);
-  chk(r.inBox === 0, 'no reeds left where the west-high tree now stands',
-    r.inBox ? `still there: ${r.where}` : `${r.n} tufts, none in the tree's ground`);
+  chk(r.n >= 10, 'the forest still has ferns and reeds in it', `${r.n} drawn`);
+  chk(r.bad.length === 0, 'and not one of them is standing in something',
+    r.bad.length ? r.bad.slice(0, 4).join('; ')
+                 : `${r.n} plants, all clear of six trunks, 25 sites and the lake`);
+}
+
+// ==================== the owl has two nests ====================
+// NEST_TREES is a rule — every lake-clear evergreen — and not an index, so
+// this counts the cups the world actually draws rather than reading a
+// constant back to itself. Two parts per tree: the back half on the trunk
+// and the near rim in the canopy pass, which is what puts the bird IN the
+// nest rather than on top of it.
+{
+  const r = await page.evaluate(`(w => {
+    const cups = document.querySelectorAll('.sai-bg-nest').length;
+    const pines = (w.def.trees || []).filter(t => t.kind === 'pine').length;
+    return { cups, pines };
+  })(window.__saiWorld)`);
+  chk(r.cups === r.pines * 2, 'a nest in every evergreen',
+    `${r.cups} cup halves for ${r.pines} conifers`);
 }
 
 chk(errs.length === 0, 'no JS errors', errs.length ? errs[0] : 'clean');

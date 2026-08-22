@@ -1466,6 +1466,13 @@ body {
   transform-box:fill-box; transform-origin:10% 50%;
   animation:sai-rac-feed .88s ease-in-out infinite; }
 @keyframes sai-rac-feed{ 0%,100%{transform:translate(0,0);} 50%{transform:translate(-2px,-2.2px);} }
+/* He is standing IN the lake, so he casts no forest-floor shadow onto it —
+   the goose's dabble already does this, and the raccoon's was the LOWEST ink
+   on his sprite, sitting on the water he is supposed to have his hands in. */
+.sai-sprite[data-state="racwet"]  .sai-crit--raccoon .sai-crit-shadow,
+.sai-sprite[data-state="racwash"] .sai-crit--raccoon .sai-crit-shadow,
+.sai-sprite[data-state="racpaws"] .sai-crit--raccoon .sai-crit-shadow{ opacity:0; animation:none; }
+
 .sai-sprite[data-state="raceat"] .sai-crit-mouth-open{ opacity:1; }
 .sai-sprite[data-state="raceat"] .sai-crit-mouth-rest{ opacity:0; }
 
@@ -3298,7 +3305,11 @@ body {
                   tell a 300ms leap from a fast walk — both are just px/s —
                   and by the time an easing filter could tell them apart the
                   leap is over.
-     data-spent   a._ex is past 0.6. The stamina half of the table: which
+     data-spent   a._exHot is past 0.14 — the exertion ledger measured
+                  against that animal's OWN trailing average, not a flat
+                  level, because the resting level scales with top speed and
+                  a flat one had the cougar panting 87% of the time.
+                  The stamina half of the table: which
                   animals cannot hold their top, and which never notice.
 
    Both are set for EVERY species, so every rule below is scoped to one. */

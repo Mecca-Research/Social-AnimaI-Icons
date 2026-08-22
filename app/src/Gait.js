@@ -86,6 +86,11 @@ export const GAIT_DEF =
 //   0.80  real urgency            (fleeing, the cat's seekroof)
 //   1.00  TOP SPEED               (the rescue. and the cat's dash. that is all.)
 
+// Seconds of memory in the trailing average `_exHot` is measured against.
+// Long enough that a sprint stands out against a minute of wandering, short
+// enough that the animal stops panting well before the next bout.
+const EX_AVG_TAU = 18;
+
 export function gait(a, ctx, urgency = 0.30) {
   const g = SPEED[a.species] || GAIT_DEF;
   const dt = ctx.dt, now = ctx.now;
@@ -97,6 +102,31 @@ export function gait(a, ctx, urgency = 0.30) {
   const load = (a._pace || 1) - 1;
   let ex = (a._ex || 0) + (load > 0 ? load * g.drain : -g.recov) * dt;
   a._ex = ex = ex < 0 ? 0 : ex > 1 ? 1 : ex;
+
+  // ---- 1b. ...and whether he is BLOWN, which is NOT the same reading -----
+  // `_ex` is a LEVEL, and its resting level is a fact about the species
+  // rather than about the moment. `pace` scales with `top`, so the load an
+  // animal carries just wandering scales with `top` too: measured over five
+  // minutes in a real browser, the cougar idles at 0.72, the deer at 0.64
+  // and the bear at 0.63, while the wolf sits at 0.10. Reading the level
+  // against one flat 0.6 therefore said "blown" for the three fastest
+  // animals almost always — it put the cougar's pant loop on 87% of frames,
+  // a cat permanently sticking his tongue out.
+  //
+  // That saturation is not a bug in the ledger: it is what holds the cougar
+  // to an ambush predator's cruise, below the wolf's, while leaving him the
+  // faster sprint. Undo it and he cruises 37% harder and out-cruises the
+  // wolf, which is the one thing the speed table is deliberately built to
+  // prevent. So the ledger stays and the READING changes.
+  //
+  // What the panting art means is a recent effort, so compare him with
+  // himself: a slow trailing average of his own ledger, and `_exHot` is how
+  // far above his own normal he has climbed. Rest and it converges to zero
+  // whatever level that species rests at; sprint and it opens up for as long
+  // as the average takes to catch up.
+  const exK = dt > 0 ? Math.min(1, dt / EX_AVG_TAU) : 0;
+  a._exAvg = a._exAvg == null ? ex : a._exAvg + (ex - a._exAvg) * exK;
+  a._exHot = ex - a._exAvg;
 
   // ---- 2. urgency -> pace, damped by what is left -----------------------
   // Note the floor: a fully spent animal falls back to its OWN cruise, never
