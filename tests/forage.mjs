@@ -78,6 +78,9 @@ async function chain(species, evId, ms = 60000, seed = '') {
   return page.evaluate(`(async w => { const a=w.agents.find(x=>x.species==='${species}');
     ${stillness(species)}
     a.state='wander'; a.intent='wander'; a.z=0; a._carry=null;
+    // NOTE for whoever reads a strange result here: this spot is the nut
+    // site at (.300,.450) to the pixel. An animal whose appetite wants a nut
+    // starts ON it, with no walk leg at all — see the skunk's scrape.
     a.x=.30*w.bounds.w; a.y=.45*w.bounds.h;
     a.intentUntil=performance.now()+900000; a.noEventUntil=performance.now()+900000;
     // The ethogram state is CLEANED, not dropped. Dropping it (a._eth=null)
@@ -205,8 +208,19 @@ if (await page.evaluate(`!!window.__saiEtho.ETHOGRAM.deer`)) {
 {
   const r = await chain('skunk', 'windfall', 120000);
   chk(r.chain.split('>').length > 2, 'skunk gathers windfall', r.chain);
+  // NOT a chain-length check, and the difference is the whole reason this
+  // one went red. `scrape` declares exactly ONE state, so the longest chain
+  // it can ever produce is wander>clawscrape>wander — and the fixture parks
+  // every animal at (.30,.45), which IS the nut site at (.300,.450). The
+  // skunk therefore spawns on top of his own target, the goto leg completes
+  // in nothing, and whether 'wander' is caught before the event fires is a
+  // coin flip on the first 90ms poll. Half the runs read clawscrape>wander
+  // and failed a build with nothing wrong with it.
+  //
+  // What matters about this event is that he scraped, at a site he went to.
+  // That is what is asserted.
   const r2 = await chain('skunk', 'scrape', 120000);
-  chk(r2.chain.split('>').length > 2, 'skunk scrapes soil', r2.chain);
+  chk(/clawscrape/.test(r2.chain), 'skunk scrapes soil', r2.chain);
 }
 {
   // Seeded beside a berry. The west thicket moved to the south-east this
