@@ -316,15 +316,21 @@ const FOREST_TREES = [
   // everything below y .73, and the map edge is 8% away. The way out was
   // DIAGONAL — one tree hard into the corner, the other back and down —
   // plus a trim: 1.44 -> 1.32 and 1.26 -> 1.20. That is 174px between the
-  // trunks and 13px of daylight between the crowns.
+  // trunks and 12px of daylight between the crowns.
   //
   // The gap is quoted at 1500x940 on purpose. Crowns are drawn in FIXED px
   // while the trunks are stage fractions, so every pair in this world closes
   // up on a short window — the west pair, the roomiest on the map, is +59px
   // here and -16px at 1008x700. That is structural, and no placement fixes
   // it; what a placement can fix is the shape people actually look at.
+  //
+  // The lower one is at .895 and not .875 for a fourth rule that only bites
+  // on a squat window: its crown, padded by the grazing goose's own box,
+  // reached the sward's east edge at 900x620 and covered 3% of his lawn.
+  // A crown paints over the animals on purpose, so that is 3% of the bird's
+  // longest bout spent invisible.
   { x: .945, y: .550, s: 1.32,  kind: "oak"  }, // east flank, into the corner
-  { x: .875, y: .710, s: 1.20,  kind: "oak"  }, // east flank, back and down
+  { x: .895, y: .730, s: 1.20,  kind: "oak"  }, // east flank, back and down
   // UP, off the big fallen log — which has itself moved, out of the
   // background and into the forage list as a real site. This is the drey
   // tree: DREY_TREE is a rule, not an index, so the squirrel's nest follows
@@ -899,6 +905,68 @@ const FORAGE_SITES = [
   { x: .775, y: .700, s: 1.05, kind: "root", dir:  1 },
 ];
 const FORAGE_REACH = 26;   // how close counts as "at" a site
+// ---------------- Ferns and reeds ----------------
+// OUT OF THE BACKGROUND, and for the same reason the two scenery logs came
+// out of it in v0.37: `preserveAspectRatio="xMidYMid slice"` crops the short
+// axis, so anything drawn in that viewBox SLIDES ACROSS THE MAP as the window
+// changes shape. A fern placed clear of a trunk at one aspect is growing out
+// of it at the next, which is exactly what "the ferns and reeds are in the
+// way" describes — and no amount of nudging them inside that viewBox fixes
+// it, because the thing they are in the way OF is anchored differently.
+//
+// Held in stage fractions now, like every other object that has to stay put,
+// and solved rather than placed: every spot here clears every trunk, every
+// forage site's drawn art, the lake by 0.18 of rho, the goose's sward, all
+// four bare-earth patches and the screen edges — at nine stage shapes. 394
+// squares of the map satisfy that; these are the fourteen furthest apart.
+//
+// They are scenery, so they paint at z-index 1: over the ground, under the
+// trunks and forage at 2, well under the animals at 10. Nothing walks behind
+// a fern, and nothing has to.
+const PLANTS = [
+  { x: .050, y: .050, s: 1.10, kind: "fern" },
+  { x: .050, y: .300, s: 1.25, kind: "fern" },
+  { x: .050, y: .520, s: 1.05, kind: "reed" },
+  { x: .050, y: .690, s: 1.20, kind: "fern" },
+  { x: .080, y: .960, s: 1.00, kind: "reed" },
+  { x: .150, y: .480, s: 1.15, kind: "fern" },
+  { x: .320, y: .630, s: 1.00, kind: "reed" },
+  { x: .510, y: .560, s: 1.10, kind: "fern" },
+  { x: .590, y: .520, s: 0.95, kind: "reed" },
+  { x: .800, y: .050, s: 1.05, kind: "reed" },
+  { x: .890, y: .050, s: 1.15, kind: "fern" },
+  { x: .950, y: .150, s: 1.00, kind: "reed" },
+  { x: .850, y: .940, s: 1.20, kind: "fern" },
+  { x: .950, y: .960, s: 1.05, kind: "reed" },
+];
+
+function PlantLayer({ bounds }) {
+  const { w, h } = bounds;
+  if (!w || !h) return null;
+  return (
+    <>
+      {PLANTS.map((p, i) => (
+        <div key={i} style={{ position: "absolute", left: p.x * w, top: p.y * h, zIndex: 1,
+          pointerEvents: "none", transform: `translate(-50%,-100%) scale(${p.s})`,
+          transformOrigin: "50% 100%" }}>
+          {/* overflow visible: the drawings run well above their own anchor,
+              and the gradients and the soft filter they paint with live in
+              ForestScene's defs — SVG resolves url(#id) across the document,
+              so there is one copy of each and not fifteen. */}
+          <svg width="8" height="8" viewBox="-4 -4 8 8" style={{ display: "block", overflow: "visible" }}>
+            <g className="sai-bg-sway"
+               style={{ animationDelay: `${(i * 0.63) % 5}s`,
+                        animationDuration: `${5 + (i % 4) * 0.8}s`,
+                        transformOrigin: "50% 100%" }}>
+              {p.kind === "fern" ? <SaiBgFern /> : <SaiBgGrass />}
+            </g>
+          </svg>
+        </div>
+      ))}
+    </>
+  );
+}
+
 function ForageLayer({ bounds, sites }) {
   const { w, h } = bounds;
   if (!w || !h) return null;
@@ -2022,6 +2090,7 @@ export default function SocialAnimalsRPG() {
       <div ref={stageRef} className="relative rounded-2xl border border-emerald-900/60 overflow-hidden min-h-0 shadow-xl shadow-black/40" style={{ background: WORLDS[worldKey].bg }}>
         {worldKey === "forest" && <ForestScene />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <Lake bounds={snapshot.bounds} />}
+        {worldKey === "forest" && snapshot.bounds.w > 0 && <PlantLayer bounds={snapshot.bounds} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <TreeLayer bounds={snapshot.bounds} part="trunk" />}
         {/* the drey paints after the trunk it is in and before the animals,
             so he works its near face and the canopy still veils its crown */}
@@ -2164,40 +2233,11 @@ function ForestScene() {
       { x: 780, w: 140 }, { x: 980, w: 80 }, { x: 1120, w: 60 },
     ].map((r, i) => ({ ...r, delay: (i * 1.4).toFixed(2), dur: (7 + i * 0.8).toFixed(1) }));
 
-    const ferns = [];
-    const fernSpots = [
-      // the four big middle-left / bottom-right ferns are gone — real
-      // trunked trees stand there now (see TreeLayer)
-      [1170, 500, 0.85],
-      [250, 720, 1.0], [700, 690, 0.9],
-      // upper clearings (left of the lake and along the top)
-      [140, 150, 0.9], [420, 120, 0.8], [80, 310, 1.0], [300, 235, 0.7], [545, 320, 0.8],
-    ];
-    for (let i = 0; i < fernSpots.length; i++) {
-      const [x, y, s] = fernSpots[i];
-      ferns.push({ x, y, s, rot: rand(-8, 8), delay: (rand(0, 5)).toFixed(2), dur: (5 + rand(0, 3)).toFixed(2) });
-    }
-
-    // Ground the scenery is NOT allowed to grow on, in the background's own
-    // viewBox. The tall tufts read as reeds, and three of them stood on and
-    // above the spot the west-high tree moved into — a tree growing out of a
-    // clump of rushes. Held here rather than by deleting three generated
-    // items, because the generator is seeded: change the count and every
-    // tuft after it moves.
-    const keepOut = (x, y) => BG_KEEPOUT.some(
-      (k) => x > k.x0 && x < k.x1 && y > k.y0 && y < k.y1);
-    const grass = [];
-    for (let i = 0; i < 8; i++) {
-      const gx = rand(60, 1140), gy = rand(400, 760), gs = rand(0.7, 1.25);
-      const gr = rand(-6, 6), gd = rand(0, 5).toFixed(2), gu = (4 + rand(0, 2.5)).toFixed(2);
-      if (!keepOut(gx, gy)) grass.push({ x: gx, y: gy, s: gs, rot: gr, delay: gd, dur: gu });
-    }
-    // extra tufts for the once-empty upper clearings (kept left of the lake)
-    for (let i = 0; i < 6; i++) {
-      const gx = rand(40, 560), gy = rand(110, 380), gs = rand(0.6, 1.05);
-      const gr = rand(-6, 6), gd = rand(0, 5).toFixed(2), gu = (4 + rand(0, 2.5)).toFixed(2);
-      if (!keepOut(gx, gy)) grass.push({ x: gx, y: gy, s: gs, rot: gr, delay: gd, dur: gu });
-    }
+    // The ferns and the reeds used to be generated here, in the background's
+    // sliced viewBox, which meant they DRIFTED relative to everything they
+    // were supposed to stand clear of. They are stage-anchored scenery now:
+    // see PLANTS and PlantLayer. BG_KEEPOUT went with them — a keep-out box
+    // is what you need when you cannot say where a thing is.
 
     const leaves = [];
     const leafCols = ["#79c98a", "#4e9c5f", "#ffd27a", "#b9ecab", "#e0527a"];
@@ -2227,7 +2267,7 @@ function ForestScene() {
     const dapples = [];
     for (let i = 0; i < 5; i++) dapples.push({ x: rand(150, 1050), y: rand(430, 720), r: rand(60, 130), delay: rand(0, 8).toFixed(2), dur: (9 + rand(0, 5)).toFixed(2) });
 
-    return { rays, ferns, grass, leaves, flies, butterflies, dapples };
+    return { rays, leaves, flies, butterflies, dapples };
   }, []);
 
   return (
@@ -2397,23 +2437,7 @@ function ForestScene() {
         <g transform="translate(90 150) scale(0.8)"><SaiBgMushroom /></g>
         <g transform="translate(490 300) scale(0.65)"><SaiBgMushroom cap="url(#sai-bg-capGrad)" /></g>
 
-        {/* grass tufts (sway) */}
-        {data.grass.map((g, i) => (
-          <g key={"grs" + i} transform={`translate(${g.x} ${g.y}) scale(${g.s}) rotate(${g.rot})`}>
-            <g className="sai-bg-sway" style={{ animationDelay: g.delay + "s", animationDuration: g.dur + "s" }}>
-              <SaiBgGrass />
-            </g>
-          </g>
-        ))}
 
-        {/* ferns (sway) */}
-        {data.ferns.map((f, i) => (
-          <g key={"frn" + i} transform={`translate(${f.x} ${f.y}) scale(${f.s}) rotate(${f.rot})`}>
-            <g className="sai-bg-sway" style={{ animationDelay: f.delay + "s", animationDuration: f.dur + "s" }}>
-              <SaiBgFern />
-            </g>
-          </g>
-        ))}
 
         {/* grain + foreground vignette */}
         <rect x="0" y="0" width="1200" height="800" filter="url(#sai-bg-grain)" opacity="0.5" style={{ mixBlendMode: "overlay" }} />
@@ -3094,9 +3118,6 @@ WORLDS.forest.caches = CACHE_SPOTS;
 // that is where the scenery is placed; the tree that cleared these is held
 // in stage fractions, so the box is drawn generously rather than derived —
 // the two coordinate systems only line up at one window shape.
-const BG_KEEPOUT = [
-  { x0: 120, y0: 190, x1: 290, y1: 330 },   // the west-high tree's new ground
-];
 const BG_VB = { w: 1200, h: 800 };
 const EARTH_FUZZ = 20;
 const BARE_EARTH = [

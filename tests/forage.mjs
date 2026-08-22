@@ -446,10 +446,28 @@ await page.waitForTimeout(400);
   // about three seconds of swimming. That was a 50/50 check.
   const spot = await page.evaluate(`(w => {
     if (!w.shallowBandAt || !w.lakePointAt) return null;
+    const g = w.agents.find(a => a.species === 'goose');
+    // shallowPoint refuses a band point under a crown now — a bird under one
+    // paints at 10 against a canopy at 12, so he is feeding off screen. A
+    // fixture that still seeds him on one sends him a third of the way round
+    // the lake, and at 3.8fps headless an 18s give-up does not buy that swim.
+    const hidden = (x, y) => {
+      const hw = g.r * 1.35, up = g.r * 2;
+      for (const t of (w.def.trees || [])) {
+        const k = w.__crowns[t.kind]; if (!k) continue;
+        const tx = t.x * w.bounds.w, ty = t.y * w.bounds.h;
+        if (Math.abs(x - tx) > k.half * t.s + hw) continue;
+        const top = ty - k.topPx * t.s, bot = ty - k.botPx * t.s;
+        if (y > top && y - up < bot) return true;
+      }
+      return false;
+    };
     for (let k = 0; k < 48; k++) {
       const t = (k / 48) * Math.PI * 2;
       const band = w.shallowBandAt(t);
-      if (band) return w.lakePointAt(t, (band[0] + band[1]) / 2);
+      if (!band) continue;
+      const p = w.lakePointAt(t, (band[0] + band[1]) / 2);
+      if (!hidden(p.x, p.y)) return p;
     }
     return null; })(window.__saiWorld)`);
   chk(!!spot, 'the world names a dabblable band',

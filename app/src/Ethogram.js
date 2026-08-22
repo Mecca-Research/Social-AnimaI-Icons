@@ -1546,7 +1546,10 @@ function douseSpot(a, c) {
     const t = t0 + (k === 0 ? 0 : (k & 1 ? 1 : -1) * Math.ceil(k / 2) * 0.06);
     if (t < SOUTH_SHORE[0] || t > SOUTH_SHORE[1]) continue;
     const band = c.douseBand(t);
-    if (band) return c.lakePoint(c.bounds, t, c.rand(band[0], band[1]));
+    // ...and off the band's shallow LIP: `near` is built so his reach lands
+    // exactly ON the drawn shore, which is the definition of the edge and no
+    // place to stand. The deeper three quarters of it is water either way.
+    if (band) return c.lakePoint(c.bounds, t, c.rand(band[0], band[0] + (band[1] - band[0]) * 0.75));
   }
   // Nothing usable on the bottom shore at this stage shape — the lake's south
   // lobe is its short axis, and on a squat window there is no water there wide
@@ -3428,7 +3431,11 @@ function swardHeading(a, c) {
 function beginCrop(a, c) {
   a.vx = 0; a.vy = 0;
   a._cropAim = c.rand(0, Math.PI * 2);
-  a._cropN = Math.round(c.rand(10, 16));   // ~26s of grass, which is a meal, not a nibble
+  // Eight mouthfuls, ~15s of grass. Thirteen was 25s, and at the share of the
+  // clock the ladder allows him that bought one bout every eight minutes: a
+  // DUTY CYCLE IS BLIND TO HOW OFTEN A BOUT STARTS, which is the only part of
+  // it a viewer can see. Same meal, twice as often.
+  a._cropN = Math.round(c.rand(6, 10));
   a._cropStep = false;                     // the head goes down the moment he arrives
   a._cropUntil = c.now + c.rand(CROP_HEAD_DOWN[0], CROP_HEAD_DOWN[1]);
   a.state = "cropgrass";
@@ -3495,16 +3502,25 @@ function shallowPoint(a, c) {
   for (let k = 0; k < 24; k++) {
     const t = ang + (k === 0 ? 0 : (k & 1 ? 1 : -1) * Math.ceil(k / 2) * 0.26);
     const band = c.shallowBand(t);
-    if (band) return c.lakePoint(b, t, c.rand(band[0], band[1]));
+    if (!band) continue;
+    const p = c.lakePoint(b, t, c.rand(band[0], band[1]));
+    // ...and it has to be IN VIEW, for exactly the reason the sward is. A
+    // crown paints at zIndex 12 and the animals at 10, so a bird under one is
+    // not on screen. "No crown over the goose's sward" was rule 3 of the tree
+    // placement and it was never asked of the WATER half of his feeding: 45%
+    // of the band he can stand in is under the east oak, and it was taking
+    // half his dabbles. That is most of "not in the water anymore" — he was
+    // in it, behind a tree.
+    if (!inCrown(a, c, p.x, p.y)) return p;
   }
-  return null;    // no shore on this stage is both shallow and wide enough
+  return null;    // no shore here is shallow, wide enough AND in view
 }
 
 function beginDabble(a, c, S, g) {
   a.vx = 0; a.vy = 0;
   a._dabX = g ? g.x : a.x; a._dabY = g ? g.y : a.y;
   a._faceDir = c.LAKE.cx * c.bounds.w > a.x ? 1 : -1;   // head under over the deep side
-  a._dabN = Math.round(c.rand(3, 5));
+  a._dabN = Math.round(c.rand(2, 3));   // ~11s under, against the old ~19
   a.state = "dabble"; a.stateUntil = c.now + c.rand(DABBLE_DOWN[0], DABBLE_DOWN[1]);
 }
 
@@ -3601,7 +3617,7 @@ defineEthogram("goose", {
     // birds can crop it at once.
     {
       id: "graze", domain: "land", trigger: "seek",
-      every: [140000, 212000], chance: 0.45, cool: 30000,
+      every: [94000, 142000], chance: 0.45, cool: 30000,
       states: ["cropgrass"],
       goto: {
         state: "tosward", within: 20, giveUp: 26000, urgency: 0.45,
@@ -3626,7 +3642,7 @@ defineEthogram("goose", {
     // the generic swimming rig would tuck away the very legs that say so.
     {
       id: "dabble", domain: "water", trigger: "seek",
-      every: [120000, 184000], chance: 0.50, cool: 26000,
+      every: [79000, 119000], chance: 0.50, cool: 26000,
       states: ["dabble", "dabblelift"], ownsWater: true,
       goto: {
         state: "toshallow", within: 10, giveUp: 18000, urgency: 0.30,

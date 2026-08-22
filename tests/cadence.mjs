@@ -270,7 +270,7 @@ const FEEDING = {
   raccoon:  { berry: 24.1 },
   fox:      { scrump: 7.4 },
   hedgehog: { roots: 12.7, logs: 16.4 },
-  goose:    { graze: 30.2, dabble: 19.3 },
+  goose:    { graze: 20.3, dabble: 12.6 },
 };
 
 const duty = await page.evaluate(`(feeding => {
