@@ -1822,11 +1822,27 @@ const WORLDS = {
 };
 
 // a point every species of this world may stand on
+// WHO MAY BE ABOVE THE GROUND ON THE BLUFF WITHOUT HAVING CLIMBED THERE.
+// The owl flies and the cougar climbs, so both may simply BE on a terrace;
+// everyone else has to work up to it a level at a time and therefore has to
+// arrive at the bottom. This is about ARRIVING, not about being able to get
+// there — a squirrel can still leap his way up, he just cannot walk on from
+// off screen halfway up a cliff.
+const ROCK_HIGH_ENTRY = new Set(["owl", "cougar"]);
+
 function spawnSafe(world, x, y, species) {
   const { bounds, def } = world;
   if (inAnyHouse(bounds, def.houses, x, y, 22)) return false;
   if (def.hasWater && !canSwimIn(def, species) && lakeRho(bounds, x, y) < 1.12) return false;
   if (def.pool && !canSwimIn(def, species) && inPool(bounds, def.pool, x, y, 26)) return false;
+  if (def.rock) {
+    // never inside a face, whoever you are: there is nothing to stand on.
+    if (rockZone(bounds, x, y).wall && !inRockCave(bounds, x, y)) return false;
+    // ...and no walking in from off screen onto a terrace you would have had
+    // to leap to reach.
+    const lvl = rockLevelAt(bounds, x, y);
+    if (lvl != null && lvl > ROCK_LEVEL_GROUND && !ROCK_HIGH_ENTRY.has(species)) return false;
+  }
   return true;
 }
 function interiorPoint(world, species) {
@@ -1855,6 +1871,9 @@ function enterFromEdge(a, world, sp) {
     const dx = target.x - x, dy = target.y - y; const d = Math.hypot(dx, dy) || 1;
     a.x = x; a.y = y; a.vx = (dx / d) * sp; a.vy = (dy / d) * sp;
     a.state = "wander"; a.targetId = null;
+    // he arrives ON a terrace, and from here on may only leave it by leaping
+    a._lvl = world.def.rock ? (rockLevelAt(bounds, x, y) ?? ROCK_LEVEL_GROUND)
+                            : ROCK_LEVEL_GROUND;
     return;
   }
 }
@@ -2001,6 +2020,13 @@ export default function SocialAnimalsRPG() {
       // so a suite that asks "is this ground under a tree" cannot drift from
       // the predicate the goose actually grazes by.
       W.__crowns = TREE_CROWNS;
+      // the bluff's terrain, so a suite checks the rule the world walks by
+      // rather than a copy of it that can drift
+      W.rockZoneAt = (x, y) => rockZone(W.bounds, x, y);
+      W.rockLevelAt = (x, y) => rockLevelAt(W.bounds, x, y);
+      W.inRockCaveAt = (x, y) => inRockCave(W.bounds, x, y);
+      W.__rock = { breaks: ROCK_BREAKS, profile: ROCK_PROFILE, cave: ROCK_CAVE,
+                   highEntry: [...ROCK_HIGH_ENTRY] };
       // ...and the painted width of each kind of forage site, plus the pit's
       // own, for the same reason: the suite checks the skunk's holes against
       // the drawing, and must not carry its own copy of the drawing.
@@ -2171,6 +2197,176 @@ export default function SocialAnimalsRPG() {
   );
 }
 
+/* ---------------- The west bluff: where it is ---------------- */
+/**
+ * THE FIVE BREAK LINES, and the right-hand profile, in per-mille of the
+ * stage — x of the width, y of the height. They live out here rather than
+ * inside RockLayer because BOTH the drawing and the walking read them.
+ *
+ *   L0  back of the upper plateau: the foot of the mass that carries on up
+ *       off the top of the stage
+ *   L1  the cliff top, which is the plateau's lip
+ *   B1  the cliff's foot, which is the back of the lower shelf
+ *   L2  the shelf's lip
+ *   T1  the foot of the lower riser, where stone gives out into talus
+ *
+ * Between them the bluff is five bands, and three of them are walls:
+ *
+ *   above L0    the mass going on up off screen        WALL
+ *   L0 .. L1    the upper plateau                      level 2
+ *   L1 .. B1    the cliff, with the cave cut into it   WALL
+ *   B1 .. L2    the lower shelf                        level 1
+ *   L2 .. T1    the lower riser                        WALL
+ *   below T1    the talus, and the forest floor        level 0
+ *
+ * That is not a rule invented for the physics — it is what the picture
+ * already says. A floor is drawn light because it faces the sky and a wall
+ * is drawn dark because it does not, and an animal can stand on the one and
+ * not the other. Geometry-as-physics: the line that is drawn is the line
+ * that is walked to, so there is exactly one copy of each number.
+ */
+const ROCK_BREAKS = {
+  L0: [[-90, 60], [-48, 96], [-14, 128], [16, 148], [50, 172], [86, 188]],
+  L1: [[-90, 178], [-48, 206], [-6, 232], [26, 248], [62, 262], [100, 268]],
+  B1: [[-90, 352], [-44, 376], [-2, 398], [30, 410], [66, 424], [105, 432]],
+  L2: [[-90, 480], [-40, 502], [4, 518], [42, 528], [80, 534], [114, 536]],
+  T1: [[-90, 578], [-38, 600], [6, 616], [40, 626], [66, 632], [84, 636]],
+};
+const ROCK_EDGES = {
+  EDGE_UP: [[106, -60], [104, 44], [98, 92], [92, 140], [86, 188]],
+  EDGE_PLAT: [[86, 188], [96, 204], [100, 268]],
+  EDGE_CLIFF: [[100, 268], [107, 306], [102, 372], [105, 432]],
+  EDGE_SHELF: [[105, 432], [113, 448], [116, 474], [114, 536]],
+  EDGE_RISER: [[114, 536], [106, 566], [96, 600], [84, 636]],
+  FOOT: [[84, 636], [74, 686], [58, 740], [44, 800], [36, 872],
+         [28, 950], [20, 1010], [-90, 1010]],
+};
+/** the whole right-hand silhouette as (y -> x), y ascending */
+const ROCK_PROFILE = (() => {
+  const E = ROCK_EDGES;
+  const all = E.EDGE_UP.concat(E.EDGE_PLAT.slice(1), E.EDGE_CLIFF.slice(1),
+    E.EDGE_SHELF.slice(1), E.EDGE_RISER.slice(1), E.FOOT.slice(1, -1));
+  return all.map(([x, y]) => [y, x]);            // [yPm, xPm]
+})();
+
+/** linear interpolation through a polyline held as [key, value] pairs */
+function alongPm(line, k) {
+  if (k <= line[0][0]) return line[0][1];
+  const last = line[line.length - 1];
+  if (k >= last[0]) return last[1];
+  for (let i = 1; i < line.length; i++) {
+    const [k0, v0] = line[i - 1], [k1, v1] = line[i];
+    if (k <= k1) return v0 + (v1 - v0) * ((k - k0) / (k1 - k0 || 1));
+  }
+  return last[1];
+}
+/** a break line is held as [x, y], so this is "how far down is it here" */
+const breakYAt = (line, xPm) => alongPm(line, xPm);
+
+// the bands, top to bottom. `level` is the terrace an animal stands on;
+// null means a wall it cannot.
+const ROCK_LEVEL_GROUND = 0, ROCK_LEVEL_SHELF = 1, ROCK_LEVEL_PLATEAU = 2;
+
+/**
+ * WHICH BAND OF THE BLUFF IS THIS POINT IN, and can it be stood on.
+ * Returns { on, level, wall, band }. `on` is false for everything east of
+ * the rock's own silhouette, which is most of the map — that is open forest
+ * floor and counts as level 0 like the talus does.
+ */
+function rockZone(bounds, x, y) {
+  const xPm = x / bounds.w * 1000, yPm = y / bounds.h * 1000;
+  if (xPm > alongPm(ROCK_PROFILE, yPm)) {
+    return { on: false, level: ROCK_LEVEL_GROUND, wall: false, band: "forest" };
+  }
+  const B = ROCK_BREAKS;
+  if (yPm < breakYAt(B.L0, xPm)) return { on: true, level: null, wall: true, band: "upper" };
+  if (yPm < breakYAt(B.L1, xPm)) return { on: true, level: ROCK_LEVEL_PLATEAU, wall: false, band: "plateau" };
+  if (yPm < breakYAt(B.B1, xPm)) return { on: true, level: null, wall: true, band: "cliff" };
+  if (yPm < breakYAt(B.L2, xPm)) return { on: true, level: ROCK_LEVEL_SHELF, wall: false, band: "shelf" };
+  if (yPm < breakYAt(B.T1, xPm)) return { on: true, level: null, wall: true, band: "riser" };
+  return { on: true, level: ROCK_LEVEL_GROUND, wall: false, band: "talus" };
+}
+
+/** the y, in stage px, of a break line at this x — where a leap lands */
+function rockBreakY(bounds, line, x) {
+  return breakYAt(line, x / bounds.w * 1000) / 1000 * bounds.h;
+}
+
+/**
+ * THE BLUFF AS PHYSICS. Three rules, and they are the whole of it.
+ *
+ *  1. A WALL CANNOT BE STOOD ON. An animal that ends a frame inside the
+ *     riser, the cliff or the upper mass is pushed vertically to whichever
+ *     of the two terraces bounding that wall is nearer, and its velocity
+ *     into the wall is cancelled — the same shape as keepAshore, which has
+ *     done this job for the lake since the beginning.
+ *  2. AN ANIMAL DOES NOT CHANGE LEVEL BY WALKING. It carries `_lvl`, and a
+ *     step that would put it on a different terrace is refused the same way
+ *     a step into a wall is. Height is crossed by LEAPING, FLYING or
+ *     CLIMBING, never by strolling up a cliff.
+ *  3. THE CAVE IS A ROOM. It is cut into the cliff, so by rule 1 it would be
+ *     a wall; it is carved back out as standable, because the owner asked
+ *     for it to be occupied. Its floor is the shelf's, so it is level 1.
+ *
+ * The cave mouth, in the same per-mille the bands are in. Read off the
+ * `cave` polygon RockLayer draws, shrunk by a body's width so an animal
+ * inside it is inside the DRAWN opening rather than halfway through its jamb.
+ */
+const ROCK_CAVE = { x0: -6, x1: 50, y0: 320, y1: 430 };
+function inRockCave(bounds, x, y) {
+  const xPm = x / bounds.w * 1000, yPm = y / bounds.h * 1000;
+  return xPm > ROCK_CAVE.x0 && xPm < ROCK_CAVE.x1
+      && yPm > ROCK_CAVE.y0 && yPm < ROCK_CAVE.y1;
+}
+
+/** which terrace an animal standing here belongs to, cave included */
+function rockLevelAt(bounds, x, y) {
+  if (inRockCave(bounds, x, y)) return ROCK_LEVEL_SHELF;
+  return rockZone(bounds, x, y).level;          // null inside a wall
+}
+
+// the wall bands, and the two break lines that bound each one. Ejection goes
+// to whichever is nearer, so an animal shoved into the riser from below comes
+// back down to the talus and one shoved in from above lands on the shelf.
+const ROCK_WALLS = {
+  riser: ["L2", "T1"],      // shelf above, talus below
+  cliff: ["L1", "B1"],      // plateau above, shelf below
+  upper: [null, "L0"],      // nothing above: the mass goes off screen
+};
+
+/**
+ * Keep an animal off the rock faces, and on its own terrace. Called from the
+ * grounded rules beside keepAshore, and skipped for anything genuinely in
+ * the air — a leaping animal is MEANT to be over a wall for a moment, which
+ * is the entire point of leaping.
+ */
+function keepOffRock(a, bounds) {
+  const z = rockZone(bounds, a.x, a.y);
+  if (!z.on) { a._lvl = ROCK_LEVEL_GROUND; return; }   // open forest floor
+  if (a._lvl == null) a._lvl = rockLevelAt(bounds, a.x, a.y) ?? ROCK_LEVEL_GROUND;
+
+  const cave = inRockCave(bounds, a.x, a.y);
+  const lvl = cave ? ROCK_LEVEL_SHELF : z.level;
+  if (lvl === a._lvl) return;                          // where it belongs
+
+  // Inside a wall, or on the wrong terrace. Both are the same correction:
+  // go back to the nearest edge of the band this animal is allowed on.
+  const B = ROCK_BREAKS;
+  const bandOf = (l) => (l === ROCK_LEVEL_PLATEAU ? ["L0", "L1"]
+    : l === ROCK_LEVEL_SHELF ? ["B1", "L2"] : ["T1", null]);
+  const [topLine, botLine] = bandOf(a._lvl);
+  const top = topLine ? rockBreakY(bounds, B[topLine], a.x) : -1e9;
+  const bot = botLine ? rockBreakY(bounds, B[botLine], a.x) : 1e9;
+  const pad = Math.max(6, a.r * 0.5);
+  const want = a.y < top + pad ? top + pad : a.y > bot - pad ? bot - pad : a.y;
+  if (want !== a.y) {
+    const up = want < a.y;
+    a.y = want;
+    // slide along the face rather than grinding into it
+    if (up ? a.vy > 0 : a.vy < 0) a.vy = 0;
+  }
+}
+
 /* ---------------- The west bluff ---------------- */
 /**
  * A GREY ROCK FORMATION DOWN THE LEFT MARGIN, and only the BOTTOM of one.
@@ -2315,27 +2511,23 @@ function RockLayer({ bounds }) {
     //   B1  the cliff's foot, which is the back of the lower shelf
     //   L2  the shelf's lip
     //   T1  the foot of the lower riser, where stone gives out into talus
-    const L0 = [[-90, 60], [-48, 96], [-14, 128], [16, 148], [50, 172], [86, 188]];
-    const L1 = [[-90, 178], [-48, 206], [-6, 232], [26, 248], [62, 262], [100, 268]];
-    const B1 = [[-90, 352], [-44, 376], [-2, 398], [30, 410], [66, 424], [105, 432]];
-    const L2 = [[-90, 480], [-40, 502], [4, 518], [42, 528], [80, 534], [114, 536]];
-    const T1 = [[-90, 578], [-38, 600], [6, 616], [40, 626], [66, 632], [84, 636]];
+    // ...and they are MODULE constants now, because the physics reads them.
+    // See ROCK below: the bands these five lines cut are the terraces an
+    // animal can stand on and the walls it cannot, and geometry-as-physics
+    // means the line that is drawn IS the line that is walked to. Two copies
+    // of these numbers would drift the first time one of them was nudged.
+    const { L0, L1, B1, L2, T1 } = ROCK_BREAKS;
 
     // the right-hand profile, top to bottom. A WEDGE, and that is the whole
     // trick: 106 wide where it leaves the top of the frame, pinched to 86
     // at the neck, then stepping out to 100, 105 and 116 as it descends,
     // and back in to 84 below the shelf. A mass that widens as it comes
     // down is a mass whose top is somewhere above the window.
-    const EDGE_UP = [[106, -60], [104, 44], [98, 92], [92, 140], [86, 188]];
-    const EDGE_PLAT = [[86, 188], [96, 204], [100, 268]];
-    const EDGE_CLIFF = [[100, 268], [107, 306], [102, 372], [105, 432]];
-    const EDGE_SHELF = [[105, 432], [113, 448], [116, 474], [114, 536]];
-    const EDGE_RISER = [[114, 536], [106, 566], [96, 600], [84, 636]];
+    const { EDGE_UP, EDGE_PLAT, EDGE_CLIFF, EDGE_SHELF, EDGE_RISER } = ROCK_EDGES;
     // ...and the talus, which runs off the BOTTOM of the frame as well. It
     // narrows the whole way down: past y 700 the west-low oak's root plate
     // is the neighbour and nothing here may pass x 48.
-    const FOOT = [[84, 636], [74, 686], [58, 740], [44, 800], [36, 872],
-                  [28, 950], [20, 1010], [-90, 1010]];
+    const FOOT = ROCK_EDGES.FOOT;
 
     const outline = poly([[-90, -60]].concat(EDGE_UP, EDGE_PLAT.slice(1),
       EDGE_CLIFF.slice(1), EDGE_SHELF.slice(1), EDGE_RISER.slice(1), FOOT.slice(1)));
@@ -3744,6 +3936,12 @@ const DAM_PLAN = (() => {
 // the plan reaches the beaver's ethogram as def.dam. Attached here rather
 // than in the WORLDS literal above, which is evaluated 1300 lines earlier.
 WORLDS.forest.dam = DAM_PLAN;
+// ...and the bluff, so the grounded rules and the ethogram both know there
+// is terrain on the west edge. A world without this flag simply has no rock,
+// which is every world but this one.
+WORLDS.forest.rock = { breaks: ROCK_BREAKS, cave: ROCK_CAVE,
+                       levels: { ground: ROCK_LEVEL_GROUND, shelf: ROCK_LEVEL_SHELF,
+                                 plateau: ROCK_LEVEL_PLATEAU } };
 
 // ---------------- The sward ----------------
 // Open grass, and nothing else: the goose grazes here. It is a wide, shallow
@@ -4877,6 +5075,9 @@ function stepWorld(world, cfg, dt) {
       // a bush — and they set their own height each frame
       if (a.z > 0 && !hopping && !ETHO_Z_STATES.has(a.state)) { a.z *= Math.exp(-5 * dt); if (a.z < 0.5) a.z = 0; }
       if (def.hasWater && !canSwimIn(def, a.species)) keepAshore(a, bounds);
+      // ...and off the bluff's faces. Skipped while genuinely airborne: a
+      // leap is MEANT to be over a wall for a moment.
+      if (def.rock && !hopping && a.z < 4) keepOffRock(a, bounds);
       if (def.pool && !canSwimIn(def, a.species) && a.z < 3) keepOutOfPool(a, bounds, def.pool);
       if (a.z < 3) keepOutOfHouses(a, bounds, def.houses);
       if (def.fences) {
