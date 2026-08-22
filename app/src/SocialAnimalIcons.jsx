@@ -204,13 +204,31 @@ function padRimRho(bounds) {
 // this state — which is why `up` is a token 6 and why the lake's northern
 // shore stays usable on stages where nothing else does.
 const STAND_REACH = { side: 41, down: 32, up: 6 };
+// ...and the raccoon's DOUSE pose, which is a different drawing on a smaller
+// animal and had to be measured on its own. racwet / racwash / racpaws are
+// one group — `.sai-crit-washpose` — drawn at r*2.7 px across the same
+// 120-unit box (0.4703 px/unit at r 20.9) and wrapped in
+//   translate(60 103) scale(1.02) translate(-60 -103).
+// Four marks set the envelope:
+//   the water sheet   ellipse cx74 cy99 rx43 ry11   -> px -13.9..+27.4 across,
+//                                                      +13.0..+23.6 down
+//   the ground shadow ellipse cx60 cy105 rx29 ry6 — the RIG's, and unlike the
+//     goose's it is NOT switched off in this state, so it is the LOWEST ink
+//     on the sprite:                                -> px +18.3..+24.0
+//   the tail          out to x 13.6 under an 11-wide cap  -> px -22.3
+//   the ear tip       local y 21                          -> px -19.1
+// He mirrors on `_faceDir`, so `side` is the larger flank. Held in the pose
+// and swept over a whole animation cycle the drawn box measures -27.3/+20.3
+// across and -22.8/+24.7 down, and these carry the same ~2px of margin that
+// STAND_REACH's `side: 41` already carries over its own measured 36.4.
+const DOUSE_REACH = { side: 29, down: 27, up: 21 };
 const STAND_BAND_PX = 20;   // how wide to make the band once it clears
 const STAND_MIN_PX = 5;     // thinner than this is not a band, it is a line
 
-function standClearance(t) {
+function standClearance(t, reach) {
   const s = Math.sin(t);
-  return Math.abs(Math.cos(t)) * STAND_REACH.side +
-    (s > 0 ? s * STAND_REACH.down : -s * STAND_REACH.up);
+  return Math.abs(Math.cos(t)) * reach.side +
+    (s > 0 ? s * reach.down : -s * reach.up);
 }
 
 /**
@@ -225,11 +243,14 @@ function standClearance(t) {
  * far:  clear of the swim disc and of the floats' outer drift rim.
  * Callers walk the angle until one comes back non-null.
  */
-function shallowBandAt(bounds, t) {
+// `reach` is the POSE's, not the species': the band is only ever as wide as
+// the drawing standing in it, and a goose-shaped band comes back null down
+// the whole south shore where a raccoon-shaped one still has 5.6px of room.
+function shallowBandAt(bounds, t, reach = STAND_REACH) {
   let pa = t % (Math.PI * 2); if (pa < 0) pa += Math.PI * 2;
   if (pa > DAM_SECTOR[0] && pa < DAM_SECTOR[1]) return null;   // a building site, not shallows
   const px = lakeRhoScale(bounds, pa);
-  const near = Math.min(LAKE_WET_RHO - 0.03, LAKE_SHORE_RHO - standClearance(pa) / px);
+  const near = Math.min(LAKE_WET_RHO - 0.03, LAKE_SHORE_RHO - standClearance(pa, reach) / px);
   const floor = Math.max(SWIM_RHO_MAX + 0.06, padRimRho(bounds) + 0.02);
   if (near <= floor + 0.005) return null;
   const far = Math.max(floor, near - STAND_BAND_PX / px);
@@ -267,9 +288,14 @@ const FOREST_TREES = [
   // step toward it broke rule 1 — the only way right was to go far enough
   // down to clear the root's latitude entirely.
   { x: .125, y: .800, s: 1.38,  kind: "oak"  }, // west, low
-  // Right, into the open ground it was asked for. The three grass tufts
-  // that stood on and above the old spot are gone — see BG_KEEPOUT.
-  { x: .168, y: .315, s: 1.176, kind: "oak"  }, // west, high
+  // Right, into the open ground it was asked for — and an EVERGREEN now,
+  // which is a second nest tree as well as a second silhouette. A conifer's
+  // crown box is 40 half-width against an oak's 64, so the same tree stops
+  // leaning over the ground west of it. The scale is 1.10 and not more for
+  // one reason: a pine's crown is drawn 232px tall against an oak's 207, in
+  // FIXED px, so at this latitude anything above 1.10 puts the tip off the
+  // top of the stage and the tree reads as beheaded rather than tall.
+  { x: .168, y: .315, s: 1.10, kind: "pine", fruit: false }, // west, high
   // Moved from (.898,.480) — its west face was over the lake. Every trunk
   // behavior works a trunk from the WEST and stands its subject a sprite-foot
   // north of the anchor, and at the old spot that put the bear's back scratch
@@ -281,8 +307,24 @@ const FOREST_TREES = [
   // other's blocker: the lake tree could not come down past the one below
   // it, and that one could not come down past the south-east larder's 96px
   // rings. Moved one at a time they were stuck at 2% and 1.5%.
-  { x: .920, y: .575, s: 1.44,  kind: "oak"  }, // east flank, above the forage
-  { x: .890, y: .725, s: 1.26,  kind: "oak"  }, // east flank, below it
+  //
+  // ...and then they were solved as a pair AGAIN, because at (.920,.575) and
+  // (.890,.725) their crowns OVERLAPPED BY 35px — 138px between the trunks
+  // against 173px of combined crown. They read as one lumpy mass. What pins
+  // this corner is that the lake's south-east shore puts a trunk's own west
+  // working spots in the water above y .55, the larder's 96px rings block
+  // everything below y .73, and the map edge is 8% away. The way out was
+  // DIAGONAL — one tree hard into the corner, the other back and down —
+  // plus a trim: 1.44 -> 1.32 and 1.26 -> 1.20. That is 174px between the
+  // trunks and 13px of daylight between the crowns.
+  //
+  // The gap is quoted at 1500x940 on purpose. Crowns are drawn in FIXED px
+  // while the trunks are stage fractions, so every pair in this world closes
+  // up on a short window — the west pair, the roomiest on the map, is +59px
+  // here and -16px at 1008x700. That is structural, and no placement fixes
+  // it; what a placement can fix is the shape people actually look at.
+  { x: .945, y: .550, s: 1.32,  kind: "oak"  }, // east flank, into the corner
+  { x: .875, y: .710, s: 1.20,  kind: "oak"  }, // east flank, back and down
   // UP, off the big fallen log — which has itself moved, out of the
   // background and into the forage list as a real site. This is the drey
   // tree: DREY_TREE is a rule, not an index, so the squirrel's nest follows
@@ -337,19 +379,35 @@ const CLIMB_HEAD = 0.768;   // hug pose: ear tips above the sprite centre
  */
 const NEST_DX = 20;                    // right of the trunk's centre line
 const NEST_CLEAR_RHO = 1.6;            // shoreline is 1.0
-const NEST_TREE = (() => {
+// THE RULE: every evergreen that stands clear of the lake carries a nest.
+// It is a set now, not an index — the map has two conifers and an owl with
+// one roost has one place to be, which after a few minutes reads as a bird
+// on a peg rather than a bird that lives here. Still a RULE and not a list
+// of coordinates: add a third spruce and it gets a nest, turn one back into
+// an oak and its nest goes with it, and nothing downstream is edited.
+//
+// A conifer specifically, and not simply "the biggest trees". A broadleaf's
+// crown is drawn as three overlapping blobs with the nest cup sitting in
+// front of them; a conifer's whorls give the cup something to be wedged IN.
+// The old rule picked the biggest lake-clear tree, which was the spruce, so
+// this is the same answer plus the one the layout just gained.
+const NEST_TREES = (() => {
   const clear = (t) => Math.hypot((t.x - LAKE.cx) / LAKE.rx, (t.y - LAKE.cy) / LAKE.ry) >= NEST_CLEAR_RHO;
-  let best = -1;
+  const out = [];
   for (let i = 0; i < FOREST_TREES.length; i++) {
-    if (!clear(FOREST_TREES[i])) continue;
-    if (best < 0 || FOREST_TREES[i].s > FOREST_TREES[best].s) best = i;
+    const t = FOREST_TREES[i];
+    if (t.kind === "pine" && clear(t)) out.push(i);
   }
-  // No inland tree at all would be a very different map than this one; take
-  // the biggest anyway rather than lose the behavior over a layout change.
-  if (best < 0) for (let i = 0; i < FOREST_TREES.length; i++) {
-    if (best < 0 || FOREST_TREES[i].s > FOREST_TREES[best].s) best = i;
+  // A map with no lake-clear conifer would be a very different map than this
+  // one; take the biggest tree of any kind rather than lose the behavior
+  // over a layout change.
+  if (!out.length) {
+    let best = 0;
+    for (let i = 1; i < FOREST_TREES.length; i++)
+      if (FOREST_TREES[i].s > FOREST_TREES[best].s) best = i;
+    out.push(best);
   }
-  return best;
+  return out;
 })();
 
 /**
@@ -379,8 +437,13 @@ const NEST_TREE = (() => {
  */
 const OWL_ROOST_SPAN = (104.12 - 25.16) / 120;   // toes -> tuft tips, of the sprite box
 const NEST_VEIL = 4;                             // px of his ear tips inside the leaves
-const NEST_PX = TREE_CANOPY_PX
-  - (OWL_ROOST_SPAN * speciesSize("owl") * 2.7 - NEST_VEIL) / (FOREST_TREES[NEST_TREE].s || 1);
+// The drop below the canopy line, in STAGE px. It is a stage number and not
+// a tree-local one because the thing that has to fit in the gap is the OWL,
+// who is drawn the same size whatever trunk he is on — which is exactly why
+// this cannot be one constant shared by two nest trees of different scales.
+// Divide it out by a tree's own scale to get that tree's cup floor.
+const NEST_DROP_PX = OWL_ROOST_SPAN * speciesSize("owl") * 2.7 - NEST_VEIL;
+const nestFloorPx = (s) => TREE_CANOPY_PX - NEST_DROP_PX / (s || 1);
 // ...and the patch of floor he takes off from and lands back beside: out
 // past the buttress so he is never standing inside the bark.
 const NEST_FOOT_DX = 26, NEST_FOOT_DY = 14;
@@ -473,8 +536,11 @@ setTreeMetrics({
   // the owl's nest: which tree, and where on it. Handed over rather than
   // imported, same as everything else here — the ethogram never learns a
   // coordinate, only "tree number n, this far out and this far up it".
-  nest: { i: NEST_TREE, dx: NEST_DX, floorPx: NEST_PX,
-          footDX: NEST_FOOT_DX, footDY: NEST_FOOT_DY },
+  // `is` is a LIST of tree indices, and floorPx is handed over as the two
+  // numbers it is computed from rather than as an answer, because the answer
+  // depends on which of the trees he picked: canopyPx - dropPx / thisTree.s.
+  nest: { is: NEST_TREES, dx: NEST_DX, canopyPx: TREE_CANOPY_PX,
+          dropPx: NEST_DROP_PX, footDX: NEST_FOOT_DX, footDY: NEST_FOOT_DY },
   // ...and where each species of crown is PAINTED, which is the one entry
   // here that is a place an animal must not stop rather than one it goes to.
   crowns: TREE_CROWNS,
@@ -525,7 +591,7 @@ const SPRUCE_WHORLS = [
  * THE NEST. World geometry, so the world draws it and no sprite does — the
  * same contract as the trunks, the bushes and the larder: the cup that is
  * drawn IS the cup the owl's talons land on, and if this art moves, the
- * ethogram follows it, because both read NEST_PX.
+ * ethogram follows it, because both read the same canopy line and drop.
  *
  * It comes in two halves, because the tree does. The cup, its lining and the
  * broken limb it is wedged on belong to the TRUNK pass at zIndex 2, under
@@ -541,8 +607,8 @@ const SPRUCE_WHORLS = [
  * not, and a nest that swayed with the leaves would visibly come off the
  * limb holding it up.
  */
-function TreeNest({ part }) {
-  const y = 20 - NEST_PX;           // the cup floor, in the trunk svg's own units
+function TreeNest({ part, floorPx }) {
+  const y = 20 - floorPx;           // the cup floor, in the trunk svg's own units
   const x = NEST_DX;
   if (part === "canopy") {
     return (
@@ -574,7 +640,7 @@ function TreeNest({ part }) {
       <path d="M -12 6 C -4 4 6 3 14 4" stroke="#4e3521" strokeWidth="6" fill="none" strokeLinecap="round" />
       <path d="M -10 11 C -3 10 4 9 9 8" stroke="#422c1a" strokeWidth="3.4" fill="none" strokeLinecap="round" />
       {/* the cup: outer mass, with a concave top whose centre lands on y 0 —
-          which is NEST_PX above the anchor, which is where the talons go */}
+          which is floorPx above the anchor, which is where the talons go */}
       <path d="M -18 -5 C -18 10 -12 14 0 14 C 12 14 18 10 18 -5
                C 11 1.7 -11 1.7 -18 -5 Z" fill="#5a3f26" />
       <path d="M -18 -5 C -18 6 -13 10 -4 12 C -12 9 -15 3 -15 -4 Z" fill="#6b4a2a" opacity=".7" />
@@ -620,7 +686,7 @@ function TreeLayer({ bounds, part }) {
                  the sway group — the boughs swing, the trunk it is wedged
                  into does not. */
               <>
-              {i === NEST_TREE && <TreeNest part="canopy" />}
+              {NEST_TREES.includes(i) && <TreeNest part="canopy" floorPx={nestFloorPx(t.s)} />}
               <g className="sai-bg-sway" style={{ animationDuration: `${6.5 + i * 0.7}s`, animationDelay: `${i * 1.3}s`, transformOrigin: "50% 100%" }}>
                 {kind === "pine" ? (
                   <>
@@ -699,7 +765,7 @@ function TreeLayer({ bounds, part }) {
                 <path d="M -14 -3 C -23 -7 -30 -3 -34 3 C -25 4 -19 4 -14 2 Z" fill="#3f2c1c" />
                 <path d="M 16 -5 C 25 -9 32 -5 36 2 C 28 4 21 4 16 2 Z" fill="#3f2c1c" />
                 {/* the nest's back half, last so it paints onto the bark */}
-                {i === NEST_TREE && <TreeNest part="trunk" />}
+                {NEST_TREES.includes(i) && <TreeNest part="trunk" floorPx={nestFloorPx(t.s)} />}
               </>
             ) : (
               <>
@@ -719,7 +785,7 @@ function TreeLayer({ bounds, part }) {
                 <path d="M -8 -95.4 C -22 -105.4 -34 -109.4 -46 -107.4 M 9 -97.4 C 22 -107.4 34 -111.4 46 -108.4" stroke="#5b3f26"
                   strokeWidth="5" fill="none" strokeLinecap="round" />
                 {/* the nest's back half, last so it paints onto the bark */}
-                {i === NEST_TREE && <TreeNest part="trunk" />}
+                {NEST_TREES.includes(i) && <TreeNest part="trunk" floorPx={nestFloorPx(t.s)} />}
               </>
             )}
           </svg>
@@ -1820,6 +1886,14 @@ export default function SocialAnimalsRPG() {
       // the drawing, and must not carry its own copy of the drawing.
       W.__siteHalf = FORAGE_SITE_HALF;
       W.__pitHalf = PIT_HALF_PX;
+      // ...and the two lines the depth rule itself is measured against, for
+      // the same reason: a suite carrying its own copy of the trunk's
+      // working line goes on passing after the rule moves under it. That is
+      // exactly how v0.37's depth check passed on a broken rule.
+      W.__tree = { basePx: TREE_BASE_PX, canopyPx: TREE_CANOPY_PX,
+                   trunkR: TREE_TRUNK_R, standFeet: STAND_FEET,
+                   touchPad: TRUNK_TOUCH_PAD };
+      W.__logBody = { nearPx: LOG_NEAR_PX, topPx: LOG_TOP_PX };
       // ...and the shoreline band itself, so a suite can put an animal ON a
       // legal dabbling spot instead of somewhere it then has to swim to. The
       // goose's plunge check is about the plunge; its walk-there leg is
@@ -1827,6 +1901,10 @@ export default function SocialAnimalsRPG() {
       // 18s give-up buys only a few seconds of swimming, so a seed that has
       // to cross any water at all is a coin flip rather than a check.
       W.shallowBandAt = (t) => shallowBandAt(W.bounds, t);
+      W.douseBandAt = (t) => shallowBandAt(W.bounds, t, DOUSE_REACH);
+      // ...and the shipped reach itself, so the suite checks the number the
+      // world uses rather than a copy of it that can drift
+      W.__douseReach = DOUSE_REACH;
       W.lakePointAt = (t, rho) => lakePoint(W.bounds, t, rho);
       W.__sep = (a, b) => separatePair(W, a, b, W, false);
       W.__cool = (a, ms) => enterCooldown(a, ms);
@@ -2025,43 +2103,13 @@ function SaiBgGrass() {
   );
 }
 
-function SaiBgClover() {
-  const leaves = [0, 90, 180, 270];
-  return (
-    <g filter="url(#sai-bg-soft)">
-      {leaves.map((r, i) => (
-        <g key={i} transform={`rotate(${r})`}>
-          <path
-            d="M0 -2 C 9 -14 20 -8 16 3 C 13 11 4 11 0 4 Z"
-            fill="url(#sai-bg-cloverGrad)"
-          />
-        </g>
-      ))}
-      <circle r="2.4" fill="#163a24" />
-    </g>
-  );
-}
-
-function SaiBgFlower({ petal, petal2 }) {
-  const petals = [0, 60, 120, 180, 240, 300];
-  return (
-    <g filter="url(#sai-bg-soft)">
-      <path d="M0 0 Q 3 22 0 40" stroke="#2f6b45" strokeWidth="2.4" fill="none" />
-      {petals.map((r, i) => (
-        <ellipse
-          key={i}
-          cx="0"
-          cy="-11"
-          rx="6.5"
-          ry="12"
-          transform={`rotate(${r})`}
-          fill={i % 2 ? petal2 : petal}
-        />
-      ))}
-      <circle r="6" fill="url(#sai-bg-flowerCore)" />
-    </g>
-  );
-}
+// The four-leaf clovers, the six-petal flowers and the scattered brown
+// pebbles that used to live here are gone. They were decoration with no
+// behaviour behind them, and at fourteen animals on one map that is fourteen
+// silhouettes competing with a field of small bright shapes that never move
+// and never mean anything. The mushrooms stay: there are four of them, they
+// read as forest rather than as confetti, and they sit where the eye is not
+// already busy.
 
 function SaiBgMushroom({ cap }) {
   return (
@@ -2151,25 +2199,6 @@ function ForestScene() {
       if (!keepOut(gx, gy)) grass.push({ x: gx, y: gy, s: gs, rot: gr, delay: gd, dur: gu });
     }
 
-    const clovers = [];
-    for (let i = 0; i < 7; i++) clovers.push({ x: rand(120, 1080), y: rand(430, 760), s: rand(0.7, 1.3), rot: rand(0, 360) });
-    for (let i = 0; i < 4; i++) clovers.push({ x: rand(80, 560), y: rand(100, 380), s: rand(0.6, 1.1), rot: rand(0, 360) });
-
-    const flowers = [
-      { x: 200, y: 560, s: 1, p: "#ff9ecb", p2: "#ffd166" },
-      { x: 520, y: 700, s: 0.9, p: "#b98cff", p2: "#ff9ecb" },
-      { x: 880, y: 560, s: 1.05, p: "#ffd166", p2: "#ff9ecb" },
-      { x: 1040, y: 700, s: 0.85, p: "#e0527a", p2: "#ffd166" },
-      { x: 360, y: 480, s: 0.8, p: "#ff9ecb", p2: "#b98cff" },
-      { x: 150, y: 220, s: 0.8, p: "#ffd166", p2: "#e0527a" },
-      { x: 380, y: 320, s: 0.7, p: "#ff9ecb", p2: "#b98cff" },
-      { x: 520, y: 150, s: 0.75, p: "#b98cff", p2: "#ffd166" },
-    ];
-
-    const pebbles = [];
-    for (let i = 0; i < 6; i++) pebbles.push({ x: rand(120, 1080), y: rand(450, 760), rx: rand(7, 16), ry: rand(4, 9) });
-    for (let i = 0; i < 3; i++) pebbles.push({ x: rand(60, 540), y: rand(140, 360), rx: rand(6, 13), ry: rand(4, 8) });
-
     const leaves = [];
     const leafCols = ["#79c98a", "#4e9c5f", "#ffd27a", "#b9ecab", "#e0527a"];
     for (let i = 0; i < 6; i++) {
@@ -2198,7 +2227,7 @@ function ForestScene() {
     const dapples = [];
     for (let i = 0; i < 5; i++) dapples.push({ x: rand(150, 1050), y: rand(430, 720), r: rand(60, 130), delay: rand(0, 8).toFixed(2), dur: (9 + rand(0, 5)).toFixed(2) });
 
-    return { rays, ferns, grass, clovers, flowers, pebbles, leaves, flies, butterflies, dapples };
+    return { rays, ferns, grass, leaves, flies, butterflies, dapples };
   }, []);
 
   return (
@@ -2245,14 +2274,6 @@ function ForestScene() {
             <stop offset="0.7" stopColor="#4e9c5f" />
             <stop offset="1" stopColor="#b9ecab" />
           </linearGradient>
-          <linearGradient id="sai-bg-cloverGrad" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0" stopColor="#4e9c5f" />
-            <stop offset="1" stopColor="#2f6b45" />
-          </linearGradient>
-          <radialGradient id="sai-bg-flowerCore" cx="0.4" cy="0.35" r="0.7">
-            <stop offset="0" stopColor="#ffe9ad" />
-            <stop offset="1" stopColor="#ffd27a" />
-          </radialGradient>
           <linearGradient id="sai-bg-stemGrad" x1="0" y1="1" x2="0" y2="0">
             <stop offset="0" stopColor="#6b4a2a" />
             <stop offset="1" stopColor="#e9d6b0" />
@@ -2376,35 +2397,11 @@ function ForestScene() {
         <g transform="translate(90 150) scale(0.8)"><SaiBgMushroom /></g>
         <g transform="translate(490 300) scale(0.65)"><SaiBgMushroom cap="url(#sai-bg-capGrad)" /></g>
 
-        {/* pebbles */}
-        {data.pebbles.map((p, i) => (
-          <g key={"peb" + i} transform={`translate(${p.x} ${p.y})`} filter="url(#sai-bg-soft)">
-            <ellipse rx={p.rx} ry={p.ry} fill="#6b4a2a" />
-            <ellipse cx={-p.rx * 0.25} cy={-p.ry * 0.3} rx={p.rx * 0.6} ry={p.ry * 0.5} fill="#8a6a44" opacity="0.7" />
-          </g>
-        ))}
-
-        {/* clover */}
-        {data.clovers.map((c, i) => (
-          <g key={"clv" + i} transform={`translate(${c.x} ${c.y}) scale(${c.s}) rotate(${c.rot})`}>
-            <SaiBgClover />
-          </g>
-        ))}
-
         {/* grass tufts (sway) */}
         {data.grass.map((g, i) => (
           <g key={"grs" + i} transform={`translate(${g.x} ${g.y}) scale(${g.s}) rotate(${g.rot})`}>
             <g className="sai-bg-sway" style={{ animationDelay: g.delay + "s", animationDuration: g.dur + "s" }}>
               <SaiBgGrass />
-            </g>
-          </g>
-        ))}
-
-        {/* flowers (gentle sway) */}
-        {data.flowers.map((f, i) => (
-          <g key={"flw" + i} transform={`translate(${f.x} ${f.y}) scale(${f.s})`}>
-            <g className="sai-bg-sway sai-bg-sway-soft" style={{ animationDelay: (i * 0.7) + "s" }}>
-              <SaiBgFlower petal={f.p} petal2={f.p2} />
             </g>
           </g>
         ))}
@@ -3462,6 +3459,8 @@ function stepWorld(world, cfg, dt) {
   // ethogram has to carry a copy of geometry it cannot see change.
   const ethoCtx = { now, dt, def, bounds, world, cfg, rand, isWet, isFreeState, lakePoint, LAKE,
     shallowBand: (t) => (def.hasWater ? shallowBandAt(bounds, t) : null),
+    // the same question asked for the raccoon's pose instead of the goose's
+    douseBand: (t) => (def.hasWater ? shallowBandAt(bounds, t, DOUSE_REACH) : null),
     onBareEarth: (x, y, pad) => onBareEarth(def, bounds, x, y, pad) };
 
   // ---- floats (lily pads + drift logs): VERY slow quasi-chaotic drift
@@ -4526,7 +4525,8 @@ function renderWorld(world, iconsRef, padsRef, damRefs, pitRefs) {
     // the trunks, the bushes and the drey at 2 and over the lake and the
     // skunk's pits, which are also 1 but earlier in the DOM — so an animal
     // behind a tree is still in front of the water it is standing beside.
-    const zi = behindTrunk(a, world.def, world.bounds) ? '1' : '10';
+    const zi = (behindTrunk(a, world.def, world.bounds)
+             || behindLog(a, world.forage)) ? '1' : '10';
     if (el.style.zIndex !== zi) el.style.zIndex = zi;
 
     // drive the sprite: facing, walk cycle, and interaction jitter
@@ -4574,7 +4574,15 @@ function renderWorld(world, iconsRef, padsRef, damRefs, pitRefs) {
       // invisible: only the species that cannot hold their top ever get
       // here, and a wolf at drain 0.10 never does, which is the whole point
       // of putting the cougar next to him.
-      sprite.dataset.spent = (a._ex || 0) > 0.6 ? '1' : '';
+      // Blown, not merely fast. See Gait.js's exertion ledger: `_ex` rests at
+      // a level set by the species' own top speed, so a flat threshold on it
+      // reads the three fastest animals as permanently exhausted. `_exHot`
+      // is the same ledger measured against that animal's own trailing
+      // average, so this is "he has been working harder than he usually
+      // does", which is what the panting art is for. The absolute floor
+      // stops a well-rested animal panting over a small ripple.
+      sprite.dataset.spent =
+        (a._ex || 0) > 0.35 && (a._exHot || 0) > 0.14 ? '1' : '';
       // The musk. A fact about a MOMENT rather than about a state — the
       // fight it answers is already over by the time it shows, and the
       // break-up that follows is a dash-away — so it rides its own flag
@@ -4642,23 +4650,89 @@ function renderWorld(world, iconsRef, padsRef, damRefs, pitRefs) {
  * rut and bed, the raccoon's den, the squirrel's drey, the owl's nest —
  * works the WEST face and stands its subject a sprite-foot NORTH of the
  * anchor, which is to say above it. Read the depth rule literally and every
- * one of them vanishes into the bark the moment it starts. So inside the
- * tree's own reach the animal is not behind the tree, it is touching it,
- * and it stays in front. Beyond that ring it is simply further away than
- * the tree is. One ring, already defined, doing both jobs.
+ * one of them vanishes into the bark the moment it starts.
+ *
+ * v0.37 wrote that exception as TREE_REACH, and TREE_REACH IS THE WRONG
+ * RING. It is how close the BEAR HAS TO BE TO TAKE AN INTEREST — an
+ * approach radius, a flat 96px that does not scale with the tree. Measured
+ * as a depth exception it reaches 96px straight up the bark, half again as
+ * far as any behavior ever stands an animal, and it swallowed the bottom
+ * half of every trunk on the map: 68px of the spruce's 154px of bare bole,
+ * 75px of the small oak's 122. The trunks went on being walked over and the
+ * suite went on passing, because four sample points cannot test the shape
+ * of a boundary — the one point it expected to be BEHIND sat 1.5px inside
+ * the upper edge of the only stretch of bark the rule got right.
+ *
+ * The right line is the tree's own WORK. Every one of those behaviors pins
+ * a.y to (anchor - TREE_BASE_PX*s - a pose foot) and carries the HEIGHT on
+ * a.z, never on a.y — so no animal that belongs to this tree is ever above
+ * that line, and everything above it is simply further away than the tree
+ * is. Read off the same two constants the behaviors are, so it scales with
+ * BOTH the tree and the animal, which a flat 96 did not.
  */
+// The highest a trunk ever stands anything that belongs to it, in px above
+// its own anchor. STAND_FEET is the deepest of the pose feet, so one number
+// covers all six behaviors. The pad is the bear's clearance: his rub sits
+// exactly on the line.
+const TRUNK_TOUCH_PAD = 10;
+const trunkTouchPx = (s, r) => TREE_BASE_PX * s + r * 3.1 * STAND_FEET + TRUNK_TOUCH_PAD;
+
 function behindTrunk(a, def, bounds) {
   if (!def.trees || a.dragging) return false;
   for (const t of def.trees) {
     const s = t.s || 1;
     const tx = t.x * bounds.w, ty = t.y * bounds.h;
-    if (a.y >= ty) continue;                                  // nearer than the base
-    if (ty - a.y > TREE_CANOPY_PX * s) continue;              // above the trunk: the canopy's problem
+    const up = ty - a.y;                                      // px up the screen from the anchor
+    if (up <= trunkTouchPx(s, a.r)) continue;                 // level with the base, or at the tree
+    if (up > TREE_CANOPY_PX * s) continue;                    // above the trunk: the canopy's problem
     if (Math.abs(a.x - tx) > (TREE_TRUNK_R + 2) * s + a.r * 1.35) continue;  // not across the bark
-    if (Math.hypot(a.x - tx, a.y - ty) <= TREE_REACH) continue;              // at the tree, not behind it
     return true;
   }
   return false;
+}
+
+// THE DRAWN TIMBER, in stage px above a log site's anchor at scale 1.
+// ForageLayer's viewBox floor is local y 16, so a local y is (16 - y) px up.
+//   near  the near face: both bodies are drawn down to local y +10
+//   top   the mossed back: the mossy cap peaks at local -27.1, the rotten
+//         one's at -22. One number for both, taken from the taller.
+const LOG_NEAR_PX = 6, LOG_TOP_PX = 43;
+
+/**
+ * IS THIS ANIMAL BEHIND THAT LOG?
+ *
+ * The same rule as the trunks, and it was simply missing. The log body
+ * paints at 2 and the animals at 10, so an animal up the screen of a log
+ * walked over the timber. ForageCanopyLayer is NOT this and never was: its
+ * over-layer is the rot hole's rim and the mossy log's near lip — 8.7px of
+ * a 35.3px log — and its job is to cut the animal in FRONT of the wood.
+ * 84% of the drawn mossy log, and 96% of a rotten one, had nothing above
+ * z-index 10 at all.
+ *
+ * ...and the exception cannot be geometry this time. "On the log" and
+ * "behind the log" are THE SAME BAND: the hedgehog's dive puts him 35.6*s
+ * up with the log's back at 43*s, and the raccoon dens at the end grain,
+ * 84*s out. Nothing about where he stands says which. The CLAIM says it —
+ * the same claim that stops two animals working one bush — so the log an
+ * animal is holding is the log he is standing ON. `_onLog` goes on saying
+ * so for the moment after the bout ends, while the claim is already let go
+ * and a hedgehog is still shuffling off the wood.
+ */
+function behindLog(a, sites) {
+  if (!sites || a.dragging) return false;
+  let onLog = null, behind = false;
+  for (const f of sites) {
+    if (f.kind !== "log") continue;
+    const s = f.s || 1, up = f.py - a.y;
+    if (up <= LOG_NEAR_PX * s) continue;                                        // nearer than its near face
+    if (up > LOG_TOP_PX * s + a.r * 1.35) continue;                             // clear over its back
+    if (Math.abs(a.x - f.px) > FORAGE_SITE_HALF.log * s + a.r * 1.35) continue; // not across the timber
+    if (f.userId === a.id) { onLog = f.i; continue; }   // it is his: he is ON it
+    if (a._onLog === f.i) { onLog = f.i; continue; }    // ...and still getting off it
+    behind = true;
+  }
+  a._onLog = onLog;        // it lapses the moment he steps off the wood
+  return behind;
 }
 
 function getAgent(world, id) { return world.agents.find(a => a.id === id); }

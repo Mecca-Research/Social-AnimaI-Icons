@@ -1518,16 +1518,46 @@ function nearestForage(a, c, kind) {
  */
 
 /**
- * The nearest stretch of shallows, standing IN the water. His HANDS have to
- * be past the waterline for any of this to read — on the mud at rho 1.05 he
- * was miming it at a lake he had not reached.
+ * THE BOTTOM SHORE, AND FAR ENOUGH IN THAT THE DRAWING IS IN THE WATER.
+ *
+ * 0.93 was the same mistake the goose's old [0.86, 0.93] was: a number about
+ * the ANCHOR, in a world that draws a sprite around it. On the lake's south
+ * shore a hundredth of rho is worth 1.57px, so 0.93 put the anchor 11px
+ * inside the drawn waterline while the wash pose hangs 24.7px below it — the
+ * whole douse (the lens, both pads, the rings, his shadow) landing at rho
+ * 1.087, past even the OUTER edge of the mud liner at 1.08. And the 13px he
+ * was allowed to stop short of it is worth 0.083 rho, wider than the liner
+ * itself: in a live bout he settled at anchor rho 0.997 with the drawing at
+ * 1.157, out on the grass.
+ *
+ * So the band is the world's own arithmetic asked of HIS pose, and the angle
+ * is a fact about him: he washes at the BOTTOM of the lake. Due south is
+ * t = PI/2 with y down, SOUTH_SHORE is the bottom third either side of it,
+ * and it clears DAM_SECTOR (2.45..3.95) comfortably.
  */
-function waterEdge(a, c) {
-  const ang = Math.atan2((a.y - c.LAKE.cy * c.bounds.h) / (c.LAKE.ry * c.bounds.h),
-                         (a.x - c.LAKE.cx * c.bounds.w) / (c.LAKE.rx * c.bounds.w));
-  // rho 0.93, not 1.05. Above 1 he stands on the mud with the water in front
-  // of him; inside the waterline his forearms are actually in it.
-  return c.lakePoint(c.bounds, ang, 0.93);
+const SOUTH_SHORE = [Math.PI / 3, Math.PI * 2 / 3];   // 60 .. 120 degrees
+
+function douseSpot(a, c) {
+  if (!c.douseBand) return null;         // a water world that owns no shoreline art
+  const due = Math.PI / 2;
+  const t0 = due + c.rand(-0.10, 0.10);  // not the same footprint every bout
+  // walk out from due south, both ways, staying on the bottom third
+  for (let k = 0; k < 24; k++) {
+    const t = t0 + (k === 0 ? 0 : (k & 1 ? 1 : -1) * Math.ceil(k / 2) * 0.06);
+    if (t < SOUTH_SHORE[0] || t > SOUTH_SHORE[1]) continue;
+    const band = c.douseBand(t);
+    if (band) return c.lakePoint(c.bounds, t, c.rand(band[0], band[1]));
+  }
+  // Nothing usable on the bottom shore at this stage shape — the lake's south
+  // lobe is its short axis, and on a squat window there is no water there wide
+  // enough to stand him up in. Take the rest of the shore rather than retire
+  // the behavior: the mud rule is what must never bend, the compass may.
+  for (let k = 1; k < 24; k++) {
+    const t = due + (k & 1 ? 1 : -1) * Math.ceil(k / 2) * 0.26;
+    const band = c.douseBand(t);
+    if (band) return c.lakePoint(c.bounds, t, c.rand(band[0], band[1]));
+  }
+  return null;
 }
 
 /** how long the empty-hand rub runs inside a feeding bout, and on its own */
@@ -1543,7 +1573,7 @@ const RUB_ALONE = [7000, 11000];
 function racCarry(a, c, S) {
   releaseClaim(a, S);
   a._carry = "berry";
-  a._racWater = waterEdge(a, c);
+  a._racWater = c.def.hasWater ? douseSpot(a, c) : null;
   a._racWaterBy = c.now + 18000;
   a.state = "racdouse";
 }
@@ -1608,8 +1638,13 @@ function driveRaccoon(a, c, S) {
     // cfg.speed, which is the thing Gait.js exists to stop. It is an errand
     // with something in his jaws, so it is 0.45, the same as the squirrel's
     // haul from the nut tree to a cache.)
-    if (stepTowardAt(a, c, a._racWater, gait(a, c, 0.45)) < 13) {
+    // ...and the band is 5.6px wide on the south shore, so "near enough" is
+    // not near enough: 13px of slack is 0.083 rho there, wider than the whole
+    // mud liner. Arrive ON the spot, the way the dabble does.
+    if (!a._racWater || stepTowardAt(a, c, a._racWater, gait(a, c, 0.45)) < 10) {
       a.vx = 0; a.vy = 0;
+      if (!a._racWater) { a.state = "raceat"; a.stateUntil = c.now + c.rand(2400, 3200); return; }
+      a.x = a._racWater.x; a.y = a._racWater.y;
       a._faceDir = c.LAKE.cx * c.bounds.w > a.x ? 1 : -1;   // work facing the water
       a.state = "racwet"; a.stateUntil = c.now + c.rand(RUB_INBOUT[0], RUB_INBOUT[1]);
     } else if (c.now >= a._racWaterBy) {
@@ -1624,7 +1659,13 @@ function driveRaccoon(a, c, S) {
   if (a.state === "racwet") {
     // Hands only. The fruit is tucked against his chest and both palms are
     // under the surface working on each other. Nothing is being cleaned.
+    // The band is thinner than one second of the separation push, so hold
+    // the spot the way driveDabble holds the goose's.
     a.vx = 0; a.vy = 0;
+    if (a._racWater) {
+      const k = Math.min(1, c.dt * 3);
+      a.x += (a._racWater.x - a.x) * k; a.y += (a._racWater.y - a.y) * k;
+    }
     if (c.now >= a.stateUntil) {
       a.state = "racwash"; a.stateUntil = c.now + c.rand(3400, 4800);
     }
@@ -1635,9 +1676,15 @@ function driveRaccoon(a, c, S) {
     // NOW the fruit goes under, into pads that are twice the instrument they
     // were a moment ago. Turned, not scrubbed — and his eyes are up the bank
     // the whole time, because they are not what is doing the looking.
+    // The band is thinner than one second of the separation push, so hold
+    // the spot the way driveDabble holds the goose's.
     a.vx = 0; a.vy = 0;
+    if (a._racWater) {
+      const k = Math.min(1, c.dt * 3);
+      a.x += (a._racWater.x - a.x) * k; a.y += (a._racWater.y - a.y) * k;
+    }
     if (c.now >= a.stateUntil) {
-      a._faceDir = 0;
+      a._faceDir = 0; a._racWater = null;
       a.state = "raceat"; a.stateUntil = c.now + c.rand(2400, 3200);
     }
     return;
@@ -2010,18 +2057,29 @@ defineEthogram("raccoon", {
       every: [70000, 120000], chance: 0.50, cool: 30000,
       states: ["racpaws"], ownsWater: true,
       goto: {
-        state: "towaterrub", within: 13, giveUp: 20000, urgency: 0.30,
+        state: "towaterrub", within: 10, giveUp: 20000, urgency: 0.30,
         none: 12000, lost: 12000,
-        pick: (a, c) => (c.def.hasWater ? waterEdge(a, c) : null),
+        pick: (a, c) => (c.def.hasWater ? douseSpot(a, c) : null),
       },
-      begin(a, c) {
+      // `g` is the picked point itself. The engine's `within` is a radius and
+      // not a landing, and the band is 5.6px wide — so take the spot, then
+      // hold it, exactly as driveDabble holds the goose's.
+      begin(a, c, S, g) {
         a.vx = 0; a.vy = 0;
+        if (g) { a.x = g.x; a.y = g.y; a._racWater = g; }
         a._faceDir = c.LAKE.cx * c.bounds.w > a.x ? 1 : -1;
         a.state = "racpaws"; a.stateUntil = c.now + c.rand(RUB_ALONE[0], RUB_ALONE[1]);
       },
       drive(a, c) {
         a.vx = 0; a.vy = 0;
-        if (c.now >= a.stateUntil) { a._faceDir = 0; endEvent(a, c, { reroll: true, quiet: 1000 }); }
+        if (a._racWater) {
+          const k = Math.min(1, c.dt * 3);
+          a.x += (a._racWater.x - a.x) * k; a.y += (a._racWater.y - a.y) * k;
+        }
+        if (c.now >= a.stateUntil) {
+          a._faceDir = 0; a._racWater = null;
+          endEvent(a, c, { reroll: true, quiet: 1000 });
+        }
       },
     },
 
@@ -4076,10 +4134,27 @@ const OWL_GLIDE_OUT = 86;
  * survives FOREST_TREES being resized and extended underneath it. Clamped,
  * because a shorter array must not index off the end.
  */
-function nestTree(c) {
+function nestTree(a, c) {
   const N = TREE && TREE.nest;
-  if (!N || !c.def.trees || !c.def.trees.length) return null;
-  return c.def.trees[Math.min(Math.max(N.i, 0), c.def.trees.length - 1)] || null;
+  const trees = c.def.trees;
+  if (!N || !trees || !trees.length) return null;
+  const is = (N.is && N.is.length ? N.is : [0])
+    .map((i) => Math.min(Math.max(i, 0), trees.length - 1));
+  // ONE TREE FOR THE WHOLE TRIP. He takes the nearer nest when he sets off
+  // and then commits to it, because nestFoot, nestPerch and owlLanding are
+  // called at three separate moments of one flight — the walk there, the
+  // lift, and the glide off — and a bird who re-chooses halfway takes off
+  // from one tree and lands in another. Cleared with `_perch` when the bout
+  // ends, so the next roost is decided from wherever he then is.
+  if (a._nestI != null && is.indexOf(a._nestI) >= 0) return trees[a._nestI] || null;
+  let best = is[0], bd = Infinity;
+  for (const i of is) {
+    const t = trees[i]; if (!t) continue;
+    const d = Math.hypot(t.x * c.bounds.w - a.x, t.y * c.bounds.h - a.y);
+    if (d < bd) { bd = d; best = i; }
+  }
+  a._nestI = best;
+  return trees[best] || null;
 }
 
 /**
@@ -4093,18 +4168,21 @@ function nestTree(c) {
  * cup floor and nothing else.
  */
 function nestPerch(a, c) {
-  const t = nestTree(c); if (!t) return null;
+  const t = nestTree(a, c); if (!t) return null;
   const N = TREE.nest;
   return {
     x: t.x * c.bounds.w + N.dx * t.s,
     y: t.y * c.bounds.h - a.r * OWL_SPRITE_PX * ROOST_FOOT,
-    z: N.floorPx * t.s,
+    // floorPx * s, with floorPx = canopyPx - dropPx / s. The drop is stage
+    // px because the owl is: he is the same bird on a 1.10 pine and a 1.56
+    // spruce, so the cup sits a different distance down each tree's canopy.
+    z: N.canopyPx * t.s - N.dropPx,
   };
 }
 
 /** ...and the patch of floor he takes off from, out clear of the bark. */
 function nestFoot(a, c) {
-  const t = nestTree(c); if (!t) return null;
+  const t = nestTree(a, c); if (!t) return null;
   const N = TREE.nest;
   return { x: t.x * c.bounds.w + N.footDX * t.s,
            y: t.y * c.bounds.h + N.footDY * t.s };
@@ -4120,7 +4198,7 @@ function nestFoot(a, c) {
  * construction, so the descent never has to be rescued by keepAshore.
  */
 function owlLanding(a, c) {
-  const t = nestTree(c); if (!t) return null;
+  const t = nestTree(a, c); if (!t) return null;
   const tx = t.x * c.bounds.w, ty = t.y * c.bounds.h;
   const f = c.def.fallback || { x: 0.5, y: 0.5 };
   let dx = f.x * c.bounds.w - tx, dy = f.y * c.bounds.h - ty;
@@ -4195,7 +4273,7 @@ defineEthogram("owl", {
       },
       begin(a, c) {
         const p = nestPerch(a, c);
-        if (!p) { a._perch = null; endEvent(a, c, { cool: 30000, reroll: true, stop: true }); return; }
+        if (!p) { a._perch = null; a._nestI = null; endEvent(a, c, { cool: 30000, reroll: true, stop: true }); return; }
         a.vx = 0; a.vy = 0;
         a._faceDir = 1;          // out from the trunk, which is behind his shoulder
         a._perch = p;
@@ -4260,6 +4338,7 @@ defineEthogram("owl", {
         a.z = p.z * Math.pow(1 - q, 1.7);
         if (q < 1) return;
         a.z = 0; a._perch = null; a._land = null; a._faceDir = 0;
+        a._nestI = null;                 // next roost is decided from here
         endEvent(a, c, { reroll: true, quiet: 1400, stop: true });
       },
     },
