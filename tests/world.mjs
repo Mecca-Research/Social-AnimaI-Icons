@@ -754,6 +754,114 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     `${r.cups} cup halves for ${r.pines} conifers`);
 }
 
+// ==================== the bluff has elevation ====================
+// The brief drew a line across the left margin and said: below it you walk
+// in, above it you leap. These checks ask the terrain for its own answers
+// rather than watching an animal wander into them, because the bands are
+// geometry â€” the two that ARE about movement put the animal at the face
+// first, so a transition costs a handful of frames instead of a long walk.
+{
+  const r = await page.evaluate(`(w => {
+    const B = w.bounds, px = (xPm, yPm) => [xPm / 1000 * B.w, yPm / 1000 * B.h];
+    const at = (xPm, yPm) => { const [x, y] = px(xPm, yPm);
+      return { band: w.rockZoneAt(x, y).band, lvl: w.rockLevelAt(x, y),
+               cave: w.inRockCaveAt(x, y) }; };
+    // straight down the column the white line was drawn across
+    const column = [100, 200, 300, 450, 560, 700, 800].map(y => at(40, y).band);
+    // the walls, each sampled well inside itself
+    const walls = [[40, 100], [70, 300], [40, 560]].map(p => at(p[0], p[1]).lvl);
+    // the terraces
+    const decks = [[40, 200], [70, 450], [40, 800]].map(p => at(p[0], p[1]).lvl);
+    // the room, and the rock beside its mouth
+    const room = at(20, 375), jamb = at(70, 375);
+    // where walkable ground begins on the left margin, to a per-mille
+    let line = 0;
+    for (let y = 400; y < 900; y++) if (at(40, y).lvl === 0) { line = y; break; }
+    return { column, walls, decks, room, jamb, line };
+  })(window.__saiWorld)`);
+  chk(r.column.join('>') === 'upper>plateau>cliff>shelf>riser>talus>talus',
+    'the bluff reads as six bands down the column',
+    r.column.join(' > '));
+  chk(r.walls.every((v) => v === null), 'no face is walkable',
+    `upper/cliff/riser levels: ${JSON.stringify(r.walls)}`);
+  chk(r.decks.join(',') === '2,1,0', 'three terraces, top to bottom',
+    `plateau ${r.decks[0]}, shelf ${r.decks[1]}, talus ${r.decks[2]}`);
+  chk(r.room.lvl === 1 && r.room.cave && r.jamb.lvl === null,
+    'the cave is occupiable and the wall beside it is not',
+    `cave lvl ${r.room.lvl}, jamb lvl ${r.jamb.lvl}`);
+  chk(r.line > 600 && r.line < 660, 'walkable ground starts at the drawn line',
+    `${r.line} per-mille (the erasure line was 629)`);
+}
+
+// Entry. Everybody walks in below the line; the owl and the cougar are the
+// two the brief let in higher, and even they are refused a wall.
+{
+  const r = await page.evaluate(`(w => {
+    const B = w.bounds, bad = [], high = {};
+    for (const sp of ['fox', 'deer', 'bear', 'turtle', 'owl', 'cougar']) {
+      for (let yPm = 120; yPm < 900; yPm += 20) {
+        for (let xPm = 10; xPm < 120; xPm += 10) {
+          const x = xPm / 1000 * B.w, y = yPm / 1000 * B.h;
+          if (!w.spawnSafeAt(x, y, sp)) continue;
+          const z = w.rockZoneAt(x, y), lvl = w.rockLevelAt(x, y);
+          if (z.wall && !w.inRockCaveAt(x, y)) bad.push(sp + ' into the ' + z.band);
+          if (lvl > 0) { high[sp] = (high[sp] || 0) + 1;
+            if (sp !== 'owl' && sp !== 'cougar') bad.push(sp + ' onto terrace ' + lvl); }
+        }
+      }
+    }
+    return { bad, high };
+  })(window.__saiWorld)`);
+  chk(r.bad.length === 0, 'nobody walks in through a wall or onto a terrace',
+    r.bad.length ? r.bad.slice(0, 3).join('; ') : 'swept 6 species over 440 points');
+  chk((r.high.owl || 0) > 0 && (r.high.cougar || 0) > 0,
+    'the owl and the cougar may enter high',
+    `owl ${r.high.owl || 0} spots, cougar ${r.high.cougar || 0}`);
+}
+
+// And the two rules that are about MOVING between them. Each animal is put
+// at the face he would meet anyway, so the arc costs frames instead of the
+// walk across the map that would earn them.
+{
+  const r = await page.evaluate(`(async (w) => {
+    const B = w.bounds, out = {};
+    const frame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 20)));
+    const park = (o) => { o.x = -900; o.y = -900; o.state = 'idle';
+      o.idleUntil = performance.now() + 9e6; o.noEventUntil = performance.now() + 9e6; };
+    const run = async (nm, startLvl, yPm, vy, n) => {
+      const a = w.agents.find(x => x.species === nm);
+      if (!a) return null;
+      for (const o of w.agents) if (o !== a) park(o);
+      a.state = 'wander'; a.z = 0; a.dragging = false;
+      a.x = 0.04 * B.w; a.y = yPm / 1000 * B.h; a._lvl = startLvl;
+      a._rockHop = null; a._rockHopEnd = 0;
+      a.intentUntil = performance.now() + 9e6; a.noEventUntil = performance.now() + 9e6;
+      let seen = new Set([startLvl]);
+      for (let i = 0; i < n; i++) { a.state = 'wander'; a.vx = 0; a.vy = vy;
+        await frame(); seen.add(a._lvl); }
+      const lvl = a._lvl; park(a);
+      return { lvl, seen: [...seen].sort().join('') };
+    };
+    // up the riser from the talus: a leaper takes it, a turtle does not
+    out.foxUp = await run('fox', 0, 645, -70, 8);
+    out.turtleUp = await run('turtle', 0, 645, -70, 8);
+    // down off the plateau: the owl clears the whole bluff, the cougar steps
+    out.owlDown = await run('owl', 2, 400, 70, 14);
+    out.cougarDown = await run('cougar', 2, 400, 70, 14);
+    return out;
+  })(window.__saiWorld)`);
+  chk(r.foxUp && r.foxUp.lvl === 1 && r.turtleUp && r.turtleUp.lvl === 0,
+    'a fox leaps the riser and a turtle cannot',
+    `fox -> ${r.foxUp && r.foxUp.lvl}, turtle -> ${r.turtleUp && r.turtleUp.lvl}`);
+  // The rule, not the clock: the owl SKIPS the shelf and the cougar cannot.
+  // Asserting where each ends up after n frames would be asserting the
+  // headless frame rate, which is not what the brief said.
+  chk(r.owlDown && r.owlDown.lvl === 0 && !r.owlDown.seen.includes('1')
+      && r.cougarDown && r.cougarDown.seen.includes('1'),
+    'the owl flies past the shelf and the cougar has to stand on it',
+    `owl saw ${r.owlDown && r.owlDown.seen}, cougar saw ${r.cougarDown && r.cougarDown.seen}`);
+}
+
 chk(errs.length === 0, 'no JS errors', errs.length ? errs[0] : 'clean');
 console.log(`\n${fail.length ? 'FAIL ' + fail.length : 'ALL PASS'} (${pass.length} passed)`);
 await browser.close();

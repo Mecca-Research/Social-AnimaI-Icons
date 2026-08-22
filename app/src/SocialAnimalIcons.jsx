@@ -2025,6 +2025,9 @@ export default function SocialAnimalsRPG() {
       W.rockZoneAt = (x, y) => rockZone(W.bounds, x, y);
       W.rockLevelAt = (x, y) => rockLevelAt(W.bounds, x, y);
       W.inRockCaveAt = (x, y) => inRockCave(W.bounds, x, y);
+      // the entry rule itself, so the suite asks the world who may walk in
+      // where rather than re-deriving it and testing its own arithmetic
+      W.spawnSafeAt = (x, y, sp) => spawnSafe(W, x, y, sp);
       W.__rock = { breaks: ROCK_BREAKS, profile: ROCK_PROFILE, cave: ROCK_CAVE,
                    highEntry: [...ROCK_HIGH_ENTRY] };
       // ...and the painted width of each kind of forage site, plus the pit's
@@ -2312,7 +2315,7 @@ function rockBreakY(bounds, line, x) {
  * `cave` polygon RockLayer draws, shrunk by a body's width so an animal
  * inside it is inside the DRAWN opening rather than halfway through its jamb.
  */
-const ROCK_CAVE = { x0: -6, x1: 50, y0: 320, y1: 430 };
+const ROCK_CAVE = { x0: 0, x1: 50, y0: 320, y1: 430 };
 function inRockCave(bounds, x, y) {
   const xPm = x / bounds.w * 1000, yPm = y / bounds.h * 1000;
   return xPm > ROCK_CAVE.x0 && xPm < ROCK_CAVE.x1
@@ -2334,6 +2337,14 @@ const ROCK_WALLS = {
   upper: [null, "L0"],      // nothing above: the mass goes off screen
 };
 
+// the two break lines bounding each WALKABLE terrace, top first. The talus
+// has no bottom: it runs off the foot of the frame into the forest floor.
+const ROCK_BAND_LINES = {
+  [ROCK_LEVEL_GROUND]:  ["T1", null],
+  [ROCK_LEVEL_SHELF]:   ["B1", "L2"],
+  [ROCK_LEVEL_PLATEAU]: ["L0", "L1"],
+};
+
 /**
  * Keep an animal off the rock faces, and on its own terrace. Called from the
  * grounded rules beside keepAshore, and skipped for anything genuinely in
@@ -2352,12 +2363,34 @@ function keepOffRock(a, bounds) {
   // Inside a wall, or on the wrong terrace. Both are the same correction:
   // go back to the nearest edge of the band this animal is allowed on.
   const B = ROCK_BREAKS;
-  const bandOf = (l) => (l === ROCK_LEVEL_PLATEAU ? ["L0", "L1"]
-    : l === ROCK_LEVEL_SHELF ? ["B1", "L2"] : ["T1", null]);
-  const [topLine, botLine] = bandOf(a._lvl);
-  const top = topLine ? rockBreakY(bounds, B[topLine], a.x) : -1e9;
+  const [topLine, botLine] = ROCK_BAND_LINES[a._lvl] || ROCK_BAND_LINES[ROCK_LEVEL_GROUND];
+  const shelfTop = topLine ? rockBreakY(bounds, B[topLine], a.x) : -1e9;
   const bot = botLine ? rockBreakY(bounds, B[botLine], a.x) : 1e9;
   const pad = Math.max(6, a.r * 0.5);
+
+  // THE CAVE IS A ROOM CUT BACK INTO THE CLIFF, so on the shelf the ceiling
+  // is not flat: it is the cliff face everywhere except across the mouth,
+  // where it lifts to the back wall. Walk in and you keep going until the
+  // back stops you; walk at a jamb and the jamb stops you.
+  //
+  // Which way an animal gets pushed is decided by WHICH FACE IS NEARER, the
+  // same rule a corner of any solid object gets. Step off the east jamb one
+  // pixel and you are put back one pixel, not dropped the height of the room
+  // onto the shelf — and the shortest way out of the middle of the cliff,
+  // where there is no room at all, is still straight down onto the shelf.
+  let top = shelfTop;
+  if (a._lvl === ROCK_LEVEL_SHELF) {
+    const cx0 = ROCK_CAVE.x0 / 1000 * bounds.w, cx1 = ROCK_CAVE.x1 / 1000 * bounds.w;
+    const cy0 = ROCK_CAVE.y0 / 1000 * bounds.h;
+    const inSpan = a.x > cx0 && a.x < cx1;
+    if (inSpan) top = Math.min(top, cy0);
+    if (a.y < shelfTop) {                       // above the shelf: the room or nothing
+      const nx = clamp(a.x, cx0 + pad, cx1 - pad);
+      const dx = Math.abs(nx - a.x), dy = (shelfTop + pad) - a.y;
+      if (a.y > cy0 && dx > 0 && dx < dy) { a.x = nx; a.vx = 0; return; }
+    }
+  }
+
   const want = a.y < top + pad ? top + pad : a.y > bot - pad ? bot - pad : a.y;
   if (want !== a.y) {
     const up = want < a.y;
@@ -2365,6 +2398,106 @@ function keepOffRock(a, bounds) {
     // slide along the face rather than grinding into it
     if (up ? a.vy > 0 : a.vy < 0) a.vy = 0;
   }
+}
+
+/**
+ * GETTING UP AND DOWN THE BLUFF.
+ *
+ * Walking cannot change level, so without this the terraces are scenery with
+ * rules attached and nothing ever stands on them. A transition is world-side
+ * rather than an ethogram event for the same reason the cat's fence jump is:
+ * it is a fact about the TERRAIN that any animal meeting it has to obey, not
+ * an appetite that a species chooses to have. Twelve ethograms would each
+ * need the same event otherwise, and nine of them do not have one.
+ *
+ * Who can do what:
+ *   LEAPERS   go up and down ONE level at a time, at the face, on an arc.
+ *             Everybody with legs worth the name.
+ *   CLIMBERS  the cougar, who may take the cliff as well as the riser.
+ *   FLYERS    the owl, who ignores the faces entirely and drops from the
+ *             plateau straight to the ground on one glide.
+ *   NOBODY    the turtle and the frog do not go up a cliff. The frog can
+ *             out-jump any of them on the flat and still cannot climb rock,
+ *             which is the difference between a leap and a scramble.
+ */
+const ROCK_LEAPERS = new Set(["bear", "deer", "cougar", "wolf", "fox", "raccoon",
+                              "squirrel", "skunk", "hedgehog", "beaver", "goose"]);
+const ROCK_CLIMBERS = new Set(["cougar", "squirrel"]);
+const ROCK_FLYERS = new Set(["owl"]);
+// how near a face he has to be for the leap to be offered, and how long the
+// arc takes. The lift is the wall's own height, so a taller face is a bigger
+// jump without anybody writing that down twice.
+const ROCK_HOP_NEAR = 26, ROCK_HOP_MS = 520;
+
+/**
+ * Offer a level change if he is at a face and heading into it. Returns true
+ * if a move was started, in which case the caller leaves him alone: he is
+ * airborne, keepOffRock stands down, and the arc lands him on the far side.
+ *
+ * A LEAP AND A GLIDE ARE THE SAME ARC OVER A DIFFERENT SPAN. A leaper and a
+ * climber take exactly one terrace at a time, up or down, which is what the
+ * brief asks for: land animals lower themselves one level at a time. The owl
+ * takes the whole bluff in one move, because a bird coming off the top of a
+ * cliff does not stop on the ledge halfway down.
+ */
+function tryRockHop(a, bounds, now) {
+  if (now < (a._rockHopEnd || 0)) return true;         // one already running
+  // Only ON the bluff. Without this the break lines are still arithmetic out
+  // in the open forest, and a bear crossing that latitude fifty metres clear
+  // of the rock launches himself onto a shelf that is not under him.
+  if (!rockZone(bounds, a.x, a.y).on) return false;
+
+  const lvl = a._lvl ?? ROCK_LEVEL_GROUND;
+  const sp = ROCK_FLYERS.has(a.species) ? "fly"
+    : ROCK_CLIMBERS.has(a.species) ? "climb"
+    : ROCK_LEAPERS.has(a.species) ? "leap" : null;
+  if (!sp) return false;
+
+  // Which way is he trying to go? Up is toward smaller y, and every face on
+  // this bluff runs across the map, so intent is simply the sign of vy.
+  const up = a.vy < -4, down = a.vy > 4;
+  if (!up && !down) return false;
+
+  // one terrace for legs, the whole flight of them for wings
+  const target = sp === "fly" ? (up ? ROCK_LEVEL_PLATEAU : ROCK_LEVEL_GROUND)
+    : up ? lvl + 1 : lvl - 1;
+  if (target === lvl) return false;
+  if (target < ROCK_LEVEL_GROUND || target > ROCK_LEVEL_PLATEAU) return false;
+  // the cliff is a climb, not a leap: only a climber or a flyer takes it
+  if (sp === "leap" && Math.max(lvl, target) === ROCK_LEVEL_PLATEAU) return false;
+
+  // the line he is standing at, and the one he lands on. Going up he leaves
+  // the top of his own band for the bottom of the target's; going down he
+  // leaves his own bottom for the target's top.
+  const B = ROCK_BREAKS;
+  const mine = ROCK_BAND_LINES[lvl], theirs = ROCK_BAND_LINES[target];
+  const nearLine = up ? mine[0] : mine[1];
+  const farLine = up ? theirs[1] : theirs[0];
+  if (!nearLine || !farLine) return false;
+  const nearY = rockBreakY(bounds, B[nearLine], a.x);
+  if (Math.abs(a.y - nearY) > ROCK_HOP_NEAR) return false;
+  const farY = rockBreakY(bounds, B[farLine], a.x);
+
+  const pad = Math.max(8, a.r * 0.5);
+  const span = Math.abs(target - lvl);
+  a._rockHop = { y0: a.y, y1: farY + (up ? pad : -pad),
+                 lift: Math.max(18, Math.abs(farY - nearY) * (sp === "fly" ? 0.35 : 0.55)),
+                 ms: ROCK_HOP_MS * (sp === "fly" ? 1.15 * span : 1), t0: now };
+  a._rockHopEnd = now + a._rockHop.ms;
+  a._lvl = target;                      // he is committed the moment he pushes off
+  return true;
+}
+
+/** run the arc. Ballistic in y, held in x, and it sets its own height. */
+function driveRockHop(a, now) {
+  const h = a._rockHop; if (!h) return false;
+  const q = Math.min(1, (now - h.t0) / h.ms);
+  a.y = h.y0 + (h.y1 - h.y0) * q;
+  a.z = h.lift * Math.sin(Math.PI * q);
+  a.vy = 0;
+  if (q < 1) return true;
+  a.z = 0; a._rockHop = null; a._rockHopEnd = 0;
+  return false;
 }
 
 /* ---------------- The west bluff ---------------- */
@@ -5066,6 +5199,11 @@ function stepWorld(world, cfg, dt) {
       a.x = clamp(a.x, rr.l, rr.r); a.y = clamp(a.y, rr.t, rr.b);
     }
 
+    // A flight or a roof owns its own height, so the bluff cannot hold the
+    // flier to a terrace — but it can keep reading which one is under him,
+    // so he touches down owing it nothing.
+    if ((onRoof || inAir) && def.rock) a._lvl = rockLevelAt(bounds, a.x, a.y) ?? a._lvl;
+
     // grounded rules only
     if (!onRoof && !inAir) {
       if (a.state !== "seekroof") a.roofI = -1; // the hunt keeps its target roof
@@ -5075,9 +5213,21 @@ function stepWorld(world, cfg, dt) {
       // a bush — and they set their own height each frame
       if (a.z > 0 && !hopping && !ETHO_Z_STATES.has(a.state)) { a.z *= Math.exp(-5 * dt); if (a.z < 0.5) a.z = 0; }
       if (def.hasWater && !canSwimIn(def, a.species)) keepAshore(a, bounds);
-      // ...and off the bluff's faces. Skipped while genuinely airborne: a
-      // leap is MEANT to be over a wall for a moment.
-      if (def.rock && !hopping && a.z < 4) keepOffRock(a, bounds);
+      // ...and the bluff. An arc already running owns the frame outright —
+      // it is MEANT to be over a wall for a moment, which is the whole point
+      // of leaping — so the wall rule only speaks when nobody is in the air.
+      if (def.rock) {
+        if (!driveRockHop(a, now)) {
+          if (!(isFreeState(a) && tryRockHop(a, bounds, now))) {
+            // Genuinely off the ground — a frog's hop, a squirrel up a trunk
+            // — so read the terrace back off the terrain instead of holding
+            // him to the one he left. Otherwise he lands owing the rock a
+            // level and gets shoved somewhere he never walked.
+            if (!hopping && a.z < 4) keepOffRock(a, bounds);
+            else a._lvl = rockLevelAt(bounds, a.x, a.y) ?? a._lvl;
+          }
+        }
+      }
       if (def.pool && !canSwimIn(def, a.species) && a.z < 3) keepOutOfPool(a, bounds, def.pool);
       if (a.z < 3) keepOutOfHouses(a, bounds, def.houses);
       if (def.fences) {
