@@ -2424,6 +2424,14 @@ const ROCK_LEAPERS = new Set(["bear", "deer", "cougar", "wolf", "fox", "raccoon"
                               "squirrel", "skunk", "hedgehog", "beaver", "goose"]);
 const ROCK_CLIMBERS = new Set(["cougar", "squirrel"]);
 const ROCK_FLYERS = new Set(["owl"]);
+// The cliff is 140px where the riser is 85, so it is not the same jump. Only
+// the two who could actually make it get it: a fox and a deer both clear
+// about two and a half times their own shoulder height, which is what that
+// face is. The bear and the wolf are heavier than their legs, and the
+// raccoon, skunk, hedgehog, beaver and goose are short of leg outright —
+// they get the shelf and the cave, and the top of the bluff belongs to
+// whoever climbs or flies.
+const ROCK_CLIFF_JUMPERS = new Set(["fox", "deer"]);
 // how near a face he has to be for the leap to be offered, and how long the
 // arc takes. The lift is the wall's own height, so a taller face is a bigger
 // jump without anybody writing that down twice.
@@ -2464,7 +2472,8 @@ function tryRockHop(a, bounds, now) {
   if (target === lvl) return false;
   if (target < ROCK_LEVEL_GROUND || target > ROCK_LEVEL_PLATEAU) return false;
   // the cliff is a climb, not a leap: only a climber or a flyer takes it
-  if (sp === "leap" && Math.max(lvl, target) === ROCK_LEVEL_PLATEAU) return false;
+  if (sp === "leap" && Math.max(lvl, target) === ROCK_LEVEL_PLATEAU
+      && !ROCK_CLIFF_JUMPERS.has(a.species)) return false;
 
   // the line he is standing at, and the one he lands on. Going up he leaves
   // the top of his own band for the bottom of the target's; going down he

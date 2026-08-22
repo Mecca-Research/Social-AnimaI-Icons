@@ -819,40 +819,56 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     `owl ${r.high.owl || 0} spots, cougar ${r.high.cougar || 0}`);
 }
 
-// And the two rules that are about MOVING between them. Each animal is put
-// at the face he would meet anyway, so the arc costs frames instead of the
-// walk across the map that would earn them.
+// And the rules that are about MOVING between them. Each animal is put at
+// the face he would meet anyway, so an arc costs frames instead of the walk
+// across the map that would earn them, and his x is pinned so his own
+// wandering cannot carry him off the rock mid-test.
 {
   const r = await page.evaluate(`(async (w) => {
-    const B = w.bounds, out = {};
+    const B = w.bounds, out = {}, R = w.__rock.breaks, xPm = 40, X = xPm / 1000 * B.w;
+    const lineY = (nm) => { const L = R[nm]; let i = 0;
+      while (i < L.length - 2 && L[i + 1][0] < xPm) i++;
+      const a = L[i], b = L[i + 1] || L[i];
+      const f = b[0] === a[0] ? 0 : (xPm - a[0]) / (b[0] - a[0]);
+      return (a[1] + (b[1] - a[1]) * f) / 1000 * B.h; };
     const frame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 20)));
     const park = (o) => { o.x = -900; o.y = -900; o.state = 'idle';
       o.idleUntil = performance.now() + 9e6; o.noEventUntil = performance.now() + 9e6; };
-    const run = async (nm, startLvl, yPm, vy, n) => {
+    const run = async (nm, lvl, y0, vy, n) => {
       const a = w.agents.find(x => x.species === nm);
       if (!a) return null;
       for (const o of w.agents) if (o !== a) park(o);
       a.state = 'wander'; a.z = 0; a.dragging = false;
-      a.x = 0.04 * B.w; a.y = yPm / 1000 * B.h; a._lvl = startLvl;
-      a._rockHop = null; a._rockHopEnd = 0;
+      a.x = X; a.y = y0; a._lvl = lvl; a._rockHop = null; a._rockHopEnd = 0;
       a.intentUntil = performance.now() + 9e6; a.noEventUntil = performance.now() + 9e6;
-      let seen = new Set([startLvl]);
-      for (let i = 0; i < n; i++) { a.state = 'wander'; a.vx = 0; a.vy = vy;
-        await frame(); seen.add(a._lvl); }
-      const lvl = a._lvl; park(a);
-      return { lvl, seen: [...seen].sort().join('') };
+      const seen = new Set([lvl]);
+      for (let i = 0; i < n; i++) {
+        a.state = 'wander'; a.x = X;
+        if (vy < 0 ? a.vy > vy / 3 : a.vy < vy / 3) a.vy = vy;
+        await frame(); seen.add(a._lvl);
+      }
+      const lvlEnd = a._lvl; park(a);
+      return { lvl: lvlEnd, seen: [...seen].sort().join('') };
     };
-    // up the riser from the talus: a leaper takes it, a turtle does not
-    out.foxUp = await run('fox', 0, 645, -70, 8);
-    out.turtleUp = await run('turtle', 0, 645, -70, 8);
-    // down off the plateau: the owl clears the whole bluff, the cougar steps
-    out.owlDown = await run('owl', 2, 400, 70, 14);
-    out.cougarDown = await run('cougar', 2, 400, 70, 14);
+    const riser = lineY('T1') + 8, cliff = lineY('B1') + 8, plateau = lineY('L1') + 30;
+    out.foxRiser = await run('fox', 0, riser, -70, 10);
+    out.turtleRiser = await run('turtle', 0, riser, -70, 10);
+    out.foxCliff = await run('fox', 1, cliff, -70, 10);        // jumps it
+    out.cougarCliff = await run('cougar', 1, cliff, -70, 10);   // climbs it
+    out.bearCliff = await run('bear', 1, cliff, -70, 10);       // does neither
+    out.owlDown = await run('owl', 2, plateau, 70, 14);
+    out.cougarDown = await run('cougar', 2, plateau, 70, 14);
     return out;
   })(window.__saiWorld)`);
-  chk(r.foxUp && r.foxUp.lvl === 1 && r.turtleUp && r.turtleUp.lvl === 0,
+  chk(r.foxRiser && r.foxRiser.lvl === 1 && r.turtleRiser && r.turtleRiser.lvl === 0,
     'a fox leaps the riser and a turtle cannot',
-    `fox -> ${r.foxUp && r.foxUp.lvl}, turtle -> ${r.turtleUp && r.turtleUp.lvl}`);
+    `fox -> ${r.foxRiser && r.foxRiser.lvl}, turtle -> ${r.turtleRiser && r.turtleRiser.lvl}`);
+  // the brief's three verbs, each with a referent, and one animal with none
+  chk(r.foxCliff && r.foxCliff.lvl === 2 && r.cougarCliff && r.cougarCliff.lvl === 2
+      && r.bearCliff && r.bearCliff.lvl === 1,
+    'the cliff is jumped or climbed, and a bear does neither',
+    `fox -> ${r.foxCliff && r.foxCliff.lvl}, cougar -> ${r.cougarCliff && r.cougarCliff.lvl}` +
+    `, bear -> ${r.bearCliff && r.bearCliff.lvl}`);
   // The rule, not the clock: the owl SKIPS the shelf and the cougar cannot.
   // Asserting where each ends up after n frames would be asserting the
   // headless frame rate, which is not what the brief said.
