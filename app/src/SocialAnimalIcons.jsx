@@ -938,22 +938,25 @@ const PLANTS = [
   // Swept round the shore rather than placed: each is the first radius
   // outward from the waterline, at its own angle, that clears every trunk,
   // every site's drawn art, the goose's sward and the screen edges at nine
-  // stage shapes — and stays inside rho 1.62, so it still reads as
-  // lakeside rather than as something standing in a field near a lake. The
+  // stage shapes — and sits between rho 1.14 and 1.80: past the mud liner,
+  // which runs 1.00 to 1.08, so nothing is standing in the water or on the
+  // wet, and still close enough to read as lakeside rather than as something
+  // in a field near a lake. The
   // TOP and BOTTOM arcs are sampled twice as densely as the flanks. The
   // west shore returns nothing at all, correctly: the clearing's own sites
   // own that ground.
-  { x: .641, y: .056, s: 1.05, kind: "reed" },   // top shore, -107deg
-  { x: .746, y: .044, s: 1.20, kind: "reed" },   // -81
-  { x: .792, y: .070, s: 1.00, kind: "fern" },   // -69
-  { x: .832, y: .102, s: 1.15, kind: "reed" },   // -56
-  { x: .875, y: .128, s: 1.05, kind: "fern" },   // -43
-  { x: .924, y: .157, s: 1.10, kind: "fern" },   // east flank, -30
-  { x: .949, y: .378, s: 1.00, kind: "reed" },   // 22
-  { x: .861, y: .469, s: 1.15, kind: "reed" },   // bottom shore, 51
-  { x: .599, y: .561, s: 1.00, kind: "fern" },   // 111
-  { x: .585, y: .496, s: 1.20, kind: "reed" },   // 120
-  { x: .545, y: .486, s: 1.10, kind: "fern" },   // 129
+  { x: .630, y: .050, s: 1.05, kind: "reed" },   // top shore, -109deg
+  { x: .768, y: .042, s: 1.20, kind: "reed" },   // -76
+  { x: .798, y: .062, s: 1.00, kind: "fern" },   // -68
+  { x: .825, y: .084, s: 1.15, kind: "reed" },   // -60
+  { x: .860, y: .109, s: 0.95, kind: "fern" },   // -49
+  { x: .891, y: .126, s: 1.10, kind: "reed" },   // -40
+  { x: .929, y: .149, s: 1.05, kind: "fern" },   // east flank, -31
+  { x: .952, y: .397, s: 1.00, kind: "reed" },   // 26
+  { x: .856, y: .483, s: 1.15, kind: "reed" },   // bottom shore, 54
+  { x: .599, y: .555, s: 1.00, kind: "fern" },   // 112
+  { x: .592, y: .507, s: 1.20, kind: "reed" },   // 118
+  { x: .551, y: .500, s: 1.10, kind: "fern" },   // 126
 ];
 
 function PlantLayer({ bounds }) {
