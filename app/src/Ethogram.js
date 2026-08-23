@@ -3760,7 +3760,17 @@ defineEthogram("goose", {
  * touching every single one before it exists. Twenty trips for the whole
  * dam against the old fourteen for a seventh of the timber.
  */
-const DAM_PER_RUN = 5;   // logs carried per crossing; 100 / 5 = 20 trips
+// ...and FIFTEEN, not five, because five was still the wrong bottleneck.
+// Measured over twenty virtual minutes: a trip costs about 80 seconds, of
+// which only 18 is the crossing and the laying — the other 62 is him
+// WANDERING UNTIL HE HAPPENS TO CROSS AN EDGE, since `offstage` is the only
+// way in. So the cost of the dam is very nearly the cost of its trips, and
+// the lever that matters is how much each trip carries. At five it took 27
+// minutes of watching to close a hundred logs and a viewer reasonably read
+// the half-built arch as a fourteen-log pile. Fifteen is seven trips, and a
+// beaver working fifteen points along his own structure reads more like a
+// beaver than one who lays five and leaves.
+const DAM_PER_RUN = 15;  // logs carried per crossing; 100 / 15 = 7 trips
 defineEthogram("beaver", {
   domainOf: (a, c) => (c.def.hasWater && c.isWet(a.x, a.y) ? "water" : "land"),
 

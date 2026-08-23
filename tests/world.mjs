@@ -31,6 +31,10 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
     n: (w.def.trees || []).length,
     kinds: (w.def.trees || []).map(x => x.kind || 'oak'),
     scales: (w.def.trees || []).map(x => x.s),
+    // the AUTHORED scale, which is what the table is written in. A tree's s
+    // carries the stage in it now, so two trees written the same size only
+    // agree in s by accident of the window; s0 is where they are declared.
+    authored: (w.def.trees || []).map(x => x.s0),
   }))(window.__saiWorld)`);
   chk(t.n === 6, 'six trees stand in the forest', `${t.n}: ${t.kinds.join(',')}`);
   // TWO conifers now. The west-high oak became one, which is a second
@@ -44,6 +48,16 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
   const rest = t.scales.filter((_, i) => t.kinds[i] !== 'pine');
   chk(Math.max(...pineS) > Math.max(...rest) * 1.05, 'the spruce is the biggest tree',
     `${Math.max(...pineS)} against a largest oak of ${Math.max(...rest)}`);
+  // ...and now BOTH of them are, which is the whole of what "make the top-left
+  // spruce the size of the lone one" asked for. The west-high pine ran 1.10
+  // against the lone spruce's 1.56 because its anchor sat at y .315 and a
+  // 1.56 crown needs y >= 232*1.56/872 = .4150 of stage above it — so the
+  // resize was a re-solve of the west side, not a number change, and this is
+  // the line that says it stayed done.
+  const pineA = t.authored.filter((_, i) => t.kinds[i] === 'pine');
+  chk(pineA.length === 2 && Math.abs(pineA[0] - pineA[1]) < 1e-9,
+    'and both evergreens are the same tree',
+    `authored ${pineA.join(' and ')} — was 1.10 against 1.56`);
 }
 {
   // The south-east ground is the point of the move: three berries and two nut
@@ -394,8 +408,8 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
 // the fault only showed on stages shorter than about 1130px.
 {
   const r = await page.evaluate(`(w => {
-    const S = w.def.sward, T = w.def.trees || [], C = w.__crowns;
-    if (!S || !C) return { missing: true };
+    const S = w.def.sward, T = w.def.trees || [], C = w.__crowns, K = w.__treeScale;
+    if (!S || !C || !K) return { missing: true };
     const SIZES = [[1008,700],[1264,732],[1350,700],[1424,832],[1600,820],[1904,1012],
                    [1000,800],[1240,1000],[900,620],[1440,900],[1280,720],[1920,1080],
                    [960,600],[1120,640]];
@@ -408,6 +422,12 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
     const hw = rr * 1.35, up = rr * 2;
     let worst = 0, worstAt = '';
     for (const [W, H] of SIZES) {
+      // A crown is sized against the stage now, so a sweep of SHAPES has to
+      // size it for the shape it is asking about: t.s is the answer for the
+      // window this suite happens to be running in, and t.s0 * treeScale is
+      // the answer for the one in hand. Using t.s here would have checked
+      // fourteen latitudes against one crown size.
+      const ks = K(W, H);
       let n = 0, bad = 0;
       for (let i = 0; i <= 20; i++) for (let j = 0; j <= 20; j++) {
         const x = (S.x0 + (S.x1 - S.x0) * i / 20) * W;
@@ -415,9 +435,10 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
         n++;
         for (const t of T) {
           const k = C[t.kind || 'oak']; if (!k) continue;
+          const s = t.s0 * ks;
           const tx = t.x * W, ty = t.y * H;
-          if (Math.abs(x - tx) > k.half * t.s + hw) continue;
-          if (y > ty - k.topPx * t.s && y - up < ty - k.botPx * t.s) { bad++; break; }
+          if (Math.abs(x - tx) > k.half * s + hw) continue;
+          if (y > ty - k.topPx * s && y - up < ty - k.botPx * s) { bad++; break; }
         }
       }
       if (bad / n > worst) { worst = bad / n; worstAt = W + 'x' + H; }
@@ -428,6 +449,269 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
     r.missing ? 'the world hands over no sward or no crown boxes'
       : r.worst === 0 ? `x ${r.sward} clear at all fourteen stage shapes`
       : `${(100 * r.worst).toFixed(0)}% under a crown at ${r.worstAt}`);
+}
+
+// ================== the crowns are painted whole ==================
+// A crown used to be drawn in FIXED px above an anchor held as a stage
+// FRACTION, so how much of it fitted over that anchor was y*h against
+// topPx*s — a race the tree lost as the window shortened. The west-high pine
+// lost it at four of the eight shapes it was measured at, by 81px at 965x552
+// and 75px at 1104x572, while its own note claimed 1.10 kept the leader on.
+//
+// Crowns are sized against the stage now, so the h divides out of the sign:
+//   tip = h * (y - topPx*s0/872)
+// and a crown is whole at EVERY shape or at none. That makes this a real
+// check rather than a survey: one arithmetic fact, swept over fourteen
+// shapes to prove the h really has gone.
+//
+// The scale rule comes off the world (__treeScale) rather than being copied
+// here, for the same reason the crown boxes and the lake do: a suite holding
+// its own copy of the rule goes on passing after the real one moves.
+{
+  const r = await page.evaluate(`(w => {
+    const T = w.def.trees || [], C = w.__crowns, K = w.__treeScale;
+    if (!T.length || !C || !K) return { missing: true };
+    const SIZES = [[1008,700],[1264,732],[1350,700],[1424,832],[1600,820],[1904,1012],
+                   [1000,800],[1240,1000],[900,620],[1440,900],[1280,720],[1920,1080],
+                   [960,600],[1120,640]];
+    let worst = null, spread = null;
+    for (const [W, H] of SIZES) {
+      const ks = K(W, H);
+      for (let i = 0; i < T.length; i++) {
+        const t = T[i], c = C[t.kind || 'oak']; if (!c) continue;
+        const s = t.s0 * ks, tip = t.y * H - c.topPx * s;
+        if (!worst || tip < worst.tip)
+          worst = { tip, i, at: W + 'x' + H, kind: t.kind || 'oak', x: t.x, y: t.y };
+        // ...and the one that used to lose the race, tracked on its own, so
+        // the report says how much the fix actually bought it
+        if (t.x === 0.168 && t.y === 0.315) {
+          if (!spread) spread = { lo: tip, hi: tip };
+          spread.lo = Math.min(spread.lo, tip); spread.hi = Math.max(spread.hi, tip);
+        }
+      }
+    }
+    return { worst, spread, n: T.length, shapes: SIZES.length };
+  })(window.__saiWorld)`);
+  if (r.missing) chk(false, 'every crown is painted whole, at every stage shape',
+    'the world hands over no trees, no crown boxes or no scale rule');
+  else chk(r.worst.tip > 0, 'every crown is painted whole, at every stage shape',
+    r.worst.tip > 0
+      ? `all ${r.n} clear at all ${r.shapes} shapes; tightest is the ${r.worst.kind} at ${r.worst.x},${r.worst.y}, ${r.worst.tip.toFixed(1)}px of sky at ${r.worst.at}`
+        + (r.spread ? ` — the west-high pine now runs ${r.spread.lo.toFixed(0)}..${r.spread.hi.toFixed(0)}px and was cut by 81px at 965x552` : '')
+      : `the ${r.worst.kind} at ${r.worst.x},${r.worst.y} is cut ${(-r.worst.tip).toFixed(0)}px at ${r.worst.at}`);
+}
+
+// ============== ...and the gaps between them hold ==============
+// The other half of the same bug, and the one the world had written off. Its
+// note read: "every pair in this world closes up on a short window — the
+// west pair, the roomiest on the map, is +59px here and -16px at 1008x700.
+// That is structural, and no placement fixes it." It was not structural and
+// it was never about placement: the trunks moved with the stage and the
+// crowns did not, so the two walked into each other. Now they scale
+// together, and a gap quoted at one shape holds at all of them.
+//
+// Box separation, not centre distance: positive is daylight, negative is two
+// crowns painted as one lumpy mass. The boxes are deliberately fatter than
+// the silhouettes, so a small positive number is real daylight on screen.
+{
+  const r = await page.evaluate(`(w => {
+    const T = w.def.trees || [], C = w.__crowns, K = w.__treeScale;
+    if (T.length < 2 || !C || !K) return { missing: true };
+    const SIZES = [[1008,700],[1264,732],[1350,700],[1424,832],[1600,820],[1904,1012],
+                   [1000,800],[1240,1000],[900,620],[1440,900],[1280,720],[1920,1080],
+                   [960,600],[1120,640]];
+    const box = (t, W, H, ks) => {
+      const c = C[t.kind || 'oak'], s = t.s0 * ks;
+      return { x: t.x * W, top: t.y * H - c.topPx * s,
+               bot: t.y * H - c.botPx * s, half: c.half * s };
+    };
+    let worst = null, pairs = 0;
+    for (const [W, H] of SIZES) {
+      const ks = K(W, H);
+      for (let i = 0; i < T.length; i++) for (let j = i + 1; j < T.length; j++) {
+        const A = box(T[i], W, H, ks), B = box(T[j], W, H, ks);
+        // two axis-aligned boxes are apart by the larger of their two axis
+        // separations; whichever axis is doing the separating is the one the
+        // eye reads the daylight along
+        const gap = Math.max(Math.abs(A.x - B.x) - (A.half + B.half),
+                             Math.max(A.top, B.top) - Math.min(A.bot, B.bot));
+        if (!worst || gap < worst.gap)
+          worst = { gap, pair: T[i].x + ',' + T[i].y + ' / ' + T[j].x + ',' + T[j].y,
+                    at: W + 'x' + H };
+      }
+    }
+    pairs = T.length * (T.length - 1) / 2;
+    return { worst, pairs, shapes: SIZES.length };
+  })(window.__saiWorld)`);
+  if (r.missing) chk(false, 'no two crowns are painted as one, at any stage shape',
+    'the world hands over too few trees, no crown boxes or no scale rule');
+  else chk(r.worst.gap > 0, 'no two crowns are painted as one, at any stage shape',
+    r.worst.gap > 0
+      ? `${r.pairs} pairs x ${r.shapes} shapes all apart; the closest call is pair ${r.worst.pair} with ${r.worst.gap.toFixed(1)}px at ${r.worst.at}`
+      : `pair ${r.worst.pair} overlaps by ${(-r.worst.gap).toFixed(0)}px at ${r.worst.at}`);
+}
+
+// ============ ...and the west faces are forest floor ============
+// THE FIFTH RULE A TRUNK KEEPS, and the newest: since the bluff was cut into
+// the west edge, a trunk's own WEST working spots can land on rock. Every
+// trunk behaviour — the bear's scratch, the deer's rub, his scrape, his bed —
+// stands its subject at
+//     x = tx - trunkR*s - r*3.1*poseReach,   y = ty - basePx*s - r*3.1*feet
+// which is a FIXED px offset west of a FRACTIONAL anchor, so a spot that is
+// open ground on a wide stage walks into the rock on a narrow one.
+//
+// It fails QUIETLY, which is why it wants a check rather than an eye. An
+// animal does not change terrace by walking: a deer whose bed lands on the
+// shelf walks into the riser, is pushed back out, and gives the bout up after
+// its 24s. Nothing looks wrong; the behaviour simply never happens.
+//
+// This is the rule that decided where the west-high pine could stand once it
+// was grown to the lone spruce's 1.56. It is also why that resize could not
+// be a scale change: a 1.56 crown needs its anchor at y >= .4150, and every
+// anchor at that latitude either put the deer's bed on the bluff or put a
+// forage site inside the 96px ring.
+//
+// SWEPT IN FRACTIONS, ASKED OF THE WORLD. rockZone reads per-mille of the
+// stage, so where a FRACTIONAL point falls on the bluff is the same answer at
+// every window — which means the suite can build a spot's fraction for a
+// 1000x800 stage and put that question to the live rockZoneAt without
+// resizing anything and without carrying a copy of the rock.
+{
+  const r = await page.evaluate(`(w => {
+    const T = w.def.trees || [], M = w.__treeMetrics, P = window.__saiProfile, B = w.bounds;
+    if (!T.length || !M || !P || !w.rockZoneAt) return { missing: true };
+    const SIZES = [[1008,700],[1264,732],[1350,700],[1424,832],[1600,820],[1904,1012],
+                   [1000,800],[1240,1000],[1440,900],[1280,720],[1920,1080],[1120,640],
+                   [1084,1132],[2544,832]];
+    // the four drawn poses that meet a trunk from the west, each as "how far
+    // east of his own centre the drawing gets" and "the ground line below it"
+    const POSES = [['deer bed', 'deer', M.deer.bed, M.deer.feet],
+                   ['deer rub', 'deer', M.deer.brow, M.deer.feet],
+                   ['deer scrape', 'deer', M.deer.hoof, M.deer.feet],
+                   ['bear scratch', 'bear', M.standBack, M.standFeet]];
+    const on = (fx, fy) => w.rockZoneAt(fx * B.w, fy * B.h).on;
+    const rho = (fx, fy) => w.lakeRhoAt(fx * B.w, fy * B.h);
+    // how far east of the DRAWN outline this fraction is, in px of a W-wide
+    // stage — bisected on the world's own predicate rather than measured off
+    // a polyline the suite would have to hold a copy of
+    const clearPx = (fx, fy, W) => {
+      if (on(fx, fy)) return -1;
+      let lo = 0, hi = fx;
+      for (let k = 0; k < 34; k++) { const m = (lo + hi) / 2; if (on(m, fy)) lo = m; else hi = m; }
+      return (fx - hi) * W;
+    };
+    let worst = null, wet = [];
+    for (const S of SIZES) {
+      const W = S[0], H = S[1], ks = w.__treeScale(W, H);
+      for (let i = 0; i < T.length; i++) {
+        const t = T[i], s = t.s0 * ks;
+        for (const p of POSES) {
+          const rr = P[p[1]].size;
+          const fx = t.x - (M.trunkR * s + rr * 3.1 * p[2]) / W;
+          const fy = t.y - (M.basePx * s + rr * 3.1 * p[3]) / H;
+          const clear = clearPx(fx, fy, W);
+          if (!worst || clear < worst.clear)
+            worst = { clear: clear, i: i, kind: t.kind || 'oak', x: t.x, y: t.y,
+                      what: p[0], at: W + 'x' + H, band: w.rockZoneAt(fx * B.w, fy * B.h).band };
+          if (rho(fx, fy) < 1.05) wet.push('tree ' + i + ' ' + p[0] + ' at ' + W + 'x' + H);
+        }
+      }
+    }
+    return { worst: worst, wet: wet, n: T.length, shapes: SIZES.length, poses: POSES.length };
+  })(window.__saiWorld)`);
+  if (r.missing) chk(false, 'every trunk works its west face on forest floor',
+    'the world hands over no trees, no tree metrics, no size table or no rock');
+  else {
+    chk(r.worst.clear > 0, 'every trunk works its west face on forest floor',
+      r.worst.clear > 0
+        ? `${r.n} trunks x ${r.poses} poses x ${r.shapes} shapes all clear of the drawn rock; `
+          + `tightest is the ${r.worst.kind} at ${r.worst.x},${r.worst.y} — its ${r.worst.what} `
+          + `with ${r.worst.clear.toFixed(1)}px of floor at ${r.worst.at}`
+        : `the ${r.worst.kind} at ${r.worst.x},${r.worst.y} puts its ${r.worst.what} on the ${r.worst.band} at ${r.worst.at}`);
+    chk(r.wet.length === 0, 'and none of them in the lake at any stage shape',
+      r.wet.length ? r.wet.slice(0, 3).join('; ') : 'every west spot past rho 1.05 at all fourteen');
+  }
+}
+
+// ============ the browse shrub the resize displaced ============
+// Growing the west-high pine to 1.56 moved it 148px down the stage, and one
+// object was standing where it had to go: the browse shrub that used to sit
+// at (.225,.455). With that shrub there, a 1.56 pine had NO legal anchor
+// anywhere in the west — best case 10px inside its own reach ring. It moved
+// up and right, and this is the check that it landed somewhere a site may be.
+//
+// Found as the WESTERNMOST browse shrub rather than by coordinate, so the
+// suite goes on asking about the right bush if it is ever moved again. Three
+// bars, all of them the world's own:
+//   1. the bear's 96px reach ring, off every trunk, at fourteen shapes
+//   2. never the tightest site pair on the map — the rule the forage table
+//      states for a new site in exactly those words
+//   3. its 60px approach ring: on the stage, off the drawn rock, and past the
+//      rho 1.12 the spawn guard bites at, so nothing working it is shoved
+// Swept in fractions and put to the world's own predicates, the same way the
+// west faces above are.
+{
+  const r = await page.evaluate(`(w => {
+    const F = w.forage || [], T = w.def.trees || [], B = w.bounds;
+    const shrubs = F.map((f, i) => ({ f: f, i: i })).filter(o => o.f.kind === 'shrub');
+    if (!shrubs.length || !T.length || !w.rockZoneAt) return { missing: true };
+    shrubs.sort((a, b) => a.f.x - b.f.x);
+    const me = shrubs[0].i, S = F[me];
+    const SIZES = [[1008,700],[1264,732],[1350,700],[1424,832],[1600,820],[1904,1012],
+                   [1000,800],[1240,1000],[1440,900],[1280,720],[1920,1080],[1120,640],
+                   [1084,1132],[2544,832]];
+    const on = (fx, fy) => w.rockZoneAt(fx * B.w, fy * B.h).on;
+    let ring = null, pair = null, lake = null, rock = null, edge = null;
+    for (const Z of SIZES) {
+      const W = Z[0], H = Z[1], ks = w.__treeScale(W, H);
+      const D = (a, b) => Math.hypot((a.x - b.x) * W, (a.y - b.y) * H);
+      for (const t of T) {
+        const d = D(S, t) - 96;
+        if (!ring || d < ring.v) ring = { v: d, at: W + 'x' + H, kind: t.kind || 'oak' };
+      }
+      // the tightest pair the world already ships, this shape, ignoring this
+      // bush — the bar it has to beat rather than a number invented here
+      let bar = Infinity, mine = Infinity, who = '';
+      for (let i = 0; i < F.length; i++) for (let j = i + 1; j < F.length; j++) {
+        const d = D(F[i], F[j]);
+        if (i === me || j === me) { if (d < mine) { mine = d; who = F[i].kind + '/' + F[j].kind; } }
+        else if (d < bar) bar = d;
+      }
+      if (!pair || mine - bar < pair.v) pair = { v: mine - bar, mine: mine, bar: bar, at: W + 'x' + H, who: who };
+      for (let a = 0; a < 24; a++) {
+        const fx = S.x + Math.cos(a / 24 * 6.283185307) * 60 / W;
+        const fy = S.y + Math.sin(a / 24 * 6.283185307) * 60 / H;
+        const rr = w.lakeRhoAt(fx * B.w, fy * B.h);
+        if (!lake || rr < lake.v) lake = { v: rr, at: W + 'x' + H };
+        if (on(fx, fy)) rock = { at: W + 'x' + H };
+        const e = Math.min(fx * W, fy * H, (1 - fx) * W, (1 - fy) * H);
+        if (!edge || e < edge.v) edge = { v: e, at: W + 'x' + H };
+      }
+    }
+    return { i: me, x: S.x, y: S.y, n: shrubs.length,
+             ring: ring, pair: pair, lake: lake, rock: rock, edge: edge,
+             lvl: w.rockLevelAt(S.x * B.w, S.y * B.h), wet: w.inWaterAt(S.x * B.w, S.y * B.h),
+             shapes: SIZES.length };
+  })(window.__saiWorld)`);
+  if (r.missing) chk(false, 'the west browse shrub stands where a site may stand',
+    'the world hands over no shrubs, no trees or no rock');
+  else {
+    chk(r.ring.v > 0 && r.pair.v > 0 && r.lvl === 0 && !r.wet,
+      'the west browse shrub stands where a site may stand',
+      r.ring.v > 0 && r.pair.v > 0 && r.lvl === 0 && !r.wet
+        ? `(${r.x},${r.y}), level ${r.lvl} forest floor: ${r.ring.v.toFixed(1)}px outside the nearest `
+          + `${r.ring.kind}'s 96px ring at ${r.ring.at}, and ${r.pair.v.toFixed(1)}px looser than the `
+          + `world's own tightest site pair (${r.pair.mine.toFixed(0)} against ${r.pair.bar.toFixed(0)}) at ${r.pair.at}`
+        : `(${r.x},${r.y}) level ${r.lvl}${r.wet ? ' WET' : ''}: ring ${r.ring.v.toFixed(1)}px at ${r.ring.at}, `
+          + `pair ${r.pair.v.toFixed(1)}px (${r.pair.who}) at ${r.pair.at}`);
+    chk(!r.rock && r.lake.v >= 1.12 && r.edge.v > 0,
+      'and the ground an animal works it from is all reachable',
+      !r.rock && r.lake.v >= 1.12 && r.edge.v > 0
+        ? `its 60px approach ring never nearer the lake than rho ${r.lake.v.toFixed(2)} (the spawn guard bites at 1.12), `
+          + `never on the bluff, and never nearer a screen edge than ${r.edge.v.toFixed(0)}px, at all ${r.shapes} shapes`
+        : r.rock ? `the approach ring reaches the bluff at ${r.rock.at}`
+                 : `rho ${r.lake.v.toFixed(2)} at ${r.lake.at}, ${r.edge.v.toFixed(0)}px from an edge at ${r.edge.at}`);
+  }
 }
 
 // ==================== the floats do not march in step ====================
@@ -971,6 +1255,145 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
       && r.cougarDown && r.cougarDown.seen.includes('1'),
     'the owl flies past the shelf and the cougar has to stand on it',
     `owl saw ${r.owlDown && r.owlDown.seen}, cougar saw ${r.cougarDown && r.cougarDown.seen}`);
+}
+
+// ==================== the stepping stones ====================
+// Two rocks that can be stood ON: the long slab already lying in the middle
+// of the shelf, and a NEW ledge cut into the middle of the riser with a
+// second block on it. The point of them is that the climb to the cave's own
+// level is a sequence of hops instead of one arc up the whole face — and the
+// point of these checks is that the surface an animal is stood on is the
+// surface that is PAINTED, which is the only claim a platform makes.
+{
+  const r = await page.evaluate(`(w => {
+    const out = {};
+    for (const id of ["slab", "step"]) {
+      const el = document.querySelector("[data-sai-plat=" + JSON.stringify(id) + "]");
+      const o = { drawn: !!el, inFill: 0, n: 0, feetOffLip: 0, self: 0, x0: 0, x1: 0 };
+      if (el) {
+        const pt = el.ownerSVGElement.createSVGPoint();
+        const s0 = w.rockPlatformStand(id, 0, 20);
+        o.x0 = Math.round(s0.x0); o.x1 = Math.round(s0.x1);
+        for (let i = 1; i < 10; i++) {
+          const x = s0.x0 + (s0.x1 - s0.x0) * (i / 10);
+          const s = w.rockPlatformStand(id, x, 20);
+          o.n++;
+          pt.x = x; pt.y = s.lip - 2;            // a shade INSIDE the painted top
+          if (el.isPointInFill(pt)) o.inFill++;
+          if (Math.abs(s.feet - s.lip) > 0.5) o.feetOffLip++;
+          if (Math.abs((s.y + 20 * w.__rock.spriteFeet - s.z) - s.feet) > 0.01) o.self++;
+        }
+      }
+      out[id] = o;
+    }
+    return out;
+  })(window.__saiWorld)`);
+  for (const id of ['slab', 'step']) {
+    const o = r[id];
+    chk(o.drawn && o.n > 0 && o.inFill === o.n,
+      `the ${id}'s standing line is inside the top RockLayer paints`,
+      o.drawn ? `${o.inFill}/${o.n} samples inside the drawn surface, x ${o.x0}..${o.x1}px`
+        : 'nothing in the DOM carries that tag');
+    chk(o.n > 0 && o.feetOffLip === 0 && o.self === 0,
+      `an animal on the ${id} stands on top of it and not at its foot`,
+      `${o.n - o.feetOffLip}/${o.n} samples put the sprite's own ground line on the drawn edge`);
+  }
+}
+
+// WHERE THE NEW ONE IS. The owner asked for it in the exact middle of the
+// elevation, and the middle that matters is not the middle of the drawn
+// band: it is the height at which the two hops it makes are the same hop.
+{
+  const r = await page.evaluate(`(w => {
+    const B = w.bounds, R = w.__rock.breaks;
+    const lineY = (nm, x) => { const L = R[nm], xPm = x / B.w * 1000; let i = 0;
+      while (i < L.length - 2 && L[i + 1][0] < xPm) i++;
+      const a = L[i], b = L[i + 1] || L[i];
+      const f = b[0] === a[0] ? 0 : (xPm - a[0]) / (b[0] - a[0]);
+      return (a[1] + (b[1] - a[1]) * f) / 1000 * B.h; };
+    const s0 = w.rockPlatformStand("step", 0, 20);
+    const x = (s0.x0 + s0.x1) / 2, st = w.rockPlatformStand("step", x, 20);
+    const L2 = lineY("L2", x), T1 = lineY("T1", x);
+    const fd = 20 * w.__rock.spriteFeet, pad = 10;   // r 20: pad is max(8, r/2)
+    const talus = T1 + pad + fd, shelf = L2 - pad + fd;
+    return { x: Math.round(x), lip: st.lip, L2, T1, exits: st.exits,
+             up1: talus - st.lip, up2: st.lip - shelf, one: talus - shelf };
+  })(window.__saiWorld)`);
+  chk(r.lip > r.L2 && r.lip < r.T1, 'the new ledge is cut into the riser itself',
+    `its lip at ${Math.round(r.lip)}px, between the shelf's L2 at ${Math.round(r.L2)}` +
+    ` and the talus at T1 ${Math.round(r.T1)}`);
+  chk(r.exits.length === 2 && r.exits[0].lvl === 0 && r.exits[1].lvl === 1,
+    'and it is a landing between the talus and the shelf, not on either',
+    `exits to levels ${r.exits.map((e) => e.lvl).join(' and ')}`);
+  const even = Math.abs(r.up1 - r.up2) / (r.up1 + r.up2);
+  chk(r.up1 > 20 && r.up2 > 20 && even < 0.2,
+    'and it halves the climb to the cave entrance',
+    `${Math.round(r.up1)}px up then ${Math.round(r.up2)}px, against ` +
+    `${Math.round(r.one)}px in the single arc it replaces`);
+}
+
+// ...and the moving part. He is put at the foot of the riser under the new
+// ledge and walked into it, so the whole staircase costs a handful of frames
+// instead of the wander across the map that would earn it. His x is pinned
+// for the same reason the face checks above pin theirs.
+{
+  const r = await page.evaluate(`(async (w) => {
+    const B = w.bounds, R = w.__rock.breaks;
+    const lineY = (nm, x) => { const L = R[nm], xPm = x / B.w * 1000; let i = 0;
+      while (i < L.length - 2 && L[i + 1][0] < xPm) i++;
+      const a = L[i], b = L[i + 1] || L[i];
+      const f = b[0] === a[0] ? 0 : (xPm - a[0]) / (b[0] - a[0]);
+      return (a[1] + (b[1] - a[1]) * f) / 1000 * B.h; };
+    const frame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 20)));
+    const park = (o) => { o.x = -900; o.y = -900; o.state = "idle";
+      o.idleUntil = performance.now() + 9e6; o.noEventUntil = performance.now() + 9e6; };
+    const climb = async (nm, n) => {
+      const a = w.agents.find(x => x.species === nm); if (!a) return null;
+      const s0 = w.rockPlatformStand("step", 0, 20), X = (s0.x0 + s0.x1) / 2;
+      for (const o of w.agents) if (o !== a) park(o);
+      a.state = "wander"; a.z = 0; a.dragging = false; a._plat = null;
+      a._rockHop = null; a._rockHopEnd = 0; a._lvl = 0;
+      a.x = X; a.y = lineY("T1", X) + 10;
+      a.intentUntil = performance.now() + 9e6; a.noEventUntil = performance.now() + 9e6;
+      const plats = [], lvls = [0]; let arc = null, footN = 0, footBad = 0;
+      for (let i = 0; i < n; i++) {
+        a.state = "wander"; a.x = X;
+        if (a.vy > -20) a.vy = -70;
+        await frame();
+        if (a._plat && a._rockHop && !arc) arc = Object.assign({}, a._rockHop);
+        if (a._plat && !a._rockHop) {
+          const s = w.rockPlatformStand(a._plat, a.x, a.r);
+          footN++;
+          if (Math.abs((a.y - a.z + a.r * w.__rock.spriteFeet) - s.lip) > 1) footBad++;
+          if (plats[plats.length - 1] !== a._plat) plats.push(a._plat);
+        }
+        if (lvls[lvls.length - 1] !== a._lvl) lvls.push(a._lvl);
+      }
+      const end = a._lvl, wall = w.rockZoneAt(a.x, a.y).wall && !a._plat;
+      park(a);
+      return { plats, lvls: lvls.join(""), end, arc, footN, footBad, wall };
+    };
+    return { wolf: await climb("wolf", 14), turtle: await climb("turtle", 14) };
+  })(window.__saiWorld)`);
+  const W = r.wolf, T = r.turtle;
+  chk(!!W && W.plats.includes('step'),
+    'a wolf walking at the riser lands on the new ledge',
+    W ? `stood on ${W.plats.join(' then ') || 'nothing'}` : 'no wolf');
+  chk(!!W && W.lvls.includes('1'),
+    'and goes on up from it to the cave entrance level',
+    W ? `terraces seen: ${W.lvls}` : 'no wolf');
+  chk(!!W && W.footN > 0 && W.footBad === 0 && !W.wall,
+    'and every frame he spends up there has his paws on the drawn top',
+    W ? `${W.footN - W.footBad}/${W.footN} standing frames on the lip` : 'no wolf');
+  const arc = W && W.arc;
+  chk(!!arc && arc.lift > 8 && arc.z1 > arc.z0
+      && (arc.z0 + (arc.z1 - arc.z0) / 2 + arc.lift) > Math.max(arc.z0, arc.z1) + 8,
+    'the hop onto it is an arc and not a ramp',
+    arc ? `rests at z ${Math.round(arc.z0)} -> ${Math.round(arc.z1)}, ` +
+          `apex ${Math.round(arc.z0 + (arc.z1 - arc.z0) / 2 + arc.lift)}` : 'no hop recorded');
+  chk(!!T && T.plats.length === 0 && T.end === 0,
+    'and a turtle still gets nowhere near it',
+    T ? `stood on ${T.plats.length} platforms, ended on terrace ${T.end}` : 'no turtle');
 }
 
 chk(errs.length === 0, 'no JS errors', errs.length ? errs[0] : 'clean');
