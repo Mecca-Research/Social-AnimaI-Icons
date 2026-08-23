@@ -2336,6 +2336,15 @@ export default function SocialAnimalsRPG() {
       // this once at the top and gets the roster the world used to hand out
       // by default. It is the world's OWN seeding path, not a copy of it.
       W.__dropOffstage = (a) => dropOffstage(a, W.bounds);
+      // THE SPEED LEVER, WITHOUT THE WIDGET. Three forage checks wind the
+      // world up because headless frames run at about a quarter of real
+      // time and the production give-up timers — wall-clock, and right for
+      // a real viewer — expire mid-journey. They did it by dragging the
+      // speed slider to its max, and when the slider was removed from the
+      // toolbar the suite crashed on a null element rather than failing a
+      // check. This is the same value the slider set.
+      W.__setSpeed = (v) => { const n = clamp(+v || DEFAULTS.speed, 60, 120);
+                              setCfg((c) => ({ ...c, speed: n })); return n; };
       W.__seedCast = (n) => { W.agents = seedAgents(W, n || Object.keys(W.def.roster).length);
                               return W.agents.length; };
       W.__rock = { breaks: ROCK_BREAKS, profile: ROCK_PROFILE, cave: ROCK_CAVE,
