@@ -331,6 +331,35 @@ const FOREST_TREES = [
   // one reason: a pine's crown is drawn 232px tall against an oak's 207, in
   // FIXED px, so at this latitude anything above 1.10 puts the tip off the
   // top of the stage and the tree reads as beheaded rather than tall.
+  //
+  // ...and the second half of that sentence is TRUE OF 1.10 ITSELF on
+  // anything but a tall window, which the note above got wrong for three
+  // releases. MEASURED, tip in stage px (negative = cut off the top):
+  //
+  //          900x620  1008x700  1120x640  1424x832  1500x940  1920x1080
+  //   1.10    -81.3     -56.1     -75.0     -14.5     +19.5      +63.6
+  //   1.56   -188.0    -162.8    -181.7    -121.3     -87.2      -43.1
+  //
+  // The anchor sits .315 down, so the ceiling over it is .315*h px and the
+  // crown under it is 232*s px: the whole crown only fits where h >= 736*s.
+  // At 1.10 that is a stage 810 tall, which is 1500x940 and up — everything
+  // shorter ships this tree with its leader and top whorls cut, and at
+  // 1120x640 it is showing 41% of its crown. The number that would put the
+  // WHOLE crown on at all twelve checked shapes (h down to 572) is s 0.78,
+  // i.e. smaller than it is now, not larger.
+  //
+  // WHY IT CANNOT SIMPLY BE GROWN, asked as a sweep rather than argued: at
+  // 1.56 the four placement rules below are perfectly happy with this spot —
+  // 273 cells of the map pass them, the nearest being (.17,.31) — so the
+  // rules are not what pins the size. The CEILING is. A 1.56 crown needs the
+  // anchor at y .633 to clear it at twelve shapes (.656 at 900x620), and the
+  // west corridor is closed at every one of those latitudes: the surface
+  // root at (.185,.690) owns .58-.76 through rule 1, the west-low oak owns
+  // .78-.88, and the mossy log at (.210,.950) owns the bottom. Swept over
+  // the whole map at twelve shapes, s 1.50 and 1.56 have NO legal anchor
+  // anywhere; 1.40 has three cells, all at (.11-.12,.57-.58) hard against
+  // the bluff. Growing this tree is therefore a re-solve of the west side,
+  // not a scale change, and it costs the top-left silhouette to buy it.
   { x: .168, y: .315, s: 1.10, kind: "pine", fruit: false }, // west, high
   // Moved from (.898,.480) — its west face was over the lake. Every trunk
   // behavior works a trunk from the WEST and stands its subject a sprite-foot
@@ -2065,7 +2094,27 @@ export default function SocialAnimalsRPG() {
       // where rather than re-deriving it and testing its own arithmetic
       W.spawnSafeAt = (x, y, sp) => spawnSafe(W, x, y, sp);
       W.__rock = { breaks: ROCK_BREAKS, profile: ROCK_PROFILE, cave: ROCK_CAVE,
-                   highEntry: [...ROCK_HIGH_ENTRY] };
+                   highEntry: [...ROCK_HIGH_ENTRY],
+                   // the platforms themselves — the SAME objects RockLayer
+                   // draws its slab and its ledge from, so a suite can check
+                   // that the thing painted is the thing stood on without
+                   // carrying a copy of either — and the sprite's own ground
+                   // line, which is half of what "standing on" means here.
+                   platforms: ROCK_PLATFORMS, spriteFeet: SPRITE_FEET };
+      // WHERE A PLATFORM PUTS AN ANIMAL, asked of the world rather than
+      // rebuilt in the suite. `feet` is the y the SPRITE'S paws are drawn at
+      // — the number the whole point of a platform lives or dies on — and it
+      // is derived the same way the step loop derives it.
+      W.rockPlatformStand = (id, x, r) => {
+        const p = rockPlatform(id); if (!p) return null;
+        const a = { x, r, z: 0 };
+        const y = platFootY(W.bounds, p, x);
+        return { y, z: platLift(W.bounds, p, a), lip: platLipY(W.bounds, p, x),
+                 feet: y + spriteFeetPx(a) - platLift(W.bounds, p, a),
+                 x0: platX0(W.bounds, p), x1: platX1(W.bounds, p),
+                 level: platLevel(p), exits: p.exits.map((e) => ({ lvl: e.lvl,
+                   y: platExitY(W.bounds, p, e, x) })) };
+      };
       // ...and the painted width of each kind of forage site, plus the pit's
       // own, for the same reason: the suite checks the skunk's holes against
       // the drawing, and must not carry its own copy of the drawing.
@@ -2392,6 +2441,190 @@ const ROCK_BAND_LINES = {
   [ROCK_LEVEL_PLATEAU]: ["L0", "L1"],
 };
 
+/* ---------------- PLATFORMS: the rocks you stand ON ---------------- */
+/**
+ * A TERRACE IS A FLOOR; A PLATFORM IS A THING LYING ON ONE. The five break
+ * lines cut the bluff into bands, and until now the only way from the talus
+ * up to the cave's shelf was one arc up the whole riser. A platform is the
+ * step in the middle of it: a piece of drawn stone with a top you can land
+ * on, stand on, and push off again.
+ *
+ * Two of them, and they are the two the owner asked for:
+ *
+ *   slab  the long block already lying in the middle of the shelf. It was
+ *         scenery; it is now something to get up on.
+ *   step  a NEW ledge cut into the exact middle of the riser — halfway up
+ *         the face, halfway along it — with a second block sitting on it.
+ *         With it the climb to the cave entrance is two hops instead of one.
+ *
+ * EVERY NUMBER HERE IS DRAWN. RockLayer builds its slabs from ROCK_SLABS and
+ * its ledge from ROCK_LEDGE, and the physics reads the same two polylines
+ * out of the same objects — `lip`, the front edge of the top surface, which
+ * is where an animal's feet go, and `foot`, where the stone meets whatever
+ * is under it, which is where its ANCHOR goes. Geometry-as-physics: the edge
+ * that is painted is the edge that is stood on.
+ */
+
+/**
+ * The wedge a fallen slab is drawn as: a lit top and two darker sides, in
+ * per-mille, off one corner and a scale. `lip` and `foot` are the same
+ * points again as (x -> y) polylines for alongPm to read.
+ */
+function rockSlabPts(x, y, s) {
+  const P = (dx, dy) => [x + dx * s, y + dy * s];
+  const a = P(0, 0), b = P(15, -6), c = P(30, 2), d = P(14, 9);
+  const e = P(13, 26), f = P(-1, 16), g = P(29, 19);
+  return { top: [a, b, c, d], west: [a, d, e, f], east: [d, c, g, e],
+           lip: [a, d, c], foot: [f, e, g] };
+}
+// The three slabs lying on the shelf, west corner and scale.
+// The first of them is THE LONG ROCK the owner pointed at, and it grew: it
+// was 1.25 and is 1.5, because a platform has to look like something worth
+// jumping onto, and it moved 8 west, because at 52 its east end ran under
+// the west-low oak's crown — which paints at zIndex 12, over the animals,
+// so an animal standing on that end would have been standing in leaves.
+const ROCK_SLABS = [[44, 456, 1.5], [16, 488, 0.8], [-58, 430, 0.95]];
+
+/**
+ * THE MID-RISER LEDGE. Three polylines and a block, all per-mille.
+ *
+ *   back  where the plate meets the riser behind it
+ *   lip   its front edge — the standing line
+ *   foot  the bottom of its front face, back into the riser
+ *
+ * It sits at the middle of the riser both ways. At x 54 the face runs from
+ * L2 at 530 down to T1 at 629 and the plate lies across 570..620, so the
+ * eye puts it squarely in the middle of the drop — and, which is the number
+ * that actually matters, the two hops it makes come out 57px and 49px where
+ * the single arc it replaces was 106. East it stops at 78-80, inside the
+ * riser's own outline (102 at this latitude), so it is a step cut into the
+ * face and not a shelf hanging off the end of it.
+ */
+const ROCK_LEDGE = {
+  back: [[-30, 540], [-2, 554], [26, 564], [54, 570], [78, 573]],
+  lip:  [[-30, 568], [-2, 582], [26, 592], [54, 597], [80, 598]],
+  foot: [[-30, 592], [-2, 606], [26, 616], [54, 620], [78, 620]],
+  // the second rock, standing on the WEST end of the plate — the same wedge
+  // as the ones on the shelf, one size up, so the step reads as broken-off
+  // cliff and not as a shelf somebody built. West, and not in the middle,
+  // because the middle is the bit that has to stay clear to land on.
+  slab: [0, 546, 1.15],
+};
+
+/**
+ * WHERE THE SPRITE'S FEET ACTUALLY ARE. Critter draws the 120-unit rig at
+ * r*2.7 px, centred on a.y, with the rig's ground line at viewBox y 103 —
+ * so the paws land this far BELOW the point the world moves around.
+ *
+ * On a terrace that is invisible: the shelf is ninety pixels deep and the
+ * feet land inside it wherever the anchor is. On a slab twenty pixels tall
+ * it is the whole difference between standing ON the rock and standing in
+ * front of it, so a platform lifts by the stone's height PLUS this.
+ */
+const SPRITE_FEET = 2.7 * (103 - 60) / 120;
+const spriteFeetPx = (a) => a.r * SPRITE_FEET;
+
+/**
+ * The platforms themselves. `exits` are the terraces this platform is
+ * reached from and left for, each named by the break line an animal stands
+ * at down there — or null, meaning the platform's own foot, for one that is
+ * simply lying on the floor it belongs to.
+ */
+const ROCK_PLATFORMS = [
+  {
+    id: "slab", ...(() => {
+      const p = rockSlabPts(ROCK_SLABS[0][0], ROCK_SLABS[0][1], ROCK_SLABS[0][2]);
+      return { lip: p.lip, foot: p.foot };
+    })(),
+    // it is lying on the shelf, so the shelf is both the way up and the way
+    // down. Its own foot line is the ground beside it.
+    exits: [{ lvl: ROCK_LEVEL_SHELF, line: null }],
+  },
+  {
+    id: "step", lip: ROCK_LEDGE.lip, foot: ROCK_LEDGE.foot,
+    // the standing part starts where the companion block stops. Read off
+    // the block's own east foot rather than written down again, so moving
+    // the rock along the plate moves the landing with it.
+    from: rockSlabPts(ROCK_LEDGE.slab[0], ROCK_LEDGE.slab[1], ROCK_LEDGE.slab[2]).foot[2][0],
+    // cut into the riser, so it bridges the talus below and the shelf above:
+    // this is the half-way house that makes the cave entrance two hops.
+    exits: [{ lvl: ROCK_LEVEL_GROUND, line: "T1" },
+            { lvl: ROCK_LEVEL_SHELF, line: "L2" }],
+  },
+];
+const rockPlatform = (id) => ROCK_PLATFORMS.find((p) => p.id === id) || null;
+
+/** the standing line, in px: where an animal's FEET go on this platform */
+const platLipY = (bounds, p, x) => alongPm(p.lip, x / bounds.w * 1000) / 1000 * bounds.h;
+/** its footing, in px: where the stone meets what is under it */
+const platFootY = (bounds, p, x) => alongPm(p.foot, x / bounds.w * 1000) / 1000 * bounds.h;
+/** the span it can be stood on, in px — the drawn top edge, end to end */
+const platX0 = (bounds, p) => (p.from ?? p.lip[0][0]) / 1000 * bounds.w;
+const platX1 = (bounds, p) => (p.to ?? p.lip[p.lip.length - 1][0]) / 1000 * bounds.w;
+/** the terrace an animal on it belongs to if he somehow loses his grip */
+const platLevel = (p) => p.exits[0].lvl;
+
+/**
+ * HOW HIGH THIS ANIMAL RIDES ON THIS PLATFORM. His anchor sits at the
+ * stone's foot; the lift carries his drawn feet from where they would be
+ * standing beside it up onto the top of it.
+ */
+function platLift(bounds, p, a) {
+  return platFootY(bounds, p, a.x) + spriteFeetPx(a) - platLipY(bounds, p, a.x);
+}
+/** where an exit puts him down, in px */
+function platExitY(bounds, p, e, x) {
+  return e.line ? rockBreakY(bounds, ROCK_BREAKS[e.line], x) : platFootY(bounds, p, x);
+}
+
+/**
+ * Hold an animal on the platform he is standing on. It replaces keepOffRock
+ * for him outright: his anchor is INSIDE a wall for the mid-riser step, and
+ * the wall rule would tip him off the face he is standing on.
+ */
+function keepOnPlatform(a, bounds, now) {
+  const p = rockPlatform(a._plat);
+  if (!p) { a._plat = null; return; }
+  const x0 = platX0(bounds, p), x1 = platX1(bounds, p);
+
+  // NOBODY LIVES ON A ROCK. Leaving is a hop, and a hop is only OFFERED in a
+  // free state — so a bear who starts a walk to a tree while he is up here
+  // has no way left of asking to come down, and stands pressed against the
+  // end of the slab until the errand finishes. Measured: two minutes on the
+  // slab wandering, twenty-six seconds mid-errand. Past the cap the stone
+  // lets go of him whatever he is doing, on the same arc as any other exit.
+  if (now - (a._platT0 || now) > ROCK_PLAT_STAY_MS) {
+    leavePlatform(a, bounds, p, p.exits[0], now);
+    return;
+  }
+
+  // HE HAS BEEN PICKED UP AND PUT SOMEWHERE ELSE. A drag skips the whole
+  // navigation loop, so the frame after the drop is the first chance to
+  // notice — and snapping him the width of the stage back onto a rock he is
+  // no longer near is exactly the fling keepOffRock learned not to do.
+  const slack = Math.max(40, a.r * 2);
+  if (a.x < x0 - slack || a.x > x1 + slack
+      || Math.abs(a.y - platFootY(bounds, p, a.x)) > slack) {
+    a._plat = null; a.z = 0;
+    a._lvl = rockLevelAt(bounds, a.x, a.y) ?? ROCK_LEVEL_GROUND;
+    return;
+  }
+
+  // ...otherwise the top of the stone is his floor: he paces along it and
+  // turns at the ends of it, the way anything does at the edge of what it is
+  // standing on.
+  if (a.x < x0) { a.x = x0; if (a.vx < 0) a.vx = -a.vx; }
+  if (a.x > x1) { a.x = x1; if (a.vx > 0) a.vx = -a.vx; }
+  a.y = platFootY(bounds, p, a.x);
+  a.z = platLift(bounds, p, a);
+  a._lvl = platLevel(p);
+  // vy is deliberately LEFT ALONE. Pinning it to zero here looks harmless —
+  // his y is being written every frame anyway — but the wander block derives
+  // its heading from atan2(vy, vx), so a vy held at zero is a heading held
+  // at due east, and an animal that can only ever walk sideways never asks
+  // to come down off the rock again.
+}
+
 /**
  * Keep an animal off the rock faces, and on its own terrace. Called from the
  * grounded rules beside keepAshore, and skipped for anything genuinely in
@@ -2509,6 +2742,85 @@ const ROCK_CLIFF_JUMPERS = new Set(["fox", "deer"]);
 // arc takes. The lift is the wall's own height, so a taller face is a bigger
 // jump without anybody writing that down twice.
 const ROCK_HOP_NEAR = 26, ROCK_HOP_MS = 520;
+// a hop onto a stone is a shorter move than a hop up a face, so it is a
+// quicker one. Same arc, less of it.
+const ROCK_PLAT_MS = Math.round(ROCK_HOP_MS * 0.85);
+// ...and how long anybody perches before the rock lets go of him. Leaving is
+// a hop like any other and wants the intent to leave, which is the sign of
+// vy — but the long slab has only ONE way off it, down onto the shelf it is
+// lying on, so an animal whose wander heading happens to point north is
+// asking to leave in the one direction there is no leaving in. Past this he
+// steps down whichever way he was facing, which is what anything does when
+// it has finished looking around. See keepOnPlatform for what it is worth.
+const ROCK_PLAT_STAY_MS = 9000;
+
+/**
+ * ONTO A ROCK, AND OFF IT AGAIN.
+ *
+ * The same shape as the face hop below, and world-side for the same reason:
+ * a change of height is a fact about the TERRAIN that anything with legs has
+ * to obey, not an appetite a species chooses to have. What is different is
+ * what it is measured against — the DRAWN top of a piece of stone instead of
+ * a break line.
+ *
+ * Mounting, he jumps toward the top; dismounting, he jumps toward an exit.
+ * Both are one arc. The mount HOLDS ITS X: a jump at a rock forty pixels
+ * long that let the wander carry him ten pixels sideways per hop would put
+ * him past the end of it about a third of the time, and an animal standing
+ * on air beside a slab is worse than one that never got up.
+ */
+/** start one arc: an end height at each end, and an x to hold or not */
+function rockArc(a, y1, z1, holdX, now) {
+  const feet0 = a.y - a.z, feet1 = y1 - z1;      // what the EYE sees move
+  a._rockHop = { y0: a.y, y1, z0: a.z, z1, x0: a.x, x1: holdX,
+                 lift: Math.max(16, Math.abs(feet1 - feet0) * 0.55),
+                 ms: ROCK_PLAT_MS, t0: now };
+  a._rockHopEnd = now + ROCK_PLAT_MS;
+}
+/** take one of a platform's exits: the arc down (or up) off the stone */
+function leavePlatform(a, bounds, p, e, now) {
+  const pad = Math.max(8, a.r * 0.5);
+  const ey = platExitY(bounds, p, e, a.x);
+  rockArc(a, ey + (ey < platLipY(bounds, p, a.x) ? -pad : pad), 0, null, now);
+  a._plat = null; a._lvl = e.lvl;
+}
+
+function tryPlatformHop(a, bounds, now) {
+  // ---- already up on one. Its own exits are the only ways off ----
+  if (a._plat) {
+    const p = rockPlatform(a._plat);
+    if (!p) { a._plat = null; return false; }
+    const lip = platLipY(bounds, p, a.x);
+    for (const e of p.exits) {
+      const ey = platExitY(bounds, p, e, a.x);
+      const up = ey < lip;                       // that exit is ABOVE the top
+      if (up ? !(a.vy < -4) : !(a.vy > 4)) continue;
+      leavePlatform(a, bounds, p, e, now);
+      return true;
+    }
+    return false;
+  }
+
+  // ---- on a terrace, standing at the foot of one: get up on it ----
+  const lvl = a._lvl ?? ROCK_LEVEL_GROUND;
+  for (const p of ROCK_PLATFORMS) {
+    const x0 = platX0(bounds, p), x1 = platX1(bounds, p);
+    if (a.x < x0 || a.x > x1) continue;          // not along its length
+    const lip = platLipY(bounds, p, a.x);
+    for (const e of p.exits) {
+      if (e.lvl !== lvl) continue;               // not the terrace he is on
+      const ey = platExitY(bounds, p, e, a.x);
+      if (Math.abs(a.y - ey) > ROCK_HOP_NEAR) continue;
+      const up = ey > lip;                       // the top is above him
+      if (up ? !(a.vy < -4) : !(a.vy > 4)) continue;
+      a._plat = p.id; a._platT0 = now;
+      rockArc(a, platFootY(bounds, p, a.x), platLift(bounds, p, a), a.x, now);
+      a._lvl = platLevel(p);
+      return true;
+    }
+  }
+  return false;
+}
 
 /**
  * Offer a level change if he is at a face and heading into it. Returns true
@@ -2533,6 +2845,15 @@ function tryRockHop(a, bounds, now) {
     : ROCK_CLIMBERS.has(a.species) ? "climb"
     : ROCK_LEAPERS.has(a.species) ? "leap" : null;
   if (!sp) return false;
+
+  // THE STONE COMES FIRST. Standing on a platform he is not being held by a
+  // wall, he is being held by a rock, so the rock's own exits are the only
+  // way off it — falling back to the face rule from up there would step him
+  // off the top of a slab as if it were not there.
+  if (a._plat) return tryPlatformHop(a, bounds, now);
+  // ...and down on the floor a rock at his feet is a nearer thing to jump at
+  // than the face behind it. Not for the owl: a bird does not use a step.
+  if (sp !== "fly" && tryPlatformHop(a, bounds, now)) return true;
 
   // Which way is he trying to go? Up is toward smaller y, and every face on
   // this bluff runs across the map, so intent is simply the sign of vy.
@@ -2562,7 +2883,11 @@ function tryRockHop(a, bounds, now) {
 
   const pad = Math.max(8, a.r * 0.5);
   const span = Math.abs(target - lvl);
-  a._rockHop = { y0: a.y, y1: farY + (up ? pad : -pad),
+  // ...and he lands INSIDE the band he was aiming for. `pad` used to be added
+  // the other way round, which put every landing a pad's depth into the wall
+  // he had just cleared and left keepOffRock to snap him back out of it on
+  // the next frame — a visible twitch at the end of every hop on the bluff.
+  a._rockHop = { y0: a.y, y1: farY + (up ? -pad : pad),
                  lift: Math.max(18, Math.abs(farY - nearY) * (sp === "fly" ? 0.35 : 0.55)),
                  ms: ROCK_HOP_MS * (sp === "fly" ? 1.15 * span : 1), t0: now };
   a._rockHopEnd = now + a._rockHop.ms;
@@ -2570,15 +2895,25 @@ function tryRockHop(a, bounds, now) {
   return true;
 }
 
-/** run the arc. Ballistic in y, held in x, and it sets its own height. */
+/**
+ * Run the arc. Ballistic in y and it sets its own height.
+ *
+ * z0..z1 is the RESTING height at each end of the move — zero on a terrace,
+ * and the stone's own lift at either end of a platform hop — with the sine
+ * laid on top of it. A face hop passes neither, gets zero for both, and is
+ * exactly the arc it always was; a hop onto a slab finishes standing on the
+ * slab instead of dropping through it the instant it lands.
+ */
 function driveRockHop(a, now) {
   const h = a._rockHop; if (!h) return false;
   const q = Math.min(1, (now - h.t0) / h.ms);
+  const z0 = h.z0 || 0, z1 = h.z1 || 0;
   a.y = h.y0 + (h.y1 - h.y0) * q;
-  a.z = h.lift * Math.sin(Math.PI * q);
+  if (h.x1 != null) a.x = h.x0 + (h.x1 - h.x0) * q;   // an aimed hop holds its x
+  a.z = z0 + (z1 - z0) * q + h.lift * Math.sin(Math.PI * q);
   a.vy = 0;
   if (q < 1) return true;
-  a.z = 0; a._rockHop = null; a._rockHopEnd = 0;
+  a.y = h.y1; a.z = z1; a._rockHop = null; a._rockHopEnd = 0;
   return false;
 }
 
@@ -2798,12 +3133,32 @@ function RockLayer({ bounds }) {
     // wedge with a lit top and two darker sides is the smallest complete
     // statement of "this is stone", and between the ferns and the whole
     // formation these are the only thing that gives the mass a size.
-    const mkBlock = (x, y, s) => ({
-      top: poly([[x, y], [x + 15 * s, y - 6 * s], [x + 30 * s, y + 2 * s], [x + 14 * s, y + 9 * s]]),
-      west: poly([[x, y], [x + 14 * s, y + 9 * s], [x + 13 * s, y + 26 * s], [x - 1 * s, y + 16 * s]]),
-      east: poly([[x + 14 * s, y + 9 * s], [x + 30 * s, y + 2 * s], [x + 29 * s, y + 19 * s], [x + 13 * s, y + 26 * s]]),
-    });
-    const blocks = [mkBlock(52, 458, 1.25), mkBlock(16, 488, 0.8), mkBlock(-58, 430, 0.95)];
+    //
+    // The wedge itself is rockSlabPts, out at module scope with the break
+    // lines, and the three corners are ROCK_SLABS — because the first of
+    // them is a PLATFORM now and the physics reads its top edge and its
+    // footing off the same object this draws. One copy of each number.
+    const mkBlock = (x, y, s) => {
+      const p = rockSlabPts(x, y, s);
+      return { top: poly(p.top), west: poly(p.west), east: poly(p.east) };
+    };
+    const blocks = ROCK_SLABS.map((b) => mkBlock(b[0], b[1], b[2]));
+
+    // THE MID-RISER LEDGE, and the second block standing on it. A step cut
+    // into the middle of the face between the talus and the cave's shelf,
+    // drawn exactly the way the shelf above it is: a lit plate, a dark front
+    // face under it, a warm rim on the lip and a hard shadow beneath. Its
+    // three lines are ROCK_LEDGE, and the middle one — the lip — is where an
+    // animal that lands on it puts its feet.
+    const ledgePlate = poly(ROCK_LEDGE.back.concat(rev(ROCK_LEDGE.lip)));
+    const ledgeFace = poly(ROCK_LEDGE.lip.concat(rev(ROCK_LEDGE.foot)));
+    const ledgeLip = line(ROCK_LEDGE.lip);
+    const ledgeBack = line(ROCK_LEDGE.back);
+    // its east corner, turning down out of the light like the shelf's does
+    const ledgeSide = poly([[ROCK_LEDGE.back[4][0] - 14, ROCK_LEDGE.back[4][1] - 1],
+                            ROCK_LEDGE.back[4], ROCK_LEDGE.lip[4], ROCK_LEDGE.foot[4],
+                            [ROCK_LEDGE.foot[4][0] - 12, ROCK_LEDGE.foot[4][1] - 4]]);
+    const ledgeBlock = mkBlock(ROCK_LEDGE.slab[0], ROCK_LEDGE.slab[1], ROCK_LEDGE.slab[2]);
 
     // THE CAVE. Cut into the cliff and not into the shelf under it, with
     // its floor a shade BELOW B1 so the mouth sits ON the shelf rather than
@@ -2879,6 +3234,7 @@ function RockLayer({ bounds }) {
              L0: line(L0), L1: line(L1), B1: line(B1), L2: line(L2), T1: line(T1),
              lintelTop: line(lintelTop),
              cliffFacets, riserFacets, upperFacets, plateauFacets, shelfFacets,
+             ledgePlate, ledgeFace, ledgeLip, ledgeBack, ledgeSide, ledgeBlock,
              blocks, stones, poly, line, X, Y, P };
   }, [w, h]);
 
@@ -3111,7 +3467,10 @@ function RockLayer({ bounds }) {
         <g key={"blk" + i}>
           <path d={b.east} fill="#3c4137" />
           <path d={b.west} fill="#5d6354" />
-          <path d={b.top} fill="#c5c3a8" />
+          {/* the first block is the PLATFORM: tagged so a suite can ask the
+              painted surface whether the point the physics stands an animal
+              on is inside it, instead of rebuilding the polygon itself */}
+          <path d={b.top} fill="#c5c3a8" data-sai-plat={i === 0 ? "slab" : undefined} />
           <path d={b.top} fill="url(#sairock-warm)" />
         </g>
       ))}
@@ -3134,6 +3493,50 @@ function RockLayer({ bounds }) {
           </g>
         </g>
         <rect x="0" y={Y(560)} width={X(130)} height={Y(100)} fill="url(#sairock-bounce)" opacity="0.5" />
+      </g>
+
+      {/* ---- THE MID-RISER LEDGE: the step halfway up the face ----
+              Drawn the way the shelf above it is, because it is the same
+              thing one size down — a floor that sees the sky over a wall
+              that does not. Outside the riser's clip so its lip keeps its
+              warm rim, and BEFORE the talus so the boulders at its foot
+              still read as lying in front of it.
+
+              Order matters here and it is the order every other step of
+              this formation is built in: the hard shadow the plate throws
+              back onto the riser, the plate, its front face, the occlusion
+              under the lip, the warm rim on top of it, then the block. */}
+      <path d={g.ledgeBack} fill="none" stroke="#080c07" strokeWidth={X(7)} opacity="0.45"
+        strokeLinejoin="round" transform={"translate(0," + Y(-4) + ")"} filter="url(#sairock-hair)" />
+      <path d={g.ledgeFace} fill="#31362e" />
+      <path d={g.ledgeSide} fill="#272c26" />
+      <path d={g.ledgePlate} fill="url(#sairock-shelf)" data-sai-plat="step" />
+      <path d={g.ledgePlate} fill="url(#sairock-warm)" />
+      {/* the riser's own shadow banked along the back of it: one dark band
+          is what makes a step a step, and it is the only reason a plate
+          this shallow reads as standing out of the face at all */}
+      <path d={g.ledgePlate} fill="url(#sairock-castfloor)" opacity="0.42" />
+      {/* ...and a scrap of the canopy light on the landing itself, the same
+          trick the dapple in front of the cave plays: the eye has to be told
+          this is a floor and not another band of shadow. */}
+      <ellipse cx={X(48)} cy={Y(588)} rx={X(34)} ry={Y(13)} fill="url(#sairock-dapple)" opacity="0.55" />
+      <path d={g.ledgeLip} fill="none" stroke="#080c07" strokeWidth={X(5)} opacity="0.7"
+        strokeLinejoin="round" transform={"translate(0," + Y(3.2) + ")"} />
+      <path d={g.ledgeLip} fill="none" stroke="#f2e8c4" strokeWidth={X(2)} opacity="0.6"
+        strokeLinejoin="round" transform={"translate(0," + Y(-1.2) + ")"} />
+      {/* THE SECOND ROCK. Same wedge as the ones on the shelf, sitting at
+          the west end of the plate where the ledge is deepest, so the
+          landing itself stays clear. */}
+      <g>
+        <path d={g.ledgeBlock.east} fill="#3c4137" />
+        <path d={g.ledgeBlock.west} fill="#5d6354" />
+        <path d={g.ledgeBlock.top} fill="#c5c3a8" />
+        <path d={g.ledgeBlock.top} fill="url(#sairock-warm)" />
+      </g>
+      {/* grass in the crack along its lip, like every other lip here */}
+      <g stroke="#3f7c4a" fill="none" strokeLinecap="round" opacity="0.8" strokeWidth={X(1.6)}>
+        <path d={line([[38, 594], [36, 581]])} /><path d={line([[41, 595], [43, 582]])} />
+        <path d={line([[64, 598], [62, 586]])} />
       </g>
 
       {/* ---- THE TALUS: broken rock and litter, running off the bottom of
@@ -5588,7 +5991,10 @@ function stepWorld(world, cfg, dt) {
     // A flight or a roof owns its own height, so the bluff cannot hold the
     // flier to a terrace — but it can keep reading which one is under him,
     // so he touches down owing it nothing.
-    if ((onRoof || inAir) && def.rock) a._lvl = rockLevelAt(bounds, a.x, a.y) ?? a._lvl;
+    if ((onRoof || inAir) && def.rock) {
+      a._lvl = rockLevelAt(bounds, a.x, a.y) ?? a._lvl;
+      a._plat = null;                   // whatever he was standing on, he left it
+    }
 
     // grounded rules only
     if (!onRoof && !inAir) {
@@ -5605,6 +6011,12 @@ function stepWorld(world, cfg, dt) {
       if (def.rock) {
         if (!driveRockHop(a, now)) {
           if (!(isFreeState(a) && tryRockHop(a, bounds, now))) {
+            // UP ON A ROCK the stone holds him, not the wall: his anchor is
+            // inside the riser for the mid-riser step, and keepOffRock would
+            // tip him off the very thing he is standing on. It also owns his
+            // height, so the z decay above cannot sink him through the slab.
+            if (a._plat) keepOnPlatform(a, bounds, now);
+            else
             // Genuinely off the ground — a frog's hop, a squirrel up a trunk
             // — so read the terrace back off the terrain instead of holding
             // him to the one he left. Otherwise he lands owing the rock a

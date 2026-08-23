@@ -430,6 +430,57 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
       : `${(100 * r.worst).toFixed(0)}% under a crown at ${r.worstAt}`);
 }
 
+// ============ ...and the crowns are painted under the ceiling ============
+// A crown is drawn in FIXED px above an anchor held as a stage FRACTION, so
+// how much of it fits over the anchor is .315*h against 232*s â€” a race the
+// tree loses as the window shortens. The west-high pine at (.168,.315) has
+// been losing it since it was planted: its own note claimed 1.10 kept the
+// leader on the stage, and the leader is in fact cut at ten of the fourteen
+// shapes below, by 81px at 900x620 and 75px at 1120x640. That is the reason
+// a "make it the size of the lone spruce" resize is not a scale change: at
+// 1.56 this crown is 0% painted at 1120x640 and 51% at 1500x940, and there
+// is no anchor anywhere on the map that clears the ceiling and the four
+// placement rules at once.
+//
+// So the ceiling gets a check of its own, in two halves. Five of the six
+// stand wholly under it and must keep doing so; the sixth is the shipped
+// exception, held to no worse than it is today so the next resize has to
+// argue with a number instead of with a comment.
+{
+  const r = await page.evaluate(`(w => {
+    const T = w.def.trees || [], C = w.__crowns;
+    if (!T.length || !C) return { missing: true };
+    const SIZES = [[992,632],[1248,664],[1334,632],[1408,764],[1584,752],[1888,944],
+                   [990,732],[1224,932],[1002,552],[1424,832],[1264,652],[1904,1012],
+                   [983,532],[1104,572]];
+    const out = T.map(() => ({ cut: 0, at: '', shown: 1 }));
+    for (const [W, H] of SIZES) {
+      for (let i = 0; i < T.length; i++) {
+        const t = T[i], k = C[t.kind || 'oak']; if (!k) continue;
+        const anchor = t.y * H, top = anchor - k.topPx * t.s, bot = anchor - k.botPx * t.s;
+        const cut = Math.max(0, -top);
+        const shown = Math.max(0, Math.min(bot, H) - Math.max(top, 0)) / ((k.topPx - k.botPx) * t.s);
+        if (cut > out[i].cut) { out[i].cut = cut; out[i].at = W + 'x' + H; }
+        if (shown < out[i].shown) out[i].shown = shown;
+      }
+    }
+    return { out, kinds: T.map(t => (t.kind || 'oak') + ' ' + t.x + ',' + t.y) };
+  })(window.__saiWorld)`);
+  if (r.missing) chk(false, 'every crown but one is painted whole', 'no trees or no crown boxes');
+  else {
+    const cut = r.out.map((o, i) => ({ i, ...o })).filter((o) => o.cut > 0.5);
+    chk(cut.length === 1 && cut[0].i === 1, 'one crown is cut by the stage top, and only one',
+      cut.length === 1 && cut[0].i === 1
+        ? `the west-high pine, ${Math.round(cut[0].cut)}px at ${cut[0].at}; the other five are whole at fourteen shapes`
+        : cut.map((o) => `${r.kinds[o.i]} cut ${Math.round(o.cut)}px at ${o.at}`).join('; '));
+    // the shipped exception, pinned. 88px and 30% are what it measures now:
+    // any resize that makes either worse has to come back through here.
+    const p = r.out[1] || { cut: 999, shown: 0 };
+    chk(p.cut <= 88 && p.shown >= 0.30, 'and that one is no more beheaded than it already was',
+      `cut ${Math.round(p.cut)}px (<= 88) at ${p.at}, ${(p.shown * 100).toFixed(0)}% of the crown still painted (>= 30%)`);
+  }
+}
+
 // ==================== the floats do not march in step ====================
 // The eleven drifting floats are dealt three bob phases off a NINE-character
 // string, so the last two indices came back `pad-undefined`, matched no rule,
@@ -971,6 +1022,145 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
       && r.cougarDown && r.cougarDown.seen.includes('1'),
     'the owl flies past the shelf and the cougar has to stand on it',
     `owl saw ${r.owlDown && r.owlDown.seen}, cougar saw ${r.cougarDown && r.cougarDown.seen}`);
+}
+
+// ==================== the stepping stones ====================
+// Two rocks that can be stood ON: the long slab already lying in the middle
+// of the shelf, and a NEW ledge cut into the middle of the riser with a
+// second block on it. The point of them is that the climb to the cave's own
+// level is a sequence of hops instead of one arc up the whole face â€” and the
+// point of these checks is that the surface an animal is stood on is the
+// surface that is PAINTED, which is the only claim a platform makes.
+{
+  const r = await page.evaluate(`(w => {
+    const out = {};
+    for (const id of ["slab", "step"]) {
+      const el = document.querySelector("[data-sai-plat=" + JSON.stringify(id) + "]");
+      const o = { drawn: !!el, inFill: 0, n: 0, feetOffLip: 0, self: 0, x0: 0, x1: 0 };
+      if (el) {
+        const pt = el.ownerSVGElement.createSVGPoint();
+        const s0 = w.rockPlatformStand(id, 0, 20);
+        o.x0 = Math.round(s0.x0); o.x1 = Math.round(s0.x1);
+        for (let i = 1; i < 10; i++) {
+          const x = s0.x0 + (s0.x1 - s0.x0) * (i / 10);
+          const s = w.rockPlatformStand(id, x, 20);
+          o.n++;
+          pt.x = x; pt.y = s.lip - 2;            // a shade INSIDE the painted top
+          if (el.isPointInFill(pt)) o.inFill++;
+          if (Math.abs(s.feet - s.lip) > 0.5) o.feetOffLip++;
+          if (Math.abs((s.y + 20 * w.__rock.spriteFeet - s.z) - s.feet) > 0.01) o.self++;
+        }
+      }
+      out[id] = o;
+    }
+    return out;
+  })(window.__saiWorld)`);
+  for (const id of ['slab', 'step']) {
+    const o = r[id];
+    chk(o.drawn && o.n > 0 && o.inFill === o.n,
+      `the ${id}'s standing line is inside the top RockLayer paints`,
+      o.drawn ? `${o.inFill}/${o.n} samples inside the drawn surface, x ${o.x0}..${o.x1}px`
+        : 'nothing in the DOM carries that tag');
+    chk(o.n > 0 && o.feetOffLip === 0 && o.self === 0,
+      `an animal on the ${id} stands on top of it and not at its foot`,
+      `${o.n - o.feetOffLip}/${o.n} samples put the sprite's own ground line on the drawn edge`);
+  }
+}
+
+// WHERE THE NEW ONE IS. The owner asked for it in the exact middle of the
+// elevation, and the middle that matters is not the middle of the drawn
+// band: it is the height at which the two hops it makes are the same hop.
+{
+  const r = await page.evaluate(`(w => {
+    const B = w.bounds, R = w.__rock.breaks;
+    const lineY = (nm, x) => { const L = R[nm], xPm = x / B.w * 1000; let i = 0;
+      while (i < L.length - 2 && L[i + 1][0] < xPm) i++;
+      const a = L[i], b = L[i + 1] || L[i];
+      const f = b[0] === a[0] ? 0 : (xPm - a[0]) / (b[0] - a[0]);
+      return (a[1] + (b[1] - a[1]) * f) / 1000 * B.h; };
+    const s0 = w.rockPlatformStand("step", 0, 20);
+    const x = (s0.x0 + s0.x1) / 2, st = w.rockPlatformStand("step", x, 20);
+    const L2 = lineY("L2", x), T1 = lineY("T1", x);
+    const fd = 20 * w.__rock.spriteFeet, pad = 10;   // r 20: pad is max(8, r/2)
+    const talus = T1 + pad + fd, shelf = L2 - pad + fd;
+    return { x: Math.round(x), lip: st.lip, L2, T1, exits: st.exits,
+             up1: talus - st.lip, up2: st.lip - shelf, one: talus - shelf };
+  })(window.__saiWorld)`);
+  chk(r.lip > r.L2 && r.lip < r.T1, 'the new ledge is cut into the riser itself',
+    `its lip at ${Math.round(r.lip)}px, between the shelf's L2 at ${Math.round(r.L2)}` +
+    ` and the talus at T1 ${Math.round(r.T1)}`);
+  chk(r.exits.length === 2 && r.exits[0].lvl === 0 && r.exits[1].lvl === 1,
+    'and it is a landing between the talus and the shelf, not on either',
+    `exits to levels ${r.exits.map((e) => e.lvl).join(' and ')}`);
+  const even = Math.abs(r.up1 - r.up2) / (r.up1 + r.up2);
+  chk(r.up1 > 20 && r.up2 > 20 && even < 0.2,
+    'and it halves the climb to the cave entrance',
+    `${Math.round(r.up1)}px up then ${Math.round(r.up2)}px, against ` +
+    `${Math.round(r.one)}px in the single arc it replaces`);
+}
+
+// ...and the moving part. He is put at the foot of the riser under the new
+// ledge and walked into it, so the whole staircase costs a handful of frames
+// instead of the wander across the map that would earn it. His x is pinned
+// for the same reason the face checks above pin theirs.
+{
+  const r = await page.evaluate(`(async (w) => {
+    const B = w.bounds, R = w.__rock.breaks;
+    const lineY = (nm, x) => { const L = R[nm], xPm = x / B.w * 1000; let i = 0;
+      while (i < L.length - 2 && L[i + 1][0] < xPm) i++;
+      const a = L[i], b = L[i + 1] || L[i];
+      const f = b[0] === a[0] ? 0 : (xPm - a[0]) / (b[0] - a[0]);
+      return (a[1] + (b[1] - a[1]) * f) / 1000 * B.h; };
+    const frame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 20)));
+    const park = (o) => { o.x = -900; o.y = -900; o.state = "idle";
+      o.idleUntil = performance.now() + 9e6; o.noEventUntil = performance.now() + 9e6; };
+    const climb = async (nm, n) => {
+      const a = w.agents.find(x => x.species === nm); if (!a) return null;
+      const s0 = w.rockPlatformStand("step", 0, 20), X = (s0.x0 + s0.x1) / 2;
+      for (const o of w.agents) if (o !== a) park(o);
+      a.state = "wander"; a.z = 0; a.dragging = false; a._plat = null;
+      a._rockHop = null; a._rockHopEnd = 0; a._lvl = 0;
+      a.x = X; a.y = lineY("T1", X) + 10;
+      a.intentUntil = performance.now() + 9e6; a.noEventUntil = performance.now() + 9e6;
+      const plats = [], lvls = [0]; let arc = null, footN = 0, footBad = 0;
+      for (let i = 0; i < n; i++) {
+        a.state = "wander"; a.x = X;
+        if (a.vy > -20) a.vy = -70;
+        await frame();
+        if (a._plat && a._rockHop && !arc) arc = Object.assign({}, a._rockHop);
+        if (a._plat && !a._rockHop) {
+          const s = w.rockPlatformStand(a._plat, a.x, a.r);
+          footN++;
+          if (Math.abs((a.y - a.z + a.r * w.__rock.spriteFeet) - s.lip) > 1) footBad++;
+          if (plats[plats.length - 1] !== a._plat) plats.push(a._plat);
+        }
+        if (lvls[lvls.length - 1] !== a._lvl) lvls.push(a._lvl);
+      }
+      const end = a._lvl, wall = w.rockZoneAt(a.x, a.y).wall && !a._plat;
+      park(a);
+      return { plats, lvls: lvls.join(""), end, arc, footN, footBad, wall };
+    };
+    return { wolf: await climb("wolf", 14), turtle: await climb("turtle", 14) };
+  })(window.__saiWorld)`);
+  const W = r.wolf, T = r.turtle;
+  chk(!!W && W.plats.includes('step'),
+    'a wolf walking at the riser lands on the new ledge',
+    W ? `stood on ${W.plats.join(' then ') || 'nothing'}` : 'no wolf');
+  chk(!!W && W.lvls.includes('1'),
+    'and goes on up from it to the cave entrance level',
+    W ? `terraces seen: ${W.lvls}` : 'no wolf');
+  chk(!!W && W.footN > 0 && W.footBad === 0 && !W.wall,
+    'and every frame he spends up there has his paws on the drawn top',
+    W ? `${W.footN - W.footBad}/${W.footN} standing frames on the lip` : 'no wolf');
+  const arc = W && W.arc;
+  chk(!!arc && arc.lift > 8 && arc.z1 > arc.z0
+      && (arc.z0 + (arc.z1 - arc.z0) / 2 + arc.lift) > Math.max(arc.z0, arc.z1) + 8,
+    'the hop onto it is an arc and not a ramp',
+    arc ? `rests at z ${Math.round(arc.z0)} -> ${Math.round(arc.z1)}, ` +
+          `apex ${Math.round(arc.z0 + (arc.z1 - arc.z0) / 2 + arc.lift)}` : 'no hop recorded');
+  chk(!!T && T.plats.length === 0 && T.end === 0,
+    'and a turtle still gets nowhere near it',
+    T ? `stood on ${T.plats.length} platforms, ended on terrace ${T.end}` : 'no turtle');
 }
 
 chk(errs.length === 0, 'no JS errors', errs.length ? errs[0] : 'clean');
