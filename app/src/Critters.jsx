@@ -1388,7 +1388,12 @@ function GooseDraw({ uid }) {
           <ellipse cx="90" cy="88" rx="2.6" ry="3.4" opacity=".65" />
           <ellipse cx="66" cy="92" rx="4" ry="2.6" opacity=".7" />
         </g>
-        <path d="M 18 90 q 14 -9 30 -3 M 62 94 q 16 -8 30 -1" stroke="#dff3fb" strokeWidth="3"
+        {/* the water he is standing in, thrown out either side of him. It is
+            the one part of this group that is about the LAKE rather than
+            about the wings, so it carries a name: the same spread wings do
+            the descent off the bluff, in dry air, and everything wet has to
+            come off them. See .splash-wake / .splash-spray in index.css. */}
+        <path className="splash-wake" d="M 18 90 q 14 -9 30 -3 M 62 94 q 16 -8 30 -1" stroke="#dff3fb" strokeWidth="3"
           fill="none" strokeLinecap="round" opacity=".8" />
       </g>
     </g>

@@ -56,6 +56,13 @@ await page.addInitScript(() => {
 await page.goto(url, { waitUntil: "networkidle" });
 await page.waitForTimeout(1500);
 await page.evaluate("window.__pump(30)");
+// A world opens with ONE animal, and the hop probe below needs a specific
+// species to drive. Ask the world for its whole roster through its own
+// seeding path — without this the probe reads `undefined.z` and this gate
+// crashes instead of reporting, which is precisely the failure it exists to
+// catch in the first place.
+await page.evaluate("window.__saiWorld.__seedCast && window.__saiWorld.__seedCast()");
+await page.evaluate("window.__pump(20)");
 
 const fail = [];
 const chk = (ok, label, detail) => {
@@ -80,15 +87,18 @@ chk(r.plan === 100, "the served dam plan is a hundred logs", `${r.plan} in def.d
 // ...and STANDING, not merely planned. v0.41 shipped a correct hundred-log
 // plan over a world that started with zero of them placed and took fourteen
 // minutes to fill, so every check agreed while the dam was not there.
-chk(r.dam === r.plan, "and the dam is standing at load",
-  `${r.dam} of ${r.plan} placed on a fresh page`);
-chk(r.drey > 0, "and the squirrel already has a drey", `${r.drey} courses at load`);
+// ...and EMPTY, which is the shipped intent: the beaver lays one log per
+// crossing and the long build is the point. This pair is here because the
+// served bundle is where "the dam is wrong" was reported from twice.
+chk(r.dam === 0 && r.drey === 0, "and the lake and the fork start empty",
+  `${r.dam} logs, ${r.drey} drey courses at load`);
 chk(r.rockEastPct <= 12, "the rock's region stays on the rock",
   `reaches ${r.rockEastPct}% of the stage width`);
 
 const g = await page.evaluate(`(() => {
   const w = window.__saiWorld, B = w.bounds;
   const a = w.agents.find(x => x.species === 'fox');
+  if (!a) return { n: -1, worstPct: 0, missing: true };
   for (const o of w.agents) if (o !== a) { o.x=-2000; o.y=-2000; o.state='idle';
     o.idleUntil=performance.now()+9e6; o.noEventUntil=performance.now()+9e6; }
   let worst = 0, n = 0;
@@ -107,7 +117,8 @@ const g = await page.evaluate(`(() => {
   }
   return { n, worstPct: Math.round(worst / B.w * 100) };
 })()`);
-chk(g.n === 0, "nothing hops on ground that is not the rock",
+chk(g.n === 0 && !g.missing, "nothing hops on ground that is not the rock",
+  g.missing ? "no fox in the world to drive — the probe never ran" :
   `${g.n} off-rock hop starts, eastmost ${g.worstPct}% of the width`);
 chk(errs.length === 0, "the served page throws nothing", errs.length ? errs[0] : "clean");
 

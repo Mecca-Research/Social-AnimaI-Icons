@@ -22,6 +22,12 @@ const page = await browser.newPage({ viewport: { width: 1500, height: 940 } });
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 await page.goto(process.env.SAI_URL || 'http://localhost:5173/', { waitUntil: 'networkidle' });
 await page.waitForTimeout(2500);
+// A world opens with ONE animal now; every check below looks its subjects up
+// by species. Ask the world for its whole roster first, through its own
+// seeding path, or the suite quietly checks nothing.
+await page.evaluate('window.__saiWorld.__seedCast && window.__saiWorld.__seedCast()');
+await page.waitForTimeout(600);
+
 // WHAT IS STANDING WHEN THE PAGE OPENS, captured HERE — before a single
 // check has run — because several of them mutate the very fields this is
 // about. The dam block below sets damCount to drive the geometry checks and
@@ -33,6 +39,64 @@ const AT_LOAD = await page.evaluate(`(w => ({
 
 const pass = [], fail = [];
 const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  ✔' : '  ✘'} ${l} — ${d}`); };
+
+// ============ what is actually THERE when you open the page ============
+// EVERY SUITE HERE ONCE MEASURED THE PLAN AND NONE MEASURED THE VIEW, and
+// the dam was reported unbuilt twice — correctly — against two builds this
+// suite called green, because the plan said a hundred logs while the world
+// showed a fifteen-log arc for the first two minutes.
+//
+// The answer to that is NOT to stand the dam up at load. It was, briefly,
+// and that hid the only thing worth watching. The dam starts empty and the
+// beaver lays ONE log per crossing, which is what a beaver does and what
+// the owner asked for; the long build is the reward for leaving it running.
+//
+// THIS RUNS FIRST, before any other check, and that is not tidiness. It
+// needs a world nobody has touched: the checks below park the cast with
+// noEventUntil nine million ms out, and one of them finishes the dam to
+// measure the completed structure. Run last, this failed four times in a
+// row for four different reasons — a muzzle it inherited, a dam already
+// built, an errand it had picked up in the meantime, a budget in the wrong
+// clock — none of which were the beaver.
+{
+  const r = await page.evaluate(`(async (w) => {
+    const bv = w.agents.find(a => a.species === 'beaver');
+    if (!bv) return { none: 'no beaver in the roster' };
+    const frame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 20)));
+    // The owner's own shortcut: pick him up and drop him off the edge. A dam
+    // run starts on going OFF-STAGE, so a throw is worth a crossing — and
+    // six pixels over the line has to be enough, which is what dropOffstage
+    // is for and what this is really checking.
+    bv.state = 'wander'; bv.z = 0; bv.dragging = false;
+    bv.x = w.bounds.w + 6; bv.y = 0.2 * w.bounds.h; bv.vx = 0; bv.vy = 0;
+    if (w.__dropOffstage) w.__dropOffstage(bv);
+    let started = 0;
+    for (let i = 1; i <= 120 && !started; i++) {
+      await frame();
+      if (bv.state === 'damrun') started = i;
+    }
+    return { started, state: bv.state,
+             // if it did not start, say what the trigger was looking at
+             dam: w.damCount | 0, plan: (w.def.dam || []).length,
+             x: Math.round(bv.x), edge: Math.round(w.bounds.w),
+             carried: !!w.__dropOffstage };
+  })(window.__saiWorld)`);
+  chk(AT_LOAD.plan === 100, 'the beaver has a hundred logs to lay',
+    `${AT_LOAD.plan} in the plan`);
+  chk(AT_LOAD.dam === 0 && AT_LOAD.drey === 0,
+    'and the lake and the fork are empty when the page opens',
+    `${AT_LOAD.dam} logs, ${AT_LOAD.drey} drey courses — both are things you watch get built`);
+  // ...and this asserts the RUN STARTS, not that the log lands. Measured on
+  // a virtual 60fps clock: dropped clear of the edge he takes the errand on
+  // the very next frame, and the log lands about sixteen seconds later,
+  // nearly all of it the swim. Waiting for the log at this suite's frame
+  // rate would be waiting on dt clamping rather than on the beaver.
+  chk(!r.none && r.started > 0, 'and pushing him off the map starts a dam run',
+    r.none || (r.started ? `in the errand ${r.started} frame(s) after the drop`
+                         : `still ${r.state} after 120 frames — x ${r.x} vs edge ${r.edge},`
+                           + ` dam ${r.dam}/${r.plan}, carried ${r.carried}`));
+}
+
 
 // ============================ terrain ============================
 {
@@ -642,6 +706,128 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
   }
 }
 
+// ============ ...and no crown is painted over the bluff ============
+// THE SIXTH RULE A TRUNK KEEPS, and the same rule as the sward check above
+// wearing different clothes. A crown paints at zIndex 12 and the animals at
+// 10, so anything standing under one is not on screen — and the bluff is
+// three terraces and two standable platforms of exactly that. It fails the
+// way the west faces do, quietly: nothing looks broken, an animal on the
+// ledge is simply behind leaves.
+//
+// The west-low oak used to be all of it. At 1.38 from (.125,.800) its crown
+// box covered 24% of the drawn shelf, 45% of the riser and 31% of the
+// `step` platform's lip — 74% of the part of that step which can actually
+// be stood on — and 15% of the lip at the reference. It is also what made
+// the bluff's collision region look wider than the drawn stone. Clearing it
+// cost a resize and not a nudge: the surface root at (.185,.690) and the
+// fallen log at (.21,.95) leave that longitude a slot of .8220..8510 to
+// stand in, and a 1.38 crown needs y .965 before its TOP is below the wide
+// band of the rock. See FOREST_TREES, which carries the working.
+//
+// ASKED OF THE ROCK ITSELF, in fractions. rockZone reads per-mille of the
+// stage, so which band a FRACTION lands in is one answer for every window:
+// the bluff is sampled once here and the sixteen shapes are then swept over
+// that one sample. The crown boxes, the scale rule and the platforms all
+// come off the world for the same reason they do above — a suite holding
+// its own copy of them goes on passing after the real ones move.
+{
+  const r = await page.evaluate(`(w => {
+    const T = w.def.trees || [], C = w.__crowns, K = w.__treeScale, B = w.bounds;
+    const P = w.__rock && w.__rock.platforms;
+    if (!T.length || !C || !K || !P || !w.rockZoneAt) return { missing: true };
+    // every shape the tree rules are checked at, the two squat windows
+    // included: a crown box is shape-independent in the ways that matter
+    // and there is nothing here to excuse.
+    const SIZES = [[1008,700],[1264,732],[1350,700],[1424,832],[1600,820],[1904,1012],
+                   [1000,800],[1240,1000],[1440,900],[1280,720],[1920,1080],[1120,640],
+                   [1084,1132],[2544,832],[900,620],[960,600]];
+    // THE DRAWN BLUFF, once. Nothing on the map reaches past x .14, so that
+    // is as far east as this has to look.
+    const pts = [], area = {};
+    for (let i = 0; i <= 240; i++) for (let j = 0; j <= 240; j++) {
+      const fx = i / 240 * 0.14, fy = j / 240;
+      const z = w.rockZoneAt(fx * B.w, fy * B.h);
+      if (!z.on) continue;
+      pts.push([fx, fy, z.band]);
+      area[z.band] = (area[z.band] || 0) + 1;
+    }
+    // ...and the two platforms, each as the line an animal's feet go on:
+    // the span it can be stood on, and its own mean latitude.
+    const plats = P.map(function (p) {
+      const xs = p.lip.map(function (q) { return q[0]; });
+      return { id: p.id, x0: (p.from != null ? p.from : Math.min.apply(null, xs)),
+               x1: Math.max.apply(null, xs),
+               lat: p.lip.reduce(function (a, q) { return a + q[1]; }, 0) / p.lip.length };
+    });
+    const box = (t, W, H, ks) => {
+      const c = C[t.kind || 'oak'], s = t.s0 * ks;
+      return { x: t.x * W, top: t.y * H - c.topPx * s,
+               bot: t.y * H - c.botPx * s, half: c.half * s };
+    };
+    let band = { f: 0 }, plat = { f: 0 }, tight = null;
+    for (const S of SIZES) {
+      const W = S[0], H = S[1], ks = K(W, H);
+      const boxes = T.map((t) => box(t, W, H, ks));
+      const hit = {};
+      for (const q of pts) {
+        const x = q[0] * W, y = q[1] * H;
+        for (const b of boxes) {
+          if (Math.abs(x - b.x) > b.half) continue;
+          if (y > b.top && y < b.bot) { hit[q[2]] = (hit[q[2]] || 0) + 1; break; }
+        }
+      }
+      for (const k of Object.keys(area)) {
+        const f = (hit[k] || 0) / area[k];
+        if (f > band.f) band = { f: f, band: k, at: W + 'x' + H };
+      }
+      for (const p of plats) {
+        const y = p.lat / 1000 * H, a = p.x0 / 1000 * W, b2 = p.x1 / 1000 * W;
+        let cov = 0;
+        for (const b of boxes) {
+          if (y <= b.top || y >= b.bot) continue;
+          const lo = Math.max(a, b.x - b.half), hi = Math.min(b2, b.x + b.half);
+          if (hi - lo > cov) cov = hi - lo;
+        }
+        const f = b2 > a ? cov / (b2 - a) : 0;
+        if (f > plat.f) plat = { f: f, id: p.id, at: W + 'x' + H };
+      }
+      // ...and HOW MUCH ROOM, so the line says what the margin is rather
+      // than only that there is one. Bisected on the world's own predicate,
+      // the same way the west faces are.
+      for (let i = 0; i < T.length; i++) {
+        const b = boxes[i], wf = (b.x - b.half) / W;
+        for (let k = 0; k <= 48; k++) {
+          const fy = (b.top + (b.bot - b.top) * k / 48) / H;
+          if (fy < 0 || fy > 1) continue;
+          if (!w.rockZoneAt(0.0005 * B.w, fy * B.h).on) continue;
+          let lo = 0.0005, hi = 0.5;
+          for (let n = 0; n < 30; n++) {
+            const m = (lo + hi) / 2;
+            if (w.rockZoneAt(m * B.w, fy * B.h).on) lo = m; else hi = m;
+          }
+          const g = (wf - hi) * W;
+          if (!tight || g < tight.g)
+            tight = { g: g, kind: T[i].kind || 'oak', x: T[i].x, y: T[i].y, at: W + 'x' + H };
+        }
+      }
+    }
+    return { band: band, plat: plat, tight: tight, n: T.length,
+             shapes: SIZES.length, samples: pts.length, bands: Object.keys(area).length };
+  })(window.__saiWorld)`);
+  if (r.missing) chk(false, 'no crown is painted over the bluff',
+    'the world hands over no trees, no crown boxes, no scale rule or no rock');
+  else chk(r.band.f === 0 && r.plat.f === 0 && r.tight.g > 0,
+    'no crown is painted over the bluff',
+    r.band.f === 0 && r.plat.f === 0 && r.tight.g > 0
+      ? `${r.n} crowns clear of all ${r.bands} bands and both platforms at all ${r.shapes} shapes; `
+        + `the closest is the ${r.tight.kind} at ${r.tight.x},${r.tight.y} with `
+        + `${r.tight.g.toFixed(1)}px of daylight at ${r.tight.at} `
+        + `— it was -92px, over 24% of the shelf and 31% of the step`
+      : r.band.f > 0 ? `${(100 * r.band.f).toFixed(0)}% of the ${r.band.band} is under a crown at ${r.band.at}`
+      : r.plat.f > 0 ? `${(100 * r.plat.f).toFixed(0)}% of the ${r.plat.id} platform is under a crown at ${r.plat.at}`
+      : `the ${r.tight.kind} at ${r.tight.x},${r.tight.y} overlaps the drawn rock by ${(-r.tight.g).toFixed(1)}px at ${r.tight.at}`);
+}
+
 // ============ the browse shrub the resize displaced ============
 // Growing the west-high pine to 1.56 moved it 148px down the stage, and one
 // object was standing where it had to go: the browse shrub that used to sit
@@ -761,6 +947,7 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
   const r = await page.evaluate(`(async w => {
     const a = w.agents.find(x => x.species === 'skunk');
     if (!a) return { none: 'no skunk' };
+    const B = w.bounds;
     const half = w.__siteHalf, pit = w.__pitHalf;
     if (!half) return { none: 'the world hands over no painted site widths' };
     w.pits = [];
@@ -775,9 +962,33 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
     // one — this read "no pit was dug inside 120s" on a build that digs three
     // in well under that on two runs either side of it. A check that reports
     // it never got to ask is not a failure of the thing it is checking.
+    // ...and he is kept OFF THE BLUFF while it runs. This check is about
+    // where his holes land, and none of them are on rock — but since the
+    // cave's terrace stopped being something a skunk can step off, an animal
+    // who wanders up there spends seconds walking to the mid-riser steps or
+    // off the west of the stage, and at three or four frames a second with
+    // dt clamped to 50ms those seconds are most of this loop's SIM time. Six
+    // baseline runs of this suite passed and three of eight afterwards
+    // reported "never got to ask", with the skunk measured at 0-3.4% of a
+    // five-minute sim up there against 0-0.2% before. Put him back on the
+    // floor rather than follow him: the terrace's own rules are checked in
+    // full further down this file, and a fixture is not a finding.
+    const floor = () => {
+      for (let i = 0; i < 60; i++) {
+        const x = B.w * (0.30 + Math.random() * 0.55), y = B.h * (0.30 + Math.random() * 0.50);
+        if (w.spawnSafeAt(x, y, 'skunk')) return { x, y };
+      }
+      return null;
+    };
     const t0 = performance.now();
     while (performance.now() - t0 < 300000 && (w.pits || []).length < 3) {
       await new Promise(r => setTimeout(r, 90));
+      if (a._lvl || a._plat) {
+        const g = floor();
+        if (g) { a.x = g.x; a.y = g.y; a.vx = 0; a.vy = 0; a.z = 0; }
+        a._lvl = 0; a._plat = null; a._shelfT0 = 0;
+        a._rockHop = null; a._rockHopEnd = 0;
+      }
       if (a.state === 'wander') {              // keep the dig due, everything else muzzled
         const t = performance.now();
         for (const id of Object.keys(S.seekAt)) S.seekAt[id] = t + 900000;
@@ -1062,6 +1273,7 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
   const r = await page.evaluate(`(async (w) => {
     const B = w.bounds;
     const logs = w.damLogsAt();
+    const wasBuilt = w.damCount | 0;             // whatever the world had
     w.damCount = logs.length;                    // finish the dam for the test
     // DAM_PLACED is refreshed from world.damCount at the head of a frame, so
     // the land test does not know about the timber until one has run
@@ -1091,7 +1303,13 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
         const m = idx(a, c);
         if (open[m] && !seen[m]) { seen[m] = 1; reached++; st.push(m); } } }
     let openTotal = 0; for (let k = 0; k < N * N; k++) if (open[k]) openTotal++;
-    w.damCount = logs.length;                    // put the world back AS FOUND
+    // ...and PUT IT BACK AS FOUND, which means what it was, not the fixture.
+    // This restored logs.length — the value the fixture had just written —
+    // so the dam stayed finished for every check after it. The one that
+    // noticed was the beaver's own: with the plan complete his errand has
+    // nothing left to build, so a drop off the map started no run and the
+    // check read "still wander" against a world where the push works.
+    w.damCount = wasBuilt;
     return { n: logs.length, wetLogs, pct: +(dam / lake * 100).toFixed(1),
              pockets: openTotal - reached, cells: openTotal + dam };
   })(window.__saiWorld)`);
@@ -1245,7 +1463,13 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
     out.cougarCliff = await run('cougar', 1, 70, cliff, -70, 10);  // climbs it
     out.bearCliff = await run('bear', 1, 70, cliff, -70, 10);      // does neither
     out.owlDown = await run('owl', 2, 70, plateau, 70, 14);
-    out.cougarDown = await run('cougar', 2, 70, plateau, 70, 14);
+    // SIXTY, not fourteen. A leap off the plateau used to be the next frame;
+    // the descent rework gives a grace before an animal commits, and 14
+    // frames at this suite's rate is well under a second of simulated time.
+    // The rule being checked is the ROUTE — the cougar may not skip the
+    // shelf the way the owl does — and a budget that cannot fit one hop
+    // measures the frame rate instead.
+    out.cougarDown = await run('cougar', 2, 70, plateau, 70, 60);
     return out;
   })(window.__saiWorld)`);
   chk(r.foxRiser && r.foxRiser.lvl === 1 && r.turtleRiser && r.turtleRiser.lvl === 0,
@@ -1264,6 +1488,222 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
       && r.cougarDown && r.cougarDown.seen.includes('1'),
     'the owl flies past the shelf and the cougar has to stand on it',
     `owl saw ${r.owlDown && r.owlDown.seen}, cougar saw ${r.cougarDown && r.cougarDown.seen}`);
+}
+
+// ============== off the cave's terrace ==============
+// THE SHELF IS THE ONE THE CAVE MOUTH OPENS ONTO, and until now anything
+// with legs could step off its lip and take the riser home in one arc. The
+// owner's rule is that three animals come off that edge and the rest turn
+// round: the cougar JUMPS it, the owl and the goose FLY down, and everyone
+// else takes the mid-riser steps or walks off the west of the stage.
+//
+// Three things have to hold, and they are checked apart, because the first
+// is a list, the second is the SHAPE of a move, and the third is the half
+// that keeps the rule from being a cage.
+{
+  const who = await page.evaluate(`(w => ({
+    drop: w.__rock.shelfDrop.slice().sort().join(','),
+    wing: w.__rock.shelfWing.slice().sort().join(','),
+    // ...and whether the flight state is scoped per species in the CSS. One
+    // name serving two birds is only safe while every rule carrying it also
+    // names the animal: a bare rule hands the goose the owl's wings the
+    // first time both are on the bluff, silently. Read off the LIVE
+    // stylesheet, so it is the shipped rule that is checked and not a copy.
+    bare: (() => {
+      let n = 0, bad = 0;
+      for (const sh of document.styleSheets) {
+        let rules; try { rules = sh.cssRules; } catch (e) { continue; }
+        for (const rule of rules || []) {
+          for (const sel of String(rule.selectorText || '').split(',')) {
+            if (sel.indexOf('data-fly') < 0) continue;
+            n++; if (sel.indexOf('.sai-crit--') < 0) bad++;
+          }
+        }
+      }
+      return { n, bad };
+    })(),
+  }))(window.__saiWorld)`);
+  chk(who.drop === 'cougar', 'one animal jumps off the cave terrace', who.drop || 'nobody');
+  chk(who.wing === 'goose,owl', 'and two fly down off it', who.wing || 'nobody');
+  chk(who.bare.n > 0 && who.bare.bad === 0,
+    'and the flight they share is drawn per species, not once for both',
+    `${who.bare.n} shipped selectors carry the flight flag, ${who.bare.bad} of them name no species`);
+}
+
+// And the moves themselves. Each animal is put ON the shelf at its lip and
+// walked at the edge, so a decision costs a handful of frames instead of the
+// wander across the map that would earn it — and his x is pinned WEST of the
+// mid-riser step's span (which starts at per-mille 33) and west of the long
+// slab's (44), so what is measured is the EDGE and not a stepping stone.
+{
+  const r = await page.evaluate(`(async (w) => {
+    const B = w.bounds, R = w.__rock.breaks, out = {};
+    const lineY = (nm, xPm) => { const L = R[nm]; let i = 0;
+      while (i < L.length - 2 && L[i + 1][0] < xPm) i++;
+      const a = L[i], b = L[i + 1] || L[i];
+      const f = b[0] === a[0] ? 0 : (xPm - a[0]) / (b[0] - a[0]);
+      return (a[1] + (b[1] - a[1]) * f) / 1000 * B.h; };
+    const frame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 20)));
+    const park = (o) => { o.x = -900; o.y = -900; o.state = 'idle';
+      o.idleUntil = performance.now() + 9e6; o.noEventUntil = performance.now() + 9e6; };
+    // AN ETHOGRAM WILL EAT THIS TEST IF IT IS LET. The goose walks off to the
+    // sward and the beaver to the dam the moment either is offered, and
+    // neither is in a free state again for half a minute — so no rock rule
+    // is ever put to them and every row reads "refused" for the wrong
+    // reason. Every event is gated on the same cooldown table, so one proxy
+    // silences the lot of them without naming a single event.
+    const mute = (o) => { const S = o._eth; if (!S) return;
+      S.cd = new Proxy({}, { get: () => Infinity, set: () => true });
+      S.armed = {}; S.goal = null; };
+    const XPM = 20;
+    const put = (a, lvl, line, dy) => {
+      const X = XPM / 1000 * B.w;
+      for (const o of w.agents) if (o !== a) park(o);
+      mute(a);
+      a.dragging = false; a.z = 0; a._plat = null; a._shelfT0 = 0;
+      a._rockHop = null; a._rockHopEnd = 0; a._lvl = lvl;
+      a.x = X; a.y = lineY(line, XPM) + dy; a.state = 'wander';
+      // ...and a swimmer's standing INTENT steers him at the lake, which is
+      // north-east of here: a vy pointing the wrong way on every frame.
+      a.intent = 'wander'; a.swimTarget = null; a._ashoreUntil = 0;
+      a.intentUntil = performance.now() + 9e6; a.noEventUntil = performance.now() + 9e6;
+      return X;
+    };
+    // n is a CEILING, not a count: it breaks the moment the move is over, so
+    // the same call works whether this renderer gives four frames a second
+    // or sixty. The eleven who are refused get a short one — a hop starts on
+    // the first frame it is offered or not at all — and the three who move
+    // get a long one, because a flight is 1.15s of clock either way.
+    const run = async (nm, lvl, line, dy, vy, n) => {
+      const a = w.agents.find(x => x.species === nm);
+      if (!a) return null;
+      const X = put(a, lvl, line, dy);
+      let arc = null, flew = 0, flag = 0, done = 0;
+      for (let i = 0; i < n && !done; i++) {
+        if (!a._rockHop) { a.state = 'wander'; a.x = X; }
+        if (vy > 0 ? a.vy < vy / 3 : a.vy > vy / 3) a.vy = vy;
+        await frame();
+        if (a._rockHop && !arc) arc = Object.assign({}, a._rockHop);
+        if (a.state === w.__rock.flyState) flew++;
+        flag = Math.max(flag, document.querySelectorAll('.sai-sprite[data-fly="1"]').length);
+        if (arc && !a._rockHop) done = 1;
+      }
+      const o = { lvl: a._lvl, arc, flew, flag, plat: a._plat || '' };
+      park(a);
+      return o;
+    };
+    for (const nm of ['cougar', 'owl', 'goose']) out[nm] = await run(nm, 1, 'L2', -8, 70, 40);
+    for (const nm of ['bear', 'wolf', 'fox', 'deer', 'raccoon', 'skunk',
+                      'hedgehog', 'beaver', 'squirrel', 'turtle', 'frog']) {
+      out[nm] = await run(nm, 1, 'L2', -8, 70, 6);
+    }
+    // ...and the ONE thing this must not have changed. The goose is a bird
+    // coming down and a LEAPER going up, so his ascent is asked for again
+    // here: put him at the foot of the riser walking into it.
+    out.gooseUp = await run('goose', 0, 'T1', 8, -70, 20);
+    return out;
+  })(window.__saiWorld)`);
+
+  const drop = (o) => o && o.arc ? Math.abs(o.arc.y1 - o.arc.y0) : 0;
+  const C = r.cougar;
+  chk(!!C && C.lvl === 0 && !!C.arc && !C.arc.fly,
+    'the cougar jumps off the shelf, in one arc, to the ground',
+    C ? `ended on terrace ${C.lvl}, ${C.arc ? Math.round(drop(C)) + 'px of drop' : 'no arc'}` : 'no cougar');
+  // A JUMP OFF A LEDGE GOES OUT AS WELL AS DOWN. A hop UP a face has to
+  // finish over the spot it started at or it lands on nothing; a drop is the
+  // other way round, and a cat that came down the riser in the column he left
+  // would read as falling rather than as jumping.
+  chk(!!C && !!C.arc && C.arc.x1 > C.arc.x0 && C.arc.lift > drop(C) * 0.3,
+    'and it carries him clear of the face he left',
+    C && C.arc ? `${Math.round(C.arc.x1 - C.arc.x0)}px out, apex ${Math.round(C.arc.lift)}px over a ${Math.round(drop(C))}px drop`
+      : 'no arc');
+
+  for (const nm of ['owl', 'goose']) {
+    const o = r[nm];
+    chk(!!o && o.lvl === 0 && !!o.arc && !!o.arc.fly && o.flew > 0,
+      `the ${nm} flies down off the shelf`,
+      o ? `ended on terrace ${o.lvl}, ${o.flew} frames of it in the flight state` : `no ${nm}`);
+    // ...and it is a FLIGHT and not a leap, which is a claim about the SHAPE
+    // of the move: a leap's descent is one lob whose apex is over half the
+    // face, and a bird's push-off is spent long before the ground is.
+    chk(!!o && !!o.arc && o.arc.lift < drop(o) * 0.25 && o.arc.ms > 900
+        && o.arc.x1 > o.arc.x0,
+      `and the ${nm} glides out rather than lobbing over the edge`,
+      o && o.arc ? `push-off ${Math.round(o.arc.lift)}px against a ${Math.round(drop(o))}px descent, over ${o.arc.ms}ms, ${Math.round(o.arc.x1 - o.arc.x0)}px out`
+        : 'no arc');
+    chk(!!o && o.flag > 0, `and the ${nm}'s sprite is told, so the wings come out`,
+      o ? `${o.flag} sprite carrying the flight flag mid-descent` : 'none did');
+  }
+
+  const legs = ['bear', 'wolf', 'fox', 'deer', 'raccoon', 'skunk', 'hedgehog',
+                'beaver', 'squirrel', 'turtle', 'frog'];
+  const off = legs.filter((nm) => !(r[nm] && r[nm].lvl === 1 && !r[nm].arc));
+  chk(off.length === 0, 'and the other eleven cannot come off that edge at all',
+    off.length ? off.map((nm) => nm + ' -> ' + (r[nm] ? r[nm].lvl : 'missing')).join(', ')
+      : `all ${legs.length} refused the drop and stayed on the terrace`);
+
+  const G = r.gooseUp;
+  chk(!!G && G.lvl === 1 && !!G.arc && !G.arc.fly,
+    'the goose still LEAPS the riser to get up, wings folded',
+    G ? `ended on terrace ${G.lvl} by ${G.arc ? (G.arc.fly ? 'a flight' : 'an arc') : 'nothing'}` : 'no goose');
+}
+
+// ...and the half that stops the rule being a cage. An animal refused the
+// edge has to be sent somewhere, or the shelf is a shelf with a hedgehog on
+// it forever. The heading is asked of the rule directly rather than watched:
+// headless rAF runs at three or four frames a second and the sim clamps dt
+// to 50ms, so a walk across this terrace is four hundred frames of wall
+// clock — and sweeping the whole terrace is what is wanted anyway.
+{
+  const r = await page.evaluate(`(w => {
+    const B = w.bounds, R = w.__rock.breaks;
+    const lineY = (nm, xPm) => { const L = R[nm]; let i = 0;
+      while (i < L.length - 2 && L[i + 1][0] < xPm) i++;
+      const a = L[i], b = L[i + 1] || L[i];
+      const f = b[0] === a[0] ? 0 : (xPm - a[0]) / (b[0] - a[0]);
+      return (a[1] + (b[1] - a[1]) * f) / 1000 * B.h; };
+    const st = w.rockPlatformStand('step', 0, 20);
+    const legs = ['bear', 'wolf', 'fox', 'deer', 'raccoon', 'skunk', 'hedgehog',
+                  'beaver', 'squirrel', 'turtle', 'frog'];
+    const out = { still: [], up: [], notWest: [], notStep: [], n: 0, cave: 0 };
+    for (const sp of legs) {
+      for (let xPm = -60; xPm <= 104; xPm += 4) {
+        const x = xPm / 1000 * B.w;
+        // three latitudes: the back of the terrace, its middle and its lip —
+        // and at the cave's own x the back one is INSIDE the room, which is
+        // the spot every draft of this rule has got wrong. The room's floor
+        // is above the terrace's, so a flat heading walks into a jamb and
+        // stays there, and the west jamb of that room is the stage edge.
+        const top = lineY('B1', xPm), bot = lineY('L2', xPm);
+        for (const f of [0.12, 0.5, 0.92]) {
+          const y = top + (bot - top) * f;
+          if (w.inRockCaveAt(x, y)) out.cave++;
+          for (const patient of [true, false]) {
+            const v = w.rockShelfWayOutAt(sp, x, y, 20, patient);
+            out.n++;
+            if (Math.hypot(v.vx, v.vy) < 1) { out.still.push(sp + '@' + xPm); continue; }
+            if (v.vy < -0.001) out.up.push(sp + '@' + xPm + ':' + f);
+            if (!patient || sp === 'turtle' || sp === 'frog') {
+              if (v.vx >= 0) out.notWest.push(sp + '@' + xPm + (patient ? '' : ' spent'));
+            } else if (x > st.x0 + 20 && x < st.x1 - 20) {
+              if (!(v.vy > 0 && Math.abs(v.vx) < 1)) out.notStep.push(sp + '@' + xPm);
+            }
+          }
+        }
+      }
+    }
+    return out;
+  })(window.__saiWorld)`);
+  chk(r.n > 0 && r.still.length === 0, 'nobody refused the shelf edge is left standing at it',
+    `${r.n} headings over 11 species, ${r.cave} of the spots inside the cave itself`);
+  chk(r.up.length === 0, 'and no way off that terrace points up into the cliff',
+    r.up.length ? r.up.slice(0, 3).join('; ') : 'every heading is downhill first, the room included');
+  chk(r.notWest.length === 0, 'a spent patience — and a turtle — turns around and walks west',
+    r.notWest.length ? `${r.notWest.length} headings that do not: ${r.notWest.slice(0, 3).join('; ')}`
+      : 'west at every spot, for both of the two who take no stone at all');
+  chk(r.notStep.length === 0, 'and over the mid-riser step he asks to go down onto it',
+    r.notStep.length ? r.notStep.slice(0, 3).join('; ')
+      : 'straight down at the landing, the whole length of it');
 }
 
 // ==================== the stepping stones ====================
@@ -1405,22 +1845,7 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
     T ? `stood on ${T.plats.length} platforms, ended on terrace ${T.end}` : 'no turtle');
 }
 
-// ============ what is actually THERE when you open the page ============
-// EVERY SUITE HERE MEASURED THE PLAN AND NONE MEASURED THE VIEW. The dam
-// plan has been a hundred logs since v0.40 and every check agreed, while
-// world.damCount started at 0 and took about fourteen minutes to fill — so
-// what anyone saw in their first two minutes was a fifteen-log arc, which is
-// the fourteen-log pile the rebuild existed to replace. It was reported
-// unbuilt twice, correctly, against two builds this suite called green.
-// The squirrel's drey was the same: six courses at half a trip a minute.
-//
-// So this asks the world what is STANDING at load, not what is planned.
-{
-  const r = AT_LOAD;
-  chk(r.plan > 0 && r.dam === r.plan, 'the dam is standing when the page loads',
-    `${r.dam} of ${r.plan} logs placed at load`);
-  chk(r.drey > 0, 'and the squirrel already has a drey', `${r.drey} courses at load`);
-}
+
 
 chk(errs.length === 0, 'no JS errors', errs.length ? errs[0] : 'clean');
 console.log(`\n${fail.length ? 'FAIL ' + fail.length : 'ALL PASS'} (${pass.length} passed)`);

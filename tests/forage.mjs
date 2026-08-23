@@ -21,6 +21,12 @@ const page = await browser.newPage({ viewport: { width: 1500, height: 940 } });
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 await page.goto(process.env.SAI_URL || 'http://localhost:5173/', { waitUntil: 'networkidle' });
 await page.waitForTimeout(2500);
+// A world opens with ONE animal now; every check below looks its subjects up
+// by species. Ask the world for its whole roster first, through its own
+// seeding path, or the suite quietly checks nothing.
+await page.evaluate('window.__saiWorld.__seedCast && window.__saiWorld.__seedCast()');
+await page.waitForTimeout(600);
+
 const pass = [], fail = [];
 const chk = (ok, l, d) => { (ok?pass:fail).push(`${l} — ${d}`); console.log(`${ok?'  ✔':'  ✘'} ${l} — ${d}`); };
 
@@ -306,9 +312,19 @@ if (await page.evaluate(`!!window.__saiEtho.ETHOGRAM.deer`)) {
 // real time, so their production give-up timers — all wall-clock, and sound
 // for a real user — expire mid-journey. Wind the app's own speed control up
 // for these rather than slacken the timers to suit the test rig.
-await page.evaluate(`(() => { const r=document.querySelector('input[type=range]');
-  const set=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set;
-  set.call(r, r.max); r.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+// ...and it is wound through the world's own hook, not the toolbar. This
+// dragged the speed slider to its max until the slider was removed from the
+// UI, at which point the suite crashed on a null element instead of failing
+// a check — a whole run lost to a widget that is not what is being tested.
+await page.evaluate(`(() => {
+  const w = window.__saiWorld;
+  if (w && w.__setSpeed) return w.__setSpeed(120);
+  const r = document.querySelector('input[type=range]');   // older builds
+  if (!r) return null;
+  const set = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+  set.call(r, r.max); r.dispatchEvent(new Event('input', { bubbles: true }));
+  return +r.max;
+})()`);
 await page.waitForTimeout(400);
 {
   // Dropped beside a float rather than across the clearing from one. The

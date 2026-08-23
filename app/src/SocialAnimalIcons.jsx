@@ -35,9 +35,12 @@ const perSec = (rate, dt) => Math.random() < 1 - Math.exp(-rate * dt); // Poisso
 
 // ---------------- Config ----------------
 const DEFAULTS = {
-  numAgents: 14, // the full cast: every species has signature behavior now,
-                 // and an 8-of-14 random draw left half of it unseen
-  speed: 80,                 // px/s nominal (UI rescaled)
+  // ONE. The cast arrives by hand now: + Icon adds the next species and the
+  // roster is the ceiling, so a full map is something you built rather than
+  // something you were handed. `speed` stays because the whole world is
+  // scaled off it — it is no longer a slider, just the nominal rate.
+  numAgents: 1,
+  speed: 80,                 // px/s nominal
 };
 const MAX_AGENTS = Object.keys(SPECIES).length; // one of each species, no repeats
 
@@ -305,7 +308,7 @@ function shallowBandAt(bounds, t, reach = STAND_REACH) {
 // line at 117px — because the bear treats every entry in this list
 // identically: a species that closed its boughs somewhere else would
 // give him one tree he climbs wrong.
-// EVERY POSITION HERE IS SOLVED, NOT PLACED. The four rules a trunk has to
+// EVERY POSITION HERE IS SOLVED, NOT PLACED. The six rules a trunk has to
 // keep are the ones the world already enforces elsewhere, and each of them
 // was learned from a bug:
 //   1. no forage site within TREE_REACH (96px) of the trunk — a site closer
@@ -321,32 +324,68 @@ function shallowBandAt(bounds, t, reach = STAND_REACH) {
 //      rub spot on the shelf is a behaviour that walks into the riser,
 //      gets pushed back, and gives up. That rule is what pins the
 //      west-high pine below.
+//   6. no CROWN over the rock either, which is the same rule as 3 wearing
+//      different clothes: a crown paints at zIndex 12 over the animals at
+//      10, so a terrace under one is a terrace an animal stands on unseen.
+//      The bluff has two standable platforms and three terraces and the
+//      west-low oak used to cover parts of all of them. That rule is what
+//      pins the west-low oak below, and it is the one that cost a resize.
 // checked at twelve stage shapes. The two extreme short windows (900x620,
 // 960x600) are excluded: the world already ships violations at those and
 // solving for them freezes every tree where it stands. (The crown ceiling
 // and the crown-to-crown gaps ARE checked at all fourteen: since treeScale
 // they are shape-independent, so there is nothing to exclude.)
 const FOREST_TREES = [
-  // Down and right, past the surface root at (.185,.690). It could not move
-  // a LITTLE right: it already sat 103px from that root's 96px ring, so any
-  // step toward it broke rule 1 — the only way right was to go far enough
-  // down to clear the root's latitude entirely.
+  // DOWN, EAST, AND A SIZE SMALLER — which is one change and not three.
   //
-  // AND IT STILL CANNOT, WHICH IS WORTH WRITING DOWN because there are now
-  // two more reasons to want it further east and no room for either:
-  //   - its crown paints over the bluff's new `step` platform, covering
-  //     8-31% of that ledge depending on the shape (13% at the reference),
-  //     so an animal standing on the east end of the step is under leaves;
-  //   - it owns the tightest west face on the map by rule 5 — its own deer
-  //     bed spot has 8.3px of forest floor at 1008x700, against the
-  //     west-high spruce's 21.9px at its worst.
-  // Both want the same fix and neither can have it. The root's ring is at
-  // 97.3px at 1120x640, i.e. 1.3px of slack, so ANY eastward step breaks
-  // rule 1; and this crown is already the tightest pair on the map with the
-  // bottom-left oak — 1.3px of daylight at 1084x1132 — so any step east or
-  // south merges the two into one mass. Clearing the step outright needs
-  // x >= .170, which is 90px inside both. Measured, not assumed.
-  { x: .125, y: .800, s: 1.38,  kind: "oak"  }, // west, low
+  // It was asked to come off the rock and to stop standing level with the
+  // bottom-left oak at .775, and its old anchor did both wrong. The crown
+  // paints at zIndex 12, so what it covered it covered outright: 24% of the
+  // drawn shelf, 45% of the riser and 31% of the `step` platform's lip at
+  // the worst stage shape (15% at the reference, and 74% of the part of the
+  // step that can actually be STOOD on). That is a ledge with leaves over
+  // it — and it is also what made the bluff's collision region look wider
+  // than the drawn stone, which was filed as a physics bug and was not one.
+  //
+  // WHY IT COULD NOT KEEP 1.38, MEASURED AT ALL TWENTY-TWO SHAPES THIS FILE
+  // AND tests/world.mjs ARE CHECKED AT. Three things close on this corner
+  // from three sides and they leave no cell:
+  //   west   the bluff. A crown box is 64*s half-wide and the rock runs
+  //          114-116 per-mille across from the shelf's lip down to y 536,
+  //          so what binds is the crown's TOP, not its west edge — the rock
+  //          narrows as it falls, and a crown clears it by dropping below
+  //          the wide band rather than by stepping around it. At 1.38 that
+  //          means y >= .965 from this longitude, and y >= 1.042 from the
+  //          old one, which is off the bottom of the stage.
+  //   south  the fallen log at (.21,.95) and its own 96px ring. It puts a
+  //          FLOOR under the latitude: at x .144 nothing may stand lower
+  //          than y .8510 (1008x700), which is .114 above what the rock
+  //          wants.
+  //   north  the surface root at (.185,.690), the same 96px ring, which
+  //          puts a ceiling at y .8220. The whole legal slot at this
+  //          longitude is .8220..8510 — twenty-nine thousandths of stage.
+  //   east   the bottom-left oak's crown, already the tightest pair on the
+  //          map at 1.3px of daylight (1084x1132), which is what stops the
+  //          tree simply walking out of the west.
+  // The latitude the rock wants is under the log; the longitude that would
+  // clear the log is inside the oak. The only free variable left was the
+  // crown's own size, so the resize IS the move.
+  //
+  // 1.38 -> 1.05, AND THE WHOLE BLUFF IS CLEAR. Swept over the same shapes,
+  // maximising the smallest margin rather than taking the first legal cell:
+  // every band of the rock is now 0% covered — upper, plateau, cliff,
+  // shelf, riser and talus — and so are both platforms. The tightest the
+  // crown BOX comes to the drawn stone is 3.1px at 960x600 and 4.9px at the
+  // reference; the painted leaves are a good deal narrower than the box and
+  // stand 21px off at their worst.
+  //
+  // AND NOTHING IT ALREADY KEPT GOT TIGHTER. The forage ring 1.6px against
+  // 1.3; the crown pair 2.4px against 1.3; and the west face — this tree
+  // owned the tightest one on the map at 8.3px of forest floor — is 44.0px
+  // now, because moving east off the bluff is the same move that clears it.
+  // It sits .073 of the stage below the bottom-left oak against .025, so
+  // the two no longer read as a row.
+  { x: .144, y: .848, s: 1.05,  kind: "oak"  }, // west, low
   // Right, into the open ground it was asked for — and an EVERGREEN now,
   // which is a second nest tree as well as a second silhouette. A conifer's
   // crown box is 40 half-width against an oak's 64, so the same tree stops
@@ -2087,6 +2126,10 @@ function enterFromEdge(a, world, sp) {
     // he arrives ON a terrace, and from here on may only leave it by leaping
     a._lvl = world.def.rock ? (rockLevelAt(bounds, x, y) ?? ROCK_LEVEL_GROUND)
                             : ROCK_LEVEL_GROUND;
+    // ...and whatever he was doing on the cave's terrace, he has left the
+    // stage since. The clock that says "getting off the shelf is the errand"
+    // must not survive a walk right round the edge of the map.
+    a._shelfT0 = 0; a._plat = null;
     return;
   }
 }
@@ -2166,30 +2209,29 @@ function getRel(a, otherId, create = true) {
 
 // ---------------- World Component ----------------
 /**
- * HOW MUCH DAM IS THERE WHEN YOU OPEN THE PAGE.
+ * HOW MUCH DAM IS THERE WHEN YOU OPEN THE PAGE, AND WHY IT IS NONE.
  *
- * All of it. This was 0, and 0 is wrong for a reason no amount of checking
- * the PLAN could catch: the plan has been a hundred logs since v0.40, but a
- * hundred logs take about fourteen minutes of watching to lay, so what
- * anyone actually saw in their first two minutes was a fifteen-log arc —
- * which is indistinguishable from the fourteen-log pile this was all meant
- * to replace. The dam was reported unbuilt twice, correctly, against two
- * builds whose dam plan measured 100.
+ * This briefly stood the dam up at load, because a hundred logs took about
+ * fourteen minutes to lay and anyone opening the page saw a fifteen-log arc
+ * — indistinguishable from the fourteen-log pile the rebuild replaced.
+ * The fix for that was the wrong end of the problem. Standing it up hid the
+ * only thing worth watching.
  *
- * A beaver dam is scenery that predates the tab being opened. It stands at
- * load, and the way to watch it go up from bare water is Reset World, which
- * is a button somebody presses on purpose.
+ * So the dam starts EMPTY and the beaver carries ONE LOG PER TRIP, which is
+ * what a beaver does. A hundred trips is a long watch, and that is the
+ * point: the finished dam is what running the simulation for a long time
+ * buys you. Anyone in a hurry can pick the beaver up and drop him off the
+ * edge of the map — the dam run triggers on going off-stage, so a push is
+ * worth a whole crossing.
  */
-function damAtRest(def) { return def && def.dam ? def.dam.length : 0; }
+function damAtRest() { return 0; }
 
 /**
- * ...and the same for the squirrel's drey, for the same reason. Six courses
- * at roughly half a trip a minute is ten minutes before there is a nest in
- * the fork at all, so on any ordinary visit that tree is simply bare. The
- * drey stands at load like the dam does; Reset World still starts both from
- * nothing.
+ * The squirrel's drey goes back to being built too, for the same reason:
+ * six courses he hauls up himself, not scenery that was there before you
+ * arrived.
  */
-function dreyAtRest() { return DREY_COURSES; }
+function dreyAtRest() { return 0; }
 
 export default function SocialAnimalsRPG() {
   const stageRef = useRef(null);
@@ -2210,7 +2252,7 @@ export default function SocialAnimalsRPG() {
     def: WORLDS.forest,
     agents: [],
     running: true,
-    damCount: damAtRest(WORLDS.forest),
+    damCount: damAtRest(),
     dreyN: dreyAtRest(),
     last: performance.now(),
   });
@@ -2288,8 +2330,33 @@ export default function SocialAnimalsRPG() {
       // the entry rule itself, so the suite asks the world who may walk in
       // where rather than re-deriving it and testing its own arithmetic
       W.spawnSafeAt = (x, y, sp) => spawnSafe(W, x, y, sp);
+      // THE WHOLE CAST, ON REQUEST. A world opens with one animal now, and
+      // every suite in tests/ looks its subjects up by species — so without
+      // this they find nothing and check nothing, silently. A suite calls
+      // this once at the top and gets the roster the world used to hand out
+      // by default. It is the world's OWN seeding path, not a copy of it.
+      W.__dropOffstage = (a) => dropOffstage(a, W.bounds);
+      // THE SPEED LEVER, WITHOUT THE WIDGET. Three forage checks wind the
+      // world up because headless frames run at about a quarter of real
+      // time and the production give-up timers — wall-clock, and right for
+      // a real viewer — expire mid-journey. They did it by dragging the
+      // speed slider to its max, and when the slider was removed from the
+      // toolbar the suite crashed on a null element rather than failing a
+      // check. This is the same value the slider set.
+      W.__setSpeed = (v) => { const n = clamp(+v || DEFAULTS.speed, 60, 120);
+                              setCfg((c) => ({ ...c, speed: n })); return n; };
+      W.__seedCast = (n) => { W.agents = seedAgents(W, n || Object.keys(W.def.roster).length);
+                              return W.agents.length; };
       W.__rock = { breaks: ROCK_BREAKS, profile: ROCK_PROFILE, cave: ROCK_CAVE,
                    highEntry: [...ROCK_HIGH_ENTRY],
+                   // WHO COMES OFF THE CAVE'S TERRACE AT THE EDGE, handed
+                   // over as the sets themselves so a suite checks the rule
+                   // the world walks by instead of a species list of its own
+                   // that goes stale the moment one moves.
+                   shelfDrop: [...ROCK_SHELF_DROP],
+                   shelfWing: [...ROCK_SHELF_WING],
+                   flyState: ROCK_FLY_STATE,
+                   shelfGraceMs: ROCK_SHELF_GRACE,
                    // the platforms themselves — the SAME objects RockLayer
                    // draws its slab and its ledge from, so a suite can check
                    // that the thing painted is the thing stood on without
@@ -2309,6 +2376,18 @@ export default function SocialAnimalsRPG() {
                  x0: platX0(W.bounds, p), x1: platX1(W.bounds, p),
                  level: platLevel(p), exits: p.exits.map((e) => ({ lvl: e.lvl,
                    y: platExitY(W.bounds, p, e, x) })) };
+      };
+      // WHICH WAY THE SHELF SENDS HIM, asked of the rule itself rather than
+      // watched. A suite cannot watch this one: headless rAF runs at three
+      // or four frames a second and the sim clamps dt to 50ms, so a walk
+      // across the terrace is four hundred frames of wall clock. This hands
+      // back the heading rockShelfWayOut would give THIS species at THIS
+      // spot, so the whole terrace can be swept in one pass.
+      W.rockShelfWayOutAt = (species, x, y, r, patient) => {
+        const a = { species, x, y, r: r || 20, vx: 0, vy: 0, _shelfT0: 1 };
+        const now = 1 + (patient === false ? ROCK_SHELF_PATIENCE + 1 : 1);
+        rockShelfWayOut(a, W.bounds, now, rockVerbOf(species) !== null);
+        return { vx: a.vx, vy: a.vy };
       };
       // ...and the painted width of each kind of forage site, plus the pit's
       // own, for the same reason: the suite checks the skunk's holes against
@@ -2415,7 +2494,7 @@ export default function SocialAnimalsRPG() {
     const w = worldRef.current;
     w.def = WORLDS[key];
     w.agents = seedAgents(w, DEFAULTS.numAgents);
-    w.damCount = damAtRest(w.def); w.dreyN = dreyAtRest(); w.caches = null;
+    w.damCount = damAtRest(); w.dreyN = dreyAtRest(); w.caches = null;
     setSnapshot((s) => ({ ...s, selectedId: null }));
   };
 
@@ -2437,10 +2516,6 @@ export default function SocialAnimalsRPG() {
         <button onClick={() => (worldRef.current.running = !worldRef.current.running)} className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-xs">
           {worldRef.current.running ? "Pause" : "Run"}
         </button>
-        <label className="flex items-center gap-2">Speed
-          {/* decently slow → brisk */}
-          <input type="range" min={60} max={120} step={1} value={cfg.speed} onChange={(e)=>setCfg(v=>({...v, speed: parseFloat(e.target.value)}))} />
-        </label>
         <button onClick={addAgent} disabled={snapshot.agents.length>=maxAgents} className="px-2 py-1 rounded bg-indigo-600 disabled:opacity-50 hover:bg-indigo-500 text-xs">+ Icon</button>
         <button onClick={removeAgent} className="px-2 py-1 rounded bg-rose-700 hover:bg-rose-600 text-xs">− Icon</button>
         <button onClick={resetWorld} className="px-2 py-1 rounded bg-neutral-700 hover:bg-neutral-600 text-xs">Reset World</button>
@@ -2923,6 +2998,19 @@ function keepOffRock(a, bounds) {
  *   NOBODY    the turtle and the frog do not go up a cliff. The frog can
  *             out-jump any of them on the flat and still cannot climb rock,
  *             which is the difference between a leap and a scramble.
+ *
+ * ...AND COMING DOWN OFF THE SHELF IS NOT THE SAME MOVE AS GOING UP IT.
+ * That terrace is the one the cave mouth opens onto, and its riser is the
+ * face everything on the bluff has to cross to get home. Going up it is a
+ * scramble at a wall you can see the top of; coming down it is a drop onto
+ * talus, and the owner's rule is that only three animals take it as one:
+ * the cougar jumps, and the owl and the goose fly. Everything else has two
+ * ways off the shelf and neither of them is the edge — the mid-riser STEP,
+ * which is already there and already a two-hop staircase, or a turn round
+ * and a walk off the west of the stage the way it came in.
+ *
+ * The ascent ladder above is untouched by this. A goose still leaps the
+ * riser to get UP; he simply does not leap it to get down.
  */
 const ROCK_LEAPERS = new Set(["bear", "deer", "cougar", "wolf", "fox", "raccoon",
                               "squirrel", "skunk", "hedgehog", "beaver", "goose"]);
@@ -2936,10 +3024,29 @@ const ROCK_FLYERS = new Set(["owl"]);
 // they get the shelf and the cave, and the top of the bluff belongs to
 // whoever climbs or flies.
 const ROCK_CLIFF_JUMPERS = new Set(["fox", "deer"]);
+// WHO COMES OFF THE SHELF AT THE EDGE. One jumps and two fly, and the two
+// are not the same set as ROCK_FLYERS: the owl is a flyer everywhere and
+// takes the whole bluff in one glide either way, while the goose is a
+// LEAPER going up — he scrambles the riser like the rest of them — and a
+// bird only on the way down. Keeping him out of ROCK_FLYERS is the whole of
+// what keeps his ascent the ascent it was.
+const ROCK_SHELF_DROP = new Set(["cougar"]);
+const ROCK_SHELF_WING = new Set(["owl", "goose"]);
 // how near a face he has to be for the leap to be offered, and how long the
 // arc takes. The lift is the wall's own height, so a taller face is a bigger
 // jump without anybody writing that down twice.
 const ROCK_HOP_NEAR = 26, ROCK_HOP_MS = 520;
+// A FLIGHT IS SLOWER THAN A LEAP, which is most of what makes it read as
+// one. A wing-beat is about a third of a second on both birds' art, so a
+// descent wants three or four of them in it to be a flight rather than a
+// flinch.
+const ROCK_FLY_MS = 1150;
+// ...and the state the two birds wear on the way down, so the CSS has
+// something to hang the wings on. World-side, like the hop itself: no
+// ethogram owns it, and the name is checked unused in both Ethogram.js and
+// Critters.jsx — its two rule blocks are scoped per species, so the owl's
+// set wings and the goose's beating ones never meet.
+const ROCK_FLY_STATE = "rockfly";
 // a hop onto a stone is a shorter move than a hop up a face, so it is a
 // quicker one. Same arc, less of it.
 const ROCK_PLAT_MS = Math.round(ROCK_HOP_MS * 0.85);
@@ -2951,6 +3058,117 @@ const ROCK_PLAT_MS = Math.round(ROCK_HOP_MS * 0.85);
 // steps down whichever way he was facing, which is what anything does when
 // it has finished looking around. See keepOnPlatform for what it is worth.
 const ROCK_PLAT_STAY_MS = 9000;
+// HOW LONG HE GETS TO BE ON THE SHELF BEFORE THE WAY OUT IS THE ERRAND.
+// The grace is so an animal that has just arrived can look at the cave
+// rather than turn straight round; past the patience the steps have plainly
+// not worked for him — he was never in the right place at the right time, or
+// something else owned him every frame he was — and he goes west instead.
+// Neither is a leash: both only steer, and any errand he takes up outranks
+// them, because a hop is only ever offered in a free state anyway.
+//
+// THE GRACE IS A BEAT AND NOT A STARE, and the reason is a budget rather
+// than a taste. Refusing the edge turns a half-second drop into a walk to
+// the steps, so every second up here is a second the animal is not doing the
+// rest of its day: measured over five sim-minutes, a skunk went from 0-0.2%
+// of its time on the bluff to 6-13%, and on the worst of those it dug none
+// of its usual two to four foraging pits. The grace is a fixed third of that
+// visit, so it is the cheapest part of it to give back.
+const ROCK_SHELF_GRACE = 2200, ROCK_SHELF_PATIENCE = 24000;
+
+/** the verb this species has on rock at all, or null for the ones with none */
+const rockVerbOf = (species) => ROCK_FLYERS.has(species) ? "fly"
+  : ROCK_CLIMBERS.has(species) ? "climb"
+  : ROCK_LEAPERS.has(species) ? "leap" : null;
+/** the EDGE of the cave's terrace is not this species' way off it */
+const rockShelfBound = (species) => !ROCK_SHELF_DROP.has(species)
+  && !ROCK_SHELF_WING.has(species);
+/** he is on that terrace, and it is not his way off */
+const rockShelfEdge = (a, lvl) => lvl === ROCK_LEVEL_SHELF && rockShelfBound(a.species);
+/**
+ * ...and he has been up here long enough that GETTING DOWN is now the errand.
+ * Two callers: the steer itself, and the one place in the step loop where an
+ * ethogram is allowed to hand him a different errand instead.
+ */
+const rockShelfLeaving = (a, now) => !!a._shelfT0 && !a._plat && !a._rockHop
+  && rockShelfEdge(a, a._lvl ?? ROCK_LEVEL_GROUND)
+  && now - a._shelfT0 > ROCK_SHELF_GRACE;
+/**
+ * ...and the same clock read from ON A STONE, where his level says 0 because
+ * the mid-riser step's first exit is the talus. It is the difference between
+ * an animal who got onto that ledge coming DOWN and one who got onto it
+ * coming up — and the clock knows, because it only ever starts on the shelf.
+ */
+const rockShelfOnStone = (a, now) => !!a._shelfT0 && !!a._plat
+  && rockShelfBound(a.species) && now - a._shelfT0 > ROCK_SHELF_GRACE;
+/**
+ * ...and the narrow case where an APPETITE has to wait, which is the turtle
+ * and the frog and nobody else. They take no face and no stone anywhere on
+ * this bluff, so their only way off that terrace is the long walk west, and
+ * an errand up here is an errand aimed at a site they cannot reach — half
+ * their frames spent being steered at a log across the lake, netting no
+ * ground west in four minutes. Everyone else has the steps a few seconds
+ * away and keeps every appetite they have while they walk to them.
+ */
+const rockShelfPenned = (a, now) => rockVerbOf(a.species) === null
+  && rockShelfLeaving(a, now);
+
+/**
+ * THERE IS NO WAY DOWN AT THIS EDGE, SO STOP WALKING AT IT.
+ *
+ * This is the other half of the shelf rule, and the half the owner actually
+ * asked for: refusing the drop on its own would leave a hedgehog pacing the
+ * lip of a terrace forever, which is stranding him politely. So he is given
+ * the two ways off that exist and pointed at the nearer one.
+ *
+ *   THE STEPS   the mid-riser platform. He walks along the shelf until he
+ *               is over its span and then asks to go down, which is exactly
+ *               the mount tryPlatformHop already offers — this only puts him
+ *               where he can be offered it.
+ *   WEST        off the side of the stage. The bluff runs off the left edge
+ *               and the shelf's arithmetic runs with it, so a walk west is a
+ *               walk out of the frame, and the sim's own edge wrap brings him
+ *               back in on the floor like anything else that leaves.
+ *
+ * Nearer WINS, and on this stage that is almost always the steps: the step
+ * spans per-mille 33..80 and the shelf is only walkable out to about 114
+ * before its own east outline stops him. The west leg is what is left when
+ * the steps have had their chance and not taken it — and it is the ONLY leg
+ * for the turtle and the frog, who take no stone and no face anywhere on
+ * this bluff. `canStep` is what says which of the two he is.
+ *
+ * Speed comes off the animal himself rather than out of the config, so a
+ * turtle turns round at a turtle's pace. Nothing here reads dt: it sets a
+ * heading, and the integrator does the rest the way it does for a rescue.
+ */
+function rockShelfWayOut(a, bounds, now, canStep) {
+  const p = canStep ? rockPlatform("step") : null;
+  const x0 = p ? platX0(bounds, p) : 0, x1 = p ? platX1(bounds, p) : 0;
+  const west = -EDGE_OFF - 24;                     // clear of the wrap line
+  const sp = Math.max(16, Math.hypot(a.vx, a.vy));
+  const pad = Math.max(8, a.r * 0.5);
+  const patient = now - (a._shelfT0 || now) < ROCK_SHELF_PATIENCE;
+  const steps = !!p && patient
+    && Math.abs(a.x - (x0 + x1) / 2) < Math.abs(a.x - west);
+
+  // BOTH WAYS OFF ARE DOWNHILL FIRST, and that is not a figure of speech.
+  // The cave is a room cut back INTO the cliff, so its floor sits above the
+  // terrace's own and an animal who wandered inside is over the shelf as
+  // well as behind it. A FLAT heading walks him into a jamb and holds him
+  // there — the east one if he was going for the steps, the west one if he
+  // was leaving, and the west jamb of that room is the edge of the stage,
+  // so a turtle pressed against it never left at all. Measured: 22 minutes
+  // of one, walking due west at the wall the whole time.
+  //
+  // Aiming at a point BELOW THE LIP puts a downward component in every
+  // heading. It brings him out of the room and onto the terrace, and once he
+  // is on it keepOffRock holds him off the line itself — so what is left of
+  // that component is exactly the "I am trying to go down" the platform
+  // mount reads as intent.
+  const tx = steps ? clamp(a.x, x0 + pad, x1 - pad) : west;
+  const ty = rockBreakY(bounds, ROCK_BREAKS.L2, a.x) + pad * 2;
+  const dx = tx - a.x, dy = ty - a.y, d = Math.hypot(dx, dy) || 1;
+  a.vx = dx / d * sp; a.vy = dy / d * sp;
+}
 
 /**
  * ONTO A ROCK, AND OFF IT AGAIN.
@@ -2989,9 +3207,19 @@ function tryPlatformHop(a, bounds, now) {
     const p = rockPlatform(a._plat);
     if (!p) { a._plat = null; return false; }
     const lip = platLipY(bounds, p, a.x);
+    // HE IS ON HIS WAY DOWN OFF THE SHELF, so the stone's UPWARD exit is not
+    // one of his. The mid-riser step bridges the talus and the terrace, and
+    // an animal who has just come down onto it has a fifty-fifty wander
+    // heading — so half his dismounts put him straight back on the terrace
+    // he is trying to leave. Measured: a beaver doing that thirteen times in
+    // a row and still up there four minutes later. His stay is capped either
+    // way, so the worst this costs him is the nine seconds keepOnPlatform
+    // already allows before the rock lets go of him downward.
+    const oneWay = rockShelfOnStone(a, now);
     for (const e of p.exits) {
       const ey = platExitY(bounds, p, e, a.x);
       const up = ey < lip;                       // that exit is ABOVE the top
+      if (oneWay && up) continue;
       if (up ? !(a.vy < -4) : !(a.vy > 4)) continue;
       leavePlatform(a, bounds, p, e, now);
       return true;
@@ -3033,15 +3261,72 @@ function tryPlatformHop(a, bounds, now) {
  */
 function tryRockHop(a, bounds, now) {
   if (now < (a._rockHopEnd || 0)) return true;         // one already running
+
+  const lvl = a._lvl ?? ROCK_LEVEL_GROUND;
+  // THE SHELF CLOCK IS STOPPED BEFORE ANYTHING ELSE, and above the "is he
+  // even on the bluff" gate on purpose: an animal who left the rock entirely
+  // never reaches that gate again, so a clock stopped after it would still
+  // be running when he came back a minute later — and he would arrive on the
+  // terrace with his grace already spent and be turned round on the spot.
+  // Keyed on the TERRACE he belongs to rather than on where he is standing,
+  // so leaning a pixel over the drawn outline does not restart it either.
+  if (lvl !== ROCK_LEVEL_SHELF && !a._plat) a._shelfT0 = 0;
+
   // Only ON the bluff. Without this the break lines are still arithmetic out
   // in the open forest, and a bear crossing that latitude fifty metres clear
   // of the rock launches himself onto a shelf that is not under him.
   if (!rockZone(bounds, a.x, a.y).on) return false;
 
-  const lvl = a._lvl ?? ROCK_LEVEL_GROUND;
-  const sp = ROCK_FLYERS.has(a.species) ? "fly"
-    : ROCK_CLIMBERS.has(a.species) ? "climb"
-    : ROCK_LEAPERS.has(a.species) ? "leap" : null;
+  const sp = rockVerbOf(a.species);
+
+  // HOW LONG HE HAS BEEN UP ON THE CAVE'S TERRACE, kept here because this is
+  // the one function every free frame on the bluff passes through. It is what
+  // rockShelfWayOut spends: a grace before he is steered at all, and a
+  // patience after which the steps are written off.
+  //
+  // A STONE DOES NOT RESET IT, AND DOES NOT START IT EITHER. The mid-riser
+  // step reports the terrace BELOW it — that is what its first exit is, and
+  // what platLevel returns — so an animal who hopped down onto it read as
+  // being on the ground, and every time he hopped back UP off it he arrived
+  // on the shelf with a fresh grace and a fresh patience. Measured: a beaver
+  // four minutes into a soak, bouncing on and off the same ledge, no nearer
+  // the talus than when he started.
+  //
+  // So a stone CARRIES whatever clock he brought onto it and never starts
+  // one — the clearing at the top of this function is written to leave a
+  // platform rider's alone. That is also what tells the two directions apart
+  // later: a clock running on the step means he came DOWN onto it, and no
+  // clock means he climbed up onto it and is still going up.
+  if (lvl === ROCK_LEVEL_SHELF && !a._shelfT0) a._shelfT0 = now;
+
+  // NOBODY ELSE COMES OFF THE SHELF AT THE EDGE, and a refusal on its own is
+  // just a politer way of stranding him — so before anything else he is
+  // pointed at one of the two ways off that DO exist.
+  //
+  // NEVER AGAINST A CLIMB, though, and that guard IS the ascent ladder. Up
+  // is toward smaller y, and the cliff over this terrace is jumped by a fox
+  // and a deer and climbed by a squirrel; a steer that fired on every frame
+  // would hold their noses down and take that away without ever saying so.
+  // Asked here rather than after, because the steer WRITES vy — `down` has
+  // to be read back from it and `up` has to be read before it.
+  //
+  // ...and the guard is owed only to the animals who HAVE an ascent from
+  // here. A turtle pointing north is not asking for anything: there is
+  // nothing up there for him and never was, so his heading is no reason to
+  // leave him standing on a terrace he cannot get off. Measured: with the
+  // guard given to everyone, three turtles in nine never left in four
+  // minutes; with it given to the three who can climb, none of the nine.
+  //
+  // This whole block also sits above the `sp` gate on purpose: the turtle
+  // and the frog take no face and no stone anywhere on this bluff, so they
+  // are the two who need the walk west most, and a return for having no
+  // verb at all would have skipped exactly them.
+  const shelfEdge = rockShelfEdge(a, lvl);
+  const up = a.vy < -4;
+  const canClimbOn = sp === "climb" || ROCK_CLIFF_JUMPERS.has(a.species);
+  if (!(up && canClimbOn) && rockShelfLeaving(a, now)) {
+    rockShelfWayOut(a, bounds, now, sp !== null);
+  }
   if (!sp) return false;
 
   // THE STONE COMES FIRST. Standing on a platform he is not being held by a
@@ -3053,18 +3338,31 @@ function tryRockHop(a, bounds, now) {
   // than the face behind it. Not for the owl: a bird does not use a step.
   if (sp !== "fly" && tryPlatformHop(a, bounds, now)) return true;
 
-  // Which way is he trying to go? Up is toward smaller y, and every face on
-  // this bluff runs across the map, so intent is simply the sign of vy.
-  const up = a.vy < -4, down = a.vy > 4;
+  // Which way is he trying to go? Every face on this bluff runs across the
+  // map, so intent is simply the sign of vy — `up` was taken above, before
+  // the steer could write over it.
+  const down = a.vy > 4;
   if (!up && !down) return false;
+  // ...and this is the refusal the steer above is the other half of. Only
+  // the DROP is refused: going UP off the shelf is exactly the ladder it
+  // always was, and a fox still jumps the cliff from here.
+  if (shelfEdge && down) return false;
 
+  // WINGS COME DOWN; THEY DO NOT CLIMB DOWN. The owl was already the whole
+  // bluff in one move either way. The goose joins him OFF THE SHELF AND
+  // NOWHERE ELSE — asked for by name and by terrace rather than by being
+  // made a flyer, which would have handed him the plateau on the way up and
+  // a glide off the cliff he has never once been able to reach.
+  const wings = down && (sp === "fly"
+    || (lvl === ROCK_LEVEL_SHELF && ROCK_SHELF_WING.has(a.species)));
   // one terrace for legs, the whole flight of them for wings
-  const target = sp === "fly" ? (up ? ROCK_LEVEL_PLATEAU : ROCK_LEVEL_GROUND)
+  const target = wings ? ROCK_LEVEL_GROUND
+    : sp === "fly" ? ROCK_LEVEL_PLATEAU
     : up ? lvl + 1 : lvl - 1;
   if (target === lvl) return false;
   if (target < ROCK_LEVEL_GROUND || target > ROCK_LEVEL_PLATEAU) return false;
   // the cliff is a climb, not a leap: only a climber or a flyer takes it
-  if (sp === "leap" && Math.max(lvl, target) === ROCK_LEVEL_PLATEAU
+  if (sp === "leap" && !wings && Math.max(lvl, target) === ROCK_LEVEL_PLATEAU
       && !ROCK_CLIFF_JUMPERS.has(a.species)) return false;
 
   // the line he is standing at, and the one he lands on. Going up he leaves
@@ -3081,15 +3379,55 @@ function tryRockHop(a, bounds, now) {
 
   const pad = Math.max(8, a.r * 0.5);
   const span = Math.abs(target - lvl);
+  const drop = Math.abs(farY - nearY);
+
+  // A DESCENT LEAVES THE FACE BEHIND IT. Both of the moves the owner asked
+  // for go OUT as well as down — a cat jumping off a ledge lands clear of
+  // the stone it left, and a bird gliding down covers ground doing it —
+  // where a hop up a wall has to finish over the same spot it started at or
+  // it lands on nothing. So the outward carry belongs to the way down only,
+  // it is measured in the face's own height, and the landing is read off the
+  // break line AT THE X HE ARRIVES AT rather than the one he pushed off from.
+  // (the only legs that reach a shelf drop at all are the cougar's — every
+  // other grounded species was turned back at the refusal above)
+  const jumpOff = down && lvl === ROCK_LEVEL_SHELF;
+  const outward = wings ? drop * 0.62 : jumpOff ? drop * 0.42 : 0;
+  // ...and an ASCENT holds its x, which the paragraph above says out loud
+  // and the code did not do: with x1 null the arc never wrote a.x at all, so
+  // the animal kept whatever vx he pushed off with and drifted about 47px
+  // east over a cliff hop. Far enough to land PAST the bluff's drawn
+  // outline, where keepOffRock's "a level well clear of the rock is stale"
+  // branch forgets the level outright — which is how a fox came to arrive at
+  // plateau latitude, standing on open forest floor, having climbed nothing.
+  const x1 = outward ? Math.min(bounds.w - 40, a.x + outward) : up ? a.x : null;
+  // ...AND HE FACES THE WAY HE IS GOING. The arc writes a.x itself, so vx
+  // does nothing to the motion — but the renderer reads vx for the sprite's
+  // facing, and a bird that pushed off walking west spent the whole glide
+  // flying east backwards. 12 clears the renderer's own +/-8 deadband.
+  if (x1 != null && x1 > a.x) a.vx = Math.max(a.vx, 12);
+  const landY = x1 == null ? farY : rockBreakY(bounds, B[farLine], x1);
+
   // ...and he lands INSIDE the band he was aiming for. `pad` used to be added
   // the other way round, which put every landing a pad's depth into the wall
   // he had just cleared and left keepOffRock to snap him back out of it on
   // the next frame — a visible twitch at the end of every hop on the bluff.
-  a._rockHop = { y0: a.y, y1: farY + (up ? -pad : pad),
-                 lift: Math.max(18, Math.abs(farY - nearY) * (sp === "fly" ? 0.35 : 0.55)),
-                 ms: ROCK_HOP_MS * (sp === "fly" ? 1.15 * span : 1), t0: now };
+  a._rockHop = { y0: a.y, y1: landY + (up ? -pad : pad), x0: a.x, x1,
+                 // A FLIGHT DOES NOT LOB. The leap's lift is more than half
+                 // the face because the arc IS the move; a bird's is a
+                 // push-off it has finished with by the time it is out over
+                 // the drop, and the descent is carried by the two curves in
+                 // driveRockHop instead.
+                 fly: wings || undefined,
+                 lift: wings ? Math.max(12, drop * 0.14)
+                   : Math.max(18, drop * (sp === "fly" ? 0.35 : 0.55)),
+                 ms: wings ? ROCK_FLY_MS * (span > 1 ? 1.3 : 1)
+                   : ROCK_HOP_MS * (sp === "fly" ? 1.15 * span : 1), t0: now };
   a._rockHopEnd = now + a._rockHop.ms;
   a._lvl = target;                      // he is committed the moment he pushes off
+  // The wings are the whole point of the two birds' descent, and the sprite
+  // has no way of knowing about a hop record — so the state carries it. It
+  // is world-side and belongs to no ethogram; driveRockHop hands it back.
+  if (wings) a.state = ROCK_FLY_STATE;
   return true;
 }
 
@@ -3101,17 +3439,33 @@ function tryRockHop(a, bounds, now) {
  * laid on top of it. A face hop passes neither, gets zero for both, and is
  * exactly the arc it always was; a hop onto a slab finishes standing on the
  * slab instead of dropping through it the instant it lands.
+ *
+ * A FLIGHT IS TWO CURVES WHERE A LEAP IS ONE, and that is the whole visual
+ * difference between the cougar going off the shelf and the birds doing it.
+ * The GROUND TRACK — a.x and a.y, which is where he is on the map and
+ * therefore what he passes in front of — runs out ahead of him on a fast
+ * ease-out. The HEIGHT the eye reads, a.y - a.z, comes off on a smoothstep:
+ * a beat of hang as he pushes out over the edge, then the fall, then a flare
+ * onto the talus. The gap between the two IS z, so he is genuinely airborne
+ * the whole way down — data-air is set, the shadow shrinks, the wings are on
+ * — instead of tipping over the lip on a lob.
  */
 function driveRockHop(a, now) {
   const h = a._rockHop; if (!h) return false;
   const q = Math.min(1, (now - h.t0) / h.ms);
   const z0 = h.z0 || 0, z1 = h.z1 || 0;
-  a.y = h.y0 + (h.y1 - h.y0) * q;
-  if (h.x1 != null) a.x = h.x0 + (h.x1 - h.x0) * q;   // an aimed hop holds its x
-  a.z = z0 + (z1 - z0) * q + h.lift * Math.sin(Math.PI * q);
+  const k = h.fly ? 1 - Math.pow(1 - q, 3) : q;    // the ground track
+  a.y = h.y0 + (h.y1 - h.y0) * k;
+  if (h.x1 != null) a.x = h.x0 + (h.x1 - h.x0) * k; // an aimed hop holds its x
+  a.z = h.fly
+    ? (h.y1 - h.y0) * (k - q * q * (3 - 2 * q)) + h.lift * Math.sin(Math.PI * q)
+    : z0 + (z1 - z0) * q + h.lift * Math.sin(Math.PI * q);
   a.vy = 0;
   if (q < 1) return true;
-  a.y = h.y1; a.z = z1; a._rockHop = null; a._rockHopEnd = 0;
+  a.y = h.y1; a.z = h.fly ? 0 : z1; a._rockHop = null; a._rockHopEnd = 0;
+  // ...and the wings fold. A beat on the ground before he is anybody's
+  // business again, which is what every other arrival in this world takes.
+  if (a.state === ROCK_FLY_STATE) enterCooldown(a, 700, now);
   return false;
 }
 
@@ -5391,11 +5745,19 @@ function IconNode({ a, iconsRef, worldRef, onSelect }) {
       // point it was locked to. The file's own header lists this as one of
       // the four ways a fight ends.
       A._grabFrom = A.state; A._grabTarget = A.targetId;
+      // A HOP IS A PLACE HE IS GOING, and a hand in the middle of one is a
+      // change of mind about that. The record survives a drag otherwise, and
+      // resumes on release with its clock already spent — which lands him
+      // back on the bluff he was just carried off, in one frame.
+      A._rockHop = null; A._rockHopEnd = 0; A._plat = null; A._shelfT0 = 0;
       A.dragging = true; A.state = "drag"; A._faceDir = 0; };
     const move = (e) => { if (!dragging) return; const A = getAgent(worldRef.current, a.id); if (!A) return; A.x += e.movementX; A.y += e.movementY; };
     const up = () => {
       if (!dragging) return; dragging = false; try { el.releasePointerCapture(pid); } catch {}
       const A = getAgent(worldRef.current, a.id); if (!A) return; A.dragging = false;
+
+      dropOffstage(A, worldRef.current.bounds);
+
       const from = A._grabFrom, tgt = A._grabTarget;
       A._grabFrom = null; A._grabTarget = null;
       // The partner has to still be in it. A long drag can outlast the
@@ -6075,7 +6437,21 @@ function stepWorld(world, cfg, dt) {
     // One call covers the whole hierarchy for that species: the land/water
     // time budget, the triggers, and every event it owns. Species without
     // an ethogram fall straight through and keep their own blocks above.
-    stepEthogram(a, ethoCtx);
+    //
+    // ...with ONE narrow exception, and it is about the bluff. Every site any
+    // of these appetites walks to is down on the forest floor, so an errand
+    // begun on the cave's terrace is an errand that cannot finish — and
+    // while it runs, the walk off that terrace does not, because a hop is
+    // only ever offered in a free state.
+    //
+    // It is narrow ON PURPOSE. Only the two who take no face and no stone
+    // wait, because only they have a walk long enough for it to matter; a
+    // skunk is a leaper and the steps are a few seconds away, so muzzling
+    // HIM up here cost him a dig somewhere else entirely and turned this
+    // suite's pit check into a coin flip. An event already under way is
+    // untouched either way: this declines to START one, and only for the
+    // seconds between the grace running out and his feet reaching the talus.
+    if (!(def.rock && isFreeState(a) && rockShelfPenned(a, now))) stepEthogram(a, ethoCtx);
 
 
     // navigation
@@ -6269,6 +6645,31 @@ function stepWorld(world, cfg, dt) {
       if (!ethoOffstage(a, ethoCtx)) enterFromEdge(a, world, gait(a, ethoCtx, 0.35));
     }
   }
+}
+
+/**
+ * DROPPED OVER THE SIDE COUNTS AS GONE.
+ *
+ * The wrap only speaks once an animal is EDGE_OFF past the boundary, which
+ * is right for one who wandered out — but a drop is deliberate, and letting
+ * go an inch beyond the frame did nothing at all: he simply walked back in.
+ * Carried outside the stage by any amount, he is now put clear of that
+ * threshold so the offstage rules run on the next frame.
+ *
+ * This is how the beaver is hurried along. His dam run triggers on going
+ * off-stage and he lays one log per crossing, so one throw is worth one
+ * log — and before this, a throw that landed 60px out was worth nothing.
+ */
+function dropOffstage(a, bounds) {
+  if (!bounds) return false;
+  const OVER = EDGE_OFF + 12;
+  const out = a.x < 0 || a.x > bounds.w || a.y < 0 || a.y > bounds.h;
+  if (!out) return false;
+  if (a.x < 0) a.x = Math.min(a.x, -OVER);
+  else if (a.x > bounds.w) a.x = Math.max(a.x, bounds.w + OVER);
+  if (a.y < 0) a.y = Math.min(a.y, -OVER);
+  else if (a.y > bounds.h) a.y = Math.max(a.y, bounds.h + OVER);
+  return true;
 }
 
 function isFreeState(a) {
@@ -6635,6 +7036,11 @@ function renderWorld(world, iconsRef, padsRef, damRefs, pitRefs) {
       sprite.dataset.chorus = a.state === 'padsit' && a._chorus ? '1' : '';
       // airborne (flying up/down or fluttering over a fence): flap + shrink shadow
       sprite.dataset.air = a.z > 3 ? '1' : '';
+      // ...and the two birds coming off the cave's terrace, which is a FLIGHT
+      // and not a leap. It rides its own flag rather than data-state for the
+      // reason data-burst does: the state is real, but data-state comes
+      // through the 300ms snapshot and a descent is barely four of those.
+      sprite.dataset.fly = a.state === ROCK_FLY_STATE ? '1' : '';
       // whatever he is holding: a berry, a nut, a fish. CSS shows the item.
       sprite.dataset.carry = a._carry || '';
       // the cat's pre-jump pause at a fence (little crouch via CSS)
