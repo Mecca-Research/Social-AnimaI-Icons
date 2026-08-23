@@ -3502,10 +3502,12 @@ function RockLayer({ bounds }) {
               warm rim, and BEFORE the talus so the boulders at its foot
               still read as lying in front of it.
 
-              Order matters here and it is the order every other step of
+              Built back to front, which is the order every other step of
               this formation is built in: the hard shadow the plate throws
-              back onto the riser, the plate, its front face, the occlusion
-              under the lip, the warm rim on top of it, then the block. */}
+              onto the riser behind it, the front face and the east corner
+              it stands on, the plate itself, the riser's shadow banked
+              along the back of the plate, the occlusion and warm rim on the
+              lip, and last the block that is standing on it. */}
       <path d={g.ledgeBack} fill="none" stroke="#080c07" strokeWidth={X(7)} opacity="0.45"
         strokeLinejoin="round" transform={"translate(0," + Y(-4) + ")"} filter="url(#sairock-hair)" />
       <path d={g.ledgeFace} fill="#31362e" />
@@ -6016,12 +6018,11 @@ function stepWorld(world, cfg, dt) {
             // tip him off the very thing he is standing on. It also owns his
             // height, so the z decay above cannot sink him through the slab.
             if (a._plat) keepOnPlatform(a, bounds, now);
-            else
             // Genuinely off the ground — a frog's hop, a squirrel up a trunk
             // — so read the terrace back off the terrain instead of holding
             // him to the one he left. Otherwise he lands owing the rock a
             // level and gets shoved somewhere he never walked.
-            if (!hopping && a.z < 4) keepOffRock(a, bounds);
+            else if (!hopping && a.z < 4) keepOffRock(a, bounds);
             else a._lvl = rockLevelAt(bounds, a.x, a.y) ?? a._lvl;
           }
         }
