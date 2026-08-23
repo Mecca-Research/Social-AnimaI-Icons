@@ -35,9 +35,12 @@ const perSec = (rate, dt) => Math.random() < 1 - Math.exp(-rate * dt); // Poisso
 
 // ---------------- Config ----------------
 const DEFAULTS = {
-  numAgents: 14, // the full cast: every species has signature behavior now,
-                 // and an 8-of-14 random draw left half of it unseen
-  speed: 80,                 // px/s nominal (UI rescaled)
+  // ONE. The cast arrives by hand now: + Icon adds the next species and the
+  // roster is the ceiling, so a full map is something you built rather than
+  // something you were handed. `speed` stays because the whole world is
+  // scaled off it — it is no longer a slider, just the nominal rate.
+  numAgents: 1,
+  speed: 80,                 // px/s nominal
 };
 const MAX_AGENTS = Object.keys(SPECIES).length; // one of each species, no repeats
 
@@ -2166,30 +2169,29 @@ function getRel(a, otherId, create = true) {
 
 // ---------------- World Component ----------------
 /**
- * HOW MUCH DAM IS THERE WHEN YOU OPEN THE PAGE.
+ * HOW MUCH DAM IS THERE WHEN YOU OPEN THE PAGE, AND WHY IT IS NONE.
  *
- * All of it. This was 0, and 0 is wrong for a reason no amount of checking
- * the PLAN could catch: the plan has been a hundred logs since v0.40, but a
- * hundred logs take about fourteen minutes of watching to lay, so what
- * anyone actually saw in their first two minutes was a fifteen-log arc —
- * which is indistinguishable from the fourteen-log pile this was all meant
- * to replace. The dam was reported unbuilt twice, correctly, against two
- * builds whose dam plan measured 100.
+ * This briefly stood the dam up at load, because a hundred logs took about
+ * fourteen minutes to lay and anyone opening the page saw a fifteen-log arc
+ * — indistinguishable from the fourteen-log pile the rebuild replaced.
+ * The fix for that was the wrong end of the problem. Standing it up hid the
+ * only thing worth watching.
  *
- * A beaver dam is scenery that predates the tab being opened. It stands at
- * load, and the way to watch it go up from bare water is Reset World, which
- * is a button somebody presses on purpose.
+ * So the dam starts EMPTY and the beaver carries ONE LOG PER TRIP, which is
+ * what a beaver does. A hundred trips is a long watch, and that is the
+ * point: the finished dam is what running the simulation for a long time
+ * buys you. Anyone in a hurry can pick the beaver up and drop him off the
+ * edge of the map — the dam run triggers on going off-stage, so a push is
+ * worth a whole crossing.
  */
-function damAtRest(def) { return def && def.dam ? def.dam.length : 0; }
+function damAtRest() { return 0; }
 
 /**
- * ...and the same for the squirrel's drey, for the same reason. Six courses
- * at roughly half a trip a minute is ten minutes before there is a nest in
- * the fork at all, so on any ordinary visit that tree is simply bare. The
- * drey stands at load like the dam does; Reset World still starts both from
- * nothing.
+ * The squirrel's drey goes back to being built too, for the same reason:
+ * six courses he hauls up himself, not scenery that was there before you
+ * arrived.
  */
-function dreyAtRest() { return DREY_COURSES; }
+function dreyAtRest() { return 0; }
 
 export default function SocialAnimalsRPG() {
   const stageRef = useRef(null);
@@ -2210,7 +2212,7 @@ export default function SocialAnimalsRPG() {
     def: WORLDS.forest,
     agents: [],
     running: true,
-    damCount: damAtRest(WORLDS.forest),
+    damCount: damAtRest(),
     dreyN: dreyAtRest(),
     last: performance.now(),
   });
@@ -2415,7 +2417,7 @@ export default function SocialAnimalsRPG() {
     const w = worldRef.current;
     w.def = WORLDS[key];
     w.agents = seedAgents(w, DEFAULTS.numAgents);
-    w.damCount = damAtRest(w.def); w.dreyN = dreyAtRest(); w.caches = null;
+    w.damCount = damAtRest(); w.dreyN = dreyAtRest(); w.caches = null;
     setSnapshot((s) => ({ ...s, selectedId: null }));
   };
 
@@ -2437,10 +2439,6 @@ export default function SocialAnimalsRPG() {
         <button onClick={() => (worldRef.current.running = !worldRef.current.running)} className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-xs">
           {worldRef.current.running ? "Pause" : "Run"}
         </button>
-        <label className="flex items-center gap-2">Speed
-          {/* decently slow → brisk */}
-          <input type="range" min={60} max={120} step={1} value={cfg.speed} onChange={(e)=>setCfg(v=>({...v, speed: parseFloat(e.target.value)}))} />
-        </label>
         <button onClick={addAgent} disabled={snapshot.agents.length>=maxAgents} className="px-2 py-1 rounded bg-indigo-600 disabled:opacity-50 hover:bg-indigo-500 text-xs">+ Icon</button>
         <button onClick={removeAgent} className="px-2 py-1 rounded bg-rose-700 hover:bg-rose-600 text-xs">− Icon</button>
         <button onClick={resetWorld} className="px-2 py-1 rounded bg-neutral-700 hover:bg-neutral-600 text-xs">Reset World</button>
