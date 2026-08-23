@@ -1795,10 +1795,13 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     const frame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 20)));
     // The owner's own shortcut: pick him up and drop him off the edge. A dam
     // run starts on going OFF-STAGE, so a push is worth a crossing.
+    // just OVER the edge, not far past it â€” the drop handler is what has to
+    // carry him clear of EDGE_OFF, and this check exists because it did not.
     bv.dragging = true;
-    bv.x = w.bounds.w + 70; bv.y = 0.2 * w.bounds.h; bv.vx = 0; bv.vy = 0;
+    bv.x = w.bounds.w + 6; bv.y = 0.2 * w.bounds.h; bv.vx = 0; bv.vy = 0;
     await frame(); await frame();
     bv.dragging = false;
+    if (w.__dropOffstage) w.__dropOffstage(bv);
     let started = 0;
     for (let i = 1; i <= 220 && !started; i++) {
       await frame();

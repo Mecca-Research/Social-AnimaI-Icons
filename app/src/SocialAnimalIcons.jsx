@@ -2335,6 +2335,7 @@ export default function SocialAnimalsRPG() {
       // this they find nothing and check nothing, silently. A suite calls
       // this once at the top and gets the roster the world used to hand out
       // by default. It is the world's OWN seeding path, not a copy of it.
+      W.__dropOffstage = (a) => dropOffstage(a, W.bounds);
       W.__seedCast = (n) => { W.agents = seedAgents(W, n || Object.keys(W.def.roster).length);
                               return W.agents.length; };
       W.__rock = { breaks: ROCK_BREAKS, profile: ROCK_PROFILE, cave: ROCK_CAVE,
@@ -5745,6 +5746,9 @@ function IconNode({ a, iconsRef, worldRef, onSelect }) {
     const up = () => {
       if (!dragging) return; dragging = false; try { el.releasePointerCapture(pid); } catch {}
       const A = getAgent(worldRef.current, a.id); if (!A) return; A.dragging = false;
+
+      dropOffstage(A, worldRef.current.bounds);
+
       const from = A._grabFrom, tgt = A._grabTarget;
       A._grabFrom = null; A._grabTarget = null;
       // The partner has to still be in it. A long drag can outlast the
@@ -6632,6 +6636,31 @@ function stepWorld(world, cfg, dt) {
       if (!ethoOffstage(a, ethoCtx)) enterFromEdge(a, world, gait(a, ethoCtx, 0.35));
     }
   }
+}
+
+/**
+ * DROPPED OVER THE SIDE COUNTS AS GONE.
+ *
+ * The wrap only speaks once an animal is EDGE_OFF past the boundary, which
+ * is right for one who wandered out — but a drop is deliberate, and letting
+ * go an inch beyond the frame did nothing at all: he simply walked back in.
+ * Carried outside the stage by any amount, he is now put clear of that
+ * threshold so the offstage rules run on the next frame.
+ *
+ * This is how the beaver is hurried along. His dam run triggers on going
+ * off-stage and he lays one log per crossing, so one throw is worth one
+ * log — and before this, a throw that landed 60px out was worth nothing.
+ */
+function dropOffstage(a, bounds) {
+  if (!bounds) return false;
+  const OVER = EDGE_OFF + 12;
+  const out = a.x < 0 || a.x > bounds.w || a.y < 0 || a.y > bounds.h;
+  if (!out) return false;
+  if (a.x < 0) a.x = Math.min(a.x, -OVER);
+  else if (a.x > bounds.w) a.x = Math.max(a.x, bounds.w + OVER);
+  if (a.y < 0) a.y = Math.min(a.y, -OVER);
+  else if (a.y > bounds.h) a.y = Math.max(a.y, bounds.h + OVER);
+  return true;
 }
 
 function isFreeState(a) {
