@@ -137,7 +137,13 @@ function lakeRho(bounds, x, y) {
   const dy = (y - LAKE.cy * bounds.h) / (LAKE.ry * bounds.h);
   return Math.hypot(dx, dy) / lakeWobble(Math.atan2(dy, dx));
 }
-const inWater = (bounds, x, y) => lakeRho(bounds, x, y) < 0.97;
+// THE ONE WATER PREDICATE — and a placed dam log is not water. The beaver's
+// dam is built of timber lying ON the lake, so the ground it makes is land:
+// an animal walks out over it and only meets water physics past its inner
+// face. onDamLog() is an O(1) lookup into a raster of the logs actually
+// drawn (see `The beaver's dam` below), so putting the test here costs every
+// other caller of inWater() four comparisons and one array read.
+const inWater = (bounds, x, y) => lakeRho(bounds, x, y) < 0.97 && !onDamLog(bounds, x, y);
 // a point at angle t / normalized radius rho of the lake
 function lakePoint(bounds, t, rho) {
   const m = lakeWobble(t) * rho;
@@ -148,8 +154,26 @@ function lakePoint(bounds, t, rho) {
 }
 // land animals slide along the shoreline instead of entering the water
 function keepAshore(a, bounds) {
+  // ...but the dam is shore too. Standing on a log is standing on land, and
+  // the log he is standing on is the bank he gets put back on when he walks
+  // off the far side of it — a radial shove from rho 0.4 would fling him a
+  // quarter of the lake west, which is the one thing this must never do.
+  if (onDamLog(bounds, a.x, a.y)) {
+    (a._damFoot || (a._damFoot = { x: 0, y: 0 })).x = a.x;
+    a._damFoot.y = a.y;
+    return;
+  }
   const r = lakeRho(bounds, a.x, a.y);
-  if (r >= 1.05) return;
+  if (r >= 1.05) { a._damFoot = null; return; }
+  if (a._damFoot && r < 0.97) {                 // stepped off the dam into open water
+    let nx = a.x - a._damFoot.x, ny = a.y - a._damFoot.y;
+    const d = Math.hypot(nx, ny) || 1; nx /= d; ny /= d;
+    a.x = a._damFoot.x; a.y = a._damFoot.y;
+    const vout = a.vx * nx + a.vy * ny;
+    if (vout > 0) { a.vx -= vout * nx; a.vy -= vout * ny; } // slide along the log, don't sink
+    return;
+  }
+  a._damFoot = null;
   const cx = LAKE.cx * bounds.w, cy = LAKE.cy * bounds.h;
   let nx = a.x - cx, ny = a.y - cy;
   const d = Math.hypot(nx, ny) || 1; nx /= d; ny /= d;
@@ -254,7 +278,19 @@ function shallowBandAt(bounds, t, reach = STAND_REACH) {
   const floor = Math.max(SWIM_RHO_MAX + 0.06, padRimRho(bounds) + 0.02);
   if (near <= floor + 0.005) return null;
   const far = Math.max(floor, near - STAND_BAND_PX / px);
-  return (near - far) * px >= STAND_MIN_PX ? [far, near] : null;
+  if ((near - far) * px < STAND_MIN_PX) return null;
+  // ...and the DAM has the last word, because DAM_SECTOR above is a pair of
+  // static numbers and the dam is not: the end logs of the arch are drawn a
+  // cap-length past the last plan angle, and on some window shapes that
+  // overhang lands just outside the sector. Water with timber standing in
+  // it is not shallows to dabble in, whatever the sector says.
+  // Three samples down a band that is never more than STAND_BAND_PX long,
+  // against a log that is 20px thick: nothing can hide between them.
+  for (const r of [near, (near + far) / 2, far]) {
+    const p = lakePoint(bounds, pa, r);
+    if (onDamLog(bounds, p.x, p.y)) return null;
+  }
+  return [far, near];
 }
 // ---------------- Forest trees ----------------
 // SIX big trunked trees: two down the west edge, two on the east flank
@@ -1822,11 +1858,27 @@ const WORLDS = {
 };
 
 // a point every species of this world may stand on
+// WHO MAY BE ABOVE THE GROUND ON THE BLUFF WITHOUT HAVING CLIMBED THERE.
+// The owl flies and the cougar climbs, so both may simply BE on a terrace;
+// everyone else has to work up to it a level at a time and therefore has to
+// arrive at the bottom. This is about ARRIVING, not about being able to get
+// there — a squirrel can still leap his way up, he just cannot walk on from
+// off screen halfway up a cliff.
+const ROCK_HIGH_ENTRY = new Set(["owl", "cougar"]);
+
 function spawnSafe(world, x, y, species) {
   const { bounds, def } = world;
   if (inAnyHouse(bounds, def.houses, x, y, 22)) return false;
   if (def.hasWater && !canSwimIn(def, species) && lakeRho(bounds, x, y) < 1.12) return false;
   if (def.pool && !canSwimIn(def, species) && inPool(bounds, def.pool, x, y, 26)) return false;
+  if (def.rock) {
+    // never inside a face, whoever you are: there is nothing to stand on.
+    if (rockZone(bounds, x, y).wall && !inRockCave(bounds, x, y)) return false;
+    // ...and no walking in from off screen onto a terrace you would have had
+    // to leap to reach.
+    const lvl = rockLevelAt(bounds, x, y);
+    if (lvl != null && lvl > ROCK_LEVEL_GROUND && !ROCK_HIGH_ENTRY.has(species)) return false;
+  }
   return true;
 }
 function interiorPoint(world, species) {
@@ -1855,6 +1907,9 @@ function enterFromEdge(a, world, sp) {
     const dx = target.x - x, dy = target.y - y; const d = Math.hypot(dx, dy) || 1;
     a.x = x; a.y = y; a.vx = (dx / d) * sp; a.vy = (dy / d) * sp;
     a.state = "wander"; a.targetId = null;
+    // he arrives ON a terrace, and from here on may only leave it by leaping
+    a._lvl = world.def.rock ? (rockLevelAt(bounds, x, y) ?? ROCK_LEVEL_GROUND)
+                            : ROCK_LEVEL_GROUND;
     return;
   }
 }
@@ -2001,6 +2056,16 @@ export default function SocialAnimalsRPG() {
       // so a suite that asks "is this ground under a tree" cannot drift from
       // the predicate the goose actually grazes by.
       W.__crowns = TREE_CROWNS;
+      // the bluff's terrain, so a suite checks the rule the world walks by
+      // rather than a copy of it that can drift
+      W.rockZoneAt = (x, y) => rockZone(W.bounds, x, y);
+      W.rockLevelAt = (x, y) => rockLevelAt(W.bounds, x, y);
+      W.inRockCaveAt = (x, y) => inRockCave(W.bounds, x, y);
+      // the entry rule itself, so the suite asks the world who may walk in
+      // where rather than re-deriving it and testing its own arithmetic
+      W.spawnSafeAt = (x, y, sp) => spawnSafe(W, x, y, sp);
+      W.__rock = { breaks: ROCK_BREAKS, profile: ROCK_PROFILE, cave: ROCK_CAVE,
+                   highEntry: [...ROCK_HIGH_ENTRY] };
       // ...and the painted width of each kind of forage site, plus the pit's
       // own, for the same reason: the suite checks the skunk's holes against
       // the drawing, and must not carry its own copy of the drawing.
@@ -2026,6 +2091,13 @@ export default function SocialAnimalsRPG() {
       // world uses rather than a copy of it that can drift
       W.__douseReach = DOUSE_REACH;
       W.lakePointAt = (t, rho) => lakePoint(W.bounds, t, rho);
+      // ...and the dam, as the sim itself sees it: the drawn logs for this
+      // window, and the land test that is built out of them. A suite that
+      // carried its own copy of either would keep passing after the plan
+      // moved, which is the whole reason the lake is exported this way too.
+      W.damLogsAt = () => damLogs(W.bounds);
+      W.onDamAt = (x, y) => onDamLog(W.bounds, x, y);
+      W.damViaAt = (ax, ay, bx, by) => damVia(W.bounds, ax, ay, bx, by);
       W.__sep = (a, b) => separatePair(W, a, b, W, false);
       W.__cool = (a, ms) => enterCooldown(a, ms);
       // ...and the two halves of a drag, so a suite can exercise the release
@@ -2153,7 +2225,7 @@ export default function SocialAnimalsRPG() {
         {worldKey === "forest" && snapshot.bounds.w > 0 && <DreyLayer bounds={snapshot.bounds} worldRef={worldRef} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <ForageLayer bounds={snapshot.bounds} sites={FORAGE_SITES} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <PadLayer padsRef={padsRef} />}
-        {worldKey === "forest" && snapshot.bounds.w > 0 && <DamLayer damRefs={damRefs} />}
+        {worldKey === "forest" && snapshot.bounds.w > 0 && <DamLayer damRefs={damRefs} bounds={snapshot.bounds} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <PitLayer pitRefs={pitRefs} />}
         {worldKey === "neighborhood" && snapshot.bounds.w > 0 && <NeighborhoodScene bounds={snapshot.bounds} />}
 
@@ -2169,6 +2241,345 @@ export default function SocialAnimalsRPG() {
       </div>
     </div>
   );
+}
+
+/* ---------------- The west bluff: where it is ---------------- */
+/**
+ * THE FIVE BREAK LINES, and the right-hand profile, in per-mille of the
+ * stage — x of the width, y of the height. They live out here rather than
+ * inside RockLayer because BOTH the drawing and the walking read them.
+ *
+ *   L0  back of the upper plateau: the foot of the mass that carries on up
+ *       off the top of the stage
+ *   L1  the cliff top, which is the plateau's lip
+ *   B1  the cliff's foot, which is the back of the lower shelf
+ *   L2  the shelf's lip
+ *   T1  the foot of the lower riser, where stone gives out into talus
+ *
+ * Between them the bluff is five bands, and three of them are walls:
+ *
+ *   above L0    the mass going on up off screen        WALL
+ *   L0 .. L1    the upper plateau                      level 2
+ *   L1 .. B1    the cliff, with the cave cut into it   WALL
+ *   B1 .. L2    the lower shelf                        level 1
+ *   L2 .. T1    the lower riser                        WALL
+ *   below T1    the talus, and the forest floor        level 0
+ *
+ * That is not a rule invented for the physics — it is what the picture
+ * already says. A floor is drawn light because it faces the sky and a wall
+ * is drawn dark because it does not, and an animal can stand on the one and
+ * not the other. Geometry-as-physics: the line that is drawn is the line
+ * that is walked to, so there is exactly one copy of each number.
+ */
+const ROCK_BREAKS = {
+  L0: [[-90, 60], [-48, 96], [-14, 128], [16, 148], [50, 172], [86, 188]],
+  L1: [[-90, 178], [-48, 206], [-6, 232], [26, 248], [62, 262], [100, 268]],
+  B1: [[-90, 352], [-44, 376], [-2, 398], [30, 410], [66, 424], [105, 432]],
+  L2: [[-90, 480], [-40, 502], [4, 518], [42, 528], [80, 534], [114, 536]],
+  T1: [[-90, 578], [-38, 600], [6, 616], [40, 626], [66, 632], [84, 636]],
+};
+const ROCK_EDGES = {
+  EDGE_UP: [[106, -60], [104, 44], [98, 92], [92, 140], [86, 188]],
+  EDGE_PLAT: [[86, 188], [96, 204], [100, 268]],
+  EDGE_CLIFF: [[100, 268], [107, 306], [102, 372], [105, 432]],
+  EDGE_SHELF: [[105, 432], [113, 448], [116, 474], [114, 536]],
+  EDGE_RISER: [[114, 536], [106, 566], [96, 600], [84, 636]],
+  FOOT: [[84, 636], [74, 686], [58, 740], [44, 800], [36, 872],
+         [28, 950], [20, 1010], [-90, 1010]],
+};
+/** the whole right-hand silhouette as (y -> x), y ascending */
+const ROCK_PROFILE = (() => {
+  const E = ROCK_EDGES;
+  const all = E.EDGE_UP.concat(E.EDGE_PLAT.slice(1), E.EDGE_CLIFF.slice(1),
+    E.EDGE_SHELF.slice(1), E.EDGE_RISER.slice(1), E.FOOT.slice(1, -1));
+  return all.map(([x, y]) => [y, x]);            // [yPm, xPm]
+})();
+
+/** linear interpolation through a polyline held as [key, value] pairs */
+function alongPm(line, k) {
+  if (k <= line[0][0]) return line[0][1];
+  const last = line[line.length - 1];
+  if (k >= last[0]) return last[1];
+  for (let i = 1; i < line.length; i++) {
+    const [k0, v0] = line[i - 1], [k1, v1] = line[i];
+    if (k <= k1) return v0 + (v1 - v0) * ((k - k0) / (k1 - k0 || 1));
+  }
+  return last[1];
+}
+/** a break line is held as [x, y], so this is "how far down is it here" */
+const breakYAt = (line, xPm) => alongPm(line, xPm);
+
+// the bands, top to bottom. `level` is the terrace an animal stands on;
+// null means a wall it cannot.
+const ROCK_LEVEL_GROUND = 0, ROCK_LEVEL_SHELF = 1, ROCK_LEVEL_PLATEAU = 2;
+
+/**
+ * WHICH BAND OF THE BLUFF IS THIS POINT IN, and can it be stood on.
+ * Returns { on, level, wall, band }. `on` is false for everything east of
+ * the rock's own silhouette, which is most of the map — that is open forest
+ * floor and counts as level 0 like the talus does.
+ */
+function rockZone(bounds, x, y) {
+  const xPm = x / bounds.w * 1000, yPm = y / bounds.h * 1000;
+  if (xPm > alongPm(ROCK_PROFILE, yPm)) {
+    return { on: false, level: ROCK_LEVEL_GROUND, wall: false, band: "forest" };
+  }
+  const B = ROCK_BREAKS;
+  if (yPm < breakYAt(B.L0, xPm)) return { on: true, level: null, wall: true, band: "upper" };
+  if (yPm < breakYAt(B.L1, xPm)) return { on: true, level: ROCK_LEVEL_PLATEAU, wall: false, band: "plateau" };
+  if (yPm < breakYAt(B.B1, xPm)) return { on: true, level: null, wall: true, band: "cliff" };
+  if (yPm < breakYAt(B.L2, xPm)) return { on: true, level: ROCK_LEVEL_SHELF, wall: false, band: "shelf" };
+  if (yPm < breakYAt(B.T1, xPm)) return { on: true, level: null, wall: true, band: "riser" };
+  return { on: true, level: ROCK_LEVEL_GROUND, wall: false, band: "talus" };
+}
+
+/** the y, in stage px, of a break line at this x — where a leap lands */
+/** the bluff's east outline at this latitude, in px — its own drawn edge */
+function rockEdgeX(bounds, y) {
+  return alongPm(ROCK_PROFILE, y / bounds.h * 1000) / 1000 * bounds.w;
+}
+function rockBreakY(bounds, line, x) {
+  return breakYAt(line, x / bounds.w * 1000) / 1000 * bounds.h;
+}
+
+/**
+ * THE BLUFF AS PHYSICS. Three rules, and they are the whole of it.
+ *
+ *  1. A WALL CANNOT BE STOOD ON. An animal that ends a frame inside the
+ *     riser, the cliff or the upper mass is pushed vertically to whichever
+ *     of the two terraces bounding that wall is nearer, and its velocity
+ *     into the wall is cancelled — the same shape as keepAshore, which has
+ *     done this job for the lake since the beginning.
+ *  2. AN ANIMAL DOES NOT CHANGE LEVEL BY WALKING. It carries `_lvl`, and a
+ *     step that would put it on a different terrace is refused the same way
+ *     a step into a wall is. Height is crossed by LEAPING, FLYING or
+ *     CLIMBING, never by strolling up a cliff.
+ *  3. THE CAVE IS A ROOM. It is cut into the cliff, so by rule 1 it would be
+ *     a wall; it is carved back out as standable, because the owner asked
+ *     for it to be occupied. Its floor is the shelf's, so it is level 1.
+ *
+ * The cave mouth, in the same per-mille the bands are in. Read off the
+ * `cave` polygon RockLayer draws, shrunk by a body's width so an animal
+ * inside it is inside the DRAWN opening rather than halfway through its jamb.
+ */
+const ROCK_CAVE = { x0: 0, x1: 50, y0: 320, y1: 430 };
+function inRockCave(bounds, x, y) {
+  const xPm = x / bounds.w * 1000, yPm = y / bounds.h * 1000;
+  return xPm > ROCK_CAVE.x0 && xPm < ROCK_CAVE.x1
+      && yPm > ROCK_CAVE.y0 && yPm < ROCK_CAVE.y1;
+}
+
+/** which terrace an animal standing here belongs to, cave included */
+function rockLevelAt(bounds, x, y) {
+  if (inRockCave(bounds, x, y)) return ROCK_LEVEL_SHELF;
+  return rockZone(bounds, x, y).level;          // null inside a wall
+}
+
+// the wall bands, and the two break lines that bound each one. Ejection goes
+// to whichever is nearer, so an animal shoved into the riser from below comes
+// back down to the talus and one shoved in from above lands on the shelf.
+const ROCK_WALLS = {
+  riser: ["L2", "T1"],      // shelf above, talus below
+  cliff: ["L1", "B1"],      // plateau above, shelf below
+  upper: [null, "L0"],      // nothing above: the mass goes off screen
+};
+
+// the two break lines bounding each WALKABLE terrace, top first. The talus
+// has no bottom: it runs off the foot of the frame into the forest floor.
+const ROCK_BAND_LINES = {
+  [ROCK_LEVEL_GROUND]:  ["T1", null],
+  [ROCK_LEVEL_SHELF]:   ["B1", "L2"],
+  [ROCK_LEVEL_PLATEAU]: ["L0", "L1"],
+};
+
+/**
+ * Keep an animal off the rock faces, and on its own terrace. Called from the
+ * grounded rules beside keepAshore, and skipped for anything genuinely in
+ * the air — a leaping animal is MEANT to be over a wall for a moment, which
+ * is the entire point of leaping.
+ */
+function keepOffRock(a, bounds) {
+  const z = rockZone(bounds, a.x, a.y);
+  const pad0 = Math.max(6, a.r * 0.5);
+
+  // THE EAST OUTLINE IS A FACE LIKE ANY OTHER. The terraces stand out in
+  // front of each other, so their eastern edge is a drop to the forest
+  // floor, not a doorway: an animal up on one who walks off it would
+  // otherwise arrive at ground level having descended nothing, which is the
+  // one thing the brief said land animals may not do. He is put back on his
+  // terrace and has to find a face. A level that survives out in the open
+  // forest, well clear of the rock, is stale rather than real — that one is
+  // simply forgotten, or nothing would ever come off the bluff at all.
+  if (!z.on) {
+    const lvl0 = a._lvl ?? ROCK_LEVEL_GROUND;
+    if (lvl0 === ROCK_LEVEL_GROUND) { a._lvl = ROCK_LEVEL_GROUND; return; }
+    const ex = rockEdgeX(bounds, a.y);
+    if (a.x - ex < Math.max(40, a.r * 2)) { a.x = ex - pad0; a.vx = 0; }
+    else a._lvl = ROCK_LEVEL_GROUND;
+    return;
+  }
+  if (a._lvl == null) a._lvl = rockLevelAt(bounds, a.x, a.y) ?? ROCK_LEVEL_GROUND;
+
+  const cave = inRockCave(bounds, a.x, a.y);
+  const lvl = cave ? ROCK_LEVEL_SHELF : z.level;
+  if (lvl === a._lvl) return;                          // where it belongs
+
+  // ...and coming the OTHER way, off the forest floor into the side of the
+  // mass, the nearest face is the outline he just crossed. Dropping him to
+  // his own terrace instead would fling him the height of the bluff for a
+  // step of one pixel, which is how an owl came to fall 143px sideways.
+  const ex = rockEdgeX(bounds, a.y);
+  if (a._lvl === ROCK_LEVEL_GROUND && ex - a.x < Math.max(24, a.r)) {
+    a.x = ex + pad0; a.vx = 0; return;
+  }
+
+  // Inside a wall, or on the wrong terrace. Both are the same correction:
+  // go back to the nearest edge of the band this animal is allowed on.
+  const B = ROCK_BREAKS;
+  const [topLine, botLine] = ROCK_BAND_LINES[a._lvl] || ROCK_BAND_LINES[ROCK_LEVEL_GROUND];
+  const shelfTop = topLine ? rockBreakY(bounds, B[topLine], a.x) : -1e9;
+  const bot = botLine ? rockBreakY(bounds, B[botLine], a.x) : 1e9;
+  const pad = Math.max(6, a.r * 0.5);
+
+  // THE CAVE IS A ROOM CUT BACK INTO THE CLIFF, so on the shelf the ceiling
+  // is not flat: it is the cliff face everywhere except across the mouth,
+  // where it lifts to the back wall. Walk in and you keep going until the
+  // back stops you; walk at a jamb and the jamb stops you.
+  //
+  // Which way an animal gets pushed is decided by WHICH FACE IS NEARER, the
+  // same rule a corner of any solid object gets. Step off the east jamb one
+  // pixel and you are put back one pixel, not dropped the height of the room
+  // onto the shelf — and the shortest way out of the middle of the cliff,
+  // where there is no room at all, is still straight down onto the shelf.
+  let top = shelfTop;
+  if (a._lvl === ROCK_LEVEL_SHELF) {
+    const cx0 = ROCK_CAVE.x0 / 1000 * bounds.w, cx1 = ROCK_CAVE.x1 / 1000 * bounds.w;
+    const cy0 = ROCK_CAVE.y0 / 1000 * bounds.h;
+    const inSpan = a.x > cx0 && a.x < cx1;
+    if (inSpan) top = Math.min(top, cy0);
+    if (a.y < shelfTop) {                       // above the shelf: the room or nothing
+      const nx = clamp(a.x, cx0 + pad, cx1 - pad);
+      const dx = Math.abs(nx - a.x), dy = (shelfTop + pad) - a.y;
+      if (a.y > cy0 && dx > 0 && dx < dy) { a.x = nx; a.vx = 0; return; }
+    }
+  }
+
+  const want = a.y < top + pad ? top + pad : a.y > bot - pad ? bot - pad : a.y;
+  if (want !== a.y) {
+    const up = want < a.y;
+    a.y = want;
+    // slide along the face rather than grinding into it
+    if (up ? a.vy > 0 : a.vy < 0) a.vy = 0;
+  }
+}
+
+/**
+ * GETTING UP AND DOWN THE BLUFF.
+ *
+ * Walking cannot change level, so without this the terraces are scenery with
+ * rules attached and nothing ever stands on them. A transition is world-side
+ * rather than an ethogram event for the same reason the cat's fence jump is:
+ * it is a fact about the TERRAIN that any animal meeting it has to obey, not
+ * an appetite that a species chooses to have. Twelve ethograms would each
+ * need the same event otherwise, and nine of them do not have one.
+ *
+ * Who can do what:
+ *   LEAPERS   go up and down ONE level at a time, at the face, on an arc.
+ *             Everybody with legs worth the name.
+ *   CLIMBERS  the cougar, who may take the cliff as well as the riser.
+ *   FLYERS    the owl, who ignores the faces entirely and drops from the
+ *             plateau straight to the ground on one glide.
+ *   NOBODY    the turtle and the frog do not go up a cliff. The frog can
+ *             out-jump any of them on the flat and still cannot climb rock,
+ *             which is the difference between a leap and a scramble.
+ */
+const ROCK_LEAPERS = new Set(["bear", "deer", "cougar", "wolf", "fox", "raccoon",
+                              "squirrel", "skunk", "hedgehog", "beaver", "goose"]);
+const ROCK_CLIMBERS = new Set(["cougar", "squirrel"]);
+const ROCK_FLYERS = new Set(["owl"]);
+// The cliff is 140px where the riser is 85, so it is not the same jump. Only
+// the two who could actually make it get it: a fox and a deer both clear
+// about two and a half times their own shoulder height, which is what that
+// face is. The bear and the wolf are heavier than their legs, and the
+// raccoon, skunk, hedgehog, beaver and goose are short of leg outright —
+// they get the shelf and the cave, and the top of the bluff belongs to
+// whoever climbs or flies.
+const ROCK_CLIFF_JUMPERS = new Set(["fox", "deer"]);
+// how near a face he has to be for the leap to be offered, and how long the
+// arc takes. The lift is the wall's own height, so a taller face is a bigger
+// jump without anybody writing that down twice.
+const ROCK_HOP_NEAR = 26, ROCK_HOP_MS = 520;
+
+/**
+ * Offer a level change if he is at a face and heading into it. Returns true
+ * if a move was started, in which case the caller leaves him alone: he is
+ * airborne, keepOffRock stands down, and the arc lands him on the far side.
+ *
+ * A LEAP AND A GLIDE ARE THE SAME ARC OVER A DIFFERENT SPAN. A leaper and a
+ * climber take exactly one terrace at a time, up or down, which is what the
+ * brief asks for: land animals lower themselves one level at a time. The owl
+ * takes the whole bluff in one move, because a bird coming off the top of a
+ * cliff does not stop on the ledge halfway down.
+ */
+function tryRockHop(a, bounds, now) {
+  if (now < (a._rockHopEnd || 0)) return true;         // one already running
+  // Only ON the bluff. Without this the break lines are still arithmetic out
+  // in the open forest, and a bear crossing that latitude fifty metres clear
+  // of the rock launches himself onto a shelf that is not under him.
+  if (!rockZone(bounds, a.x, a.y).on) return false;
+
+  const lvl = a._lvl ?? ROCK_LEVEL_GROUND;
+  const sp = ROCK_FLYERS.has(a.species) ? "fly"
+    : ROCK_CLIMBERS.has(a.species) ? "climb"
+    : ROCK_LEAPERS.has(a.species) ? "leap" : null;
+  if (!sp) return false;
+
+  // Which way is he trying to go? Up is toward smaller y, and every face on
+  // this bluff runs across the map, so intent is simply the sign of vy.
+  const up = a.vy < -4, down = a.vy > 4;
+  if (!up && !down) return false;
+
+  // one terrace for legs, the whole flight of them for wings
+  const target = sp === "fly" ? (up ? ROCK_LEVEL_PLATEAU : ROCK_LEVEL_GROUND)
+    : up ? lvl + 1 : lvl - 1;
+  if (target === lvl) return false;
+  if (target < ROCK_LEVEL_GROUND || target > ROCK_LEVEL_PLATEAU) return false;
+  // the cliff is a climb, not a leap: only a climber or a flyer takes it
+  if (sp === "leap" && Math.max(lvl, target) === ROCK_LEVEL_PLATEAU
+      && !ROCK_CLIFF_JUMPERS.has(a.species)) return false;
+
+  // the line he is standing at, and the one he lands on. Going up he leaves
+  // the top of his own band for the bottom of the target's; going down he
+  // leaves his own bottom for the target's top.
+  const B = ROCK_BREAKS;
+  const mine = ROCK_BAND_LINES[lvl], theirs = ROCK_BAND_LINES[target];
+  const nearLine = up ? mine[0] : mine[1];
+  const farLine = up ? theirs[1] : theirs[0];
+  if (!nearLine || !farLine) return false;
+  const nearY = rockBreakY(bounds, B[nearLine], a.x);
+  if (Math.abs(a.y - nearY) > ROCK_HOP_NEAR) return false;
+  const farY = rockBreakY(bounds, B[farLine], a.x);
+
+  const pad = Math.max(8, a.r * 0.5);
+  const span = Math.abs(target - lvl);
+  a._rockHop = { y0: a.y, y1: farY + (up ? pad : -pad),
+                 lift: Math.max(18, Math.abs(farY - nearY) * (sp === "fly" ? 0.35 : 0.55)),
+                 ms: ROCK_HOP_MS * (sp === "fly" ? 1.15 * span : 1), t0: now };
+  a._rockHopEnd = now + a._rockHop.ms;
+  a._lvl = target;                      // he is committed the moment he pushes off
+  return true;
+}
+
+/** run the arc. Ballistic in y, held in x, and it sets its own height. */
+function driveRockHop(a, now) {
+  const h = a._rockHop; if (!h) return false;
+  const q = Math.min(1, (now - h.t0) / h.ms);
+  a.y = h.y0 + (h.y1 - h.y0) * q;
+  a.z = h.lift * Math.sin(Math.PI * q);
+  a.vy = 0;
+  if (q < 1) return true;
+  a.z = 0; a._rockHop = null; a._rockHopEnd = 0;
+  return false;
 }
 
 /* ---------------- The west bluff ---------------- */
@@ -2315,27 +2726,23 @@ function RockLayer({ bounds }) {
     //   B1  the cliff's foot, which is the back of the lower shelf
     //   L2  the shelf's lip
     //   T1  the foot of the lower riser, where stone gives out into talus
-    const L0 = [[-90, 60], [-48, 96], [-14, 128], [16, 148], [50, 172], [86, 188]];
-    const L1 = [[-90, 178], [-48, 206], [-6, 232], [26, 248], [62, 262], [100, 268]];
-    const B1 = [[-90, 352], [-44, 376], [-2, 398], [30, 410], [66, 424], [105, 432]];
-    const L2 = [[-90, 480], [-40, 502], [4, 518], [42, 528], [80, 534], [114, 536]];
-    const T1 = [[-90, 578], [-38, 600], [6, 616], [40, 626], [66, 632], [84, 636]];
+    // ...and they are MODULE constants now, because the physics reads them.
+    // See ROCK below: the bands these five lines cut are the terraces an
+    // animal can stand on and the walls it cannot, and geometry-as-physics
+    // means the line that is drawn IS the line that is walked to. Two copies
+    // of these numbers would drift the first time one of them was nudged.
+    const { L0, L1, B1, L2, T1 } = ROCK_BREAKS;
 
     // the right-hand profile, top to bottom. A WEDGE, and that is the whole
     // trick: 106 wide where it leaves the top of the frame, pinched to 86
     // at the neck, then stepping out to 100, 105 and 116 as it descends,
     // and back in to 84 below the shelf. A mass that widens as it comes
     // down is a mass whose top is somewhere above the window.
-    const EDGE_UP = [[106, -60], [104, 44], [98, 92], [92, 140], [86, 188]];
-    const EDGE_PLAT = [[86, 188], [96, 204], [100, 268]];
-    const EDGE_CLIFF = [[100, 268], [107, 306], [102, 372], [105, 432]];
-    const EDGE_SHELF = [[105, 432], [113, 448], [116, 474], [114, 536]];
-    const EDGE_RISER = [[114, 536], [106, 566], [96, 600], [84, 636]];
+    const { EDGE_UP, EDGE_PLAT, EDGE_CLIFF, EDGE_SHELF, EDGE_RISER } = ROCK_EDGES;
     // ...and the talus, which runs off the BOTTOM of the frame as well. It
     // narrows the whole way down: past y 700 the west-low oak's root plate
     // is the neighbour and nothing here may pass x 48.
-    const FOOT = [[84, 636], [74, 686], [58, 740], [44, 800], [36, 872],
-                  [28, 950], [20, 1010], [-90, 1010]];
+    const FOOT = ROCK_EDGES.FOOT;
 
     const outline = poly([[-90, -60]].concat(EDGE_UP, EDGE_PLAT.slice(1),
       EDGE_CLIFF.slice(1), EDGE_SHELF.slice(1), EDGE_RISER.slice(1), FOOT.slice(1)));
@@ -3719,24 +4126,135 @@ function PadLayer({ padsRef }) {
 }
 
 // ---------------- The beaver's dam ----------------
-// A PRE-PLANNED structure at the lake's left-center end, laid one log at
-// a time: three courses of logs along arcs of the shoreline geometry —
-// a 6-log base row at the waterline, 5 across the middle, 3 on top.
-// world.damCount says how many are placed; each beaver off-screen event
-// adds one, so total build time depends on how often the beaver roams.
+/**
+ * ONE HUNDRED LOGS, IN THE ORDER A DAM IS ACTUALLY BUILT.
+ *
+ * The old plan was fourteen logs on three arcs and read as a pile of sticks.
+ * This is a structure, and it is built in two movements:
+ *
+ *   THE ARCH   4 courses of logs following the shoreline right across the
+ *              lake's west end. The outer course lies at rho 1.048, ON the
+ *              mud — the bank is painted from 1.00 to 1.08 — so the timber
+ *              overlaps the water/mud seam instead of stopping at it. The
+ *              courses step 0.050 rho inward, which is 13-17px against a
+ *              20px log, so each course beds into the one outside it and no
+ *              water shows between them. Consecutive logs on a course share
+ *              an endpoint and are each drawn DAM_CAP px longer than the gap
+ *              they span, so they overlap end to end as well. 30 logs,
+ *              8/8/7/7 — the outer courses ride the longer arcs.
+ *              Courses are laid serpentine — each one starts where the last
+ *              one finished — so the beaver never crosses his own work.
+ *
+ *   THE DOME   4 levels of STRAIGHT PARALLEL COURSES filling the water
+ *              inside the arch, each level laid across the one below it:
+ *              level 0 runs along the shore, level 1 square across it,
+ *              level 2 along, level 3 across. Every level is inset from the
+ *              one under it at the shoulder, at the deep edge and at both
+ *              ends, so the four of them stack into a mound whose crown sits
+ *              around rho 0.63 in the middle of the sector — a lodge, seen
+ *              from above, with the courses below showing at the margins.
+ *              70 logs.
+ *
+ * Together they cover the lake from the shore in to rho 0.34 at the middle
+ * of the sector, tapering to the wall alone at both ends. Measured off the
+ * shipped land test at four stage shapes (1008x700 through 1920x1080) that
+ * is 19.3-19.5% of the lake's area with no enclosed pocket of water anywhere
+ * inside it — the "around 20%, the whole left side" the plan asks for, and
+ * a surface an animal can cross without falling through.
+ *
+ * WHERE THE GEOMETRY LIVES. Every log is a straight SEGMENT held in the
+ * lake's own NORMALIZED space — n = ((x-cx)/rx, (y-cy)/ry) — in which the
+ * lake is a fixed wobble-circle that does not depend on the stage at all.
+ * That map is affine, so a straight segment in n stays a straight segment in
+ * pixels, parallel courses stay parallel, and the whole structure scales
+ * with the lake instead of drifting off it on a tall window. The plan is
+ * built ONCE, here, with no bounds; damLogs(bounds) turns it into pixels.
+ *
+ * The one thing computed at a reference stage (1500x940) is how many logs go
+ * on each course, because that number has to be the same at every stage
+ * shape or `damCount` would mean different things on different windows.
+ */
+const DAM_T0 = 2.50, DAM_T1 = 3.90;          // inside DAM_SECTOR, which the
+const DAM_TM = (DAM_T0 + DAM_T1) / 2;        // floats and the goose already
+                                             // steer clear of
+const DAM_REF = { sx: 0.22 * 1500, sy: 0.22 * 940 };  // rx*w, ry*h at the reference stage
+const DAM_SPAN = 70;    // px between log centres along a course, at the reference
+const DAM_CAP = 14;     // px each log is drawn longer than its own span, so they overlap
+const DAM_THICK = 20;   // px across a log, at the reference
+const DAM_ARCH = { rho: 1.048, step: 0.050, n: [8, 8, 7, 7] };
+// out: the shoulder, where the level meets the course outside it.
+// apex: how deep into the lake it reaches at the middle of the sector.
+// hw: its half-span in radians.  dir: 'v' runs along the shore, 'h' across it.
+// The deep face is |u| to the DAM_FACE power rather than a plain parabola:
+// squared came to a point in the middle of the sector and read as an arrow
+// head. 2.6 holds the face out flat across the middle and turns it up hard
+// at the two ends, which is the front of a mound.
+const DAM_FACE = 2.6;
+const DAM_LEVELS = [
+  { out: .885, apex: .340, hw: .730, dir: 'v', pitch: 17 },
+  { out: .835, apex: .400, hw: .620, dir: 'h', pitch: 17 },
+  { out: .785, apex: .460, hw: .510, dir: 'v', pitch: 17 },
+  { out: .735, apex: .520, hw: .400, dir: 'h', pitch: 17 },
+];
+const damFace = (L, u) => L.apex + (L.out - L.apex) * Math.pow(Math.abs(u), DAM_FACE);
+
+const nLake = (t, rho) => {
+  const m = lakeWobble(t) * rho;
+  return { x: Math.cos(t) * m, y: Math.sin(t) * m };
+};
+// is this normalized point inside dome level L?
+function inDamLevel(L, nx, ny) {
+  let t = Math.atan2(ny, nx); if (t < 0) t += Math.PI * 2;
+  const u = (t - DAM_TM) / L.hw;
+  if (u < -1 || u > 1) return false;
+  const rho = Math.hypot(nx, ny) / lakeWobble(t);
+  return rho <= L.out && rho >= damFace(L, u);
+}
+
 const DAM_PLAN = (() => {
-  const rows = [
-    { rho: .89, angs: [2.64, 2.86, 3.08, 3.30, 3.52, 3.74], len: 58 },
-    { rho: .83, angs: [2.75, 2.97, 3.19, 3.41, 3.63], len: 52 },
-    { rho: .77, angs: [2.97, 3.19, 3.41], len: 46 },
-  ];
-  const jit = [4, -5, 2, -3, 5, -2, 3, -4, 1, -5, 4, -2, 3, -3];
+  const { sx, sy } = DAM_REF;
+  const segPx = (a, b) => Math.hypot((b.x - a.x) * sx, (b.y - a.y) * sy);
   const plan = [];
-  let k = 0;
-  for (const r of rows) {
-    for (const ang of r.angs) {
-      plan.push({ ang, rho: r.rho, rot: (ang * 180) / Math.PI + 90 + jit[k % jit.length], len: r.len + ((k % 3) - 1) * 4 });
-      k++;
+  // ---- the arch: four courses along the shoreline, laid serpentine
+  for (let c = 0; c < DAM_ARCH.n.length; c++) {
+    const rho = DAM_ARCH.rho - c * DAM_ARCH.step, n = DAM_ARCH.n[c];
+    for (let i = 0; i < n; i++) {
+      const k = c % 2 ? n - 1 - i : i;
+      plan.push({ a: nLake(DAM_T0 + k * (DAM_T1 - DAM_T0) / n, rho),
+                  b: nLake(DAM_T0 + (k + 1) * (DAM_T1 - DAM_T0) / n, rho) });
+    }
+  }
+  // ---- the dome: parallel straight courses, alternating direction
+  for (const L of DAM_LEVELS) {
+    let x0 = 9, x1 = -9, y0 = 9, y1 = -9;               // the level's box in n
+    for (let i = 0; i <= 240; i++) {
+      const u = -1 + 2 * i / 240, t = DAM_TM + u * L.hw;
+      for (const r of [L.out, damFace(L, u)]) {
+        const p = nLake(t, r);
+        if (p.x < x0) x0 = p.x; if (p.x > x1) x1 = p.x;
+        if (p.y < y0) y0 = p.y; if (p.y > y1) y1 = p.y;
+      }
+    }
+    const vert = L.dir === 'v';
+    const across = vert ? x1 - x0 : y1 - y0, along = vert ? y1 - y0 : x1 - x0;
+    const rows = Math.max(1, Math.round(across / (L.pitch / (vert ? sx : sy))));
+    for (let i = 0; i < rows; i++) {
+      const C = (vert ? x0 : y0) + (i + 0.5) * across / rows;
+      let lo = null, hi = 0;                             // the level's chord on this row
+      for (let j = 0; j <= 400; j++) {
+        const V = (vert ? y0 : x0) + along * j / 400;
+        if (vert ? inDamLevel(L, C, V) : inDamLevel(L, V, C)) { if (lo === null) lo = V; hi = V; }
+      }
+      if (lo === null) continue;
+      const A = vert ? { x: C, y: lo } : { x: lo, y: C };
+      const B = vert ? { x: C, y: hi } : { x: hi, y: C };
+      const px = segPx(A, B);
+      if (px < 36) continue;                             // a stub, not a course: it would sit off the mound as a loose stick
+      const n = Math.max(1, Math.ceil(px / DAM_SPAN));
+      for (let k = 0; k < n; k++) plan.push({
+        a: { x: A.x + (B.x - A.x) * k / n, y: A.y + (B.y - A.y) * k / n },
+        b: { x: A.x + (B.x - A.x) * (k + 1) / n, y: A.y + (B.y - A.y) * (k + 1) / n },
+      });
     }
   }
   return plan;
@@ -3744,6 +4262,184 @@ const DAM_PLAN = (() => {
 // the plan reaches the beaver's ethogram as def.dam. Attached here rather
 // than in the WORLDS literal above, which is evaluated 1300 lines earlier.
 WORLDS.forest.dam = DAM_PLAN;
+// ...and the bluff, so the grounded rules and the ethogram both know there
+// is terrain on the west edge. A world without this flag simply has no rock,
+// which is every world but this one.
+WORLDS.forest.rock = { breaks: ROCK_BREAKS, cave: ROCK_CAVE,
+                       levels: { ground: ROCK_LEVEL_GROUND, shelf: ROCK_LEVEL_SHELF,
+                                 plateau: ROCK_LEVEL_PLATEAU } };
+
+// The log is drawn at reference size times this, so a dam on a small window
+// is a small dam and stays the same share of its own lake. Geometric mean of
+// the two lake radii, which is the only single number that treats a tall
+// window and a wide one alike.
+const damScale = (bounds) => Math.sqrt(bounds.w * bounds.h) / Math.sqrt(1500 * 940);
+
+// ---- the plan, in pixels, and the raster that answers "is this land?"
+// Both are memoized on the bounds: they change when the window changes and
+// at no other time. DAM_PLACED is world.damCount, mirrored here because
+// inWater() is a module function with no world in scope.
+let DAM_PX = null;      // { w, h, logs: [{x,y,rot,len,th}] }
+let DAM_GRID = null;    // { w, h, x0, y0, cw, ch, cell, first: Uint8Array }
+let DAM_PLACED = 0;
+
+function damLogs(bounds) {
+  if (DAM_PX && DAM_PX.w === bounds.w && DAM_PX.h === bounds.h) return DAM_PX.logs;
+  const cx = LAKE.cx * bounds.w, cy = LAKE.cy * bounds.h;
+  const sx = LAKE.rx * bounds.w, sy = LAKE.ry * bounds.h;
+  const k = damScale(bounds), cap = DAM_CAP * k, th = DAM_THICK * k;
+  const logs = DAM_PLAN.map((s) => {
+    const ax = cx + s.a.x * sx, ay = cy + s.a.y * sy;
+    const bx = cx + s.b.x * sx, by = cy + s.b.y * sy;
+    return {
+      x: (ax + bx) / 2, y: (ay + by) / 2, th,
+      len: Math.hypot(bx - ax, by - ay) + cap,
+      rot: (Math.atan2(by - ay, bx - ax) * 180) / Math.PI,
+    };
+  });
+  DAM_PX = { w: bounds.w, h: bounds.h, logs };
+  return logs;
+}
+
+/**
+ * A PLACED LOG IS A LAND TILE, and this is the only thing that says so.
+ *
+ * The honest test is "is this point inside any of the 100 drawn rectangles",
+ * and run per agent per frame that is 1400 rotated-rect tests a frame before
+ * anyone has asked a second question — and isWet() is asked about five times
+ * per agent per frame. So the rectangles are rasterized ONCE per window size
+ * into a 2px grid over the dam's own bounding box (144x152 cells and 22KB at
+ * the reference stage, 182x187 and 34KB at 1920x1080), and each cell holds
+ * the INDEX OF THE FIRST log that covers it. A lookup is then a bounding-box
+ * reject plus one byte compare against how many logs are actually placed —
+ * O(1), and correct at every stage of the build rather than only when the
+ * dam is finished. 255 is the empty marker, so the plan may grow to 254 logs
+ * before the cell type has to.
+ *
+ * The rasterized shape is the drawn barrel of each log — its real length,
+ * its real 20px-at-reference thickness, its real rotation — with the corners
+ * left square instead of rounded. Two bounded approximations, both stated:
+ * the square corners add at most 0.29 * half-thickness (2.9px at reference)
+ * diagonally outside the drawn round end, in a place the next log's own end
+ * cap already covers; and cell-centre sampling moves any edge by at most one
+ * half-diagonal, 1.41px. The drawn drop shadow under each log is NOT land.
+ */
+function damGrid(bounds) {
+  if (DAM_GRID && DAM_GRID.w === bounds.w && DAM_GRID.h === bounds.h) return DAM_GRID;
+  const logs = damLogs(bounds);
+  const cell = 2;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const s of logs) {
+    const r = Math.hypot(s.len, s.th) / 2;
+    if (s.x - r < x0) x0 = s.x - r; if (s.x + r > x1) x1 = s.x + r;
+    if (s.y - r < y0) y0 = s.y - r; if (s.y + r > y1) y1 = s.y + r;
+  }
+  const cw = Math.ceil((x1 - x0) / cell) + 1, ch = Math.ceil((y1 - y0) / cell) + 1;
+  const first = new Uint8Array(cw * ch).fill(255);
+  for (let n = logs.length - 1; n >= 0; n--) {          // backwards: the LOWEST index wins
+    const s = logs[n];
+    const rad = (Math.PI / 180) * s.rot, ux = Math.cos(rad), uy = Math.sin(rad);
+    const hl = s.len / 2, ht = s.th / 2, r = Math.hypot(hl, ht);
+    const i0 = Math.max(0, Math.floor((s.x - r - x0) / cell)), i1 = Math.min(cw - 1, Math.ceil((s.x + r - x0) / cell));
+    const j0 = Math.max(0, Math.floor((s.y - r - y0) / cell)), j1 = Math.min(ch - 1, Math.ceil((s.y + r - y0) / cell));
+    for (let j = j0; j <= j1; j++) {
+      const dy = y0 + (j + 0.5) * cell - s.y;
+      for (let i = i0; i <= i1; i++) {
+        const dx = x0 + (i + 0.5) * cell - s.x;
+        if (Math.abs(dx * ux + dy * uy) <= hl && Math.abs(dy * ux - dx * uy) <= ht) first[j * cw + i] = n;
+      }
+    }
+  }
+  DAM_GRID = { w: bounds.w, h: bounds.h, x0, y0, cw, ch, cell, first };
+  return DAM_GRID;
+}
+
+function onDamLog(bounds, x, y) {
+  if (DAM_PLACED <= 0) return false;
+  const g = damGrid(bounds);
+  const i = ((x - g.x0) / g.cell) | 0, j = ((y - g.y0) / g.cell) | 0;
+  if (i < 0 || j < 0 || i >= g.cw || j >= g.ch) return false;
+  return g.first[j * g.cw + i] < DAM_PLACED;
+}
+
+// The rho below which the lake at this angle is clear of the finished dam —
+// what the drifting floats are held inside, so a lily pad never fetches up
+// on the timber. Outside the sector there is nothing to dodge.
+function damClearRho(t) {
+  let pa = t % (Math.PI * 2); if (pa < 0) pa += Math.PI * 2;
+  const u = (pa - DAM_TM) / DAM_LEVELS[0].hw;
+  if (u < -1 || u > 1) return 9;
+  return damFace(DAM_LEVELS[0], u) - 0.06;
+}
+
+// A swim target on the dam is a target on land. Six rolls clear it with
+// probability 1 - 1e-6; the fallback is the deep centre, which the dam's
+// own apex (rho 0.34) can never reach.
+function lakeSwimSpot(bounds) {
+  for (let i = 0; i < 6; i++) {
+    const p = lakePoint(bounds, rand(0, Math.PI * 2), Math.sqrt(Math.random()) * SWIM_RHO_MAX);
+    if (!onDamLog(bounds, p.x, p.y)) return p;
+  }
+  return lakePoint(bounds, rand(0, Math.PI * 2), Math.sqrt(Math.random()) * 0.28);
+}
+
+// How many px of the straight line from a to b lie on placed timber. Sampled
+// every ~4px: a stride is 1-2px, so a log the line only clips at a corner is
+// still found, and the whole scan is bounding-box rejects and byte reads.
+function damCrossPx(bounds, ax, ay, bx, by) {
+  if (DAM_PLACED <= 0) return 0;
+  const dx = bx - ax, dy = by - ay, d = Math.hypot(dx, dy);
+  const steps = Math.max(2, Math.min(400, Math.round(d / 4)));
+  let hit = 0;
+  for (let i = 0; i <= steps; i++) {
+    const f = i / steps;
+    if (onDamLog(bounds, ax + dx * f, ay + dy * f)) hit++;
+  }
+  return (hit / (steps + 1)) * d;
+}
+
+/**
+ * A WALK THAT WOULD GO THROUGH THE DAM, TURNED INTO A WALK AROUND IT.
+ *
+ * Returns a place to make for first, or null if the straight line is already
+ * clear. The candidates are points on the bank ring at rho 1.16 — out on the
+ * grass past the painted mud — spread across the dam's own sector and 0.45
+ * rad past each of its ends. The two END candidates are the ones that
+ * usually win, because the dam is a wall with two ends and no doors; the
+ * ones between and beyond them matter for an animal already standing in the
+ * notch of bank the wall wraps around, who has to get out along the shore
+ * before he can go anywhere.
+ *
+ * The choice is NOT the shorter journey, and that was worth a bug: from the
+ * north-west the south end is the shorter way round, and the line to it
+ * clips the far end of the wall on the way — so he walked over the very
+ * thing he was routing around. BOTH legs of every candidate are measured and
+ * timber under a leg is priced at 40px of walking per px crossed, so a clean
+ * route always wins. Where the geometry leaves no clean single-waypoint
+ * route at all, the least timber wins: he crosses a corner of the dam, which
+ * is walking on the dam, which is allowed.
+ *
+ * Measured over every forage site and tree in the world against every spot
+ * on the douse band: 91 of the 248 straight lines run over timber, up to
+ * 236px of it. Routed, 2 of 248 do, up to 54px — and both of those start at
+ * the fallen-log site tucked into the dam's north notch, where a single
+ * waypoint cannot get round a bank that curves away under the wall.
+ */
+const DAM_VIA_RING = 13;  // candidate bank points, spread across the sector and past its ends
+function damVia(bounds, ax, ay, bx, by) {
+  if (DAM_PLACED <= 0) return null;
+  if (Math.hypot(bx - ax, by - ay) < 24) return null;
+  if (!damCrossPx(bounds, ax, ay, bx, by)) return null;
+  let best = null, bestCost = Infinity;
+  for (let i = 0; i < DAM_VIA_RING; i++) {
+    const t = (DAM_T0 - 0.45) + (i / (DAM_VIA_RING - 1)) * ((DAM_T1 + 0.45) - (DAM_T0 - 0.45));
+    const p = lakePoint(bounds, t, 1.16);
+    const c = Math.hypot(p.x - ax, p.y - ay) + Math.hypot(bx - p.x, by - p.y) +
+      40 * (damCrossPx(bounds, ax, ay, p.x, p.y) + damCrossPx(bounds, p.x, p.y, bx, by));
+    if (c < bestCost) { bestCost = c; best = p; }
+  }
+  return best;
+}
 
 // ---------------- The sward ----------------
 // Open grass, and nothing else: the goose grazes here. It is a wide, shallow
@@ -3855,28 +4551,36 @@ function onBareEarth(def, bounds, x, y, pad = 0) {
   }
   return false;
 }
-function DamLayer({ damRefs }) {
+// Each log is drawn at the length and thickness damLogs() gives it for THIS
+// window — the same numbers the land raster is built from, so what is on
+// screen and what an animal can stand on are one shape. The art is the old
+// log's, restated as fractions of its own half-thickness so it thickens with
+// the timber instead of staying a 15px stick under a 24px barrel.
+function DamLayer({ damRefs, bounds }) {
   return (
     <>
-      {DAM_PLAN.map((s, i) => (
-        <div key={i}
-          ref={(el) => { if (el) damRefs.current.set(i, el); else damRefs.current.delete(i); }}
-          style={{ position: "absolute", left: 0, top: 0, zIndex: 2, pointerEvents: "none", display: "none", willChange: "transform" }}>
-          <svg width={s.len + 14} height="30" viewBox={`${-(s.len + 14) / 2} -15 ${s.len + 14} 30`}
-            style={{ display: "block", marginLeft: -(s.len + 14) / 2, marginTop: -15, overflow: "visible" }}>
-            {/* a wet, chunky dam log: dark bark, ring at each end */}
-            <ellipse cx="0" cy="6" rx={s.len / 2 + 2} ry="7" fill="#05262f" opacity="0.45" />
-            <rect x={-s.len / 2} y="-7.5" width={s.len} height="15" rx="7" fill="#5a3d22" />
-            <rect x={-s.len / 2} y="-7.5" width={s.len} height="6" rx="3" fill="#74522f" opacity=".9" />
-            <path d={`M ${-s.len / 2 + 8} 2.6 h ${s.len - 20} M ${-s.len / 2 + 12} 5.2 h ${s.len - 28}`}
-              stroke="#3f2a15" strokeWidth="1.2" strokeLinecap="round" opacity=".7" />
-            <ellipse cx={-s.len / 2} cy="0" rx="4" ry="7.5" fill="#8a6236" />
-            <ellipse cx={-s.len / 2} cy="0" rx="2" ry="4" fill="#5a3d22" />
-            <ellipse cx={s.len / 2} cy="0" rx="4" ry="7.5" fill="#8a6236" />
-            <ellipse cx={s.len / 2} cy="0" rx="2" ry="4" fill="#5a3d22" />
-          </svg>
-        </div>
-      ))}
+      {damLogs(bounds).map((s, i) => {
+        const hb = s.th / 2, bw = s.len + hb * 1.4, bh = s.th * 2;
+        return (
+          <div key={i}
+            ref={(el) => { if (el) damRefs.current.set(i, el); else damRefs.current.delete(i); }}
+            style={{ position: "absolute", left: 0, top: 0, zIndex: 2, pointerEvents: "none", display: "none", willChange: "transform" }}>
+            <svg width={bw} height={bh} viewBox={`${-bw / 2} ${-bh / 2} ${bw} ${bh}`}
+              style={{ display: "block", marginLeft: -bw / 2, marginTop: -bh / 2, overflow: "visible" }}>
+              {/* a wet, chunky dam log: dark bark, ring at each end */}
+              <ellipse cx="0" cy={hb * 0.8} rx={s.len / 2 + hb * 0.27} ry={hb * 0.93} fill="#05262f" opacity="0.45" />
+              <rect x={-s.len / 2} y={-hb} width={s.len} height={s.th} rx={hb * 0.93} fill="#5a3d22" />
+              <rect x={-s.len / 2} y={-hb} width={s.len} height={s.th * 0.4} rx={hb * 0.4} fill="#74522f" opacity=".9" />
+              <path d={`M ${-s.len / 2 + hb * 1.07} ${hb * 0.35} h ${s.len - hb * 2.67} M ${-s.len / 2 + hb * 1.6} ${hb * 0.69} h ${s.len - hb * 3.73}`}
+                stroke="#3f2a15" strokeWidth={hb * 0.16} strokeLinecap="round" opacity=".7" />
+              <ellipse cx={-s.len / 2} cy="0" rx={hb * 0.53} ry={hb} fill="#8a6236" />
+              <ellipse cx={-s.len / 2} cy="0" rx={hb * 0.27} ry={hb * 0.53} fill="#5a3d22" />
+              <ellipse cx={s.len / 2} cy="0" rx={hb * 0.53} ry={hb} fill="#8a6236" />
+              <ellipse cx={s.len / 2} cy="0" rx={hb * 0.27} ry={hb * 0.53} fill="#5a3d22" />
+            </svg>
+          </div>
+        );
+      })}
     </>
   );
 }
@@ -4157,6 +4861,9 @@ function RelStats({ worldRef, id }) {
 function stepWorld(world, cfg, dt) {
   const { agents, bounds, def } = world;
   const now = performance.now();
+  // How much dam is standing, mirrored where inWater() can see it. Every
+  // water question asked for the rest of the frame is answered against this.
+  if (def.hasWater) DAM_PLACED = world.damCount | 0;
   const isWet = (x, y) => def.hasWater ? inWater(bounds, x, y)
     : def.pool ? inPool(bounds, def.pool, x, y) : false;
   // Forage sites, in stage pixels with a claim slot so two animals never
@@ -4188,6 +4895,12 @@ function stepWorld(world, cfg, dt) {
     shallowBand: (t) => (def.hasWater ? shallowBandAt(bounds, t) : null),
     // the same question asked for the raccoon's pose instead of the goose's
     douseBand: (t) => (def.hasWater ? shallowBandAt(bounds, t, DOUSE_REACH) : null),
+    // the dam, asked three ways: is this spot standing on it, where are its
+    // logs, and what would I have to walk round to get from here to there
+    onDam: (x, y) => (def.hasWater ? onDamLog(bounds, x, y) : false),
+    damLogs: () => (def.hasWater ? damLogs(bounds) : null),
+    damVia: (ax, ay, bx, by) => (def.hasWater ? damVia(bounds, ax, ay, bx, by) : null),
+    swimSpot: () => (def.hasWater ? lakeSwimSpot(bounds) : null),
     onBareEarth: (x, y, pad) => onBareEarth(def, bounds, x, y, pad) };
 
   // ---- floats (lily pads + drift logs): VERY slow quasi-chaotic drift
@@ -4196,7 +4909,10 @@ function stepWorld(world, cfg, dt) {
   // (frog or basking turtle) drifts 25% faster.
   if (def.hasWater) {
     if (!world.pads || world.pads.length !== PAD_SPECS.length) {
-      const angs = [2.9, 1.9, 0.85, 3.7, 0.5, 2.35, 4.35, 1.35, 3.15, 4.9, 5.55];
+      // 2.15 and 5.15 used to be 2.9 and 3.15: the dam grew over both, and a
+      // float that spawns on the timber only to be shoved to the middle of
+      // the lake on frame one is a float that started in the wrong place.
+      const angs = [2.15, 1.9, 0.85, 3.7, 0.5, 2.35, 4.35, 1.35, 5.15, 4.9, 5.55];
       const rhos = [.55, .6, .5, .42, .62, .38, .52, .45, .6, .5, .58]; // last: top-right
       world.pads = angs.map((ang, i) => ({
         ...lakePoint(bounds, ang, rhos[i]),
@@ -4218,10 +4934,13 @@ function stepWorld(world, cfg, dt) {
       p.y += (Math.cos(tsec * 0.09 + p.p2) + 0.7 * Math.sin(tsec * 0.057 + p.p1)) * base * dt;
       const rr = lakeRho(bounds, p.x, p.y);
       let maxR = Math.max(0.5, 0.97 - 38 / Math.min(LAKE.rx * bounds.w, LAKE.ry * bounds.h));
-      // keep floats out of the dam sector (the lake's west end shallows)
+      // keep floats off the dam. The old flat 0.58 was a guess at how far
+      // west the timber would reach; damClearRho is the plan answering for
+      // itself, angle by angle, so the pads follow the structure instead of
+      // a number that goes stale the moment it is rebuilt.
       const pang = Math.atan2((p.y - LAKE.cy * bounds.h) / (LAKE.ry * bounds.h), (p.x - LAKE.cx * bounds.w) / (LAKE.rx * bounds.w));
       const pa = pang < 0 ? pang + Math.PI * 2 : pang;
-      if (pa > 2.45 && pa < 3.95) maxR = Math.min(maxR, 0.58);
+      maxR = Math.min(maxR, damClearRho(pa));
       if (rr > maxR) {
         const cxp = LAKE.cx * bounds.w, cyp = LAKE.cy * bounds.h;
         const s = maxR / rr;
@@ -4770,9 +5489,7 @@ function stepWorld(world, cfg, dt) {
         // paddle between random spots inside the lake (or the pool)
         const wet = isWet(a.x, a.y);
         if (!a.swimTarget || Math.hypot(a.swimTarget.x - a.x, a.swimTarget.y - a.y) < 30) {
-          a.swimTarget = def.hasWater
-            ? lakePoint(bounds, rand(0, Math.PI * 2), Math.sqrt(Math.random()) * 0.72)
-            : poolPoint(bounds, def.pool);
+          a.swimTarget = def.hasWater ? lakeSwimSpot(bounds) : poolPoint(bounds, def.pool);
         }
         const dx = a.swimTarget.x - a.x, dy = a.swimTarget.y - a.y; const d = Math.hypot(dx, dy) || 1;
         const sp = gait(a, ethoCtx, 0.30);   // medium is the species' own now
@@ -4868,6 +5585,11 @@ function stepWorld(world, cfg, dt) {
       a.x = clamp(a.x, rr.l, rr.r); a.y = clamp(a.y, rr.t, rr.b);
     }
 
+    // A flight or a roof owns its own height, so the bluff cannot hold the
+    // flier to a terrace — but it can keep reading which one is under him,
+    // so he touches down owing it nothing.
+    if ((onRoof || inAir) && def.rock) a._lvl = rockLevelAt(bounds, a.x, a.y) ?? a._lvl;
+
     // grounded rules only
     if (!onRoof && !inAir) {
       if (a.state !== "seekroof") a.roofI = -1; // the hunt keeps its target roof
@@ -4877,6 +5599,21 @@ function stepWorld(world, cfg, dt) {
       // a bush — and they set their own height each frame
       if (a.z > 0 && !hopping && !ETHO_Z_STATES.has(a.state)) { a.z *= Math.exp(-5 * dt); if (a.z < 0.5) a.z = 0; }
       if (def.hasWater && !canSwimIn(def, a.species)) keepAshore(a, bounds);
+      // ...and the bluff. An arc already running owns the frame outright —
+      // it is MEANT to be over a wall for a moment, which is the whole point
+      // of leaping — so the wall rule only speaks when nobody is in the air.
+      if (def.rock) {
+        if (!driveRockHop(a, now)) {
+          if (!(isFreeState(a) && tryRockHop(a, bounds, now))) {
+            // Genuinely off the ground — a frog's hop, a squirrel up a trunk
+            // — so read the terrace back off the terrain instead of holding
+            // him to the one he left. Otherwise he lands owing the rock a
+            // level and gets shoved somewhere he never walked.
+            if (!hopping && a.z < 4) keepOffRock(a, bounds);
+            else a._lvl = rockLevelAt(bounds, a.x, a.y) ?? a._lvl;
+          }
+        }
+      }
       if (def.pool && !canSwimIn(def, a.species) && a.z < 3) keepOutOfPool(a, bounds, def.pool);
       if (a.z < 3) keepOutOfHouses(a, bounds, def.houses);
       if (def.fences) {
@@ -4943,7 +5680,9 @@ function lockTogether(a, b, world) {
     const bothSwimming = inWater(bounds, a.x, a.y) && inWater(bounds, b.x, b.y);
     if (!bothSwimming) {
       const r = lakeRho(bounds, mx, my);
-      if (r < 1.08) {
+      // a meeting on the dam is a meeting on dry timber; only open water
+      // has to be pushed out of
+      if (r < 1.08 && !onDamLog(bounds, mx, my)) {
         const cx = LAKE.cx * bounds.w, cy = LAKE.cy * bounds.h;
         const s = 1.08 / Math.max(r, 0.05);
         mx = cx + (mx - cx) * s; my = cy + (my - cy) * s;
@@ -5213,13 +5952,14 @@ function renderWorld(world, iconsRef, padsRef, damRefs, pitRefs) {
   // the beaver's dam: show the first damCount logs of the plan
   if (world.def?.hasWater && damRefs) {
     const n = world.damCount || 0;
-    for (let i = 0; i < DAM_PLAN.length; i++) {
+    DAM_PLACED = n;                       // ...which is also what makes them land
+    const logs = damLogs(world.bounds);
+    for (let i = 0; i < logs.length; i++) {
       const el = damRefs.current.get(i);
       if (!el) continue;
       if (i < n) {
-        const p = lakePoint(world.bounds, DAM_PLAN[i].ang, DAM_PLAN[i].rho);
         el.style.display = "";
-        el.style.transform = `translate(${p.x}px, ${p.y}px) rotate(${DAM_PLAN[i].rot}deg)`;
+        el.style.transform = `translate(${logs[i].x}px, ${logs[i].y}px) rotate(${logs[i].rot}deg)`;
       } else el.style.display = "none";
     }
   }

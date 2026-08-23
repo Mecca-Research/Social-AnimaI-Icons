@@ -216,6 +216,19 @@ function driveGoto(a, ctx, S) {
   }
   // the target may be a live object (a drifting float, a claimed bush)
   if (g.track) { const p = g.track(a, ctx, S.goal.ref); if (p) { S.goal.x = p.x; S.goal.y = p.y; } }
+  // ONE optional waypoint, picked when the walk started. The straight line
+  // is the right route for every leg in this world except one: the beaver's
+  // dam is a wall across the lake's west end, and a walk whose line runs
+  // through it has to round an end first. Cleared on arrival, and the goal's
+  // own `within` is never tested until it is — so a shoulder 200px from the
+  // real spot cannot end the walk early.
+  if (S.goal.via) {
+    const dv = g.urgency !== undefined
+      ? stepTowardAt(a, ctx, S.goal.via, gait(a, ctx, g.urgency))
+      : stepToward(a, ctx, S.goal.via, typeof g.speed === "function" ? g.speed(a, ctx) : (g.speed ?? 1));
+    if (dv > (g.viaWithin ?? 22)) return;
+    S.goal.via = null;
+  }
   // a leg that crosses the shoreline wants two speeds, the way every other
   // swim in this world does, so `speed` may also be read each frame
   // A goto states its URGENCY; how fast that actually is belongs to the
@@ -379,7 +392,7 @@ function start(a, ctx, S, ev, feature) {
     const g = v.goto.pick(a, ctx, S);
     if (!g) { S.cd[ev.id] = ctx.now + (v.goto.none ?? 6000); return false; }
     if (g.site && !claimSite(a, S, g.site)) { S.cd[ev.id] = ctx.now + 3000; return false; }
-    S.goal = { x: g.x, y: g.y, ref: g };
+    S.goal = { x: g.x, y: g.y, ref: g, via: v.goto.via ? v.goto.via(a, ctx, g) : null };
     S.goalOwner = ev.id;
     S.goalUntil = ctx.now + (v.goto.giveUp ?? 22000);
     a.state = v.goto.state;
@@ -724,7 +737,11 @@ defineEthogram("bear", {
           // cruising the shallows looking for a fish
           if (!wet) { a._diveN = 0; endEvent(a, c); return; }
           if (!a.swimTarget || Math.hypot(a.swimTarget.x - a.x, a.swimTarget.y - a.y) < 30) {
-            a.swimTarget = c.lakePoint(c.bounds, c.rand(0, Math.PI * 2), Math.sqrt(Math.random()) * 0.7);
+            // ...anywhere in the lake that is still lake: the dam's timber
+            // is land now, and a bear cruising the shallows toward it would
+            // fetch up standing on it with his swim rig still running
+            a.swimTarget = c.swimSpot ? c.swimSpot()
+              : c.lakePoint(c.bounds, c.rand(0, Math.PI * 2), Math.sqrt(Math.random()) * 0.7);
           }
           const dx = a.swimTarget.x - a.x, dy = a.swimTarget.y - a.y, d = Math.hypot(dx, dy) || 1;
           const sp = gait(a, c, 0.30);          // an unhurried cruise of the shallows
@@ -1537,19 +1554,36 @@ function nearestForage(a, c, kind) {
  */
 const SOUTH_SHORE = [Math.PI / 3, Math.PI * 2 / 3];   // 60 .. 120 degrees
 
+/**
+ * HE WADES IN AS FAR AS HIS HANDS, AND NO FURTHER.
+ *
+ * The band comes back [far, near]. `near` is the shallow lip — the exact rho
+ * at which the lowest ink his pose paints lands ON the drawn waterline — and
+ * `far` is 20px deeper. Taking the DEEPER three quarters of it, which is
+ * what this used to do, put him up to 20px out from the bank for no reason
+ * anyone could see: the whole point of the band is that its shallow end is
+ * already the last place he can stand and still be drawn on water.
+ *
+ * So he takes the shallow tenth-to-third instead. On the south shore that is
+ * 0.5-2px inside the lip on the narrowest window and 2-6px on a roomy one:
+ * the water tile against the ground tile, touching it, over none of it. He
+ * is still well inside the 0.97 that inWater() calls wet, because `near` is
+ * capped at 0.94 before anything else is asked.
+ */
+const DOUSE_LIP = [0.10, 0.30];   // fraction of the band in from its shallow end
+
 function douseSpot(a, c) {
   if (!c.douseBand) return null;         // a water world that owns no shoreline art
   const due = Math.PI / 2;
   const t0 = due + c.rand(-0.10, 0.10);  // not the same footprint every bout
+  const wade = (t, band) =>
+    c.lakePoint(c.bounds, t, band[1] - (band[1] - band[0]) * c.rand(DOUSE_LIP[0], DOUSE_LIP[1]));
   // walk out from due south, both ways, staying on the bottom third
   for (let k = 0; k < 24; k++) {
     const t = t0 + (k === 0 ? 0 : (k & 1 ? 1 : -1) * Math.ceil(k / 2) * 0.06);
     if (t < SOUTH_SHORE[0] || t > SOUTH_SHORE[1]) continue;
     const band = c.douseBand(t);
-    // ...and off the band's shallow LIP: `near` is built so his reach lands
-    // exactly ON the drawn shore, which is the definition of the edge and no
-    // place to stand. The deeper three quarters of it is water either way.
-    if (band) return c.lakePoint(c.bounds, t, c.rand(band[0], band[0] + (band[1] - band[0]) * 0.75));
+    if (band) return wade(t, band);
   }
   // Nothing usable on the bottom shore at this stage shape — the lake's south
   // lobe is its short axis, and on a squat window there is no water there wide
@@ -1558,10 +1592,13 @@ function douseSpot(a, c) {
   for (let k = 1; k < 24; k++) {
     const t = due + (k & 1 ? 1 : -1) * Math.ceil(k / 2) * 0.26;
     const band = c.douseBand(t);
-    if (band) return c.lakePoint(c.bounds, t, c.rand(band[0], band[1]));
+    if (band) return wade(t, band);
   }
   return null;
 }
+
+/** the shoulder of the dam to round on the way there, or null for a clear line */
+const douseVia = (a, c, g) => (g && c.damVia ? c.damVia(a.x, a.y, g.x, g.y) : null);
 
 /** how long the empty-hand rub runs inside a feeding bout, and on its own */
 const RUB_INBOUT = [2600, 3800];
@@ -1577,6 +1614,7 @@ function racCarry(a, c, S) {
   releaseClaim(a, S);
   a._carry = "berry";
   a._racWater = c.def.hasWater ? douseSpot(a, c) : null;
+  a._racVia = douseVia(a, c, a._racWater);   // round the dam if it is in the way
   a._racWaterBy = c.now + 18000;
   a.state = "racdouse";
 }
@@ -1644,6 +1682,12 @@ function driveRaccoon(a, c, S) {
     // ...and the band is 5.6px wide on the south shore, so "near enough" is
     // not near enough: 13px of slack is 0.083 rho there, wider than the whole
     // mud liner. Arrive ON the spot, the way the dabble does.
+    // The dam first, if the straight line runs over it. He is not carrying
+    // a berry across a hundred logs — he goes round the end of the wall.
+    if (a._racVia) {
+      if (stepTowardAt(a, c, a._racVia, gait(a, c, 0.45)) > 22 && c.now < a._racWaterBy) return;
+      a._racVia = null;
+    }
     if (!a._racWater || stepTowardAt(a, c, a._racWater, gait(a, c, 0.45)) < 10) {
       a.vx = 0; a.vy = 0;
       if (!a._racWater) { a.state = "raceat"; a.stateUntil = c.now + c.rand(2400, 3200); return; }
@@ -2063,6 +2107,7 @@ defineEthogram("raccoon", {
         state: "towaterrub", within: 10, giveUp: 20000, urgency: 0.30,
         none: 12000, lost: 12000,
         pick: (a, c) => (c.def.hasWater ? douseSpot(a, c) : null),
+        via: douseVia,          // round the dam rather than over it
       },
       // `g` is the picked point itself. The engine's `within` is a radius and
       // not a landing, and the band is 5.6px wide — so take the spot, then
@@ -2560,6 +2605,9 @@ const OPEN_CACHE = 70;  // ...and off a buried nut, of which there are four
  */
 function openSpot(p, c) {
   if (c.isWet(p.x, p.y)) return false;
+  // ...and a dam log is dry now, which is not the same as open ground: a
+  // cone dug into the beaver's timber is a hole in nothing
+  if (c.onDam && c.onDam(p.x, p.y)) return false;
   if (TREE && c.def.trees) {
     for (const t of c.def.trees) {
       if (Math.hypot(t.x * c.bounds.w - p.x, t.y * c.bounds.h - p.y) < TREE.reach) return false;
@@ -2948,6 +2996,7 @@ function foxGrass(a, c) {
     // that a stationary bout cannot be shoved off the edge mid-chew
     if (x < 90 || x > c.bounds.w - 90 || y < 120 || y > c.bounds.h - 110) continue;
     if (c.isWet(x, y) || c.isWet(x + 26, y) || c.isWet(x - 26, y) || c.isWet(x, y + 18)) continue;
+    if (c.onDam && c.onDam(x, y)) continue;   // dry, but it is timber, not grass
     let clear = true;
     for (const f of c.world.forage || []) {
       if (Math.hypot(f.px - x, f.py - y) < 44) { clear = false; break; }
@@ -3696,12 +3745,22 @@ defineEthogram("goose", {
 /**
  * THE BEAVER — the one animal here who changes the world.
  *
- * The dam is built off-stage and on-stage in halves: the log is cut where
- * nobody can see it, and every trip back across the lake with one is the
- * part you watch. Nothing about it is on a timer — the log appears when he
+ * The dam is built off-stage and on-stage in halves: the timber is cut where
+ * nobody can see it, and every trip back across the lake with it is the part
+ * you watch. Nothing about it is on a timer — a log appears when he
  * physically reaches the point the plan wants it at, so a dam that grows
  * slowly is a beaver who has not been roaming, which is the honest reading.
+ *
+ * WHAT CHANGED WITH THE HUNDRED-LOG PLAN. One log per trip was right for a
+ * fourteen-log pile and is absurd for a structure: at the rate he actually
+ * leaves the map it would be an hour of roaming before the arch closed. So
+ * a trip is now a LOAD rather than a log. He crosses the lake once, and then
+ * lays DAM_PER_RUN of them without leaving — walking the few strides from
+ * one plan point to the next along work he is already standing on, and still
+ * touching every single one before it exists. Twenty trips for the whole
+ * dam against the old fourteen for a seventh of the timber.
  */
+const DAM_PER_RUN = 5;   // logs carried per crossing; 100 / 5 = 20 trips
 defineEthogram("beaver", {
   domainOf: (a, c) => (c.def.hasWater && c.isWet(a.x, a.y) ? "water" : "land"),
 
@@ -3722,7 +3781,7 @@ defineEthogram("beaver", {
     {
       id: "dam", domain: "water", trigger: "offstage",
       chance: 1,   // walking off the map is already the rare part; a second
-                   // roll on top would make a 14-log plan a lottery
+                   // roll on top would make a 100-log plan a lottery
       states: ["damrun"],
       // the errand only exists while the plan is unfinished
       near: (a, c) => {
@@ -3739,10 +3798,11 @@ defineEthogram("beaver", {
         if (Math.random() < 0.6) { a.x = b.w + 60; a.y = c.rand(0.02, 0.30) * b.h; }
         else { a.x = c.rand(0.85, 0.98) * b.w; a.y = -60; }
         a.state = "damrun"; a._damPhase = 1;
+        a._damLeft = DAM_PER_RUN;      // this trip's load
         a.targetId = null;
         // A safety valve, not a race. The hand-written run had no timeout at
         // all; this only wants to catch a beaver genuinely wedged, so it is
-        // set far beyond the 15-25s the crossing actually takes.
+        // set far beyond the 20-30s a crossing and a load actually take.
         a._damBy = c.now + 120000;
         a.noEventUntil = c.now + 2000; // nobody accosts him on the way in
       },
@@ -3750,22 +3810,24 @@ defineEthogram("beaver", {
         // The plan slot is re-read every frame rather than held from begin:
         // with two beavers in the roster the second must retarget when the
         // first lays a log, not build the same one twice.
-        const plan = c.def.dam, n = c.world.damCount || 0;
+        const plan = c.damLogs && c.damLogs(), n = c.world.damCount || 0;
         if (!plan || n >= plan.length || c.now >= a._damBy) {
           a._damPhase = 0; endEvent(a, c, { reroll: true, stop: true }); return;
         }
-        const pl = plan[n];
         // Two legs, not one: the straight line from the corner to the dam
         // site cuts across the shore, so he makes the lake's right end first
         // and only then strikes out across open water.
-        const t = a._damPhase === 1 ? c.lakePoint(c.bounds, 0.05, 0.9)
-                                    : c.lakePoint(c.bounds, pl.ang, pl.rho);
+        const t = a._damPhase === 1 ? c.lakePoint(c.bounds, 0.05, 0.9) : plan[n];
         const d = stepToward(a, c, t, c.isWet(a.x, a.y) ? 0.6 : 0.95);
         if (a._damPhase === 1) { if (d < 26) a._damPhase = 2; return; }
         if (d >= 8) return;
         // he must physically touch the planned point before the log exists
         a.x = t.x; a.y = t.y;
         c.world.damCount = n + 1;
+        // ...and the rest of the load goes in on the same trip, each log
+        // still touched before it appears. He is already standing on the
+        // structure; the next slot is a stride or two along it.
+        if (--a._damLeft > 0 && n + 1 < plan.length) return;
         a._damPhase = 0;
         endEvent(a, c, { reroll: true, quiet: 1500, stop: true });
       },

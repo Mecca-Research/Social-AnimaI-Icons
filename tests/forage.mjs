@@ -221,11 +221,18 @@ if (await page.evaluate(`!!window.__saiEtho.ETHOGRAM.deer`)) {
   // knowing — the snuff is a WALL-CLOCK window while the quartering is
   // WALKING, and walking is dt-clamped at ~4fps, so he gets through far
   // fewer probes here than he would at 60.
+  // ...and TEN, not six, because six missed. The 30% above was measured on
+  // an older build and the check reported `wander>floorsnuff>wander` on one
+  // run in roughly six — an empty rate nearer 50% than 30%, at which six
+  // tries miss 1.6% of the time and ten miss 0.1%. The count it actually
+  // took is in the message now, so the next reader can see the rate drift
+  // instead of having to measure it again from scratch.
   const ate = (c) => /floorsnuff/.test(c) && /windfalleat\[/.test(c);
-  let r = await chain('skunk', 'windfall', 120000);
-  for (let k = 0; k < 5 && !ate(r.chain); k++)
+  let r = await chain('skunk', 'windfall', 120000), tries = 1;
+  for (; tries < 10 && !ate(r.chain); tries++)
     r = await chain('skunk', 'windfall', 120000);
-  chk(ate(r.chain), 'skunk gathers windfall', r.chain);
+  chk(ate(r.chain), 'skunk gathers windfall',
+    `${r.chain}${tries > 1 ? ` (ate on try ${tries} of 10)` : ''}`);
   // NOT a chain-length check, and the difference is the whole reason this
   // one went red. `scrape` declares exactly ONE state, so the longest chain
   // it can ever produce is wander>clawscrape>wander — and the fixture parks
@@ -584,20 +591,83 @@ await page.waitForTimeout(400);
 // past turns a forage check into hogcurl>hogball>hoguncurl. That is the
 // defence working (a hedgehog picks safety over dinner every time), but it
 // makes for a useless measurement, so the rest of the cast goes away first.
-const alone = `for (const o of w.agents) { if (o===a) continue;
-  o.x=.05*w.bounds.w; o.y=.05*w.bounds.h; o.vx=o.vy=0; o.state='idle';
+// WHERE THE REST OF THE CAST GOES. It used to be (.05, .05), which v0.40
+// turned into the inside of the west bluff's upper wall: the rock rule does
+// not care that they are idle, so all thirteen were clamped down onto the
+// talus and stacked on one spot, close enough to shoulder each other into
+// fights and separations in the middle of a measurement. They go to the top
+// right now, spread along a row, which is open sky in this world — and each
+// is pinned to ground level so the terrain has nothing to say about any of
+// them.
+const alone = `for (let oi = 0, o = null; oi < w.agents.length; oi++) {
+  o = w.agents[oi]; if (o===a) continue;
+  o.x=(.60 + .026*oi)*w.bounds.w; o.y=.06*w.bounds.h; o.vx=o.vy=0; o.state='idle';
+  o._lvl=0; o._rockHop=null; o._rockHopEnd=0;
   o.idleUntil=performance.now()+900000; o.noEventUntil=performance.now()+900000; }`;
-for (const [ev, want, label] of [
-  ['roots', /rootdig|rootbore/, 'hedgehog works a surface root'],
+/**
+ * ONE WINDOW IS NOT A HEDGEHOG. Both timber appetites come round on a roll,
+ * and chain() leaves the moment he returns to wander — so a window that does
+ * not happen to contain a completed bout reads `wander>hhtoedge>wander` and
+ * the check reports that the hedgehog will not go into a log. Measured over
+ * twelve windows apiece: about two in three produce a bout, which flakes one
+ * run in three, which is what it did.
+ *
+ * This retries until a bout actually STARTS and then judges THAT bout. It is
+ * not retrying the assertion — the retry condition is the event's own
+ * declared states, read off the ethogram, so a bout that begins and picks the
+ * wrong variant fails on the spot and is never re-rolled. Five windows with
+ * no bout in any of them is a real failure and says so, which is the shape
+ * chain()'s own note asks for: this checks whether the event WORKS, and how
+ * often it comes round is tests/cadence.mjs's question.
+ */
+async function chainBout(species, evId, seed, tries = 5, ms = 90000) {
+  const states = await page.evaluate(`(() => {
+    const e = window.__saiEtho.ETHOGRAM['${species}'].events.find(x => x.id === '${evId}');
+    const s = new Set(e.states || []);
+    for (const v of (e.variants || [])) for (const t of (v.states || [])) s.add(t);
+    return [...s]; })()`);
+  const bout = new RegExp('(^|>)(' + states.join('|') + ')(\\[|>|$)');
+  let last = null;
+  for (let i = 0; i < tries; i++) {
+    last = await chain(species, evId, ms, seed);
+    if (bout.test(last.chain)) return { ...last, tries: i + 1, started: true };
+  }
+  return { ...last, tries, started: false };
+}
+
+// WHERE HE STARTS IS SOLVED, NOT PLACED. The fixture put him at (.30,.60),
+// which is 261px from the nearest log — a walk at urgency 0.30 that does not
+// fit inside the goto's own 24s give-up when headless frames run at a
+// fifth of real time. He starts a short hop from a site of the kind under
+// test now, at whichever of sixteen bearings is furthest from every OTHER
+// site, clear of the lake's mud and off the bluff.
+const startNear = (kind) => `{
+  const S=(w.forage||[]).filter(f=>f.kind==='${kind}'), t=S[0];
+  let best=null, bestD=-1;
+  for (let k=0;k<16;k++){ const th=k*Math.PI/8;
+    const x=t.px+Math.cos(th)*60, y=t.py+Math.sin(th)*60;
+    if (x<80||y<80||x>w.bounds.w-80||y>w.bounds.h-80) continue;
+    if (w.lakeRhoAt(x,y)<1.14) continue;
+    if (w.rockZoneAt && w.rockZoneAt(x,y).on) continue;
+    let d=1e9;
+    for (const f of (w.forage||[])) { if (f===t) continue;
+      d=Math.min(d, Math.hypot(f.px-x, f.py-y)); }
+    if (d>bestD) { bestD=d; best={x,y}; } }
+  if (best) { a.x=best.x; a.y=best.y; }
+}`;
+
+for (const [ev, want, label, kind] of [
+  ['roots', /rootdig|rootbore/, 'hedgehog works a surface root', 'root'],
   // EITHER WAY IN. Dead wood comes in two kinds now and he works them
   // differently — down the rot hole of a rotten log, under the near edge of
   // a sound one — so a check that names only `logdive` fails on a perfect
   // `logunder` bout and reports it as the hedgehog not going into a log.
-  ['logs', /logdive|logunder/, 'hedgehog goes into the log'],
+  ['logs', /logdive|logunder/, 'hedgehog goes into the log', 'log'],
 ]) {
-  const r = await chain('hedgehog', ev, 90000,
-    `a.x=.30*w.bounds.w; a.y=.60*w.bounds.h; ${alone}`);
-  chk(want.test(r.chain), label, r.chain);
+  const r = await chainBout('hedgehog', ev, `${startNear(kind)} ${alone}`);
+  chk(r.started && want.test(r.chain), label,
+    r.started ? `${r.chain}${r.tries > 1 ? ` (bout came round on window ${r.tries})` : ''}`
+              : `no bout at all in ${r.tries} windows — last was ${r.chain}`);
 }
 {
   // ...and the defence itself, checked on its own terms: walk something big
