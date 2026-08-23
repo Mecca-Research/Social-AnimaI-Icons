@@ -80,9 +80,11 @@ chk(r.plan === 100, "the served dam plan is a hundred logs", `${r.plan} in def.d
 // ...and STANDING, not merely planned. v0.41 shipped a correct hundred-log
 // plan over a world that started with zero of them placed and took fourteen
 // minutes to fill, so every check agreed while the dam was not there.
-chk(r.dam === r.plan, "and the dam is standing at load",
-  `${r.dam} of ${r.plan} placed on a fresh page`);
-chk(r.drey > 0, "and the squirrel already has a drey", `${r.drey} courses at load`);
+// ...and EMPTY, which is the shipped intent: the beaver lays one log per
+// crossing and the long build is the point. This pair is here because the
+// served bundle is where "the dam is wrong" was reported from twice.
+chk(r.dam === 0 && r.drey === 0, "and the lake and the fork start empty",
+  `${r.dam} logs, ${r.drey} drey courses at load`);
 chk(r.rockEastPct <= 12, "the rock's region stays on the rock",
   `reaches ${r.rockEastPct}% of the stage width`);
 

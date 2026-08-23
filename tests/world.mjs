@@ -1775,20 +1775,50 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
 }
 
 // ============ what is actually THERE when you open the page ============
-// EVERY SUITE HERE MEASURED THE PLAN AND NONE MEASURED THE VIEW. The dam
-// plan has been a hundred logs since v0.40 and every check agreed, while
-// world.damCount started at 0 and took about fourteen minutes to fill — so
-// what anyone saw in their first two minutes was a fifteen-log arc, which is
-// the fourteen-log pile the rebuild existed to replace. It was reported
-// unbuilt twice, correctly, against two builds this suite called green.
-// The squirrel's drey was the same: six courses at half a trip a minute.
+// EVERY SUITE HERE ONCE MEASURED THE PLAN AND NONE MEASURED THE VIEW, and
+// the dam was reported unbuilt twice — correctly — against two builds this
+// suite called green, because the plan said a hundred logs while the world
+// showed a fifteen-log arc for the first two minutes.
 //
-// So this asks the world what is STANDING at load, not what is planned.
+// The answer to that is NOT to stand the dam up at load. It was, briefly,
+// and that hid the only thing worth watching. The dam starts empty and the
+// beaver lays ONE log per crossing, which is what a beaver does and what
+// the owner asked for; the long build is the reward for leaving it running.
+//
+// So what this pins is the thing that actually goes wrong: that the plan is
+// a hundred, that the world starts at nothing, and that the beaver DOES lay
+// them — one per trip, proven by making him take one.
 {
-  const r = AT_LOAD;
-  chk(r.plan > 0 && r.dam === r.plan, 'the dam is standing when the page loads',
-    `${r.dam} of ${r.plan} logs placed at load`);
-  chk(r.drey > 0, 'and the squirrel already has a drey', `${r.drey} courses at load`);
+  const r = await page.evaluate(`(async (w) => {
+    const plan = (w.def.dam || []).length, at0 = w.damCount | 0;   // live, for the lay test
+    const bv = w.agents.find(a => a.species === 'beaver');
+    if (!bv) return { plan, at0, none: 'no beaver in the roster' };
+    // A dam run starts on going off-stage, which is exactly what dropping
+    // him over the edge does — the owner's own shortcut for a hurry.
+    const frame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 20)));
+    let laid = 0, pushes = 0;
+    for (let i = 0; i < 120 && laid < 2; i++) {
+      if (bv.state !== 'damrun' && !bv.dragging) {
+        bv.x = w.bounds.w + 60; bv.y = 0.2 * w.bounds.h; bv.vx = 0; bv.vy = 0;
+        const S = bv._eth;
+        if (S) { S.cd['dam'] = 0; S.seekAt['dam'] = 0; S.armed['dam'] = 0; }
+        bv.noEventUntil = 0; bv.intentUntil = 0; pushes++;
+      }
+      await frame();
+      laid = (w.damCount | 0) - at0;
+    }
+    return { plan, at0, laid, pushes, perTrip: w.__damPerRun };
+  })(window.__saiWorld)`);
+  // the LOAD values come from AT_LOAD, captured before any check ran: the
+  // dam geometry block above sets damCount to 100 to measure the finished
+  // structure, so asking the live world here would measure that fixture.
+  chk(AT_LOAD.plan === 100, 'the beaver has a hundred logs to lay',
+    `${AT_LOAD.plan} in the plan`);
+  chk(AT_LOAD.dam === 0 && AT_LOAD.drey === 0,
+    'and the lake and the fork are empty when the page opens',
+    `${AT_LOAD.dam} logs, ${AT_LOAD.drey} drey courses — both are things you watch get built`);
+  chk(!r.none && r.laid > 0, 'and pushing him off the map lays one',
+    r.none || `${r.laid} log(s) after ${r.pushes} push(es)`);
 }
 
 chk(errs.length === 0, 'no JS errors', errs.length ? errs[0] : 'clean');
