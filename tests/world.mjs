@@ -1396,6 +1396,27 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     T ? `stood on ${T.plats.length} platforms, ended on terrace ${T.end}` : 'no turtle');
 }
 
+// ============ what is actually THERE when you open the page ============
+// EVERY SUITE HERE MEASURED THE PLAN AND NONE MEASURED THE VIEW. The dam
+// plan has been a hundred logs since v0.40 and every check agreed, while
+// world.damCount started at 0 and took about fourteen minutes to fill â€” so
+// what anyone saw in their first two minutes was a fifteen-log arc, which is
+// the fourteen-log pile the rebuild existed to replace. It was reported
+// unbuilt twice, correctly, against two builds this suite called green.
+// The squirrel's drey was the same: six courses at half a trip a minute.
+//
+// So this asks the world what is STANDING at load, not what is planned.
+{
+  const r = await page.evaluate(`(w => ({
+    dam: w.damCount | 0,
+    plan: (w.def.dam || []).length,
+    drey: w.dreyN | 0,
+  }))(window.__saiWorld)`);
+  chk(r.plan > 0 && r.dam === r.plan, 'the dam is standing when the page loads',
+    `${r.dam} of ${r.plan} logs placed at load`);
+  chk(r.drey > 0, 'and the squirrel already has a drey', `${r.drey} courses at load`);
+}
+
 chk(errs.length === 0, 'no JS errors', errs.length ? errs[0] : 'clean');
 console.log(`\n${fail.length ? 'FAIL ' + fail.length : 'ALL PASS'} (${pass.length} passed)`);
 await browser.close();

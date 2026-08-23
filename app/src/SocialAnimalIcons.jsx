@@ -2165,6 +2165,32 @@ function getRel(a, otherId, create = true) {
 }
 
 // ---------------- World Component ----------------
+/**
+ * HOW MUCH DAM IS THERE WHEN YOU OPEN THE PAGE.
+ *
+ * All of it. This was 0, and 0 is wrong for a reason no amount of checking
+ * the PLAN could catch: the plan has been a hundred logs since v0.40, but a
+ * hundred logs take about fourteen minutes of watching to lay, so what
+ * anyone actually saw in their first two minutes was a fifteen-log arc —
+ * which is indistinguishable from the fourteen-log pile this was all meant
+ * to replace. The dam was reported unbuilt twice, correctly, against two
+ * builds whose dam plan measured 100.
+ *
+ * A beaver dam is scenery that predates the tab being opened. It stands at
+ * load, and the way to watch it go up from bare water is Reset World, which
+ * is a button somebody presses on purpose.
+ */
+function damAtRest(def) { return def && def.dam ? def.dam.length : 0; }
+
+/**
+ * ...and the same for the squirrel's drey, for the same reason. Six courses
+ * at roughly half a trip a minute is ten minutes before there is a nest in
+ * the fork at all, so on any ordinary visit that tree is simply bare. The
+ * drey stands at load like the dam does; Reset World still starts both from
+ * nothing.
+ */
+function dreyAtRest() { return DREY_COURSES; }
+
 export default function SocialAnimalsRPG() {
   const stageRef = useRef(null);
   const iconsRef = useRef(new Map()); // id -> HTMLElement
@@ -2184,6 +2210,8 @@ export default function SocialAnimalsRPG() {
     def: WORLDS.forest,
     agents: [],
     running: true,
+    damCount: damAtRest(WORLDS.forest),
+    dreyN: dreyAtRest(),
     last: performance.now(),
   });
 
@@ -2372,6 +2400,9 @@ export default function SocialAnimalsRPG() {
     if (s) { const a = makeAgent(w, s); enterFromEdge(a, w, DEFAULTS.speed); w.agents.push(a); }
   };
   const removeAgent = () => { worldRef.current.agents.pop(); };
+  // RESET WORLD IS THE ONLY PLACE THE DAM STARTS EMPTY, and that is what it
+  // is for: this is the button you press to watch the beaver lay all hundred
+  // logs from bare water. Opening the page is not that button.
   const resetWorld = () => {
     const w = worldRef.current;
     w.agents = seedAgents(w, DEFAULTS.numAgents);
@@ -2384,7 +2415,7 @@ export default function SocialAnimalsRPG() {
     const w = worldRef.current;
     w.def = WORLDS[key];
     w.agents = seedAgents(w, DEFAULTS.numAgents);
-    w.damCount = 0; w.dreyN = 0; w.caches = null;
+    w.damCount = damAtRest(w.def); w.dreyN = dreyAtRest(); w.caches = null;
     setSnapshot((s) => ({ ...s, selectedId: null }));
   };
 
