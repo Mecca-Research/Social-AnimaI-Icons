@@ -40,6 +40,64 @@ const AT_LOAD = await page.evaluate(`(w => ({
 const pass = [], fail = [];
 const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  ✔' : '  ✘'} ${l} — ${d}`); };
 
+// ============ what is actually THERE when you open the page ============
+// EVERY SUITE HERE ONCE MEASURED THE PLAN AND NONE MEASURED THE VIEW, and
+// the dam was reported unbuilt twice — correctly — against two builds this
+// suite called green, because the plan said a hundred logs while the world
+// showed a fifteen-log arc for the first two minutes.
+//
+// The answer to that is NOT to stand the dam up at load. It was, briefly,
+// and that hid the only thing worth watching. The dam starts empty and the
+// beaver lays ONE log per crossing, which is what a beaver does and what
+// the owner asked for; the long build is the reward for leaving it running.
+//
+// THIS RUNS FIRST, before any other check, and that is not tidiness. It
+// needs a world nobody has touched: the checks below park the cast with
+// noEventUntil nine million ms out, and one of them finishes the dam to
+// measure the completed structure. Run last, this failed four times in a
+// row for four different reasons — a muzzle it inherited, a dam already
+// built, an errand it had picked up in the meantime, a budget in the wrong
+// clock — none of which were the beaver.
+{
+  const r = await page.evaluate(`(async (w) => {
+    const bv = w.agents.find(a => a.species === 'beaver');
+    if (!bv) return { none: 'no beaver in the roster' };
+    const frame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 20)));
+    // The owner's own shortcut: pick him up and drop him off the edge. A dam
+    // run starts on going OFF-STAGE, so a throw is worth a crossing — and
+    // six pixels over the line has to be enough, which is what dropOffstage
+    // is for and what this is really checking.
+    bv.state = 'wander'; bv.z = 0; bv.dragging = false;
+    bv.x = w.bounds.w + 6; bv.y = 0.2 * w.bounds.h; bv.vx = 0; bv.vy = 0;
+    if (w.__dropOffstage) w.__dropOffstage(bv);
+    let started = 0;
+    for (let i = 1; i <= 120 && !started; i++) {
+      await frame();
+      if (bv.state === 'damrun') started = i;
+    }
+    return { started, state: bv.state,
+             // if it did not start, say what the trigger was looking at
+             dam: w.damCount | 0, plan: (w.def.dam || []).length,
+             x: Math.round(bv.x), edge: Math.round(w.bounds.w),
+             carried: !!w.__dropOffstage };
+  })(window.__saiWorld)`);
+  chk(AT_LOAD.plan === 100, 'the beaver has a hundred logs to lay',
+    `${AT_LOAD.plan} in the plan`);
+  chk(AT_LOAD.dam === 0 && AT_LOAD.drey === 0,
+    'and the lake and the fork are empty when the page opens',
+    `${AT_LOAD.dam} logs, ${AT_LOAD.drey} drey courses — both are things you watch get built`);
+  // ...and this asserts the RUN STARTS, not that the log lands. Measured on
+  // a virtual 60fps clock: dropped clear of the edge he takes the errand on
+  // the very next frame, and the log lands about sixteen seconds later,
+  // nearly all of it the swim. Waiting for the log at this suite's frame
+  // rate would be waiting on dt clamping rather than on the beaver.
+  chk(!r.none && r.started > 0, 'and pushing him off the map starts a dam run',
+    r.none || (r.started ? `in the errand ${r.started} frame(s) after the drop`
+                         : `still ${r.state} after 120 frames — x ${r.x} vs edge ${r.edge},`
+                           + ` dam ${r.dam}/${r.plan}, carried ${r.carried}`));
+}
+
+
 // ============================ terrain ============================
 {
   const t = await page.evaluate(`(w => ({
@@ -1787,78 +1845,7 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
     T ? `stood on ${T.plats.length} platforms, ended on terrace ${T.end}` : 'no turtle');
 }
 
-// ============ what is actually THERE when you open the page ============
-// EVERY SUITE HERE ONCE MEASURED THE PLAN AND NONE MEASURED THE VIEW, and
-// the dam was reported unbuilt twice — correctly — against two builds this
-// suite called green, because the plan said a hundred logs while the world
-// showed a fifteen-log arc for the first two minutes.
-//
-// The answer to that is NOT to stand the dam up at load. It was, briefly,
-// and that hid the only thing worth watching. The dam starts empty and the
-// beaver lays ONE log per crossing, which is what a beaver does and what
-// the owner asked for; the long build is the reward for leaving it running.
-//
-// So what this pins is the thing that actually goes wrong: that the plan is
-// a hundred, that the world starts at nothing, and that the beaver DOES lay
-// them — one per trip, proven by making him take one.
-{
-  const r = await page.evaluate(`(async (w) => {
-    const bv = w.agents.find(a => a.species === 'beaver');
-    if (!bv) return { none: 'no beaver in the roster' };
-    const frame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 20)));
-    // The owner's own shortcut: pick him up and drop him off the edge. A dam
-    // run starts on going OFF-STAGE, so a push is worth a crossing.
-    // UNMUZZLE HIM FIRST. Checks above this one park the rest of the cast
-    // and set noEventUntil nine million ms out to keep them from wandering
-    // into a measurement — and the beaver is "the rest of the cast" for all
-    // of them. He arrives here silenced, so the offstage trigger is refused
-    // and this read "still wander after 220 frames" on a build where a drop
-    // starts the errand on the very next frame.
-    bv.state = 'wander'; bv.z = 0; bv.dragging = false;
-    bv.noEventUntil = 0; bv.intentUntil = 0; bv.idleUntil = 0;
-    const S = bv._eth;
-    if (S) { S.cd['dam'] = 0; S.seekAt['dam'] = 0; S.armed['dam'] = 0;
-             S.goal = null; S.goalUntil = 0; }
-    await frame();
 
-    // just OVER the edge, not far past it — the drop handler is what has to
-    // carry him clear of EDGE_OFF, and this check exists because it did not.
-    bv.dragging = true;
-    bv.x = w.bounds.w + 6; bv.y = 0.2 * w.bounds.h; bv.vx = 0; bv.vy = 0;
-    await frame(); await frame();
-    bv.dragging = false;
-    if (w.__dropOffstage) w.__dropOffstage(bv);
-    let started = 0;
-    for (let i = 1; i <= 220 && !started; i++) {
-      await frame();
-      if (bv.state === 'damrun') started = i;
-    }
-    return { started, state: bv.state,
-             // if it did not start, say what the trigger was looking at
-             dam: w.damCount | 0, plan: (w.def.dam || []).length,
-             x: Math.round(bv.x), edge: Math.round(w.bounds.w),
-             carried: !!w.__dropOffstage, running: w.running !== false,
-             eth: !!bv._eth, noEvt: Math.round((bv.noEventUntil || 0) - performance.now()) };
-  })(window.__saiWorld)`);
-  chk(AT_LOAD.plan === 100, 'the beaver has a hundred logs to lay',
-    `${AT_LOAD.plan} in the plan`);
-  chk(AT_LOAD.dam === 0 && AT_LOAD.drey === 0,
-    'and the lake and the fork are empty when the page opens',
-    `${AT_LOAD.dam} logs, ${AT_LOAD.drey} drey courses — both are things you watch get built`);
-  // ...and this asserts the RUN STARTS, not that the log lands. Measured on
-  // a virtual 60fps clock: the drop is followed by about 7 seconds before he
-  // takes the errand, and the log itself lands at about 23 — most of which
-  // is him swimming the length of the lake, which is the part worth
-  // watching. At the headless frame rate this suite runs at, waiting for the
-  // log would be waiting on dt clamping rather than on the beaver. An
-  // earlier version of this check did exactly that and failed at 0 logs
-  // after 120 pushes, on a build where the push works perfectly.
-  chk(!r.none && r.started > 0, 'and pushing him off the map starts a dam run',
-    r.none || (r.started ? `in the errand ${r.started} frames after the drop`
-                         : `still ${r.state} after 220 frames — x ${r.x} vs edge ${r.edge},`
-                           + ` dam ${r.dam}/${r.plan}, carried ${r.carried},`
-                           + ` running ${r.running}, eth ${r.eth}, muzzle ${r.noEvt}ms`));
-}
 
 chk(errs.length === 0, 'no JS errors', errs.length ? errs[0] : 'clean');
 console.log(`\n${fail.length ? 'FAIL ' + fail.length : 'ALL PASS'} (${pass.length} passed)`);
