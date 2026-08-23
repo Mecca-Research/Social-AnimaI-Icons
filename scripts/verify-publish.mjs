@@ -71,11 +71,18 @@ const r = await page.evaluate(`(() => {
   for (let y = 0; y < B.h; y += 4) for (let x = 0; x < B.w; x += 4)
     if (w.rockZoneAt(x, y).on && x > ex) ex = x;
   return { plan: (w.def.dam || []).length, hooks: !!w.rockZoneAt,
+           dam: w.damCount | 0, drey: w.dreyN | 0,
            rockEastPct: Math.round(ex / B.w * 100) };
 })()`);
 if (r.noWorld) { console.log("  ✘ the served page exposes no world"); process.exit(1); }
 chk(r.hooks, "the served bundle is this world", "the terrain model answers");
 chk(r.plan === 100, "the served dam plan is a hundred logs", `${r.plan} in def.dam`);
+// ...and STANDING, not merely planned. v0.41 shipped a correct hundred-log
+// plan over a world that started with zero of them placed and took fourteen
+// minutes to fill, so every check agreed while the dam was not there.
+chk(r.dam === r.plan, "and the dam is standing at load",
+  `${r.dam} of ${r.plan} placed on a fresh page`);
+chk(r.drey > 0, "and the squirrel already has a drey", `${r.drey} courses at load`);
 chk(r.rockEastPct <= 12, "the rock's region stays on the rock",
   `reaches ${r.rockEastPct}% of the stage width`);
 

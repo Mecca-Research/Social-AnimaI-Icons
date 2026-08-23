@@ -22,6 +22,15 @@ const page = await browser.newPage({ viewport: { width: 1500, height: 940 } });
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 await page.goto(process.env.SAI_URL || 'http://localhost:5173/', { waitUntil: 'networkidle' });
 await page.waitForTimeout(2500);
+// WHAT IS STANDING WHEN THE PAGE OPENS, captured HERE — before a single
+// check has run — because several of them mutate the very fields this is
+// about. The dam block below sets damCount to drive the geometry checks and
+// puts it back afterwards, so asking at the end measures the fixture rather
+// than the world.
+const AT_LOAD = await page.evaluate(`(w => ({
+  dam: w.damCount | 0, plan: (w.def.dam || []).length, drey: w.dreyN | 0,
+}))(window.__saiWorld)`);
+
 const pass = [], fail = [];
 const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  ✔' : '  ✘'} ${l} — ${d}`); };
 
@@ -1082,7 +1091,7 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
         const m = idx(a, c);
         if (open[m] && !seen[m]) { seen[m] = 1; reached++; st.push(m); } } }
     let openTotal = 0; for (let k = 0; k < N * N; k++) if (open[k]) openTotal++;
-    w.damCount = 0;                              // put the world back
+    w.damCount = logs.length;                    // put the world back AS FOUND
     return { n: logs.length, wetLogs, pct: +(dam / lake * 100).toFixed(1),
              pockets: openTotal - reached, cells: openTotal + dam };
   })(window.__saiWorld)`);
@@ -1394,6 +1403,23 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
   chk(!!T && T.plats.length === 0 && T.end === 0,
     'and a turtle still gets nowhere near it',
     T ? `stood on ${T.plats.length} platforms, ended on terrace ${T.end}` : 'no turtle');
+}
+
+// ============ what is actually THERE when you open the page ============
+// EVERY SUITE HERE MEASURED THE PLAN AND NONE MEASURED THE VIEW. The dam
+// plan has been a hundred logs since v0.40 and every check agreed, while
+// world.damCount started at 0 and took about fourteen minutes to fill — so
+// what anyone saw in their first two minutes was a fifteen-log arc, which is
+// the fourteen-log pile the rebuild existed to replace. It was reported
+// unbuilt twice, correctly, against two builds this suite called green.
+// The squirrel's drey was the same: six courses at half a trip a minute.
+//
+// So this asks the world what is STANDING at load, not what is planned.
+{
+  const r = AT_LOAD;
+  chk(r.plan > 0 && r.dam === r.plan, 'the dam is standing when the page loads',
+    `${r.dam} of ${r.plan} logs placed at load`);
+  chk(r.drey > 0, 'and the squirrel already has a drey', `${r.drey} courses at load`);
 }
 
 chk(errs.length === 0, 'no JS errors', errs.length ? errs[0] : 'clean');
