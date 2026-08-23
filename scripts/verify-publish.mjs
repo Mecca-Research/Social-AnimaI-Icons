@@ -56,6 +56,13 @@ await page.addInitScript(() => {
 await page.goto(url, { waitUntil: "networkidle" });
 await page.waitForTimeout(1500);
 await page.evaluate("window.__pump(30)");
+// A world opens with ONE animal, and the hop probe below needs a specific
+// species to drive. Ask the world for its whole roster through its own
+// seeding path — without this the probe reads `undefined.z` and this gate
+// crashes instead of reporting, which is precisely the failure it exists to
+// catch in the first place.
+await page.evaluate("window.__saiWorld.__seedCast && window.__saiWorld.__seedCast()");
+await page.evaluate("window.__pump(20)");
 
 const fail = [];
 const chk = (ok, label, detail) => {
@@ -91,6 +98,7 @@ chk(r.rockEastPct <= 12, "the rock's region stays on the rock",
 const g = await page.evaluate(`(() => {
   const w = window.__saiWorld, B = w.bounds;
   const a = w.agents.find(x => x.species === 'fox');
+  if (!a) return { n: -1, worstPct: 0, missing: true };
   for (const o of w.agents) if (o !== a) { o.x=-2000; o.y=-2000; o.state='idle';
     o.idleUntil=performance.now()+9e6; o.noEventUntil=performance.now()+9e6; }
   let worst = 0, n = 0;
@@ -109,7 +117,8 @@ const g = await page.evaluate(`(() => {
   }
   return { n, worstPct: Math.round(worst / B.w * 100) };
 })()`);
-chk(g.n === 0, "nothing hops on ground that is not the rock",
+chk(g.n === 0 && !g.missing, "nothing hops on ground that is not the rock",
+  g.missing ? "no fox in the world to drive — the probe never ran" :
   `${g.n} off-rock hop starts, eastmost ${g.worstPct}% of the width`);
 chk(errs.length === 0, "the served page throws nothing", errs.length ? errs[0] : "clean");
 
