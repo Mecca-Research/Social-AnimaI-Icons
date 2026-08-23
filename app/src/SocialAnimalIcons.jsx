@@ -315,41 +315,76 @@ function shallowBandAt(bounds, t, reach = STAND_REACH) {
 //   3. no crown over the goose's sward — v0.36's "56% of the lawn"
 //   4. on the map, and no nearer another trunk than the world's own
 //      tightest pair
+//   5. ...and since the bluff was cut into the west edge, the WEST working
+//      spots stay off the ROCK too, for the same reason they stay out of the
+//      lake. An animal does not change terrace by walking, so a bed or a
+//      rub spot on the shelf is a behaviour that walks into the riser,
+//      gets pushed back, and gives up. That rule is what pins the
+//      west-high pine below.
 // checked at twelve stage shapes. The two extreme short windows (900x620,
 // 960x600) are excluded: the world already ships violations at those and
-// solving for them freezes every tree where it stands.
+// solving for them freezes every tree where it stands. (The crown ceiling
+// and the crown-to-crown gaps ARE checked at all fourteen: since treeScale
+// they are shape-independent, so there is nothing to exclude.)
 const FOREST_TREES = [
   // Down and right, past the surface root at (.185,.690). It could not move
   // a LITTLE right: it already sat 103px from that root's 96px ring, so any
   // step toward it broke rule 1 — the only way right was to go far enough
   // down to clear the root's latitude entirely.
+  //
+  // AND IT STILL CANNOT, WHICH IS WORTH WRITING DOWN because there are now
+  // two more reasons to want it further east and no room for either:
+  //   - its crown paints over the bluff's new `step` platform, covering
+  //     8-31% of that ledge depending on the shape (13% at the reference),
+  //     so an animal standing on the east end of the step is under leaves;
+  //   - it owns the tightest west face on the map by rule 5 — its own deer
+  //     bed spot has 8.3px of forest floor at 1008x700, against the
+  //     west-high spruce's 21.9px at its worst.
+  // Both want the same fix and neither can have it. The root's ring is at
+  // 97.3px at 1120x640, i.e. 1.3px of slack, so ANY eastward step breaks
+  // rule 1; and this crown is already the tightest pair on the map with the
+  // bottom-left oak — 1.3px of daylight at 1084x1132 — so any step east or
+  // south merges the two into one mass. Clearing the step outright needs
+  // x >= .170, which is 90px inside both. Measured, not assumed.
   { x: .125, y: .800, s: 1.38,  kind: "oak"  }, // west, low
   // Right, into the open ground it was asked for — and an EVERGREEN now,
   // which is a second nest tree as well as a second silhouette. A conifer's
   // crown box is 40 half-width against an oak's 64, so the same tree stops
   // leaning over the ground west of it.
   //
-  // THE SCALE IS 1.10 BECAUSE OF THE LATITUDE, not because of the window.
+  // 1.10 -> 1.56, THE LONE SPRUCE'S SIZE, AND THE WHOLE COST IS THE LATITUDE.
   // Crowns scale with the stage now (see treeScale below), so the leader's
   // clearance is tip = h * (y - topPx*s0/872) — the h cancels out of the
   // SIGN, and a crown is whole at every shape or at none. For a pine that
-  // reads: whole iff s0 <= y * 872 / 232, which here is 1.184. The shipped
-  // 1.10 leaves 11.9px of daylight on the shortest stage checked and 19.5px
-  // at the reference; 1.12 spends a quarter of what is left for a 2% tree.
+  // reads: whole iff y >= 232*s0/872, which at 1.56 is y >= .4150. The old
+  // anchor had .315, so this tree could not be grown where it stood: the
+  // resize IS a move, and the move is 148px down the stage and 25 across it.
   //
-  // The 1.56 of the lone spruce is NOT available here, and after the scaling
-  // fix that is a fact about the MAP rather than about the window: a 1.56
-  // pine needs y >= 232*1.56/872 = .4150 of the stage above its anchor and
-  // this corner has .315. Dropping it to y .44 clears the ceiling by 13.3px
-  // and then loses on the other two rules — measured over sixteen shapes:
-  //   x <= .17  the deer's own west bed spot lands on the bluff, 2-99px in
-  //   x >= .18  the shrub at (.225,.455) is inside the 96px reach ring,
-  //             short by 43-96px
-  // There is no seam between them. With that one shrub moved the band opens
-  // and (.175,.440) is legal by every rule; without it the nearest legal
-  // anchor for a 1.56 pine anywhere on the map is (.540,.600), which is not
-  // this tree.
-  { x: .168, y: .315, s: 1.10, kind: "pine", fruit: false }, // west, high
+  // It still reads as the top-left tree, and by more than it did. The crown
+  // is drawn 232*s px ABOVE the anchor, so a 1.56 spruce at y .485 paints
+  // from 7% to 28% of the stage height against the old 1.10's 2% to 17% —
+  // a taller silhouette in the same corner of the sky, with 61px of daylight
+  // over the leader at the reference instead of 19.5.
+  //
+  // WHERE IT WENT, AND WHY THERE. Swept at fifteen stage shapes against every
+  // rule below plus the bluff, maximising the SMALLEST margin rather than
+  // taking the first legal cell. Two rules close on it from opposite sides
+  // and they are what fixes the spot:
+  //   west   the deer's own bed spot is drawn 13*s + 42.8px out from the
+  //          trunk's centre line, and that is a FIXED px offset against a
+  //          fractional anchor — so on a narrow stage it walks west into the
+  //          bluff. 21.9px clear at 1000x800, 56.8px at the reference.
+  //   east   the nut tree at (.300,.450) and its 96px reach ring. 22.4px.
+  // Those two meet at (.185,.485) and nowhere better: 840 cells of the west
+  // pass, and this is the middle of them. Everything else is slack — 44.8px
+  // of ceiling, 84.4px on the tightest trunk pair, 119.8px of crown daylight,
+  // 350px to the goose's sward.
+  //
+  // AND IT COST THE BROWSE SHRUB AT (.225,.455), which moved to (.265,.360).
+  // That was not a preference: with the shrub where it was, a 1.56 pine had
+  // ZERO legal anchors anywhere in the west (best case -10.1px, held by the
+  // shrub at 1120x640). One object blocked it, one object moved.
+  { x: .185, y: .485, s: 1.56, kind: "pine", fruit: false }, // west, high
   // Moved from (.898,.480) — its west face was over the lake. Every trunk
   // behavior works a trunk from the WEST and stands its subject a sprite-foot
   // north of the anchor, and at the old spot that put the bear's back scratch
@@ -646,7 +681,14 @@ const TREE_CROWNS = {
 // The deer's rut and his bed are the second and third users of the same
 // route, so this now carries a per-species sub-object the way
 // setForageMetrics carries `nut`.
-setTreeMetrics({
+//
+// Held in a const rather than passed as a literal so the SAME object can go
+// out on the dev hook below. A suite that wants to know where a trunk puts
+// the deer's bed has to build the spot out of these numbers, and a suite
+// carrying its own copy of them goes on passing after the drawing moves —
+// the same reason __crowns and __treeScale are handed over rather than
+// re-derived.
+const TREE_METRICS = {
   reach: TREE_REACH, basePx: TREE_BASE_PX, canopyPx: TREE_CANOPY_PX,
   headDeep: TREE_HEAD_DEEP, standFeet: STAND_FEET, standBack: STAND_BACK,
   // The raccoon's two errands on the same trunk, in the same units as
@@ -688,7 +730,8 @@ setTreeMetrics({
   // ...and where each species of crown is PAINTED, which is the one entry
   // here that is a place an animal must not stop rather than one it goes to.
   crowns: TREE_CROWNS,
-});
+};
+setTreeMetrics(TREE_METRICS);
 
 // The oak crown, lifted 9.4 with the trunk. Kept as data so the 117 above
 // can be read straight off the first row instead of out of a path string.
@@ -964,7 +1007,39 @@ const FORAGE_SITES = [
   { x: .445, y: .565, s: 1.02, kind: "nut" },
   // browse shrubs through the middle
   { x: .375, y: .425, s: 1.00, kind: "shrub" },
-  { x: .225, y: .455, s: 0.92, kind: "shrub" },
+  // UP AND RIGHT, out of the west-high spruce's reach ring — from (.225,.455)
+  // to (.265,.360), which is 102px at the reference stage. It moved because
+  // it was the ONE object standing between that spruce and the size the lone
+  // spruce is: at 1.56 the pine's crown needs y >= .4150 to stay on the
+  // stage, and every anchor in the west at that latitude had this bush inside
+  // its 96px ring. With the bush here the corridor opens by 840 cells; with
+  // it where it was the whole west side was empty.
+  //
+  // Solved the same way the trees are, over the same fifteen stage shapes,
+  // and it is the SITE PAIRS that pin it, not the trees: the nut at
+  // (.300,.450) closes on it from the south-east and the north berry at
+  // (.265,.250) from directly above. Worst margins, all at the shape that
+  // holds them tightest:
+  //   +23.5px looser than the tightest pair the world already ships (70px
+  //           against its 46px, at 1120x640) — the rule the forage table
+  //           states for a new site in its own words
+  //   + 9.7px on its own 60px approach ring, same shape
+  //   +23.0px outside the nearest trunk's 96px ring, which is the spruce
+  //           that displaced it (119px at 1008x700)
+  //   +102px  of forest floor between its approach ring and the bluff
+  //   rho 1.71 at its nearest approach to the lake, against a spawn guard
+  //           that bites at 1.12
+  // and nothing paints over it: no crown box, no fern, no reed.
+  //
+  // THE DEER LOSES NOTHING, and this was watched rather than argued. Put on
+  // the far side of the bush from the clearing — hard against the bluff at
+  // (.165,.290), which is the one approach the move could have spoiled — he
+  // walks to it and beds into a browse 22px off the anchor, inside the 24px
+  // the event arrives on, without a frame on rock or in water. It sits a
+  // little nearer the middle shrub than it used to (173px against 224px) and
+  // the same distance from the south one, so the second-nearest roll that
+  // keeps him out of a rut still has three bushes to spread over.
+  { x: .265, y: .360, s: 0.92, kind: "shrub" },
   { x: .415, y: .625, s: 1.05, kind: "shrub" },
   // east berries, out toward the shore
   { x: .430, y: .330, s: 1.08, kind: "berry" },
@@ -2169,6 +2244,14 @@ export default function SocialAnimalsRPG() {
       // running in. `s` on each tree is already that answer for THIS stage;
       // `s0` beside it is the authored scale the rule is applied to.
       W.__treeScale = (bw, bh) => treeScale({ w: bw, h: bh });
+      // ...and the numbers the tree behaviours are built out of, the SAME
+      // object the ethogram was handed. What a suite needs them for is the
+      // WEST WORKING SPOTS: every trunk behaviour stands its subject at
+      //   x = tx - trunkR*s - r*3.1*k,  y = ty - basePx*s - r*3.1*feet
+      // for a pose reach k, and those are fixed px against a fractional
+      // anchor — which is why a spot that is open forest floor on one stage
+      // shape is inside the bluff on the next.
+      W.__treeMetrics = TREE_METRICS;
       // the bluff's terrain, so a suite checks the rule the world walks by
       // rather than a copy of it that can drift
       W.rockZoneAt = (x, y) => rockZone(W.bounds, x, y);
