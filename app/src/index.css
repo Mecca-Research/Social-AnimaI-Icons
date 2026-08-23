@@ -4917,3 +4917,82 @@ body {
   .sai-sprite[data-state="conedig"] .sai-crit--skunk .cone-spray{ opacity:1; }
   .sai-sprite[data-state="fight"] .sai-crit--goose .hiss-air{ opacity:1; }
 }
+
+/* ==================== v0.42: off the cave's terrace ====================
+   COMING DOWN OFF THE SHELF IS THREE DIFFERENT MOVES NOW, and only one of
+   them needs anything drawn. The cougar's is a jump and the rig's own leap
+   already reads as one — data-air leans him, data-burst winds his legs up,
+   and the arc is in the sim. The other two are birds, and a bird coming off
+   a ledge that looked like a bear coming off it would be the whole point
+   missed, so `rockfly` is a state of its own with the wings out.
+
+   ONE FLAG, TWO SPECIES, and that is only safe because every rule below is
+   scoped to a species — a bare [data-fly="1"] rule here would give the goose
+   the owl's wings the first time both were on the bluff. The two sets of art
+   are not interchangeable: the owl has a purpose-drawn flappose from his
+   roost flights, and the goose's spread wings are the ones he beats in the
+   water, which is the only pair of opened wings he owns.
+
+   WHY A FLAG AND NOT data-state. The sim DOES put him in a state — it is
+   ROCK_FLY_STATE, and it is what keeps an encounter or an appetite from
+   claiming a bird halfway down a cliff — but data-state rides the 300ms
+   React snapshot, and a quarter of a second is a fifth of this move. Same
+   argument data-burst and data-musk are already made on: a fact about a
+   MOMENT comes through renderWorld every frame, not through the snapshot.
+
+   Neither bird gets a NEW drawing out of this. What the goose gets is his
+   splash wings with the water taken off them. */
+
+/* ---- the owl: set wings, a slow flex. The same descent his roost makes,
+        because it is the same descent — a bird coming off a rock and a bird
+        coming out of a spruce are doing one thing. ---- */
+.sai-sprite[data-fly="1"] .sai-crit--owl .sai-crit-body,
+.sai-sprite[data-fly="1"] .sai-crit--owl .sai-crit-head,
+.sai-sprite[data-fly="1"] .sai-crit--owl .sai-crit-tail,
+.sai-sprite[data-fly="1"] .sai-crit--owl .sai-crit-leg,
+.sai-sprite[data-fly="1"] .sai-crit--owl .sai-crit-wing{ display:none; }
+.sai-sprite[data-fly="1"] .sai-crit--owl .sai-crit-flappose{ display:inline; }
+.sai-sprite[data-fly="1"] .sai-crit--owl .flap-wing-near,
+.sai-sprite[data-fly="1"] .sai-crit--owl .flap-wing-far{
+  transform-box:fill-box; transform-origin:96% 86%;
+  animation:sai-owl-glide 1.1s ease-in-out infinite; }
+
+/* ---- the goose: both wings wide and BEATING. He is not a glider — a Canada
+        goose off a ledge rows himself down — so this is the splash's own
+        .34s stroke, which is the beat his art was drawn for, with the spray
+        and the wake that belong to the lake switched off. ---- */
+.sai-sprite[data-fly="1"] .sai-crit--goose .sai-crit-splashwings{ display:inline; }
+.sai-sprite[data-fly="1"] .sai-crit--goose .sai-crit-wing{ display:none; }
+.sai-sprite[data-fly="1"] .sai-crit--goose .splash-spray,
+.sai-sprite[data-fly="1"] .sai-crit--goose .splash-wake{ display:none; }
+/* feet tucked back under the tail, the way they are in the air and are not
+   on the water — and the ground shadow is already dimmed by data-air */
+.sai-sprite[data-fly="1"] .sai-crit--goose .sai-crit-leg{ opacity:0; }
+.sai-sprite[data-fly="1"] .sai-crit--goose .sai-crit-splashwings .wing-near{
+  transform-box:fill-box; transform-origin:92% 92%; animation:sai-goose-flapnear .34s ease-in-out infinite; }
+.sai-sprite[data-fly="1"] .sai-crit--goose .sai-crit-splashwings .wing-far{
+  transform-box:fill-box; transform-origin:92% 92%; animation:sai-goose-flapfar .34s ease-in-out infinite; }
+/* the neck stretched out ahead and level, which is the one line that says
+   "flying" rather than "flapping". It outranks the walk cycle's neck-bob by
+   specificity, which matters: the sim is moving him, so data-walking is set
+   the whole way down. */
+.sai-sprite[data-fly="1"] .sai-crit--goose .sai-crit-head{
+  transform-box:fill-box; transform-origin:14% 92%;
+  animation:sai-goose-flyneck .34s ease-in-out infinite; }
+@keyframes sai-goose-flyneck{
+  0%,100%{transform:rotate(38deg) translateY(1px);}
+  50%{transform:rotate(43deg) translateY(-2px);}
+}
+
+@media (prefers-reduced-motion: reduce){
+  /* The POSE stays, both times: a bird with its wings out is still a bird in
+     the air, and the whole reason this state exists is the shape rather than
+     the beat. Only the beating stops. */
+  .sai-sprite[data-fly="1"] .sai-crit--owl .flap-wing-near,
+  .sai-sprite[data-fly="1"] .sai-crit--owl .flap-wing-far,
+  .sai-sprite[data-fly="1"] .sai-crit--goose .sai-crit-splashwings .wing-near,
+  .sai-sprite[data-fly="1"] .sai-crit--goose .sai-crit-splashwings .wing-far,
+  .sai-sprite[data-fly="1"] .sai-crit--goose .sai-crit-head{ animation:none; }
+  .sai-sprite[data-fly="1"] .sai-crit--goose .sai-crit-head{
+    transform-box:fill-box; transform-origin:14% 92%; transform:rotate(40deg); }
+}

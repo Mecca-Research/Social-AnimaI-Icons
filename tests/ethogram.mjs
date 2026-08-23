@@ -22,6 +22,12 @@ const page = await browser.newPage({ viewport: { width: 1500, height: 940 } });
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 await page.goto(process.env.SAI_URL || 'http://localhost:5173/', { waitUntil: 'networkidle' });
 await page.waitForTimeout(2000);
+// A world opens with ONE animal now; every check below looks its subjects up
+// by species. Ask the world for its whole roster first, through its own
+// seeding path, or the suite quietly checks nothing.
+await page.evaluate('window.__saiWorld.__seedCast && window.__saiWorld.__seedCast()');
+await page.waitForTimeout(600);
+
 const pass = [], fail = [];
 const chk = (ok, label, detail) => { (ok?pass:fail).push(`${label} — ${detail}`);
   console.log(`${ok?'  ✔':'  ✘'} ${label} — ${detail}`); };
