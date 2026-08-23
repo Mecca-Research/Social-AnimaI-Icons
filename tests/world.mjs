@@ -1215,6 +1215,7 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
   const r = await page.evaluate(`(async (w) => {
     const B = w.bounds;
     const logs = w.damLogsAt();
+    const wasBuilt = w.damCount | 0;             // whatever the world had
     w.damCount = logs.length;                    // finish the dam for the test
     // DAM_PLACED is refreshed from world.damCount at the head of a frame, so
     // the land test does not know about the timber until one has run
@@ -1244,7 +1245,13 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
         const m = idx(a, c);
         if (open[m] && !seen[m]) { seen[m] = 1; reached++; st.push(m); } } }
     let openTotal = 0; for (let k = 0; k < N * N; k++) if (open[k]) openTotal++;
-    w.damCount = logs.length;                    // put the world back AS FOUND
+    // ...and PUT IT BACK AS FOUND, which means what it was, not the fixture.
+    // This restored logs.length â€” the value the fixture had just written â€”
+    // so the dam stayed finished for every check after it. The one that
+    // noticed was the beaver's own: with the plan complete his errand has
+    // nothing left to build, so a drop off the map started no run and the
+    // check read "still wander" against a world where the push works.
+    w.damCount = wasBuilt;
     return { n: logs.length, wetLogs, pct: +(dam / lake * 100).toFixed(1),
              pockets: openTotal - reached, cells: openTotal + dam };
   })(window.__saiWorld)`);
@@ -1398,7 +1405,13 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     out.cougarCliff = await run('cougar', 1, 70, cliff, -70, 10);  // climbs it
     out.bearCliff = await run('bear', 1, 70, cliff, -70, 10);      // does neither
     out.owlDown = await run('owl', 2, 70, plateau, 70, 14);
-    out.cougarDown = await run('cougar', 2, 70, plateau, 70, 14);
+    // SIXTY, not fourteen. A leap off the plateau used to be the next frame;
+    // the descent rework gives a grace before an animal commits, and 14
+    // frames at this suite's rate is well under a second of simulated time.
+    // The rule being checked is the ROUTE â€” the cougar may not skip the
+    // shelf the way the owl does â€” and a budget that cannot fit one hop
+    // measures the frame rate instead.
+    out.cougarDown = await run('cougar', 2, 70, plateau, 70, 60);
     return out;
   })(window.__saiWorld)`);
   chk(r.foxRiser && r.foxRiser.lvl === 1 && r.turtleRiser && r.turtleRiser.lvl === 0,
@@ -1795,6 +1808,19 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     const frame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 20)));
     // The owner's own shortcut: pick him up and drop him off the edge. A dam
     // run starts on going OFF-STAGE, so a push is worth a crossing.
+    // UNMUZZLE HIM FIRST. Checks above this one park the rest of the cast
+    // and set noEventUntil nine million ms out to keep them from wandering
+    // into a measurement â€” and the beaver is "the rest of the cast" for all
+    // of them. He arrives here silenced, so the offstage trigger is refused
+    // and this read "still wander after 220 frames" on a build where a drop
+    // starts the errand on the very next frame.
+    bv.state = 'wander'; bv.z = 0; bv.dragging = false;
+    bv.noEventUntil = 0; bv.intentUntil = 0; bv.idleUntil = 0;
+    const S = bv._eth;
+    if (S) { S.cd['dam'] = 0; S.seekAt['dam'] = 0; S.armed['dam'] = 0;
+             S.goal = null; S.goalUntil = 0; }
+    await frame();
+
     // just OVER the edge, not far past it â€” the drop handler is what has to
     // carry him clear of EDGE_OFF, and this check exists because it did not.
     bv.dragging = true;
@@ -1807,7 +1833,12 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
       await frame();
       if (bv.state === 'damrun') started = i;
     }
-    return { started, state: bv.state };
+    return { started, state: bv.state,
+             // if it did not start, say what the trigger was looking at
+             dam: w.damCount | 0, plan: (w.def.dam || []).length,
+             x: Math.round(bv.x), edge: Math.round(w.bounds.w),
+             carried: !!w.__dropOffstage, running: w.running !== false,
+             eth: !!bv._eth, noEvt: Math.round((bv.noEventUntil || 0) - performance.now()) };
   })(window.__saiWorld)`);
   chk(AT_LOAD.plan === 100, 'the beaver has a hundred logs to lay',
     `${AT_LOAD.plan} in the plan`);
@@ -1824,7 +1855,9 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
   // after 120 pushes, on a build where the push works perfectly.
   chk(!r.none && r.started > 0, 'and pushing him off the map starts a dam run',
     r.none || (r.started ? `in the errand ${r.started} frames after the drop`
-                         : `still ${r.state} after 220 frames`));
+                         : `still ${r.state} after 220 frames â€” x ${r.x} vs edge ${r.edge},`
+                           + ` dam ${r.dam}/${r.plan}, carried ${r.carried},`
+                           + ` running ${r.running}, eth ${r.eth}, muzzle ${r.noEvt}ms`));
 }
 
 chk(errs.length === 0, 'no JS errors', errs.length ? errs[0] : 'clean');
