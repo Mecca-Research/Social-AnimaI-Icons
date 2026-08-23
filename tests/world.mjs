@@ -394,8 +394,8 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
 // the fault only showed on stages shorter than about 1130px.
 {
   const r = await page.evaluate(`(w => {
-    const S = w.def.sward, T = w.def.trees || [], C = w.__crowns;
-    if (!S || !C) return { missing: true };
+    const S = w.def.sward, T = w.def.trees || [], C = w.__crowns, K = w.__treeScale;
+    if (!S || !C || !K) return { missing: true };
     const SIZES = [[1008,700],[1264,732],[1350,700],[1424,832],[1600,820],[1904,1012],
                    [1000,800],[1240,1000],[900,620],[1440,900],[1280,720],[1920,1080],
                    [960,600],[1120,640]];
@@ -408,6 +408,12 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     const hw = rr * 1.35, up = rr * 2;
     let worst = 0, worstAt = '';
     for (const [W, H] of SIZES) {
+      // A crown is sized against the stage now, so a sweep of SHAPES has to
+      // size it for the shape it is asking about: t.s is the answer for the
+      // window this suite happens to be running in, and t.s0 * treeScale is
+      // the answer for the one in hand. Using t.s here would have checked
+      // fourteen latitudes against one crown size.
+      const ks = K(W, H);
       let n = 0, bad = 0;
       for (let i = 0; i <= 20; i++) for (let j = 0; j <= 20; j++) {
         const x = (S.x0 + (S.x1 - S.x0) * i / 20) * W;
@@ -415,9 +421,10 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
         n++;
         for (const t of T) {
           const k = C[t.kind || 'oak']; if (!k) continue;
+          const s = t.s0 * ks;
           const tx = t.x * W, ty = t.y * H;
-          if (Math.abs(x - tx) > k.half * t.s + hw) continue;
-          if (y > ty - k.topPx * t.s && y - up < ty - k.botPx * t.s) { bad++; break; }
+          if (Math.abs(x - tx) > k.half * s + hw) continue;
+          if (y > ty - k.topPx * s && y - up < ty - k.botPx * s) { bad++; break; }
         }
       }
       if (bad / n > worst) { worst = bad / n; worstAt = W + 'x' + H; }
@@ -430,55 +437,104 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
       : `${(100 * r.worst).toFixed(0)}% under a crown at ${r.worstAt}`);
 }
 
-// ============ ...and the crowns are painted under the ceiling ============
-// A crown is drawn in FIXED px above an anchor held as a stage FRACTION, so
-// how much of it fits over the anchor is .315*h against 232*s â€” a race the
-// tree loses as the window shortens. The west-high pine at (.168,.315) has
-// been losing it since it was planted: its own note claimed 1.10 kept the
-// leader on the stage, and the leader is in fact cut at ten of the fourteen
-// shapes below, by 81px at 900x620 and 75px at 1120x640. That is the reason
-// a "make it the size of the lone spruce" resize is not a scale change: at
-// 1.56 this crown is 0% painted at 1120x640 and 51% at 1500x940, and there
-// is no anchor anywhere on the map that clears the ceiling and the four
-// placement rules at once.
+// ================== the crowns are painted whole ==================
+// A crown used to be drawn in FIXED px above an anchor held as a stage
+// FRACTION, so how much of it fitted over that anchor was y*h against
+// topPx*s â€” a race the tree lost as the window shortened. The west-high pine
+// lost it at four of the eight shapes it was measured at, by 81px at 965x552
+// and 75px at 1104x572, while its own note claimed 1.10 kept the leader on.
 //
-// So the ceiling gets a check of its own, in two halves. Five of the six
-// stand wholly under it and must keep doing so; the sixth is the shipped
-// exception, held to no worse than it is today so the next resize has to
-// argue with a number instead of with a comment.
+// Crowns are sized against the stage now, so the h divides out of the sign:
+//   tip = h * (y - topPx*s0/872)
+// and a crown is whole at EVERY shape or at none. That makes this a real
+// check rather than a survey: one arithmetic fact, swept over fourteen
+// shapes to prove the h really has gone.
+//
+// The scale rule comes off the world (__treeScale) rather than being copied
+// here, for the same reason the crown boxes and the lake do: a suite holding
+// its own copy of the rule goes on passing after the real one moves.
 {
   const r = await page.evaluate(`(w => {
-    const T = w.def.trees || [], C = w.__crowns;
-    if (!T.length || !C) return { missing: true };
-    const SIZES = [[992,632],[1248,664],[1334,632],[1408,764],[1584,752],[1888,944],
-                   [990,732],[1224,932],[1002,552],[1424,832],[1264,652],[1904,1012],
-                   [983,532],[1104,572]];
-    const out = T.map(() => ({ cut: 0, at: '', shown: 1 }));
+    const T = w.def.trees || [], C = w.__crowns, K = w.__treeScale;
+    if (!T.length || !C || !K) return { missing: true };
+    const SIZES = [[1008,700],[1264,732],[1350,700],[1424,832],[1600,820],[1904,1012],
+                   [1000,800],[1240,1000],[900,620],[1440,900],[1280,720],[1920,1080],
+                   [960,600],[1120,640]];
+    let worst = null, spread = null;
     for (const [W, H] of SIZES) {
+      const ks = K(W, H);
       for (let i = 0; i < T.length; i++) {
-        const t = T[i], k = C[t.kind || 'oak']; if (!k) continue;
-        const anchor = t.y * H, top = anchor - k.topPx * t.s, bot = anchor - k.botPx * t.s;
-        const cut = Math.max(0, -top);
-        const shown = Math.max(0, Math.min(bot, H) - Math.max(top, 0)) / ((k.topPx - k.botPx) * t.s);
-        if (cut > out[i].cut) { out[i].cut = cut; out[i].at = W + 'x' + H; }
-        if (shown < out[i].shown) out[i].shown = shown;
+        const t = T[i], c = C[t.kind || 'oak']; if (!c) continue;
+        const s = t.s0 * ks, tip = t.y * H - c.topPx * s;
+        if (!worst || tip < worst.tip)
+          worst = { tip, i, at: W + 'x' + H, kind: t.kind || 'oak', x: t.x, y: t.y };
+        // ...and the one that used to lose the race, tracked on its own, so
+        // the report says how much the fix actually bought it
+        if (t.x === 0.168 && t.y === 0.315) {
+          if (!spread) spread = { lo: tip, hi: tip };
+          spread.lo = Math.min(spread.lo, tip); spread.hi = Math.max(spread.hi, tip);
+        }
       }
     }
-    return { out, kinds: T.map(t => (t.kind || 'oak') + ' ' + t.x + ',' + t.y) };
+    return { worst, spread, n: T.length, shapes: SIZES.length };
   })(window.__saiWorld)`);
-  if (r.missing) chk(false, 'every crown but one is painted whole', 'no trees or no crown boxes');
-  else {
-    const cut = r.out.map((o, i) => ({ i, ...o })).filter((o) => o.cut > 0.5);
-    chk(cut.length === 1 && cut[0].i === 1, 'one crown is cut by the stage top, and only one',
-      cut.length === 1 && cut[0].i === 1
-        ? `the west-high pine, ${Math.round(cut[0].cut)}px at ${cut[0].at}; the other five are whole at fourteen shapes`
-        : cut.map((o) => `${r.kinds[o.i]} cut ${Math.round(o.cut)}px at ${o.at}`).join('; '));
-    // the shipped exception, pinned. 88px and 30% are what it measures now:
-    // any resize that makes either worse has to come back through here.
-    const p = r.out[1] || { cut: 999, shown: 0 };
-    chk(p.cut <= 88 && p.shown >= 0.30, 'and that one is no more beheaded than it already was',
-      `cut ${Math.round(p.cut)}px (<= 88) at ${p.at}, ${(p.shown * 100).toFixed(0)}% of the crown still painted (>= 30%)`);
-  }
+  if (r.missing) chk(false, 'every crown is painted whole, at every stage shape',
+    'the world hands over no trees, no crown boxes or no scale rule');
+  else chk(r.worst.tip > 0, 'every crown is painted whole, at every stage shape',
+    r.worst.tip > 0
+      ? `all ${r.n} clear at all ${r.shapes} shapes; tightest is the ${r.worst.kind} at ${r.worst.x},${r.worst.y}, ${r.worst.tip.toFixed(1)}px of sky at ${r.worst.at}`
+        + (r.spread ? ` â€” the west-high pine now runs ${r.spread.lo.toFixed(0)}..${r.spread.hi.toFixed(0)}px and was cut by 81px at 965x552` : '')
+      : `the ${r.worst.kind} at ${r.worst.x},${r.worst.y} is cut ${(-r.worst.tip).toFixed(0)}px at ${r.worst.at}`);
+}
+
+// ============== ...and the gaps between them hold ==============
+// The other half of the same bug, and the one the world had written off. Its
+// note read: "every pair in this world closes up on a short window â€” the
+// west pair, the roomiest on the map, is +59px here and -16px at 1008x700.
+// That is structural, and no placement fixes it." It was not structural and
+// it was never about placement: the trunks moved with the stage and the
+// crowns did not, so the two walked into each other. Now they scale
+// together, and a gap quoted at one shape holds at all of them.
+//
+// Box separation, not centre distance: positive is daylight, negative is two
+// crowns painted as one lumpy mass. The boxes are deliberately fatter than
+// the silhouettes, so a small positive number is real daylight on screen.
+{
+  const r = await page.evaluate(`(w => {
+    const T = w.def.trees || [], C = w.__crowns, K = w.__treeScale;
+    if (T.length < 2 || !C || !K) return { missing: true };
+    const SIZES = [[1008,700],[1264,732],[1350,700],[1424,832],[1600,820],[1904,1012],
+                   [1000,800],[1240,1000],[900,620],[1440,900],[1280,720],[1920,1080],
+                   [960,600],[1120,640]];
+    const box = (t, W, H, ks) => {
+      const c = C[t.kind || 'oak'], s = t.s0 * ks;
+      return { x: t.x * W, top: t.y * H - c.topPx * s,
+               bot: t.y * H - c.botPx * s, half: c.half * s };
+    };
+    let worst = null, pairs = 0;
+    for (const [W, H] of SIZES) {
+      const ks = K(W, H);
+      for (let i = 0; i < T.length; i++) for (let j = i + 1; j < T.length; j++) {
+        const A = box(T[i], W, H, ks), B = box(T[j], W, H, ks);
+        // two axis-aligned boxes are apart by the larger of their two axis
+        // separations; whichever axis is doing the separating is the one the
+        // eye reads the daylight along
+        const gap = Math.max(Math.abs(A.x - B.x) - (A.half + B.half),
+                             Math.max(A.top, B.top) - Math.min(A.bot, B.bot));
+        if (!worst || gap < worst.gap)
+          worst = { gap, pair: T[i].x + ',' + T[i].y + ' / ' + T[j].x + ',' + T[j].y,
+                    at: W + 'x' + H };
+      }
+    }
+    pairs = T.length * (T.length - 1) / 2;
+    return { worst, pairs, shapes: SIZES.length };
+  })(window.__saiWorld)`);
+  if (r.missing) chk(false, 'no two crowns are painted as one, at any stage shape',
+    'the world hands over too few trees, no crown boxes or no scale rule');
+  else chk(r.worst.gap > 0, 'no two crowns are painted as one, at any stage shape',
+    r.worst.gap > 0
+      ? `${r.pairs} pairs x ${r.shapes} shapes all apart; the closest call is pair ${r.worst.pair} with ${r.worst.gap.toFixed(1)}px at ${r.worst.at}`
+      : `pair ${r.worst.pair} overlaps by ${(-r.worst.gap).toFixed(0)}px at ${r.worst.at}`);
 }
 
 // ==================== the floats do not march in step ====================

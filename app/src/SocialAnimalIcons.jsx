@@ -327,39 +327,28 @@ const FOREST_TREES = [
   // Right, into the open ground it was asked for — and an EVERGREEN now,
   // which is a second nest tree as well as a second silhouette. A conifer's
   // crown box is 40 half-width against an oak's 64, so the same tree stops
-  // leaning over the ground west of it. The scale is 1.10 and not more for
-  // one reason: a pine's crown is drawn 232px tall against an oak's 207, in
-  // FIXED px, so at this latitude anything above 1.10 puts the tip off the
-  // top of the stage and the tree reads as beheaded rather than tall.
+  // leaning over the ground west of it.
   //
-  // ...and the second half of that sentence is TRUE OF 1.10 ITSELF on
-  // anything but a tall window, which the note above got wrong for three
-  // releases. MEASURED, tip in stage px (negative = cut off the top):
+  // THE SCALE IS 1.10 BECAUSE OF THE LATITUDE, not because of the window.
+  // Crowns scale with the stage now (see treeScale below), so the leader's
+  // clearance is tip = h * (y - topPx*s0/872) — the h cancels out of the
+  // SIGN, and a crown is whole at every shape or at none. For a pine that
+  // reads: whole iff s0 <= y * 872 / 232, which here is 1.184. The shipped
+  // 1.10 leaves 11.9px of daylight on the shortest stage checked and 19.5px
+  // at the reference; 1.12 spends a quarter of what is left for a 2% tree.
   //
-  //          900x620  1008x700  1120x640  1424x832  1500x940  1920x1080
-  //   1.10    -81.3     -56.1     -75.0     -14.5     +19.5      +63.6
-  //   1.56   -188.0    -162.8    -181.7    -121.3     -87.2      -43.1
-  //
-  // The anchor sits .315 down, so the ceiling over it is .315*h px and the
-  // crown under it is 232*s px: the whole crown only fits where h >= 736*s.
-  // At 1.10 that is a stage 810 tall, which is 1500x940 and up — everything
-  // shorter ships this tree with its leader and top whorls cut, and at
-  // 1120x640 it is showing 41% of its crown. The number that would put the
-  // WHOLE crown on at all twelve checked shapes (h down to 572) is s 0.78,
-  // i.e. smaller than it is now, not larger.
-  //
-  // WHY IT CANNOT SIMPLY BE GROWN, asked as a sweep rather than argued: at
-  // 1.56 the four placement rules below are perfectly happy with this spot —
-  // 273 cells of the map pass them, the nearest being (.17,.31) — so the
-  // rules are not what pins the size. The CEILING is. A 1.56 crown needs the
-  // anchor at y .633 to clear it at twelve shapes (.656 at 900x620), and the
-  // west corridor is closed at every one of those latitudes: the surface
-  // root at (.185,.690) owns .58-.76 through rule 1, the west-low oak owns
-  // .78-.88, and the mossy log at (.210,.950) owns the bottom. Swept over
-  // the whole map at twelve shapes, s 1.50 and 1.56 have NO legal anchor
-  // anywhere; 1.40 has three cells, all at (.11-.12,.57-.58) hard against
-  // the bluff. Growing this tree is therefore a re-solve of the west side,
-  // not a scale change, and it costs the top-left silhouette to buy it.
+  // The 1.56 of the lone spruce is NOT available here, and after the scaling
+  // fix that is a fact about the MAP rather than about the window: a 1.56
+  // pine needs y >= 232*1.56/872 = .4150 of the stage above its anchor and
+  // this corner has .315. Dropping it to y .44 clears the ceiling by 13.3px
+  // and then loses on the other two rules — measured over sixteen shapes:
+  //   x <= .17  the deer's own west bed spot lands on the bluff, 2-99px in
+  //   x >= .18  the shrub at (.225,.455) is inside the 96px reach ring,
+  //             short by 43-96px
+  // There is no seam between them. With that one shrub moved the band opens
+  // and (.175,.440) is legal by every rule; without it the nearest legal
+  // anchor for a 1.56 pine anywhere on the map is (.540,.600), which is not
+  // this tree.
   { x: .168, y: .315, s: 1.10, kind: "pine", fruit: false }, // west, high
   // Moved from (.898,.480) — its west face was over the lake. Every trunk
   // behavior works a trunk from the WEST and stands its subject a sprite-foot
@@ -383,11 +372,19 @@ const FOREST_TREES = [
   // plus a trim: 1.44 -> 1.32 and 1.26 -> 1.20. That is 174px between the
   // trunks and 12px of daylight between the crowns.
   //
-  // The gap is quoted at 1500x940 on purpose. Crowns are drawn in FIXED px
-  // while the trunks are stage fractions, so every pair in this world closes
-  // up on a short window — the west pair, the roomiest on the map, is +59px
-  // here and -16px at 1008x700. That is structural, and no placement fixes
-  // it; what a placement can fix is the shape people actually look at.
+  // The gap used to be quoted at 1500x940 because it had to be. Crowns were
+  // drawn in FIXED px over trunks held as stage fractions, so every pair in
+  // this world closed up on a short window — the west pair, the roomiest on
+  // the map, was +58px here and -17px at 1008x700, and this comment said
+  // that was structural and no placement fixed it. It was not structural, it
+  // was the scale: crowns are sized against the stage now, so the trunks and
+  // the crowns shrink together and a gap quoted at one shape holds at all of
+  // them. Box separation for the two tightest pairs, before -> after:
+  //   east (this pair)  1484x872  +50 -> +50   992x632   +7 -> +39
+  //                      972x552   -8 -> +32
+  //   west (.125,.800 / .278,.775) 1484x872 +58 -> +58
+  //                      992x632  -17 -> +34   1084x1132  -3 -> +1.4
+  // Nothing overlaps at any shape now; before, four of those eight did.
   //
   // The lower one is at .895 and not .875 for a fourth rule that only bites
   // on a squat window: its crown, padded by the grazing goose's own box,
@@ -406,6 +403,77 @@ const FOREST_TREES = [
   // conifer after berries that are not there.
   { x: .500, y: .940, s: 1.56,  kind: "pine", fruit: false }, // the lone spruce
 ];
+
+/**
+ * HOW BIG A TREE IS DRAWN, against the stage it stands on.
+ *
+ * Everything in this file that describes a tree is "stage px above the
+ * anchor at scale 1", and every consumer — TreeLayer, DreyLayer, the nest,
+ * behindTrunk, inCrown, and six trunk behaviours in Ethogram.js — multiplies
+ * it by that tree's own `s`. Until now `s` was a constant, so the drawing
+ * was a constant number of PIXELS while the anchor under it was a stage
+ * FRACTION. Those two do not stay in proportion, and the world had written
+ * down both consequences as facts of life:
+ *
+ *   - the west-high pine's leader came off the top of the stage on any short
+ *     window (-81px at 965x552, -56px at 992x632, +20px at 1484x872), while
+ *     the comment above it claimed 1.10 kept it on;
+ *   - and "every pair in this world closes up on a short window ... that is
+ *     structural, and no placement fixes it" — the west pair measured +58px
+ *     of daylight at 1484x872 and -17px at 992x632.
+ *
+ * Both are one bug: a fixed-px crown over a fractional anchor. So `s` is a
+ * function of the stage now. FOREST_TREES carries the AUTHORED scale in
+ * `s0`; `s` is that times `treeScale(bounds)`, refreshed whenever the stage
+ * changes, and nothing downstream had to learn a new name.
+ *
+ * THE BASIS IS THE GEOMETRIC MEAN OF THE TWO AXIS RATIOS, CAPPED AT THE
+ * HEIGHT RATIO. The mean is the world's own existing convention — damScale
+ * below sizes the dam the same way, and for the same stated reason: it is
+ * the only single number that treats a tall window and a wide one alike.
+ * The CAP is what this fix adds, and it is the whole point:
+ *
+ *   the mean alone GROWS a crown on a wide short stage — 1.28 at 2544x832,
+ *   a 28% taller crown on a stage 5% SHORTER than the reference — and that
+ *   is precisely the shape where the ceiling is tightest. It is right for a
+ *   dam, which is measured against its own lake, and wrong for a tree, which
+ *   is measured against the sky above it.
+ *
+ *   the cap makes the ceiling shape-independent. The tip sits at
+ *   y*h - topPx*s*k against an anchor at y*h, so any k of at most h/872
+ *   collapses that to
+ *        tip = h * (y - topPx*s0/872)
+ *   and the h divides out of the SIGN. "Is this crown whole" stops being a
+ *   per-window lottery and becomes ONE LATITUDE THRESHOLD, the same at every
+ *   shape:  y >= topPx * s0 / 872.
+ *
+ * Which term wins is just the aspect ratio: a stage wider than the
+ * reference's 1484:872 is held to the height, a squarer or taller one takes
+ * the mean. Height ALONE would do for the ceiling, but it fattens the crowns
+ * on a tall narrow stage — at 1084x1132 it gives k 1.30 on a stage 27%
+ * narrower than the reference, and the west pair's daylight goes from -3px
+ * to -53px. The mean holds k to 0.974 there and the pair opens to +1.4px.
+ *
+ * The reference is the stage at a 1500x940 window, where this world was
+ * tuned, so k is 1 there and every crown is painted exactly as it was.
+ */
+const TREE_REF = { w: 1484, h: 872 };
+const treeScale = (b) => Math.min(b.h / TREE_REF.h,
+  Math.sqrt((b.w * b.h) / (TREE_REF.w * TREE_REF.h)));
+// the authored scale, kept aside once, so syncTreeScale is idempotent and
+// CACHE_SPOTS / NEST_TREES / DREY_TREE below still settle against the numbers
+// this file was written with. A uniform k cannot reorder them anyway — both
+// rules only ever compare one tree's scale against another's.
+for (const t of FOREST_TREES) t.s0 = t.s;
+let TREE_STAGE_K = 1;
+function syncTreeScale(bounds) {
+  if (!bounds || !bounds.w || !bounds.h) return;
+  const k = treeScale(bounds);
+  if (k === TREE_STAGE_K) return;
+  TREE_STAGE_K = k;
+  for (const t of FOREST_TREES) t.s = t.s0 * k;
+}
+
 const TREE_REACH = 96; // how close the bear must be to take an interest
 // Where the bear meets the tree, all in stage px above the anchor at
 // scale 1. Both drawings sit in a viewBox whose BOTTOM EDGE is local
@@ -563,6 +631,11 @@ const TREE_BOX = {
 // that pinches in as it rises would otherwise let a bird stand in the part
 // of the band that happens to be needle-free at one window shape and vanish
 // at the next.
+//
+// AT SCALE 1 — and a tree's `s` now carries the stage in it, so these are
+// multiplied by the same number the drawing is and the box keeps landing on
+// the needles at every window shape. Anything that sweeps SHAPES rather than
+// reading the live one has to apply the rule itself: s0 * treeScale(w, h).
 const TREE_CROWNS = {
   oak:  { half: 64, botPx: 107.4, topPx: 207.4 },
   pine: { half: 40, botPx: 117,   topPx: 232 },
@@ -2045,6 +2118,11 @@ export default function SocialAnimalsRPG() {
     const fit = () => {
       const r = stage.getBoundingClientRect();
       worldRef.current.bounds = { w: r.width, h: r.height };
+      // ...and resize the forest with it. This is the one bounds-derived
+      // number that is written back onto the world's own data rather than
+      // memoized beside it, because six behaviours, three layers and the
+      // depth rule all already read `t.s` — see treeScale above.
+      syncTreeScale(worldRef.current.bounds);
     };
     fit();
     const ro = new ResizeObserver(fit); ro.observe(stage);
@@ -2085,6 +2163,12 @@ export default function SocialAnimalsRPG() {
       // so a suite that asks "is this ground under a tree" cannot drift from
       // the predicate the goose actually grazes by.
       W.__crowns = TREE_CROWNS;
+      // ...and the rule that sizes them, so a suite sweeping stage shapes
+      // asks the world how big a crown would be at 1104x572 instead of
+      // multiplying by whatever `t.s` happens to hold for the window it is
+      // running in. `s` on each tree is already that answer for THIS stage;
+      // `s0` beside it is the authored scale the rule is applied to.
+      W.__treeScale = (bw, bh) => treeScale({ w: bw, h: bh });
       // the bluff's terrain, so a suite checks the rule the world walks by
       // rather than a copy of it that can drift
       W.rockZoneAt = (x, y) => rockZone(W.bounds, x, y);
