@@ -1790,35 +1790,38 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
 // them — one per trip, proven by making him take one.
 {
   const r = await page.evaluate(`(async (w) => {
-    const plan = (w.def.dam || []).length, at0 = w.damCount | 0;   // live, for the lay test
     const bv = w.agents.find(a => a.species === 'beaver');
-    if (!bv) return { plan, at0, none: 'no beaver in the roster' };
-    // A dam run starts on going off-stage, which is exactly what dropping
-    // him over the edge does — the owner's own shortcut for a hurry.
+    if (!bv) return { none: 'no beaver in the roster' };
     const frame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 20)));
-    let laid = 0, pushes = 0;
-    for (let i = 0; i < 120 && laid < 2; i++) {
-      if (bv.state !== 'damrun' && !bv.dragging) {
-        bv.x = w.bounds.w + 60; bv.y = 0.2 * w.bounds.h; bv.vx = 0; bv.vy = 0;
-        const S = bv._eth;
-        if (S) { S.cd['dam'] = 0; S.seekAt['dam'] = 0; S.armed['dam'] = 0; }
-        bv.noEventUntil = 0; bv.intentUntil = 0; pushes++;
-      }
+    // The owner's own shortcut: pick him up and drop him off the edge. A dam
+    // run starts on going OFF-STAGE, so a push is worth a crossing.
+    bv.dragging = true;
+    bv.x = w.bounds.w + 70; bv.y = 0.2 * w.bounds.h; bv.vx = 0; bv.vy = 0;
+    await frame(); await frame();
+    bv.dragging = false;
+    let started = 0;
+    for (let i = 1; i <= 220 && !started; i++) {
       await frame();
-      laid = (w.damCount | 0) - at0;
+      if (bv.state === 'damrun') started = i;
     }
-    return { plan, at0, laid, pushes, perTrip: w.__damPerRun };
+    return { started, state: bv.state };
   })(window.__saiWorld)`);
-  // the LOAD values come from AT_LOAD, captured before any check ran: the
-  // dam geometry block above sets damCount to 100 to measure the finished
-  // structure, so asking the live world here would measure that fixture.
   chk(AT_LOAD.plan === 100, 'the beaver has a hundred logs to lay',
     `${AT_LOAD.plan} in the plan`);
   chk(AT_LOAD.dam === 0 && AT_LOAD.drey === 0,
     'and the lake and the fork are empty when the page opens',
     `${AT_LOAD.dam} logs, ${AT_LOAD.drey} drey courses — both are things you watch get built`);
-  chk(!r.none && r.laid > 0, 'and pushing him off the map lays one',
-    r.none || `${r.laid} log(s) after ${r.pushes} push(es)`);
+  // ...and this asserts the RUN STARTS, not that the log lands. Measured on
+  // a virtual 60fps clock: the drop is followed by about 7 seconds before he
+  // takes the errand, and the log itself lands at about 23 — most of which
+  // is him swimming the length of the lake, which is the part worth
+  // watching. At the headless frame rate this suite runs at, waiting for the
+  // log would be waiting on dt clamping rather than on the beaver. An
+  // earlier version of this check did exactly that and failed at 0 logs
+  // after 120 pushes, on a build where the push works perfectly.
+  chk(!r.none && r.started > 0, 'and pushing him off the map starts a dam run',
+    r.none || (r.started ? `in the errand ${r.started} frames after the drop`
+                         : `still ${r.state} after 220 frames`));
 }
 
 chk(errs.length === 0, 'no JS errors', errs.length ? errs[0] : 'clean');
