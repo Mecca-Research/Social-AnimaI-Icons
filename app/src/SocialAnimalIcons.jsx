@@ -308,7 +308,7 @@ function shallowBandAt(bounds, t, reach = STAND_REACH) {
 // line at 117px — because the bear treats every entry in this list
 // identically: a species that closed its boughs somewhere else would
 // give him one tree he climbs wrong.
-// EVERY POSITION HERE IS SOLVED, NOT PLACED. The four rules a trunk has to
+// EVERY POSITION HERE IS SOLVED, NOT PLACED. The six rules a trunk has to
 // keep are the ones the world already enforces elsewhere, and each of them
 // was learned from a bug:
 //   1. no forage site within TREE_REACH (96px) of the trunk — a site closer
@@ -324,32 +324,68 @@ function shallowBandAt(bounds, t, reach = STAND_REACH) {
 //      rub spot on the shelf is a behaviour that walks into the riser,
 //      gets pushed back, and gives up. That rule is what pins the
 //      west-high pine below.
+//   6. no CROWN over the rock either, which is the same rule as 3 wearing
+//      different clothes: a crown paints at zIndex 12 over the animals at
+//      10, so a terrace under one is a terrace an animal stands on unseen.
+//      The bluff has two standable platforms and three terraces and the
+//      west-low oak used to cover parts of all of them. That rule is what
+//      pins the west-low oak below, and it is the one that cost a resize.
 // checked at twelve stage shapes. The two extreme short windows (900x620,
 // 960x600) are excluded: the world already ships violations at those and
 // solving for them freezes every tree where it stands. (The crown ceiling
 // and the crown-to-crown gaps ARE checked at all fourteen: since treeScale
 // they are shape-independent, so there is nothing to exclude.)
 const FOREST_TREES = [
-  // Down and right, past the surface root at (.185,.690). It could not move
-  // a LITTLE right: it already sat 103px from that root's 96px ring, so any
-  // step toward it broke rule 1 — the only way right was to go far enough
-  // down to clear the root's latitude entirely.
+  // DOWN, EAST, AND A SIZE SMALLER — which is one change and not three.
   //
-  // AND IT STILL CANNOT, WHICH IS WORTH WRITING DOWN because there are now
-  // two more reasons to want it further east and no room for either:
-  //   - its crown paints over the bluff's new `step` platform, covering
-  //     8-31% of that ledge depending on the shape (13% at the reference),
-  //     so an animal standing on the east end of the step is under leaves;
-  //   - it owns the tightest west face on the map by rule 5 — its own deer
-  //     bed spot has 8.3px of forest floor at 1008x700, against the
-  //     west-high spruce's 21.9px at its worst.
-  // Both want the same fix and neither can have it. The root's ring is at
-  // 97.3px at 1120x640, i.e. 1.3px of slack, so ANY eastward step breaks
-  // rule 1; and this crown is already the tightest pair on the map with the
-  // bottom-left oak — 1.3px of daylight at 1084x1132 — so any step east or
-  // south merges the two into one mass. Clearing the step outright needs
-  // x >= .170, which is 90px inside both. Measured, not assumed.
-  { x: .125, y: .800, s: 1.38,  kind: "oak"  }, // west, low
+  // It was asked to come off the rock and to stop standing level with the
+  // bottom-left oak at .775, and its old anchor did both wrong. The crown
+  // paints at zIndex 12, so what it covered it covered outright: 24% of the
+  // drawn shelf, 45% of the riser and 31% of the `step` platform's lip at
+  // the worst stage shape (15% at the reference, and 74% of the part of the
+  // step that can actually be STOOD on). That is a ledge with leaves over
+  // it — and it is also what made the bluff's collision region look wider
+  // than the drawn stone, which was filed as a physics bug and was not one.
+  //
+  // WHY IT COULD NOT KEEP 1.38, MEASURED AT ALL TWENTY-TWO SHAPES THIS FILE
+  // AND tests/world.mjs ARE CHECKED AT. Three things close on this corner
+  // from three sides and they leave no cell:
+  //   west   the bluff. A crown box is 64*s half-wide and the rock runs
+  //          114-116 per-mille across from the shelf's lip down to y 536,
+  //          so what binds is the crown's TOP, not its west edge — the rock
+  //          narrows as it falls, and a crown clears it by dropping below
+  //          the wide band rather than by stepping around it. At 1.38 that
+  //          means y >= .965 from this longitude, and y >= 1.042 from the
+  //          old one, which is off the bottom of the stage.
+  //   south  the fallen log at (.21,.95) and its own 96px ring. It puts a
+  //          FLOOR under the latitude: at x .144 nothing may stand lower
+  //          than y .8510 (1008x700), which is .114 above what the rock
+  //          wants.
+  //   north  the surface root at (.185,.690), the same 96px ring, which
+  //          puts a ceiling at y .8220. The whole legal slot at this
+  //          longitude is .8220..8510 — twenty-nine thousandths of stage.
+  //   east   the bottom-left oak's crown, already the tightest pair on the
+  //          map at 1.3px of daylight (1084x1132), which is what stops the
+  //          tree simply walking out of the west.
+  // The latitude the rock wants is under the log; the longitude that would
+  // clear the log is inside the oak. The only free variable left was the
+  // crown's own size, so the resize IS the move.
+  //
+  // 1.38 -> 1.05, AND THE WHOLE BLUFF IS CLEAR. Swept over the same shapes,
+  // maximising the smallest margin rather than taking the first legal cell:
+  // every band of the rock is now 0% covered — upper, plateau, cliff,
+  // shelf, riser and talus — and so are both platforms. The tightest the
+  // crown BOX comes to the drawn stone is 3.1px at 960x600 and 4.9px at the
+  // reference; the painted leaves are a good deal narrower than the box and
+  // stand 21px off at their worst.
+  //
+  // AND NOTHING IT ALREADY KEPT GOT TIGHTER. The forage ring 1.6px against
+  // 1.3; the crown pair 2.4px against 1.3; and the west face — this tree
+  // owned the tightest one on the map at 8.3px of forest floor — is 44.0px
+  // now, because moving east off the bluff is the same move that clears it.
+  // It sits .073 of the stage below the bottom-left oak against .025, so
+  // the two no longer read as a row.
+  { x: .144, y: .848, s: 1.05,  kind: "oak"  }, // west, low
   // Right, into the open ground it was asked for — and an EVERGREEN now,
   // which is a second nest tree as well as a second silhouette. A conifer's
   // crown box is 40 half-width against an oak's 64, so the same tree stops

@@ -642,6 +642,128 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
   }
 }
 
+// ============ ...and no crown is painted over the bluff ============
+// THE SIXTH RULE A TRUNK KEEPS, and the same rule as the sward check above
+// wearing different clothes. A crown paints at zIndex 12 and the animals at
+// 10, so anything standing under one is not on screen — and the bluff is
+// three terraces and two standable platforms of exactly that. It fails the
+// way the west faces do, quietly: nothing looks broken, an animal on the
+// ledge is simply behind leaves.
+//
+// The west-low oak used to be all of it. At 1.38 from (.125,.800) its crown
+// box covered 24% of the drawn shelf, 45% of the riser and 31% of the
+// `step` platform's lip — 74% of the part of that step which can actually
+// be stood on — and 15% of the lip at the reference. It is also what made
+// the bluff's collision region look wider than the drawn stone. Clearing it
+// cost a resize and not a nudge: the surface root at (.185,.690) and the
+// fallen log at (.21,.95) leave that longitude a slot of .8220..8510 to
+// stand in, and a 1.38 crown needs y .965 before its TOP is below the wide
+// band of the rock. See FOREST_TREES, which carries the working.
+//
+// ASKED OF THE ROCK ITSELF, in fractions. rockZone reads per-mille of the
+// stage, so which band a FRACTION lands in is one answer for every window:
+// the bluff is sampled once here and the sixteen shapes are then swept over
+// that one sample. The crown boxes, the scale rule and the platforms all
+// come off the world for the same reason they do above — a suite holding
+// its own copy of them goes on passing after the real ones move.
+{
+  const r = await page.evaluate(`(w => {
+    const T = w.def.trees || [], C = w.__crowns, K = w.__treeScale, B = w.bounds;
+    const P = w.__rock && w.__rock.platforms;
+    if (!T.length || !C || !K || !P || !w.rockZoneAt) return { missing: true };
+    // every shape the tree rules are checked at, the two squat windows
+    // included: a crown box is shape-independent in the ways that matter
+    // and there is nothing here to excuse.
+    const SIZES = [[1008,700],[1264,732],[1350,700],[1424,832],[1600,820],[1904,1012],
+                   [1000,800],[1240,1000],[1440,900],[1280,720],[1920,1080],[1120,640],
+                   [1084,1132],[2544,832],[900,620],[960,600]];
+    // THE DRAWN BLUFF, once. Nothing on the map reaches past x .14, so that
+    // is as far east as this has to look.
+    const pts = [], area = {};
+    for (let i = 0; i <= 240; i++) for (let j = 0; j <= 240; j++) {
+      const fx = i / 240 * 0.14, fy = j / 240;
+      const z = w.rockZoneAt(fx * B.w, fy * B.h);
+      if (!z.on) continue;
+      pts.push([fx, fy, z.band]);
+      area[z.band] = (area[z.band] || 0) + 1;
+    }
+    // ...and the two platforms, each as the line an animal's feet go on:
+    // the span it can be stood on, and its own mean latitude.
+    const plats = P.map(function (p) {
+      const xs = p.lip.map(function (q) { return q[0]; });
+      return { id: p.id, x0: (p.from != null ? p.from : Math.min.apply(null, xs)),
+               x1: Math.max.apply(null, xs),
+               lat: p.lip.reduce(function (a, q) { return a + q[1]; }, 0) / p.lip.length };
+    });
+    const box = (t, W, H, ks) => {
+      const c = C[t.kind || 'oak'], s = t.s0 * ks;
+      return { x: t.x * W, top: t.y * H - c.topPx * s,
+               bot: t.y * H - c.botPx * s, half: c.half * s };
+    };
+    let band = { f: 0 }, plat = { f: 0 }, tight = null;
+    for (const S of SIZES) {
+      const W = S[0], H = S[1], ks = K(W, H);
+      const boxes = T.map((t) => box(t, W, H, ks));
+      const hit = {};
+      for (const q of pts) {
+        const x = q[0] * W, y = q[1] * H;
+        for (const b of boxes) {
+          if (Math.abs(x - b.x) > b.half) continue;
+          if (y > b.top && y < b.bot) { hit[q[2]] = (hit[q[2]] || 0) + 1; break; }
+        }
+      }
+      for (const k of Object.keys(area)) {
+        const f = (hit[k] || 0) / area[k];
+        if (f > band.f) band = { f: f, band: k, at: W + 'x' + H };
+      }
+      for (const p of plats) {
+        const y = p.lat / 1000 * H, a = p.x0 / 1000 * W, b2 = p.x1 / 1000 * W;
+        let cov = 0;
+        for (const b of boxes) {
+          if (y <= b.top || y >= b.bot) continue;
+          const lo = Math.max(a, b.x - b.half), hi = Math.min(b2, b.x + b.half);
+          if (hi - lo > cov) cov = hi - lo;
+        }
+        const f = b2 > a ? cov / (b2 - a) : 0;
+        if (f > plat.f) plat = { f: f, id: p.id, at: W + 'x' + H };
+      }
+      // ...and HOW MUCH ROOM, so the line says what the margin is rather
+      // than only that there is one. Bisected on the world's own predicate,
+      // the same way the west faces are.
+      for (let i = 0; i < T.length; i++) {
+        const b = boxes[i], wf = (b.x - b.half) / W;
+        for (let k = 0; k <= 48; k++) {
+          const fy = (b.top + (b.bot - b.top) * k / 48) / H;
+          if (fy < 0 || fy > 1) continue;
+          if (!w.rockZoneAt(0.0005 * B.w, fy * B.h).on) continue;
+          let lo = 0.0005, hi = 0.5;
+          for (let n = 0; n < 30; n++) {
+            const m = (lo + hi) / 2;
+            if (w.rockZoneAt(m * B.w, fy * B.h).on) lo = m; else hi = m;
+          }
+          const g = (wf - hi) * W;
+          if (!tight || g < tight.g)
+            tight = { g: g, kind: T[i].kind || 'oak', x: T[i].x, y: T[i].y, at: W + 'x' + H };
+        }
+      }
+    }
+    return { band: band, plat: plat, tight: tight, n: T.length,
+             shapes: SIZES.length, samples: pts.length, bands: Object.keys(area).length };
+  })(window.__saiWorld)`);
+  if (r.missing) chk(false, 'no crown is painted over the bluff',
+    'the world hands over no trees, no crown boxes, no scale rule or no rock');
+  else chk(r.band.f === 0 && r.plat.f === 0 && r.tight.g > 0,
+    'no crown is painted over the bluff',
+    r.band.f === 0 && r.plat.f === 0 && r.tight.g > 0
+      ? `${r.n} crowns clear of all ${r.bands} bands and both platforms at all ${r.shapes} shapes; `
+        + `the closest is the ${r.tight.kind} at ${r.tight.x},${r.tight.y} with `
+        + `${r.tight.g.toFixed(1)}px of daylight at ${r.tight.at} `
+        + `— it was -92px, over 24% of the shelf and 31% of the step`
+      : r.band.f > 0 ? `${(100 * r.band.f).toFixed(0)}% of the ${r.band.band} is under a crown at ${r.band.at}`
+      : r.plat.f > 0 ? `${(100 * r.plat.f).toFixed(0)}% of the ${r.plat.id} platform is under a crown at ${r.plat.at}`
+      : `the ${r.tight.kind} at ${r.tight.x},${r.tight.y} overlaps the drawn rock by ${(-r.tight.g).toFixed(1)}px at ${r.tight.at}`);
+}
+
 // ============ the browse shrub the resize displaced ============
 // Growing the west-high pine to 1.56 moved it 148px down the stage, and one
 // object was standing where it had to go: the browse shrub that used to sit
