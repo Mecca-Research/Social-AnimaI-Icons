@@ -6116,3 +6116,55 @@ body {
   /* the pounce keeps its arc: it is a one-shot, not a loop, and holding a
      fox frozen in mid-air is worse than letting him land */
 }
+
+/* ==================== v0.43 THE PREDATOR PHASE, SHARED ====================
+   Three things that belong to no single species: the two ground layers the
+   predators leave behind, and the prey end of a hunt.                     */
+
+/* ---- the carcass. Only the scatter is conditional: a fresh kill and a
+   picked-over one are the same bones, and the difference is what has been
+   dragged off it ---- */
+.sai-rem-gnaw{ display:none; }
+[data-gnawed="1"] .sai-rem-gnaw{ display:inline; }
+/* the hide takes the animal's own colour, so a goat's remains are not a
+   boar's. `data-rem` is the species that died */
+[data-rem="goat"] .sai-rem-hide{ fill:#d9d4cb; }
+[data-rem="boar"] .sai-rem-hide{ fill:#5a4c3f; }
+[data-rem="hare"] .sai-rem-hide{ fill:#b09876; }
+[data-rem="grouse"] .sai-rem-hide{ fill:#8a6f4c; }
+
+/* ---- scrapes and posts share one pool, so each hides the other ---- */
+.sai-mark-scrape, .sai-mark-post{ display:none; }
+[data-mark="scrape"] .sai-mark-scrape{ display:inline; }
+[data-mark="post"] .sai-mark-post{ display:inline; }
+
+/* ---- THE PREY END OF A HUNT.
+   data-hunted has been written on every prey sprite since the population
+   landed and read by nothing. This is the other half of "animations between
+   the predator and prey": an animal that knows it is being hunted goes
+   low, goes still-legged, and stops ambling. It is scoped to .sai-prey, so
+   it cannot reach a cast animal that happens to share a state name.       */
+.sai-sprite.sai-prey[data-hunted="1"] .sai-crit-body{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-prey-tense 1.1s ease-in-out infinite; }
+@keyframes sai-prey-tense{
+  0%,100%{ transform:translateY(1.4px) scaleY(.95); }
+  50%    { transform:translateY(1.9px) scaleY(.93); } }
+.sai-sprite.sai-prey[data-hunted="1"] .sai-crit-ear{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-prey-prick 1.1s ease-in-out infinite; }
+@keyframes sai-prey-prick{
+  0%,100%{ transform:rotate(-5deg) scaleY(1.1); }
+  50%    { transform:rotate(4deg) scaleY(1.12); } }
+/* ...and the walk slows to a creep. A hunted animal that keeps ambling at
+   its ordinary tempo is the single clearest way to make a stalk read as an
+   accident rather than as a hunt */
+.sai-sprite.sai-prey[data-hunted="1"] .sai-crit-leg{
+  animation-duration:1.5s !important; }
+
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite.sai-prey[data-hunted="1"] .sai-crit-body,
+  .sai-sprite.sai-prey[data-hunted="1"] .sai-crit-ear{ animation:none; }
+  .sai-sprite.sai-prey[data-hunted="1"] .sai-crit-body{ transform:translateY(1.6px) scaleY(.94); }
+  .sai-sprite.sai-prey[data-hunted="1"] .sai-crit-ear{ transform:rotate(-5deg) scaleY(1.1); }
+}

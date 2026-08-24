@@ -3159,6 +3159,89 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     `${after.prey} prey â€” and none of the prey in the agent list`);
 }
 
+// ============ the predator phase's foundation ============
+// Three things that belong to no single predator, checked before any of them
+// is built on top of them.
+{
+  // ---- ONE NAME, ONE SPECIES. This is the highest-risk fact in the whole
+  // project: the engine throws when one species claims a state twice and
+  // says NOTHING when two species claim the same one, which silently hands
+  // one animal the other's animation. Seven predators are about to add
+  // seventy-odd names to a stylesheet that already has a hundred and eighty.
+  const owners = await page.evaluate(`(function (w) {
+    const m = w.__ethoOwners(), seen = {}, dup = [];
+    for (const sp of Object.keys(m)) for (const s of m[sp]) (seen[s] = seen[s] || []).push(sp);
+    for (const s of Object.keys(seen)) if (seen[s].length > 1) dup.push(s + ': ' + seen[s].join(' + '));
+    const prey = w.__prey.states, clash = prey.filter(function (p) { return !!seen[p]; });
+    return { n: Object.keys(seen).length, dup: dup, clash: clash };
+  })(window.__saiWorld)`);
+  chk(owners.dup.length === 1 && owners.dup[0].indexOf('padsit') === 0,
+    'every state name in the world belongs to exactly one species, and padsit is the one exception',
+    `${owners.n} names; shared: ${owners.dup.join('; ') || 'none'}`);
+  chk(owners.clash.length === 0,
+    'and no prey state has leaked into an ethogram',
+    owners.clash.join(', ') || 'the ten prey names are still nobody\u2019s');
+
+  // ---- REMAINS. A carcass outlives the animal, which is the whole point of
+  // it, so the two things that can go wrong are that it never goes away and
+  // that it follows the cast into another world.
+  const rem = await page.evaluate(`(function (w) {
+    w.remains = [];
+    const B = w.bounds, now = performance.now();
+    const r = w.__remainsLeave(0.4 * B.w, 0.6 * B.h, 'goat', 'cougar');
+    const born = w.remains.length;
+    const claimA = w.__remains().length && w.__prey ? true : true;
+    // the pool is capped: a world cannot silt up with carcasses
+    for (let i = 0; i < 6; i++) w.__remainsLeave(0.4 * B.w, 0.6 * B.h, 'hare', 'fox');
+    const capped = w.remains.length;
+    // ...and three meals come out of one
+    const fresh = w.__remainsLeave(0.5 * B.w, 0.5 * B.h, 'goat', 'cougar');
+    let bites = 0; while (w.__remainsEat(fresh)) bites++;
+    const gnawed = !!fresh.gnawed;
+    // spent, but NOT whipped away from under the animal taking it
+    w.__remainsStep();
+    const stillThere = w.remains.indexOf(fresh) >= 0;
+    fresh.spentAt = now - 60000; w.__remainsStep();
+    const swept = w.remains.indexOf(fresh) < 0;
+    return { born: born, capped: capped, bites: bites, gnawed: gnawed,
+             stillThere: stillThere, swept: swept, max: 3 };
+  })(window.__saiWorld)`);
+  chk(rem.born === 1 && rem.capped === rem.max,
+    'a kill leaves remains, and the ground never silts up with them',
+    `one kill made one carcass; seven made ${rem.capped}, the pool the layer draws`);
+  chk(rem.bites === 3 && rem.gnawed,
+    'and there are three scavenger meals in one carcass',
+    `${rem.bites} feeds, and it is visibly gnawed after the first`);
+  chk(rem.stillThere && rem.swept,
+    'a picked-over carcass is still a carcass, and goes only once it is old',
+    'the last bite left it standing; it cleared 45s later');
+
+  // ---- MARKS. The cougar's scrapes and the wolf's posts are one record,
+  // and the reason to have them is that the next animal past can find one.
+  const mk = await page.evaluate(`(function (w) {
+    w.marks = [];
+    const B = w.bounds, now = performance.now();
+    const x = 0.3 * B.w, y = 0.5 * B.h;
+    for (let i = 0; i < 14; i++) {
+      w.__mark(x + i * 12, y, i % 2 ? 'scrape' : 'post', i % 2 ? 'cougar' : 'wolf');
+    }
+    const capped = w.marks.length;
+    const anyS = w.__markNear(x, y, 400, { kind: 'scrape' });
+    const notMine = w.__markNear(x, y, 400, { kind: 'post', notBy: 'wolf' });
+    const old = w.__mark(x, y + 60, 'scrape', 'cougar');
+    old.until = now - 1; w.__marksStep();
+    const gone = w.marks.indexOf(old) < 0;
+    return { capped: capped, foundScrape: !!anyS && anyS.m.kind === 'scrape',
+             notMine: !notMine, gone: gone };
+  })(window.__saiWorld)`);
+  chk(mk.capped === 10 && mk.foundScrape,
+    'the ground marks are one pool of ten, and the next animal past can find one',
+    `fourteen left, ${mk.capped} kept; a scrape was found by kind`);
+  chk(mk.notMine && mk.gone,
+    'and a wolf does not answer his own post, nor an expired one',
+    'notBy filtered his own out; a lapsed mark was swept');
+}
+
 chk(errs.length === 0, 'no JS errors', errs.length ? errs[0] : 'clean');
 console.log(`\n${fail.length ? 'FAIL ' + fail.length : 'ALL PASS'} (${pass.length} passed)`);
 await browser.close();

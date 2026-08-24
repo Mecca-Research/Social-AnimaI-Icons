@@ -672,14 +672,27 @@ const HUNT_SENSE = 260;
  * `free: true` is what makes two predators never converge on one mouse —
  * nearestPrey skips anything already claimed by somebody else.
  */
+/** a hunt number may be flat or asked of the target: a goat is not a grouse */
+const resolve = (v, a, c, p) => (typeof v === "function" ? v(a, c, p) : v);
+
 function huntPick(a, c, o) {
+  // hunterId IS LOAD-BEARING. nearestPrey's `free` filter skips anything
+  // under a live claim, and without an id to compare against, YOUR OWN claim
+  // counts as somebody else's — a hunter who re-picks while still holding a
+  // lapsing claim would step over the very animal he had reserved.
   const hit = nearestPrey(c.world, a.x, a.y, o.sense ?? HUNT_SENSE,
-                          { species: o.prey, habitat: o.habitat, free: true });
+                          { species: o.prey, habitat: o.habitat,
+                            free: true, hunterId: a.id, now: c.now });
   if (!hit || !hit.p) return null;
   const p = hit.p;
   // ...and it must be ON STAGE. A prey still walking in from off the edge is
   // not catchable, and a hunt that sets off after one walks off the map.
   if (!p._in || !p.alive) return null;
+  // ...and he must be able to physically GET to it. nearestPrey knows the
+  // map but not the hunter: without this a skunk sets off after a crayfish
+  // in open water he can never enter, and stands at the waterline until the
+  // walk gives up.
+  if (o.reachable && !o.reachable(a, c, p)) return null;
   if (!claimPrey(c.world, p, a.id, c.now)) return null;
   return { x: p.x, y: p.y, prey: p };
 }
@@ -689,11 +702,73 @@ function huntPick(a, c, o) {
  * live instance is what makes the stalk track a moving animal rather than
  * walk to where it used to be.
  */
-function huntTrack(a, c, ref) {
+function huntTrack(a, c, ref, o) {
   const p = ref && ref.prey;
   if (!p || !p.alive || !p._in) return null;   // goal stops updating; giveUp ends it
+  // an approach that has become illegal is abandoned rather than walked into
+  // a wall — the prey may have crossed a line the hunter cannot
+  if (o && o.reachable && !o.reachable(a, c, p)) return null;
   claimPrey(c.world, p, a.id, c.now);          // refresh: always succeeds for the holder
+  if (o && o.onApproach) o.onApproach(a, c, p, Math.hypot(p.x - a.x, p.y - a.y));
   return p;
+}
+
+/**
+ * HAND THE PREY BACK WITHOUT TOUCHING THE STATE. A drag, a fight or a
+ * forceFlee can take a hunter out of his own strike and leave the claim
+ * standing until PREY_CLAIM_MS runs it out — six seconds during which the
+ * mouse he is no longer chasing is invisible to every other hunter and
+ * cannot walk off the map. Every predator's tick() calls this, the same way
+ * every one of them already calls releaseClaim().
+ *
+ * It must NOT call endEvent: a tick runs on frames where the ethogram does
+ * not own the animal, and endEvent would set his state to wander underneath
+ * whatever the world is doing with him.
+ */
+export function huntRelease(a) {
+  if (a._huntP) releasePrey(a._huntP, a.id);
+  a._huntP = null; a._huntGo = 0; a._huntEnd = 0;
+}
+
+/**
+ * ONE DOGLEG, THROUGH SOMETHING. There is no concealment system in this
+ * world — behindTrunk and behindLog are z-index rules, not sight lines — so
+ * cover is DEFINED here as the nearest painted thing big enough to break a
+ * silhouette, and an approach "using cover" is an approach that bends
+ * through it. Berry bushes, fallen logs, surface roots and trunks.
+ *
+ * `goto.via` is evaluated once, when the walk starts, and gives exactly one
+ * waypoint — so this is a dogleg and not a route. That is the right shape:
+ * a stalking animal picks the one thing worth getting behind and then works
+ * the last stretch in the open, which is what makes the last stretch tense.
+ *
+ * Returns null when the straight line already passes close to something,
+ * because a dogleg to where he already stands reads as a stumble.
+ */
+const COVER_KINDS = ["berry", "shrub", "log", "root"];
+const COVER_NEAR = 54;      // close enough to the line that the line IS covered
+const COVER_MAX = 210;      // further than this and the detour costs the hunt
+function coverVia(a, c, g) {
+  if (!g) return null;
+  const gx = g.x - a.x, gy = g.y - a.y;
+  const leg2 = Math.max(1, gx * gx + gy * gy);
+  let best = null, bd = COVER_MAX;
+  const push = (x, y, half) => {
+    // reject anything not roughly BETWEEN us and the target
+    const t = ((x - a.x) * gx + (y - a.y) * gy) / leg2;
+    if (t < 0.15 || t > 0.85) return;
+    const d = Math.hypot(x - a.x, y - a.y);
+    if (d < bd) { bd = d; best = { x, y: y + half * 0.35 }; }   // stand BEHIND it
+  };
+  for (const f of (c.world && c.world.forage) || []) {
+    if (COVER_KINDS.indexOf(f.kind) < 0) continue;
+    push(f.px, f.py, 30 * (f.s || 1));
+  }
+  for (const t of (c.def && c.def.trees) || []) {
+    push(t.x * c.bounds.w, t.y * c.bounds.h, 13 * (t.s || 1));
+  }
+  if (!best) return null;
+  return Math.hypot(best.x - a.x, best.y - a.y) < COVER_NEAR ? null : best;
 }
 
 /** let go of a target cleanly, whatever the reason */
@@ -721,15 +796,36 @@ function huntDrop(a, c, quiet) {
  *                       he started with.
  *   catchChance         0..1, rolled once, on contact
  *   feedMs              [lo, hi] over the kill
- *   st: {stalk, strike, feed, miss}   the four state names, this species' own
+ *   fixMs               [lo, hi] of the gather, if he has one
+ *   st: {stalk, fix, strike, feed, miss}   this species' own state names.
+ *                       `fix` is optional; without it he goes straight from
+ *                       arriving to committing, which reads as a lunge.
+ *   reach, catchChance and dash may each be a FUNCTION (a, c, prey) instead
+ *                       of a number, because one event may cover prey of two
+ *                       shapes — the cougar takes a grouse and a mountain
+ *                       goat, and they are not the same reach or the same odds.
+ *   reachable(a, c, p)  optional legality filter, applied at pick AND every
+ *                       frame of the stalk. nearestPrey knows the map but not
+ *                       the hunter.
+ *   cover               true to bend the approach through one piece of cover
+ *   zGoto               true if the approach is flown rather than walked
+ *   onApproach(a,c,p,d) per frame of the stalk. The owl holds his height here.
+ *   onFix(a, c, p)      per frame of the gather.
+ *   onStrike(a,c,p,d)   per frame of the strike. The owl drops to the ground here.
  *   onKill(a, c, p)     optional. The cougar leaves a carcass here.
  */
 function makeHunt(o) {
   const st = o.st;
+  // A GLIDING APPROACH HAS TO SAY SO. defineEthogram adds `states` to
+  // ETHO_Z_STATES when an event declares holdsZ, but it never adds
+  // goto.state — so an owl on a long glide would have his z decayed out
+  // from under him at exp(-5*dt) and land halfway. makeHunt runs while the
+  // events array is being built, which is early enough for the Set.
+  if (o.zGoto) ETHO_Z_STATES.add(st.stalk);
   return {
     id: o.id, domain: o.domain, trigger: "seek",
     every: o.every, chance: o.chance, cool: o.cool, miss: o.missCool ?? 15000,
-    states: [st.strike, st.feed, st.miss].filter(Boolean),
+    states: [st.fix, st.strike, st.feed, st.miss].filter(Boolean),
     goto: {
       state: st.stalk,
       within: o.pounce ?? 74,
@@ -738,7 +834,8 @@ function makeHunt(o) {
       lost: o.lost ?? 9000,
       urgency: o.creep ?? 0.30,
       pick: (a, c) => huntPick(a, c, o),
-      track: (a, c, ref) => huntTrack(a, c, ref),
+      track: (a, c, ref) => huntTrack(a, c, ref, o),
+      ...(o.cover ? { via: (a, c, g) => coverVia(a, c, g), viaWithin: 26 } : null),
     },
 
     begin(a, c, S, g) {
@@ -747,14 +844,36 @@ function makeHunt(o) {
       claimPrey(c.world, p, a.id, c.now);
       a._huntP = p;
       a._faceDir = p.x >= a.x ? 1 : -1;
-      a.state = st.strike;
+      // THE GATHER comes first if he has one. He is in range and has not
+      // gone yet: a cat freezes, a wolf crouches, an owl hovers, a fox cocks
+      // an ear. It is the beat that makes a strike read as a decision.
+      a.state = st.fix || st.strike;
+      if (st.fix) {
+        a.stateUntil = c.now + c.rand(o.fixMs ? o.fixMs[0] : 500,
+                                      o.fixMs ? o.fixMs[1] : 1000);
+        return;
+      }
       // the budget is the whole difference between a pounce and a pursuit,
       // and it is spent in px so that it means the same at 4fps and at 60
-      a._huntGo = o.dash ?? 170;
+      a._huntGo = resolve(o.dash, a, c, p) ?? 170;
       a.stateUntil = c.now + 30000;      // a backstop, not the mechanism
     },
 
     drive(a, c, S) {
+      // ---- the gather: in range, not gone yet ---------------------------
+      if (st.fix && a.state === st.fix) {
+        const p = a._huntP;
+        if (!p || !p.alive || !p._in) { huntDrop(a, c, 900); return; }
+        claimPrey(c.world, p, a.id, c.now);        // a fix can outlast six seconds
+        a.vx = 0; a.vy = 0;
+        a._faceDir = p.x >= a.x ? 1 : -1;
+        if (o.onFix) o.onFix(a, c, p);
+        if (c.now < a.stateUntil) return;
+        a.state = st.strike;
+        a._huntGo = resolve(o.dash, a, c, p) ?? 170;
+        a.stateUntil = c.now + 30000;
+        return;
+      }
       // ---- over the kill, or standing where it was ----------------------
       if (a.state === st.feed || (st.miss && a.state === st.miss)) {
         a.vx = 0; a.vy = 0;
@@ -770,10 +889,12 @@ function makeHunt(o) {
       const d = stepTowardAt(a, c, p, sp);
       a._huntGo -= sp * c.dt;            // spend the burst on ground, not on time
       a._faceDir = p.x >= a.x ? 1 : -1;
+      if (o.onStrike) o.onStrike(a, c, p, d);
 
-      if (d <= (o.reach ?? 22)) {
+      if (d <= (resolve(o.reach, a, c, p) ?? 22)) {
         a.vx = 0; a.vy = 0;
-        if (Math.random() < (o.catchChance ?? 0.6) && consumePrey(c.world, p, a.id, c.now)) {
+        if (Math.random() < (resolve(o.catchChance, a, c, p) ?? 0.6)
+            && consumePrey(c.world, p, a.id, c.now)) {
           if (o.onKill) o.onKill(a, c, p);
           a._huntP = null;
           a.state = st.feed;
@@ -814,14 +935,29 @@ function makeHunt(o) {
  */
 const REMAINS_MS = 210000;        // how long a carcass is worth crossing the map for
 const REMAINS_FEEDS = 3;          // how many scavenger meals are in one
+const REMAINS_PICKED_MS = 45000;  // ...and a picked-over carcass is still a carcass
+const REMAINS_CLAIM_MS = 8000;    // one scavenger at a time. PREY_CLAIM_MS's cousin
+export const REMAINS_MAX = 3;     // the pool RemainsLayer draws from
 
 export function leaveRemains(world, x, y, species, by, now) {
   const list = world.remains || (world.remains = []);
   const r = { id: "rem" + (world._remId = (world._remId || 0) + 1),
               x, y, species, by, at: now, until: now + REMAINS_MS,
-              feeds: REMAINS_FEEDS, userId: null };
+              feeds: REMAINS_FEEDS, userId: null, holdUntil: 0 };
   list.push(r);
+  while (list.length > REMAINS_MAX) list.shift();   // the layer draws three
   return r;
+}
+
+/** one scavenger at a time, so two wolves do not stand in the same ribcage */
+export function claimRemains(r, byId, now) {
+  if (!r || r.feeds <= 0) return false;
+  if (r.userId && r.userId !== byId && now < (r.holdUntil || 0)) return false;
+  r.userId = byId; r.holdUntil = now + REMAINS_CLAIM_MS; return true;
+}
+export function releaseRemains(r, byId) {
+  if (!r || r.userId !== byId) return false;
+  r.userId = null; r.holdUntil = 0; return true;
 }
 
 /** drop the ones that have gone. Called from the world's step, beside stepPrey. */
@@ -829,7 +965,16 @@ export function stepRemains(world, now) {
   const list = world.remains;
   if (!list || !list.length) return;
   for (let i = list.length - 1; i >= 0; i--) {
-    if (now >= list[i].until || list[i].feeds <= 0) list.splice(i, 1);
+    const r = list[i];
+    if (r.userId && now >= (r.holdUntil || 0)) r.userId = null;
+    // THE LAST BITE DOES NOT MAKE IT VANISH from under the animal taking it.
+    // A carcass with nothing left on it is still a thing on the ground, and
+    // whipping it away the instant the wolf swallows is the one way to make
+    // three minutes of careful scavenging read as a bug.
+    if (r.feeds <= 0 && !r.spentAt) r.spentAt = now;
+    if (now >= r.until || (r.spentAt && now - r.spentAt >= REMAINS_PICKED_MS)) {
+      list.splice(i, 1);
+    }
   }
 }
 
@@ -853,6 +998,71 @@ export function eatRemains(r) {
   if (!r || r.feeds <= 0) return false;
   r.feeds--; r.gnawed = true;
   return true;
+}
+
+/* ---------------------------------------------------------------------
+ * MARKS — the two things a predator leaves on the ground and comes back to.
+ *
+ * A scrape is a pile of dirt and leaves raked together with the hind paws;
+ * a post is a raised-leg mark at a junction. They are ONE record because
+ * they behave identically: dropped at a point, drawn at ground level under
+ * the animals, fading out of a fixed pool, and READABLE — the whole reason
+ * to have them is that the next animal past can find one.
+ */
+const MARK_LIFE = { scrape: 240000, post: 300000 };
+export const MARK_MAX = 10;       // MarkLayer's pool
+
+export function leaveMark(world, x, y, kind, by, now, s) {
+  const list = world.marks || (world.marks = []);
+  const m = { id: "mk" + (world._mkId = (world._mkId || 0) + 1),
+              x, y, kind, by, s: s == null ? 0.86 + Math.random() * 0.3 : s,
+              t0: now, until: now + (MARK_LIFE[kind] || 240000) };
+  list.push(m);
+  while (list.length > MARK_MAX) list.shift();
+  return m;
+}
+export function stepMarks(world, now) {
+  const list = world.marks;
+  if (!list || !list.length) return;
+  for (let i = list.length - 1; i >= 0; i--) if (now >= list[i].until) list.splice(i, 1);
+}
+export function nearestMark(world, x, y, maxR = Infinity, opt = {}) {
+  const list = world.marks; if (!list || !list.length) return null;
+  let best = null, bd = maxR;
+  for (const m of list) {
+    if (opt.kind && m.kind !== opt.kind) continue;
+    if (opt.notBy && m.by === opt.notBy) continue;
+    if (opt.fresherThan && m.t0 < opt.fresherThan) continue;
+    const d = Math.hypot(m.x - x, m.y - y);
+    if (d < bd) { bd = d; best = m; }
+  }
+  return best ? { m: best, d: bd } : null;
+}
+
+/* ---------------------------------------------------------------------
+ * THE SLEEP CORE
+ *
+ * A DEEP SLEEP IS A HOLE IN THE WORLD, so it has a ceiling, and the ceiling
+ * is spent in FRAME TIME rather than wall clock. Thirty seconds of a
+ * headless run is a hundred frames and thirty seconds of a real one is
+ * eighteen hundred; a sleeper who is asleep for the same NUMBER of frames in
+ * both is a sleeper a check can budget. Lifted out of the raccoon's roost,
+ * which had this right and had it alone.
+ *
+ * The budget resets in begin() and NOWHERE ELSE, so surfacing and settling
+ * again cannot buy a second thirty seconds.
+ */
+const SLEEP_DEEP_MAX = 30000;
+export function sleepEnter(a, c, state, win) {
+  const left = Math.max(0, SLEEP_DEEP_MAX - (a._sleepSpent || 0));
+  a.state = state;
+  a.stateUntil = c.now + Math.min(c.rand(win[0], win[1]), left);
+  a.vx = 0; a.vy = 0;
+}
+/** true when this sleep is over, either on its own clock or on the ceiling */
+export function sleepSpent(a, c) {
+  a._sleepSpent = (a._sleepSpent || 0) + c.dt * 1000;
+  return a._sleepSpent >= SLEEP_DEEP_MAX || c.now >= a.stateUntil;
 }
 
 defineEthogram("bear", {
@@ -3291,6 +3501,10 @@ defineEthogram("fox", {
   // are handed back here or that site stays booked against him all session.
   tick(a, c, S) {
     if (S.claim) releaseClaim(a, S);
+    // ...and the prey claim with it. A drag, a fight or a forced flee can
+    // take him out of his own pounce, and a claim left standing hides the
+    // mouse from every other hunter for six seconds and pins it on stage.
+    huntRelease(a);
     if (a._faceDir) a._faceDir = 0;
     if (a._carry) a._carry = null;
   },

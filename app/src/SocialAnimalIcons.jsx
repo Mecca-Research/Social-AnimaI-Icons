@@ -11,7 +11,8 @@ import { SPECIES_PROFILE, speciesSize, PREY_PROFILE, PREY_KEYS,
          apparentFromBulk, BULK_ANCHOR } from "./SpeciesProfile.js";
 import { gait, gaitIn, speedCap, rescueReach, SPEED, GAIT_DEF } from "./Gait.js";
 import { stepEthogram, ethoSwimP, ethoShare, ETHOGRAM, ETHO_STATES, ETHO_Z_STATES, ETHO_OWNWATER_STATES, setTreeMetrics, setForageMetrics, ethoOffstage, hogCurl, squirrelBolt } from "./Ethogram.js";
-import { stepRemains, leaveRemains, nearestRemains, eatRemains } from "./Ethogram.js";
+import { stepRemains, leaveRemains, nearestRemains, eatRemains, REMAINS_MAX,
+         stepMarks, leaveMark, nearestMark, MARK_MAX } from "./Ethogram.js";
 import { setPreyTerrain, stepPrey, spawnPrey, removePrey, preyReport, preyBlocked,
          preyList, preyAt, nearestPrey, isPreyClaimed,
          claimPrey, releasePrey, consumePrey, habitatOk,
@@ -2860,6 +2861,8 @@ export default function SocialAnimalsRPG() {
   const padsRef = useRef(new Map()); // lily pad index -> HTMLElement
   const damRefs = useRef(new Map()); // dam log index -> HTMLElement
   const pitRefs = useRef(new Map()); // skunk pit index -> HTMLElement
+  const remRefs = useRef(new Map()); // remains index -> HTMLElement
+  const markRefs = useRef(new Map()); // scrape/post index -> HTMLElement
   // the lake's own life: insects that move, plants that get eaten down, and
   // the three things painted back over an animal at zIndex 12
   const lakeRefs = useRef({ bugs: new Map(), weeds: new Map(),
@@ -2882,6 +2885,12 @@ export default function SocialAnimalsRPG() {
     prey: [],
     preyCool: {},
     preyStat: { spawned: 0, left: 0, eaten: 0 },
+    // what the predators leave on the ground: the cougar's carcass and the
+    // scrapes and posts both he and the wolf come back to. Declared here
+    // rather than sprung into life on first use, so the render layers have
+    // an array to index from the first frame.
+    remains: [],
+    marks: [],
     running: true,
     damCount: damAtRest(),
     dreyN: dreyAtRest(),
@@ -2993,7 +3002,7 @@ export default function SocialAnimalsRPG() {
        *   W.__prey.near(x, y, r, opt)   what a hunter's search would find
        *   W.__prey.claim/release(key, hunterId)
        *   W.__prey.api                  the exact functions a predator calls
-       *   W.__prey.states               the nine state names, so a suite can
+       *   W.__prey.states               the ten state names, so a suite can
        *                                 prove none of them is already taken
        */
       const preyOf = (key) => (W.prey || []).find((p) => p.species === key) || null;
@@ -3042,6 +3051,13 @@ export default function SocialAnimalsRPG() {
         nearestRemains(W, x, y, r == null ? Infinity : r, opt || {});
       W.__remainsEat = (rem) => eatRemains(rem);
       W.__remainsStep = () => stepRemains(W, performance.now());
+      // ...and the scrapes and posts, the same way
+      W.__mark = (x, y, kind, by, sc) =>
+        leaveMark(W, x, y, kind || "scrape", by || "test", performance.now(), sc);
+      W.__marks = () => W.marks || [];
+      W.__markNear = (x, y, r, opt) =>
+        nearestMark(W, x, y, r == null ? Infinity : r, opt || {});
+      W.__marksStep = () => stepMarks(W, performance.now());
       W.__rock = { breaks: ROCK_BREAKS, profile: ROCK_PROFILE, cave: ROCK_CAVE,
                    highEntry: [...ROCK_HIGH_ENTRY],
                    // WHO COMES OFF THE CAVE'S TERRACE AT THE EDGE, handed
@@ -3185,7 +3201,7 @@ export default function SocialAnimalsRPG() {
       worldRef.current.frames = (worldRef.current.frames || 0) + 1;
       dt = Math.min(0.05, Math.max(0, dt));
       if (worldRef.current.running) stepWorld(worldRef.current, cfgRef.current, dt);
-      renderWorld(worldRef.current, iconsRef, padsRef, damRefs, pitRefs, lakeRefs, preyRefs);
+      renderWorld(worldRef.current, iconsRef, padsRef, damRefs, pitRefs, lakeRefs, preyRefs, remRefs, markRefs);
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
@@ -3227,6 +3243,7 @@ export default function SocialAnimalsRPG() {
     // empty map with nothing on cooldown, so the first arrivals are as
     // likely as they were on a fresh page.
     w.prey = []; w.preyCool = {}; w.preyStat = { spawned: 0, left: 0, eaten: 0 };
+    w.remains = []; w.marks = [];
   };
   const switchWorld = (key) => {
     if (!WORLDS[key]) return;
@@ -3238,6 +3255,10 @@ export default function SocialAnimalsRPG() {
     // the prey belong to the forest. Leaving them standing across a world
     // switch would put a crayfish in a swimming pool.
     w.prey = []; w.preyCool = {}; w.preyStat = { spawned: 0, left: 0, eaten: 0 };
+    // ...and so do the things the predators left lying about. A cougar's
+    // kill following the cast into the swimming pool is the same bug as a
+    // crayfish doing it.
+    w.remains = []; w.marks = [];
     setSnapshot((s) => ({ ...s, prey: [], selectedId: null }));
   };
 
@@ -3296,6 +3317,8 @@ export default function SocialAnimalsRPG() {
         {worldKey === "forest" && snapshot.bounds.w > 0 && <PadLayer padsRef={padsRef} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <DamLayer damRefs={damRefs} bounds={snapshot.bounds} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <PitLayer pitRefs={pitRefs} />}
+        {worldKey === "forest" && snapshot.bounds.w > 0 && <RemainsLayer remRefs={remRefs} />}
+        {worldKey === "forest" && snapshot.bounds.w > 0 && <MarkLayer markRefs={markRefs} />}
         {worldKey === "neighborhood" && snapshot.bounds.w > 0 && <NeighborhoodScene bounds={snapshot.bounds} />}
 
         {/* Agents */}
@@ -6611,6 +6634,108 @@ function DamLayer({ damRefs, bounds }) {
 // sizes, which is what makes the hole he leaves the hole he was seen to
 // make. Rendered from a fixed pool and driven imperatively, the dam log
 // trick, so a new pit never touches React.
+/**
+ * THE CARCASS THE COUGAR LEAVES, and the wolf comes down off the ridge for.
+ *
+ * PitLayer's pattern exactly: a fixed pool of absolutely-positioned divs,
+ * display:none until driven, index-aligned to world.remains, driven
+ * imperatively from renderWorld so a new kill never touches React. zIndex 1
+ * puts it under the animals at 10 and on the same layer as the skunk's pits,
+ * which is right — it is a thing on the ground, not a thing in the world.
+ *
+ * NOTHING HERE IS RED. It is bone, hide and a dark stain in the litter: the
+ * moment this reads as gore it stops belonging in the same world as a
+ * raccoon washing a berry.
+ */
+// A carcass is the size of what it was. Off PREY_PROFILE's apparent, with
+// the goat — the only one the cougar actually leaves — as 1.
+const REMAINS_SCALE = { goat: 1, boar: 0.88, hare: 0.62, grouse: 0.54 };
+
+function RemainsLayer({ remRefs }) {
+  return (
+    <>
+      {Array.from({ length: REMAINS_MAX }, (_, i) => (
+        <div key={i}
+          ref={(el) => { if (el) remRefs.current.set(i, el); else remRefs.current.delete(i); }}
+          style={{ position: "absolute", left: 0, top: 0, zIndex: 1, pointerEvents: "none", display: "none", willChange: "transform" }}>
+          <svg width="78" height="46" viewBox="-39 -28 78 46"
+            style={{ display: "block", marginLeft: -39, marginTop: -28, overflow: "visible" }}>
+            {/* the ground goes dark under it, but only just: the stain used
+                to be the loudest thing here and it turned a carcass into a
+                puddle. Bone is what this drawing is */}
+            <ellipse cx="0" cy="4" rx="24" ry="8" fill="#241c12" opacity=".34" />
+            {/* hide and hair FIRST, so the bones sit on top of it */}
+            <path className="sai-rem-hide" d="M -8 5 C 2 9.4 16 8 24 2.4 C 19 9.4 5 12.6 -8 9.4 Z" fill="#8d7a5e" opacity=".92" />
+            <path className="sai-rem-hide" d="M -23 5 C -18 8 -12 8.6 -8 7.6 C -13.4 10.6 -20 9.6 -23 5 Z" fill="#7d6a52" opacity=".85" />
+            {/* the spine, and the ribcage hanging off it: five arcs thinning
+                to the rear. Thick and pale — at world scale a 2px stroke in
+                bone-grey is a smudge */}
+            <path d="M -19 -1 L 21 -8" fill="none" stroke="#b9ad92" strokeWidth="4.2" strokeLinecap="round" />
+            <path d="M -17 0 C -18 -13 -9 -18 -1.5 -16.5" fill="none" stroke="#efe7d6" strokeWidth="3.4" strokeLinecap="round" />
+            <path d="M -10 1.4 C -11 -13 -2 -18 6 -16" fill="none" stroke="#f4eddd" strokeWidth="3.4" strokeLinecap="round" />
+            <path d="M -3 2 C -4 -12 5 -16.4 12.4 -14.4" fill="none" stroke="#e7dfcd" strokeWidth="3.1" strokeLinecap="round" />
+            <path d="M 4 2 C 3.4 -10 10.6 -13.6 16.4 -12" fill="none" stroke="#dcd3c0" strokeWidth="2.7" strokeLinecap="round" />
+            <path d="M 10.6 1.6 C 10.6 -7 15.4 -9.6 19.6 -8.6" fill="none" stroke="#cfc6b2" strokeWidth="2.3" strokeLinecap="round" />
+            {/* the shoulder blade at the head end — the one solid plate, and
+                the piece that says "large animal" rather than "twigs" */}
+            <path d="M -28 -1.4 C -24 -10 -16.6 -11.4 -15 -4 C -16 1 -22.6 3 -28 -1.4 Z" fill="#efe7d6" />
+            <path d="M -25.4 -2 C -23 -6.6 -19 -7.6 -17.4 -4.4" fill="none" stroke="#bdb197" strokeWidth="1.4" opacity=".8" />
+            {/* ...and the second scatter, once something has been at it */}
+            <g className="sai-rem-gnaw">
+              <path d="M 23 6 C 27 4.6 31 5.4 32.4 8 C 28.6 8.6 25 8 23 6 Z" fill="#7d6a52" opacity=".8" />
+              <path d="M -31 6.6 L -25.6 5 L -27.6 9 Z" fill="#e7dfcd" opacity=".85" />
+              <path d="M 13 11 L 18.6 9.6 L 16.6 13 Z" fill="#efe7d6" opacity=".8" />
+              <path d="M -14 12 L -8.6 11 L -10.6 14 Z" fill="#cfc6b2" opacity=".7" />
+            </g>
+          </svg>
+        </div>
+      ))}
+    </>
+  );
+}
+
+/**
+ * SCRAPES AND POSTS — one pool, because they are one record. `data-mark`
+ * picks which of the two drawings shows. Both sit at zIndex 1 with the pits
+ * and the carcass, in the same earth palette, so the ground reads as one
+ * material rather than as three animals' worth of decals.
+ */
+function MarkLayer({ markRefs }) {
+  return (
+    <>
+      {Array.from({ length: MARK_MAX }, (_, i) => (
+        <div key={i}
+          ref={(el) => { if (el) markRefs.current.set(i, el); else markRefs.current.delete(i); }}
+          style={{ position: "absolute", left: 0, top: 0, zIndex: 1, pointerEvents: "none", display: "none", willChange: "transform" }}>
+          <svg width="52" height="26" viewBox="-26 -16 52 26"
+            style={{ display: "block", marginLeft: -26, marginTop: -16, overflow: "visible" }}>
+            {/* the scrape: three rake grooves and the mound they threw up */}
+            <g className="sai-mark-scrape">
+              <ellipse cx="0" cy="0" rx="16" ry="6" fill="#4a3520" opacity=".7" />
+              <path d="M -13 -3.4 L 5 -4.6" stroke="#2e2010" strokeWidth="1.8" strokeLinecap="round" fill="none" />
+              <path d="M -13 0 L 6 -0.6" stroke="#2e2010" strokeWidth="2" strokeLinecap="round" fill="none" />
+              <path d="M -12 3.4 L 5 3.4" stroke="#2e2010" strokeWidth="1.7" strokeLinecap="round" fill="none" />
+              <path d="M 5 -6.6 C 12 -7.4 17 -4 17.6 0.6 C 12 2.4 6.6 1 5 -6.6 Z" fill="#54391d" />
+              <path d="M 6 -5.4 C 11 -6 14.6 -3.6 15.4 -0.6" fill="none" stroke="#6b4d28" strokeWidth="1.2" opacity=".8" />
+            </g>
+            {/* the post: a darkened base and three claw scores beside it */}
+            <g className="sai-mark-post">
+              <ellipse cx="0" cy="1.4" rx="9" ry="4" fill="#3a2a16" opacity=".62" />
+              <ellipse cx="0" cy="0.6" rx="5.4" ry="2.4" fill="#241a0d" opacity=".72" />
+              <path d="M -2 -12 C -1 -7 -1 -3 -1.4 -1" fill="none" stroke="#3f6b38" strokeWidth="2.2" strokeLinecap="round" />
+              <path d="M 2 -13.4 C 2.6 -8 2 -4 1.4 -1.4" fill="none" stroke="#4a7a3e" strokeWidth="2" strokeLinecap="round" />
+              <path d="M 5.4 -10 C 5.6 -6 5 -3.4 4.4 -1.6" fill="none" stroke="#3f6b38" strokeWidth="1.7" strokeLinecap="round" />
+              <path d="M 9 -3.4 L 13.6 -6" stroke="#2e2010" strokeWidth="1.4" strokeLinecap="round" fill="none" />
+              <path d="M 9.6 -1.4 L 14.6 -3.4" stroke="#2e2010" strokeWidth="1.4" strokeLinecap="round" fill="none" />
+              <path d="M 9.6 0.6 L 14 -0.6" stroke="#2e2010" strokeWidth="1.3" strokeLinecap="round" fill="none" />
+            </g>
+          </svg>
+        </div>
+      ))}
+    </>
+  );
+}
+
 function PitLayer({ pitRefs }) {
   return (
     <>
@@ -7059,7 +7184,27 @@ function stepWorld(world, cfg, dt) {
     frogBand: (t) => (def.hasWater ? shallowBandAt(bounds, t, FROG_REACH) : null),
     frogTip: (a, dir) => frogTipAt(a.x, a.y, a.r, dir === undefined ? (a._faceDir || 1) : dir),
     turtleBeak: (a, dir) => turtleBeakAt(a.x, a.y, a.r, dir === undefined ? (a._faceDir || 1) : dir),
-    bugR: BUG_R, weedHalf: WEED_HALF, mudHalf: MUDBED_HALF };
+    bugR: BUG_R, weedHalf: WEED_HALF, mudHalf: MUDBED_HALF,
+    // ---- THE BLUFF, for the two who live on it -------------------------
+    // Until now no ethogram could see the rock at all: a grep for "rock" in
+    // Ethogram.js returned nothing. The cougar's den is a room in it and the
+    // wolf's bed is a ledge on it, so it has to be askable. Bounds are
+    // pre-bound and every one is null-safe on a world with no rock in it,
+    // the same shape lakeRho uses.
+    rockZone: (x, y) => (def.rock ? rockZone(bounds, x, y)
+                                  : { on: false, level: 0, wall: false, band: "forest" }),
+    rockLevel: (x, y) => (def.rock ? rockLevelAt(bounds, x, y) : 0),
+    inCave: (x, y) => (def.rock ? inRockCave(bounds, x, y) : false),
+    caveMouth: () => (def.rock
+      ? { x: ((ROCK_CAVE.x0 + ROCK_CAVE.x1) / 2000) * bounds.w,
+          y: ((ROCK_CAVE.y0 + ROCK_CAVE.y1) / 2000) * bounds.h,
+          lvl: ROCK_LEVEL_SHELF }
+      : null),
+    // by NAME rather than by the line array, because an ethogram must not
+    // import ROCK_BREAKS: "L0" "L1" "B1" "L2" "T1"
+    breakY: (line, x) => (def.rock && ROCK_BREAKS[line]
+                          ? rockBreakY(bounds, ROCK_BREAKS[line], x) : null),
+    rockEdge: (y) => (def.rock ? rockEdgeX(bounds, y) : 0) };
 
   // ---- the lake's insects, weed beds and shoreline mud ------------------
   // Rebuilt only when the stage changes shape. The insects then MOVE, every
@@ -7890,7 +8035,7 @@ function stepWorld(world, cfg, dt) {
   if (def.prey) stepPrey(world, cfg, dt, now);
   // ...and the carcasses the cougar leaves, which outlive the animal and
   // are the whole reason the wolf comes down off the ridge
-  if (def.prey) stepRemains(world, now);
+  if (def.prey) { stepRemains(world, now); stepMarks(world, now); }
 }
 
 /**
@@ -8198,7 +8343,7 @@ function muskFlee(v, cfg) {
   }
 }
 
-function renderWorld(world, iconsRef, padsRef, damRefs, pitRefs, lakeRefs, preyRefs) {
+function renderWorld(world, iconsRef, padsRef, damRefs, pitRefs, lakeRefs, preyRefs, remRefs, markRefs) {
   const t = performance.now() / 1000;
   // drifting lily pads
   if (world.pads && padsRef) {
@@ -8238,6 +8383,47 @@ function renderWorld(world, iconsRef, padsRef, damRefs, pitRefs, lakeRefs, preyR
       el.style.display = "";
       el.style.opacity = String(o);
       el.style.transform = `translate(${p.x}px, ${p.y}px) scale(${p.s})`;
+    }
+  }
+  // ---- what the predators left on the ground ----------------------------
+  // Both on the pit's pattern and for the pit's reason: these appear and go
+  // on the sim's clock, not on React's 300ms snapshot, and a carcass that
+  // took three minutes to earn should not wait a third of a second to show.
+  if (remRefs) {
+    const list = world.remains || [];
+    for (let i = 0; i < REMAINS_MAX; i++) {
+      const el = remRefs.current.get(i);
+      if (!el) continue;
+      const r = list[i];
+      if (!r) { el.style.display = "none"; continue; }
+      const left = r.until - performance.now();
+      const o = left > 30000 ? 1 : Math.max(0, left / 30000);
+      if (o <= 0) { el.style.display = "none"; continue; }
+      el.style.display = "";
+      el.style.opacity = String(o);
+      // scaled to the animal that died, off the same table everything else
+      // is sized from, so a grouse's remains are not a mountain goat's
+      const rs = REMAINS_SCALE[r.species] || 1;
+      el.style.transform = `translate(${r.x}px, ${r.y}px) scale(${rs})`;
+      if (el.dataset.rem !== r.species) el.dataset.rem = r.species;
+      const g = r.gnawed ? "1" : "";
+      if (el.dataset.gnawed !== g) el.dataset.gnawed = g;
+    }
+  }
+  if (markRefs) {
+    const list = world.marks || [];
+    for (let i = 0; i < MARK_MAX; i++) {
+      const el = markRefs.current.get(i);
+      if (!el) continue;
+      const m = list[i];
+      if (!m) { el.style.display = "none"; continue; }
+      const left = m.until - performance.now();
+      const o = left > 60000 ? 1 : Math.max(0, left / 60000);   // the last minute weathers
+      if (o <= 0) { el.style.display = "none"; continue; }
+      el.style.display = "";
+      el.style.opacity = String(o);
+      el.style.transform = `translate(${m.x}px, ${m.y}px) scale(${m.s})`;
+      if (el.dataset.mark !== m.kind) el.dataset.mark = m.kind;
     }
   }
   // ---- the lake's life, and the three things drawn back over an animal --
@@ -8366,6 +8552,12 @@ function renderWorld(world, iconsRef, padsRef, damRefs, pitRefs, lakeRefs, preyR
       // way past, and by the time any filter could separate them the leap is
       // over. a._burstUntil already knows, so hand it over.
       sprite.dataset.burst = nowMs < (a._burstUntil || 0) ? '1' : '';
+      // THE THREAD BETWEEN THE TWO. A state name carries one side of a hunt
+      // only; this says he is holding a live target right now, whichever
+      // beat he is in, so a pose can key off the RELATIONSHIP. The prey end
+      // of the same thread is data-hunted, written below.
+      const hunting = a._huntP && a._huntP.alive ? '1' : '';
+      if (sprite.dataset.hunt !== hunting) sprite.dataset.hunt = hunting;
       // ...and the bill. The stamina half of the SPEED table has been
       // invisible: only the species that cannot hold their top ever get
       // here, and a wolf at drain 0.10 never does, which is the whole point
