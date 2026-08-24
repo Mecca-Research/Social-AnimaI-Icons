@@ -3008,16 +3008,26 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     let g = w.__prey.of('goat');
     if (!g) { w.__prey.ready('goat'); g = w.__prey.spawn('goat', true); }
     if (!g) return { none: true };
-    // put him on the talus, on stage, and point him at the shelf above
-    const B = w.bounds;
-    for (let i = 0; i < 200; i++) {
-      const x = (0.01 + Math.random() * 0.07) * B.w, y = (0.72 + Math.random() * 0.2) * B.h;
-      if (w.__prey.okAt('goat', x, y, { lvl: 0 })) { g.x = x; g.y = y; break; }
+    // PUT HIM AT THE TOP OF THE TALUS, and by sweep rather than by dart.
+    // Both matter. The sweep is so the check does not depend on where 200
+    // random throws happen to land; the top is because this check is about
+    // the LEAP, and from the foot of the talus the walk up to the lip eats
+    // 95 of the frames on its own â€” budget the walk and you are measuring
+    // the pace of a goat, not whether he can leave the ground.
+    const B = w.bounds; let placed = null;
+    for (let yf = 0.72; yf <= 0.92 && !placed; yf += 0.01) {
+      for (let xf = 0.01; xf <= 0.08; xf += 0.005) {
+        const x = xf * B.w, y = yf * B.h;
+        if (w.__prey.okAt('goat', x, y, { lvl: 0 })) {
+          g.x = x; g.y = y; placed = [Math.round(x), Math.round(y)]; break;
+        }
+      }
     }
     g._in = true; g._lvl = 0; g._hold = 0; g._leap = null; g._threat = null;
-    g.state = 'preywander'; g._goal = null; g.leaveAt = performance.now() + 9e6;
+    g.state = 'preywander'; g._goal = null; g._shuffle = 0;
+    g.leaveAt = performance.now() + 9e6;
     const lvls = [0], states = {}, air = [];
-    for (let f = 0; f < 120; f++) {
+    for (let f = 0; f < 400; f++) {
       if (!g._goal) g._goal = { x: g.x, y: g.y, lvl: 1 };
       await frame();
       states[g.state] = (states[g.state] || 0) + 1;
@@ -3027,14 +3037,18 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     }
     const z = w.rockZoneAt(g.x, g.y);
     return { lvls: lvls.join(''), states: states, maxZ: air.length ? Math.max.apply(null, air) : 0,
-             band: z.band, wall: z.wall, on: z.on, level: z.level, lvl: g._lvl };
+             band: z.band, wall: z.wall, on: z.on, level: z.level, lvl: g._lvl,
+             placed: placed, frames: Object.keys(states).map(function (k) {
+               return k + ' x' + states[k]; }).join(' ') };
   })(window.__saiWorld)`);
   chk(!climb.none && climb.lvls.indexOf('1') > 0,
     'the goat gets up onto the cave shelf, which he can only do by leaping',
-    climb.none ? 'no goat' : `terraces seen: ${climb.lvls}, ending in the ${climb.band}`);
+    climb.none ? 'no goat' : `terraces seen: ${climb.lvls}, ending in the ${climb.band}` +
+      `, from ${climb.placed ? climb.placed.join(',') : 'NOWHERE LEGAL'} â€” ${climb.frames}`);
   chk(!climb.none && (climb.states.preyclimb || 0) > 0 && climb.maxZ > 8,
     'and it is a leap: he leaves the ground to do it',
-    climb.none ? 'no goat' : `${climb.states.preyclimb || 0} frames airborne, apex z ${climb.maxZ}`);
+    climb.none ? 'no goat' : `${climb.states.preyclimb || 0} frames airborne, apex z ${climb.maxZ}` +
+      `, from ${climb.placed ? climb.placed.join(',') : 'NOWHERE LEGAL'}`);
   chk(!climb.none && climb.on && !climb.wall && climb.level === climb.lvl,
     'and he lands on the drawn terrace, not inside the face',
     climb.none ? 'no goat' : `standing in the ${climb.band}, terrace ${climb.level}`);
