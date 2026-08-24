@@ -395,6 +395,7 @@ export const PREY_PROFILE = {
   // name and one key is one drawing everywhere. See the note above.
   woodmouse: preyRow({
     mass: 0.0315, len: 0.09, hgt: 0.03, speed: 13, habitat: "floor", arrival: "edge",
+    fill: 0.6195,   // measured off the drawing by tests/sizes.mjs
     dims: "18-45g · 7.5-10.5cm body · 2.5-3.5cm",
     profile: "The smallest thing on four legs here — a quarter of a frog's bulk.",
     habits: "Runs the edges in short bursts and freezes between them. Never " +
@@ -402,6 +403,7 @@ export const PREY_PROFILE = {
   }),
   vole: preyRow({
     mass: 0.0475, len: 0.11, hgt: 0.036, speed: 8, habitat: "floor", arrival: "edge",
+    fill: 0.4994,   // measured off the drawing by tests/sizes.mjs
     dims: "30-65g · 9-13cm body · 3-4.2cm",
     profile: "Blunter and heavier than a wood mouse, on shorter legs and a short tail.",
     habits: "Keeps to runways in the grass. Slower than a wood mouse and less " +
@@ -409,6 +411,7 @@ export const PREY_PROFILE = {
   }),
   rat: preyRow({
     mass: 0.35, len: 0.228, hgt: 0.073, speed: 13, habitat: "floor", arrival: "edge",
+    fill: 0.7925,   // measured off the drawing by tests/sizes.mjs
     dims: "200-500g · 20-25.5cm body · 6-8.5cm",
     profile: "Ten times a wood mouse and it shows: a real animal rather than a scrap.",
     habits: "Bold and methodical along a wall or a log. The one prey here " +
@@ -424,6 +427,7 @@ export const PREY_PROFILE = {
   }),
   hare: preyRow({
     mass: 2.15, len: 0.46, hgt: 0.23, speed: 48, habitat: "floor", arrival: "edge",
+    fill: 0.871,   // measured off the drawing by tests/sizes.mjs
     dims: "1.3-3kg · 40-52cm body · 20-26cm at shoulder",
     profile: "The biggest of the small prey, and by a distance the fastest.",
     habits: "Sits absolutely still until the last moment, then leaves at " +
@@ -431,6 +435,7 @@ export const PREY_PROFILE = {
   }),
   gopher: preyRow({
     mass: 0.175, len: 0.19, hgt: 0.06, speed: 10, habitat: "floor", arrival: "edge",
+    fill: 0.6173,   // measured off the drawing by tests/sizes.mjs
     dims: "100-250g · 15-23cm body · 5-7cm",
     profile: "A cylinder with forepaws. NOT A BEAVER: no paddle tail, no " +
              "bulk, and a head that is mostly cheek pouches and incisors.",
@@ -439,6 +444,7 @@ export const PREY_PROFILE = {
   }),
   grouse: preyRow({
     mass: 0.6, len: 0.44, hgt: 0.275, speed: 40, habitat: "floor", arrival: "edge",
+    fill: 0.7084,   // measured off the drawing by tests/sizes.mjs
     dims: "450-750g · 40-48cm · 25-30cm standing",
     profile: "Chicken-shaped and ground-bound, between a hedgehog and a hare.",
     habits: "Walks and pecks, and relies on not being seen. Flushes in a " +
@@ -446,6 +452,7 @@ export const PREY_PROFILE = {
   }),
   gartersnake: preyRow({
     mass: 0.14, len: 0.675, hgt: 0.029, speed: 3, habitat: "floor", arrival: "edge",
+    fill: 0.5191,   // measured off the drawing by tests/sizes.mjs
     dims: "80-200g · 45-90cm · 2.2-3.5cm thick",
     profile: "Long and nearly weightless. Length that is all body — the one " +
              "animal here whose whole length counts toward the bulk index.",
@@ -454,6 +461,7 @@ export const PREY_PROFILE = {
   }),
   boar: preyRow({
     mass: 75, len: 1.3, hgt: 0.675, speed: 40, habitat: "floor", arrival: "edge",
+    fill: 0.6718,   // measured off the drawing by tests/sizes.mjs
     dims: "50-100kg · 1.1-1.5m · 55-80cm at shoulder",
     profile: "Between the cougar and the wolf on the screen and heavier than " +
              "both in life. Prey by appetite, not by temperament.",
@@ -463,6 +471,7 @@ export const PREY_PROFILE = {
   // ---------------- the bluff, and nowhere else ----------------
   goat: preyRow({
     mass: 92.5, len: 1.4, hgt: 1.05, speed: 25, habitat: "rock", arrival: "edge",
+    fill: 0.8242,   // measured off the drawing by tests/sizes.mjs
     dims: "45-140kg · 1.2-1.6m · 90-120cm at shoulder",
     profile: "The second largest animal in the world after the bear, and just " +
              "under the deer on screen.",
@@ -473,6 +482,7 @@ export const PREY_PROFILE = {
   // ---------------- the lake ----------------
   crayfish: preyRow({
     mass: 0.055, len: 0.11, hgt: 0.033, speed: 1.5, habitat: "lake", arrival: "edge",
+    fill: 0.7073,   // measured off the drawing by tests/sizes.mjs
     dims: "30-80g · 7-15cm · 2.5-4cm",
     profile: "Vole-sized on screen, and almost all of it claw and carapace.",
     habits: "Walks in overland — they do — and then stays in the water. " +
@@ -481,6 +491,7 @@ export const PREY_PROFILE = {
   // ---------------- in the wood and in the ground ----------------
   grub: preyRow({
     mass: 0.002, len: 0.03, hgt: 0.01, speed: 0.05, habitat: "litter", arrival: "surface",
+    fill: 0.4013,   // measured off the drawing by tests/sizes.mjs
     sites: ["log", "root"],
     dims: "1-3g · 2-4cm · 0.8-1.2cm",
     profile: "The smallest thing in the world by mass, and it looks it.",
@@ -490,6 +501,7 @@ export const PREY_PROFILE = {
   }),
   beetle: preyRow({
     mass: 0.0018, len: 0.028, hgt: 0.009, speed: 1.5, habitat: "litter", arrival: "surface",
+    fill: 0.6527,   // measured off the drawing by tests/sizes.mjs
     sites: ["log", "root", "soil"],
     dims: "0.5-3g · 1.5-4cm · 0.6-1.2cm",
     profile: "The smallest on screen. Lighter than a grub and faster than " +
@@ -498,6 +510,7 @@ export const PREY_PROFILE = {
   }),
   earthworm: preyRow({
     mass: 0.0045, len: 0.145, hgt: 0.0065, speed: 0.03, habitat: "litter", arrival: "surface",
+    fill: 0.3695,   // measured off the drawing by tests/sizes.mjs
     sites: ["soil", "root", "log"],
     dims: "3-6g · 9-20cm · 0.5-0.8cm thick",
     profile: "Long and thin, so it reads bigger than the grub on a third of " +
