@@ -4996,3 +4996,248 @@ body {
   .sai-sprite[data-fly="1"] .sai-crit--goose .sai-crit-head{
     transform-box:fill-box; transform-origin:14% 92%; transform:rotate(40deg); }
 }
+
+
+/* ==================== v0.43 THE PREY ====================
+   Thirteen newcomers: mouse, vole, rat, hare, gopher, grouse, gartersnake,
+   boar, goat, crayfish, grub, beetle, earthworm.
+
+   EVERY RULE BELOW IS SCOPED TO A SPECIES. There are now twenty-seven
+   drawings sharing one global stylesheet, and a bare `.sai-crit-claw` rule
+   here would find the next animal that grows a claw. The only unscoped
+   lines are the transform-box declarations, which are safe because they
+   only tell a brand-new class what its own transform is measured against.
+
+   Three of these animals have no legs to swing (gartersnake, grub,
+   earthworm) and two are drawn in plan view (crayfish, beetle). Both cases
+   need their own answer to "what does moving look like", and both get one
+   here rather than a shrug. */
+
+/* new rig parts need their own transform box, exactly like the built-ins */
+.sai-crit-claw, .sai-crit-incisor, .sai-crit-tusk, .sai-crit-flick{ transform-box:fill-box; }
+
+/* ---- per-species gait: swing angle + tempo ---- */
+.sai-crit--mouse{ --sai-swing:26deg; --sai-gait:.24s; }       /* the existing pet line, quickened */
+.sai-crit--vole{ --sai-swing:20deg; --sai-gait:.28s; }        /* short legs, high cadence */
+.sai-crit--rat{ --sai-swing:24deg; --sai-gait:.3s; }
+.sai-crit--hare{ --sai-swing:30deg; --sai-gait:.34s; }        /* bounds, does not trot */
+.sai-crit--gopher{ --sai-swing:19deg; --sai-gait:.32s; }      /* a shuffle on stubs */
+.sai-crit--grouse{ --sai-swing:14deg; --sai-gait:.36s; }      /* two legs, ground bird */
+.sai-crit--gartersnake{ --sai-swing:0deg; --sai-gait:.5s; }   /* nothing to swing */
+.sai-crit--boar{ --sai-swing:17deg; --sai-gait:.44s; }        /* heavy, short-strided */
+.sai-crit--goat{ --sai-swing:21deg; --sai-gait:.46s; }        /* deliberate, on rock */
+.sai-crit--crayfish{ --sai-swing:15deg; --sai-gait:.28s; }
+.sai-crit--grub{ --sai-swing:0deg; --sai-gait:.85s; }
+.sai-crit--beetle{ --sai-swing:18deg; --sai-gait:.2s; }       /* the fastest cadence here */
+.sai-crit--earthworm{ --sai-swing:0deg; --sai-gait:1s; }
+
+/* ---- the three rodents: the walk is where they stop looking alike ----
+   The mouse scampers on the spot, the vole trundles side to side, and the
+   rat's long back rolls. Nothing in the drawings says this; the tempo and
+   the body cycle do, and at 40px they are doing at least as much work as
+   the silhouettes. */
+.sai-sprite[data-walking="1"] .sai-crit--vole .sai-crit-body{
+  animation:sai-prey-trundle var(--sai-gait,.28s) ease-in-out infinite; }
+@keyframes sai-prey-trundle{
+  0%,100%{transform:rotate(-2.6deg) translateY(0);}
+  50%{transform:rotate(2.6deg) translateY(-1.2px);} }
+.sai-sprite[data-walking="1"] .sai-crit--rat .sai-crit-body{
+  animation:sai-prey-roll var(--sai-gait,.3s) ease-in-out infinite; }
+@keyframes sai-prey-roll{
+  0%,100%{transform:skewX(3deg) translateY(0);}
+  50%{transform:skewX(-3deg) translateY(-2px);} }
+/* the rat's tail is dragged, not wagged — it stays down and only ripples */
+.sai-sprite[data-walking="1"] .sai-crit--rat .sai-crit-tail{
+  animation:sai-prey-drag var(--sai-gait,.3s) ease-in-out infinite; }
+@keyframes sai-prey-drag{ 0%,100%{transform:rotate(-3deg);} 50%{transform:rotate(4deg);} }
+.sai-crit--rat .sai-crit-tail{ animation:sai-prey-drag 5s ease-in-out infinite var(--sai-crit-ph,0s); }
+
+/* ---- hare: a bound. The haunch is the drive, so the body leaves the floor ---- */
+.sai-sprite[data-walking="1"] .sai-crit--hare .sai-crit-body{
+  animation:sai-prey-bound var(--sai-gait,.34s) ease-in-out infinite; }
+@keyframes sai-prey-bound{
+  0%,100%{transform:translateY(0) rotate(-1.6deg) scaleY(1);}
+  35%{transform:translateY(-6px) rotate(-4deg) scaleY(1.04);}
+  70%{transform:translateY(1px) rotate(1.4deg) scaleY(.95);} }
+
+/* ---- gopher: a low shuffle, and the loaded cheek swings with the head ---- */
+.sai-sprite[data-walking="1"] .sai-crit--gopher .sai-crit-body{
+  animation:sai-prey-shuffle var(--sai-gait,.32s) ease-in-out infinite; }
+@keyframes sai-prey-shuffle{
+  0%,100%{transform:rotate(-1.8deg) translateY(0);}
+  50%{transform:rotate(1.8deg) translateY(-1.4px);} }
+/* the teeth are part of the face and must never drift off it: they are a
+   child of .sai-crit-head, so they already ride every head animation. This
+   line is only the idle chew. */
+.sai-crit--gopher .sai-crit-incisor{
+  transform-origin:50% 0%; animation:sai-prey-gnaw 4.4s ease-in-out infinite var(--sai-crit-ph2,0s); }
+@keyframes sai-prey-gnaw{
+  0%,86%,100%{transform:translateY(0);}
+  90%{transform:translateY(1.2px);} 94%{transform:translateY(0);} }
+
+/* ---- grouse: a ground bird's peck-walk, and the fan flexes ---- */
+.sai-sprite[data-walking="1"] .sai-crit--grouse .sai-crit-head{
+  animation:sai-prey-peck var(--sai-gait,.36s) ease-in-out infinite; }
+@keyframes sai-prey-peck{
+  0%,100%{transform:translate(0,0) rotate(3deg);}
+  50%{transform:translate(3.4px,-1px) rotate(-4.4deg);} }
+.sai-sprite[data-walking="1"] .sai-crit--grouse .sai-crit-body{
+  animation:sai-crit-pigeonwaddle var(--sai-gait,.36s) ease-in-out infinite; }
+
+/* ---- boar: mass. A short stride under a body that barely rises ---- */
+.sai-sprite[data-walking="1"] .sai-crit--boar .sai-crit-body{
+  animation:sai-prey-trundle-heavy var(--sai-gait,.44s) ease-in-out infinite; }
+@keyframes sai-prey-trundle-heavy{
+  0%,100%{transform:translateY(0) rotate(-1deg);}
+  50%{transform:translateY(-1.6px) rotate(1deg);} }
+/* the head is already carried low; the walk only nods it */
+.sai-sprite[data-walking="1"] .sai-crit--boar .sai-crit-head{
+  animation:sai-prey-lownod var(--sai-gait,.44s) ease-in-out infinite; }
+@keyframes sai-prey-lownod{
+  0%,100%{transform:translateY(0) rotate(1.4deg);}
+  50%{transform:translateY(1.6px) rotate(-1.6deg);} }
+
+/* ---- goat: stiff-legged and level. Nothing bounces on a ledge ---- */
+.sai-sprite[data-walking="1"] .sai-crit--goat .sai-crit-body{
+  animation:sai-prey-stiff var(--sai-gait,.46s) ease-in-out infinite; }
+@keyframes sai-prey-stiff{
+  0%,100%{transform:translateY(0);} 50%{transform:translateY(-1.2px);} }
+
+/* ---- gartersnake: the whole animal is the gait ----
+   No legs, so the walk cycle finds nothing to swing and the S-wave has to
+   carry it. Body and tail travel on the same period with the tail a beat
+   behind, which is what makes a wave look like it is going somewhere. */
+.sai-crit--gartersnake .sai-crit-body{ transform-origin:50% 60%; }
+.sai-crit--gartersnake .sai-crit-tail{ transform-origin:96% 40%; }
+.sai-sprite[data-walking="1"] .sai-crit--gartersnake .sai-crit-body{
+  animation:sai-prey-serpent var(--sai-gait,.5s) ease-in-out infinite; }
+.sai-sprite[data-walking="1"] .sai-crit--gartersnake .sai-crit-tail{
+  animation:sai-prey-serpenttail var(--sai-gait,.5s) ease-in-out infinite;
+  animation-delay:calc(var(--sai-gait,.5s) * -0.25); }
+@keyframes sai-prey-serpent{
+  0%,100%{transform:skewX(9deg) translateY(0) rotate(.8deg);}
+  50%{transform:skewX(-9deg) translateY(-1.4px) rotate(-.8deg);} }
+@keyframes sai-prey-serpenttail{
+  0%,100%{transform:rotate(-11deg) translateY(1px);}
+  50%{transform:rotate(12deg) translateY(-1px);} }
+/* the tongue: out, forked, gone. Idle, because tasting the air is what a
+   snake does while it is doing nothing else. */
+.sai-crit--gartersnake .sai-crit-flick{
+  transform-origin:0% 50%;
+  animation:sai-prey-flick 3.2s ease-in-out infinite var(--sai-crit-ph2,0s); }
+@keyframes sai-prey-flick{
+  0%,70%,100%{transform:scaleX(0); opacity:0;}
+  76%{transform:scaleX(1); opacity:1;}
+  84%{transform:scaleX(.7); opacity:1;}
+  92%{transform:scaleX(1); opacity:1;} }
+
+/* ---- crayfish: plan view. The claws lead and the walk is a scuttle ----
+   The shadow is the one part of the shared rig that assumes a side view: it
+   sits under the FEET at y=105, and a top-down animal has no feet under it.
+   Both plan-view species get it lifted to sit under the body instead. */
+.sai-crit--crayfish .sai-crit-shadow,
+.sai-crit--beetle .sai-crit-shadow{
+  animation:sai-prey-planshadow 3.6s ease-in-out infinite var(--sai-crit-ph,0s); }
+@keyframes sai-prey-planshadow{
+  0%,100%{transform:translateY(-30px) scale(1.5,1.7); opacity:.2;}
+  50%{transform:translateY(-30px) scale(1.42,1.6); opacity:.15;} }
+/* it is an aquatic animal: it does NOT lose its legs in the water the way
+   the land roster does */
+.sai-sprite[data-swimming="1"] .sai-crit--crayfish .sai-crit-leg{ opacity:1; }
+.sai-crit--crayfish .sai-crit-claw{ transform-origin:14% 50%; }
+.sai-crit--crayfish .sai-crit-claw-u{
+  animation:sai-prey-clawu 4.6s ease-in-out infinite var(--sai-crit-ph2,0s); }
+.sai-crit--crayfish .sai-crit-claw-d{
+  animation:sai-prey-clawd 4.6s ease-in-out infinite calc(var(--sai-crit-ph2,0s) - .9s); }
+@keyframes sai-prey-clawu{
+  0%,74%,100%{transform:rotate(0);} 82%{transform:rotate(-11deg);} 90%{transform:rotate(3deg);} }
+@keyframes sai-prey-clawd{
+  0%,74%,100%{transform:rotate(0);} 82%{transform:rotate(11deg);} 90%{transform:rotate(-3deg);} }
+/* threat display: both claws up and held, which is the entire vocabulary a
+   crayfish has for a fight */
+.sai-sprite[data-state="fight"] .sai-crit--crayfish .sai-crit-claw-u{
+  animation:sai-prey-clawup .2s ease-in-out infinite; }
+.sai-sprite[data-state="fight"] .sai-crit--crayfish .sai-crit-claw-d{
+  animation:sai-prey-clawdn .2s ease-in-out infinite; }
+@keyframes sai-prey-clawup{ 0%,100%{transform:rotate(-20deg);} 50%{transform:rotate(-27deg);} }
+@keyframes sai-prey-clawdn{ 0%,100%{transform:rotate(20deg);} 50%{transform:rotate(27deg);} }
+
+/* ---- beetle: a hard little machine. Fast, flat, no vertical travel ---- */
+.sai-sprite[data-walking="1"] .sai-crit--beetle .sai-crit-body{
+  animation:sai-prey-scuttle var(--sai-gait,.2s) linear infinite; }
+@keyframes sai-prey-scuttle{
+  0%,100%{transform:translate(0,0) rotate(-1.2deg);}
+  50%{transform:translate(.6px,-.4px) rotate(1.2deg);} }
+/* a beetle does not breathe visibly. Kill the idle swell — on an oval this
+   small the shared 4.5% scaleY reads as a wobble, not as life. */
+.sai-crit--beetle .sai-crit-body{ animation:none; }
+
+/* ---- grub and earthworm: peristalsis, which is the only gait they own ----
+   Both travel by pushing a bulge from one end to the other. A stride would
+   be a lie, and a rigid slide would be worse, so the body squeezes on the
+   long axis and swells on the short one. */
+.sai-crit--grub .sai-crit-body{ transform-origin:80% 60%; }
+.sai-crit--earthworm .sai-crit-body{ transform-origin:88% 50%; }
+.sai-sprite[data-walking="1"] .sai-crit--grub .sai-crit-body{
+  animation:sai-prey-wriggle var(--sai-gait,.85s) ease-in-out infinite; }
+@keyframes sai-prey-wriggle{
+  0%,100%{transform:scale(1,1) rotate(0);}
+  30%{transform:scale(.93,1.07) rotate(-3deg);}
+  62%{transform:scale(1.05,.95) rotate(2.4deg);} }
+.sai-sprite[data-walking="1"] .sai-crit--earthworm .sai-crit-body{
+  animation:sai-prey-peristalsis var(--sai-gait,1s) ease-in-out infinite; }
+@keyframes sai-prey-peristalsis{
+  0%,100%{transform:scaleX(1) scaleY(1) translateX(0);}
+  30%{transform:scaleX(.86) scaleY(1.16) translateX(2px);}
+  65%{transform:scaleX(1.07) scaleY(.93) translateX(-1px);} }
+.sai-sprite[data-walking="1"] .sai-crit--earthworm .sai-crit-tail{
+  animation:sai-prey-wormtail var(--sai-gait,1s) ease-in-out infinite; }
+@keyframes sai-prey-wormtail{
+  0%,100%{transform:rotate(0) translateX(0);}
+  40%{transform:rotate(-6deg) translateX(2.6px);} }
+/* both of them idle as a slow pulse rather than the shared breath */
+.sai-crit--grub .sai-crit-body,
+.sai-crit--earthworm .sai-crit-body{
+  animation:sai-prey-pulse 4.2s ease-in-out infinite var(--sai-crit-ph,0s); }
+@keyframes sai-prey-pulse{
+  0%,100%{transform:scale(1,1);} 50%{transform:scale(.975,1.035);} }
+
+/* ---- the rat's coats are drawing, not CSS. Nothing to do here ----
+   Left as a note so the next person does not go looking: RatDraw picks its
+   palette from the `variant` prop Critter() hands it, and the extra root
+   class (.sai-crit--rat-hooded and friends) exists only so a future rule
+   CAN reach one coat. No rule reaches one today. */
+
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-walking="1"] .sai-crit--vole .sai-crit-body,
+  .sai-sprite[data-walking="1"] .sai-crit--rat .sai-crit-body,
+  .sai-sprite[data-walking="1"] .sai-crit--rat .sai-crit-tail,
+  .sai-crit--rat .sai-crit-tail,
+  .sai-sprite[data-walking="1"] .sai-crit--hare .sai-crit-body,
+  .sai-sprite[data-walking="1"] .sai-crit--gopher .sai-crit-body,
+  .sai-crit--gopher .sai-crit-incisor,
+  .sai-sprite[data-walking="1"] .sai-crit--grouse .sai-crit-head,
+  .sai-sprite[data-walking="1"] .sai-crit--grouse .sai-crit-body,
+  .sai-sprite[data-walking="1"] .sai-crit--boar .sai-crit-body,
+  .sai-sprite[data-walking="1"] .sai-crit--boar .sai-crit-head,
+  .sai-sprite[data-walking="1"] .sai-crit--goat .sai-crit-body,
+  .sai-sprite[data-walking="1"] .sai-crit--gartersnake .sai-crit-body,
+  .sai-sprite[data-walking="1"] .sai-crit--gartersnake .sai-crit-tail,
+  .sai-crit--gartersnake .sai-crit-flick,
+  .sai-crit--crayfish .sai-crit-claw-u,
+  .sai-crit--crayfish .sai-crit-claw-d,
+  .sai-sprite[data-state="fight"] .sai-crit--crayfish .sai-crit-claw-u,
+  .sai-sprite[data-state="fight"] .sai-crit--crayfish .sai-crit-claw-d,
+  .sai-sprite[data-walking="1"] .sai-crit--beetle .sai-crit-body,
+  .sai-sprite[data-walking="1"] .sai-crit--grub .sai-crit-body,
+  .sai-sprite[data-walking="1"] .sai-crit--earthworm .sai-crit-body,
+  .sai-sprite[data-walking="1"] .sai-crit--earthworm .sai-crit-tail,
+  .sai-crit--grub .sai-crit-body,
+  .sai-crit--earthworm .sai-crit-body{ animation:none; }
+  /* the tongue must not be left frozen mid-flick, half a tongue long */
+  .sai-crit--gartersnake .sai-crit-flick{ transform:scaleX(0); opacity:0; }
+  /* the plan-view shadow is a POSITION, not a motion: it stays put */
+  .sai-crit--crayfish .sai-crit-shadow,
+  .sai-crit--beetle .sai-crit-shadow{
+    animation:none; transform:translateY(-30px) scale(1.46,1.65); opacity:.18; }
+}
