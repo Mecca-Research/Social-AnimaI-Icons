@@ -1152,7 +1152,16 @@ const FORAGE_SITES = [
   // clears the world's own worst pair at all fourteen shapes (127 vs 92 at
   // 1008x700, 112 vs 81 at 900x620, 182 vs 131 at 1500x940).
   { x: .210, y: .950, s: 0.80, kind: "log", logType: "mossy", dir: -1 },
-  { x: .185, y: .690, s: 1.00, kind: "root", dir: -1 },
+  // UP AND RIGHT, out from under the west-low oak. That oak moved to
+  // (.144,.848) in v0.42 to get its leaves off the bluff, and its crown
+  // came down over this root — the hedgehog dives into a surface root the
+  // viewer cannot see. The four placement rules never caught it because
+  // they measure a site against a TRUNK, and what covers this one is a
+  // CROWN, painted at z-index 12 over everything. There is a check for it
+  // now. Solved, not nudged: clear of every crown at eight stage shapes
+  // with 31px to spare, and still clear of the lake, the bluff, the other
+  // sites and every trunk's working line.
+  { x: .205, y: .670, s: 1.00, kind: "root", dir: -1 },
   // Out of the spruce. At (.170,.150) this root was drawn straight through
   // the west-high conifer's crown and read as a log lying behind it — the
   // one arch on the map you could not tell from a fallen trunk, in the one

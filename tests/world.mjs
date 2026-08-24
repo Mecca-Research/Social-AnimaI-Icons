@@ -1847,6 +1847,39 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
 
 
 
+// ============ no forage site hides under a crown ============
+// The hedgehog dives into a surface root and noses under a fallen log, and
+// a crown paints at z-index 12 over everything â€” so a site under one is a
+// behaviour the viewer cannot see happen. This is NOT covered by the four
+// placement rules: those measure a site against a TRUNK, and the west-low
+// oak's crown came down over the leftmost root when that tree moved in
+// v0.42 to get its own leaves off the bluff. Trunk clearance said fine.
+{
+  const r = await page.evaluate(`(w => {
+    const C = w.__crowns, K = w.__treeScale, T = w.def.trees, B = w.bounds;
+    const SIZES = [[972,552],[1104,572],[1424,832],[1484,872],[1904,1012],[1084,1132]];
+    const bad = [];
+    for (const f of (w.forage || [])) {
+      const xf = f.px / B.w, yf = f.py / B.h;
+      for (const [W, H] of SIZES) {
+        const k = K(W, H);
+        for (const t of T) {
+          const c = C[t.kind || 'oak'], s = (t.s0 != null ? t.s0 : t.s) * k;
+          const py = yf * H, top = t.y * H - c.topPx * s, bot = t.y * H - c.botPx * s;
+          if (Math.abs(t.x * W - xf * W) < c.half * s && py > top && py < bot)
+            bad.push(f.kind + ' at ' + xf.toFixed(3) + ',' + yf.toFixed(3)
+                     + ' under the ' + (t.kind || 'oak') + ' at ' + t.x + ',' + t.y
+                     + ' (' + W + 'x' + H + ')');
+        }
+      }
+    }
+    return { n: (w.forage || []).length, bad: [...new Set(bad)] };
+  })(window.__saiWorld)`);
+  chk(r.bad.length === 0, 'no forage site is painted over by a crown',
+    r.bad.length ? r.bad.slice(0, 3).join('; ')
+                 : `${r.n} sites, all clear of six crowns at six stage shapes`);
+}
+
 chk(errs.length === 0, 'no JS errors', errs.length ? errs[0] : 'clean');
 console.log(`\n${fail.length ? 'FAIL ' + fail.length : 'ALL PASS'} (${pass.length} passed)`);
 await browser.close();
