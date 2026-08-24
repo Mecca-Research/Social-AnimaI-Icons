@@ -98,6 +98,9 @@
 
 import { gait, SPEED } from "./Gait.js";
 import { SPECIES_PROFILE } from "./SpeciesProfile.js";
+// The hunting side of the prey population. Prey.js imports nothing from
+// here, so this is a one-way edge and not a cycle.
+import { nearestPrey, claimPrey, releasePrey, consumePrey } from "./Prey.js";
 
 /** species key -> compiled ethogram */
 export const ETHOGRAM = {};
@@ -606,6 +609,250 @@ function driveStrip(a, c) {
     return;
   }
   a.stateUntil = c.now + STRIP_BRANCH;               // reach for the next one
+}
+
+
+/* ======================================================================
+ * THE HUNT — one mechanism, seven predators
+ * ======================================================================
+ *
+ * Prey.js owns the animals and everything that happens TO them: finding one
+ * (nearestPrey), reserving one (claimPrey), and taking one off the board
+ * (consumePrey). It says so in its own header, and it is deliberate — prey
+ * wander and prey run, and that is the whole of that file.
+ *
+ * This is the other half: what a PREDATOR does. Seven of them hunt, and they
+ * differ in flavour rather than in structure — a cougar's pounce, an owl's
+ * swoop and a wolf's explosive sprint are the same four beats at different
+ * speeds over different prey. Writing that seven times would give us seven
+ * subtly different claim-refresh bugs, so it is written once.
+ *
+ * THE FOUR BEATS
+ *   1. pick    nearestPrey inside a SENSE radius, then claim it. The radius
+ *              is the sense: an owl hears a mouse under leaf litter from
+ *              much further off than a hedgehog can find a grub.
+ *   2. stalk   the engine's own `goto` walks him in, at a low urgency, with
+ *              `track` following the prey as it moves and refreshing the
+ *              claim on every frame of it. Ends at POUNCE range, not at
+ *              contact — the last stretch is not a walk.
+ *   3. strike  a committed burst, budgeted in PIXELS HE MAY COVER rather
+ *              than in milliseconds he may spend. That is not a stylistic
+ *              choice: `c.now` is wall-clock and movement accrues in dt,
+ *              which the sim clamps to 50ms. Headless runs at three or four
+ *              frames a second, so a 1500ms deadline buys ~7 frames and
+ *              0.35s of travel there against 1.5s of travel at 60fps — the
+ *              same pounce falls 60px short in one and lands in the other.
+ *              A distance budget spends the same in both. It is also the
+ *              more honest model: what stops a cougar tailing a hare across
+ *              the map is that a cat has one sprint in it, not a stopwatch.
+ *   4. outcome caught -> consumePrey and a feed; missed -> release the claim
+ *              and stand there. `catchChance` is per strike and per species.
+ *
+ * WHY THE CLAIM IS REFRESHED IN THREE PLACES
+ * A claim lapses after PREY_CLAIM_MS (6s) so a hunter who is dragged off the
+ * map cannot lock a wood mouse out of the world for good. A stalk is easily
+ * longer than six seconds, so it has to be renewed while it runs: in track()
+ * on the way in, and in drive() during the strike. Refreshing your own claim
+ * always succeeds and is cheap.
+ *
+ * WHAT A HUNTER MUST NOT DO
+ * Hold a reference to a prey across frames without checking `p.alive`. The
+ * instance survives being eaten — that is on purpose, so a stored reference
+ * reads as obviously dead rather than as undefined — but acting on one is a
+ * hunter feeding on an animal that is not there.
+ */
+
+/** how close the sense reaches, before the species scales it */
+const HUNT_SENSE = 260;
+
+/**
+ * Pick a target and reserve it. Returns the shape `goto.pick` wants: a plain
+ * {x,y} the walk can aim at, carrying the instance so begin() gets it back.
+ *
+ * `free: true` is what makes two predators never converge on one mouse —
+ * nearestPrey skips anything already claimed by somebody else.
+ */
+function huntPick(a, c, o) {
+  const hit = nearestPrey(c.world, a.x, a.y, o.sense ?? HUNT_SENSE,
+                          { species: o.prey, habitat: o.habitat, free: true });
+  if (!hit || !hit.p) return null;
+  const p = hit.p;
+  // ...and it must be ON STAGE. A prey still walking in from off the edge is
+  // not catchable, and a hunt that sets off after one walks off the map.
+  if (!p._in || !p.alive) return null;
+  if (!claimPrey(c.world, p, a.id, c.now)) return null;
+  return { x: p.x, y: p.y, prey: p };
+}
+
+/**
+ * Follow the target while closing, and keep the claim warm. Returning the
+ * live instance is what makes the stalk track a moving animal rather than
+ * walk to where it used to be.
+ */
+function huntTrack(a, c, ref) {
+  const p = ref && ref.prey;
+  if (!p || !p.alive || !p._in) return null;   // goal stops updating; giveUp ends it
+  claimPrey(c.world, p, a.id, c.now);          // refresh: always succeeds for the holder
+  return p;
+}
+
+/** let go of a target cleanly, whatever the reason */
+function huntDrop(a, c, quiet) {
+  const p = a._huntP;
+  if (p) releasePrey(p, a.id);
+  a._huntP = null; a._huntEnd = 0; a._faceDir = 0;
+  endEvent(a, c, { reroll: true, quiet: quiet ?? 1200, stop: true });
+}
+
+/**
+ * Build one species' hunt.
+ *
+ *   id, domain          the event's own identity
+ *   prey                one prey key or an array of them
+ *   habitat             optional extra filter ("lake" for the crayfish pair)
+ *   sense               how far off he notices one
+ *   pounce              the range the stalk ends at and the strike begins
+ *   reach               the range at which the strike connects
+ *   creep               stalk urgency, 0..1 (low = slow and quiet)
+ *   burst               strike urgency (high = committed)
+ *   dash                how far the burst may carry him before it is a miss,
+ *                       in px. Budget it well over `pounce`: the prey is
+ *                       running too, so the ground he covers is not the gap
+ *                       he started with.
+ *   catchChance         0..1, rolled once, on contact
+ *   feedMs              [lo, hi] over the kill
+ *   st: {stalk, strike, feed, miss}   the four state names, this species' own
+ *   onKill(a, c, p)     optional. The cougar leaves a carcass here.
+ */
+function makeHunt(o) {
+  const st = o.st;
+  return {
+    id: o.id, domain: o.domain, trigger: "seek",
+    every: o.every, chance: o.chance, cool: o.cool, miss: o.missCool ?? 15000,
+    states: [st.strike, st.feed, st.miss].filter(Boolean),
+    goto: {
+      state: st.stalk,
+      within: o.pounce ?? 74,
+      giveUp: o.giveUp ?? 24000,
+      none: o.none ?? 11000,
+      lost: o.lost ?? 9000,
+      urgency: o.creep ?? 0.30,
+      pick: (a, c) => huntPick(a, c, o),
+      track: (a, c, ref) => huntTrack(a, c, ref),
+    },
+
+    begin(a, c, S, g) {
+      const p = g && g.prey;
+      if (!p || !p.alive || !p._in) { huntDrop(a, c, 900); return; }
+      claimPrey(c.world, p, a.id, c.now);
+      a._huntP = p;
+      a._faceDir = p.x >= a.x ? 1 : -1;
+      a.state = st.strike;
+      // the budget is the whole difference between a pounce and a pursuit,
+      // and it is spent in px so that it means the same at 4fps and at 60
+      a._huntGo = o.dash ?? 170;
+      a.stateUntil = c.now + 30000;      // a backstop, not the mechanism
+    },
+
+    drive(a, c, S) {
+      // ---- over the kill, or standing where it was ----------------------
+      if (a.state === st.feed || (st.miss && a.state === st.miss)) {
+        a.vx = 0; a.vy = 0;
+        if (c.now < a.stateUntil) return;
+        huntDrop(a, c, a.state === st.feed ? 2600 : 1400);
+        return;
+      }
+      // ---- the strike ---------------------------------------------------
+      const p = a._huntP;
+      if (!p || !p.alive || !p._in) { huntDrop(a, c, 900); return; }
+      claimPrey(c.world, p, a.id, c.now);
+      const sp = gait(a, c, o.burst ?? 0.95);
+      const d = stepTowardAt(a, c, p, sp);
+      a._huntGo -= sp * c.dt;            // spend the burst on ground, not on time
+      a._faceDir = p.x >= a.x ? 1 : -1;
+
+      if (d <= (o.reach ?? 22)) {
+        a.vx = 0; a.vy = 0;
+        if (Math.random() < (o.catchChance ?? 0.6) && consumePrey(c.world, p, a.id, c.now)) {
+          if (o.onKill) o.onKill(a, c, p);
+          a._huntP = null;
+          a.state = st.feed;
+          a.stateUntil = c.now + c.rand(o.feedMs ? o.feedMs[0] : 3000,
+                                        o.feedMs ? o.feedMs[1] : 5200);
+          return;
+        }
+        // MISSED. The claim goes back immediately: the animal that just got
+        // away is fair game for the next hunter, and for this one on a later
+        // roll — but not on this one, or a miss is only a delay.
+        releasePrey(p, a.id); a._huntP = null;
+        if (st.miss) { a.state = st.miss; a.stateUntil = c.now + c.rand(900, 1600); return; }
+        huntDrop(a, c, 1400);
+        return;
+      }
+      if (a._huntGo <= 0 || c.now >= a.stateUntil) {   // out of burst: he is blown
+        releasePrey(p, a.id); a._huntP = null;
+        if (st.miss) { a.state = st.miss; a.stateUntil = c.now + c.rand(900, 1600); return; }
+        huntDrop(a, c, 1400);
+      }
+    },
+  };
+}
+
+/* ---------------------------------------------------------------------
+ * REMAINS
+ *
+ * Prey.js is explicit that there is no carcass: consumePrey takes the animal
+ * off the board on the frame it is caught, and "if a hunt needs a carry or a
+ * feed pose, run it on the HUNTER". That is the right call for twelve of the
+ * thirteen — a fox does not leave half a mouse.
+ *
+ * The cougar is the exception the owner asked for by name: he sleeps in the
+ * den "leaving mountain goat remains", and the wolf "waits for the Cougar to
+ * sleep or leave, then slips in to scavenge". So remains are a thing the
+ * KILLER leaves behind, not a state of the prey — they outlive the animal
+ * and they belong to the world.
+ */
+const REMAINS_MS = 210000;        // how long a carcass is worth crossing the map for
+const REMAINS_FEEDS = 3;          // how many scavenger meals are in one
+
+export function leaveRemains(world, x, y, species, by, now) {
+  const list = world.remains || (world.remains = []);
+  const r = { id: "rem" + (world._remId = (world._remId || 0) + 1),
+              x, y, species, by, at: now, until: now + REMAINS_MS,
+              feeds: REMAINS_FEEDS, userId: null };
+  list.push(r);
+  return r;
+}
+
+/** drop the ones that have gone. Called from the world's step, beside stepPrey. */
+export function stepRemains(world, now) {
+  const list = world.remains;
+  if (!list || !list.length) return;
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (now >= list[i].until || list[i].feeds <= 0) list.splice(i, 1);
+  }
+}
+
+/** the nearest carcass with a meal left in it, ignoring one another animal holds */
+export function nearestRemains(world, x, y, maxR = Infinity, opt = {}) {
+  const list = world.remains;
+  if (!list || !list.length) return null;
+  let best = null, bd = maxR;
+  for (const r of list) {
+    if (r.feeds <= 0) continue;
+    if (opt.species && r.species !== opt.species) continue;
+    if (opt.free !== false && r.userId && r.userId !== opt.byId) continue;
+    const d = Math.hypot(r.x - x, r.y - y);
+    if (d < bd) { bd = d; best = r; }
+  }
+  return best ? { r: best, d: bd } : null;
+}
+
+/** take one meal out of a carcass */
+export function eatRemains(r) {
+  if (!r || r.feeds <= 0) return false;
+  r.feeds--; r.gnawed = true;
+  return true;
 }
 
 defineEthogram("bear", {
@@ -3218,6 +3465,29 @@ defineEthogram("fox", {
         },
       ],
     },
+
+    /* ---- THE MOUSE POUNCE ---------------------------------------------
+     * The fox hunts by EAR. He is the only one here who locates prey he
+     * cannot see, so his sense radius is the widest on the floor — and the
+     * pounce it ends in is his signature: a high arc onto a spot, rather
+     * than a run at an animal. He takes anything on the forest floor up to
+     * a hare, which is most of the small prey in the world.
+     *
+     * `pounce` is deliberately long and `strikeMs` deliberately short: the
+     * whole read is that he commits from a distance and either has it or
+     * does not. A fox that chased would be a dog.
+     */
+    makeHunt({
+      id: "mousing", domain: "land",
+      prey: ["woodmouse", "vole", "rat", "hare", "gopher", "grouse", "gartersnake"],
+      sense: 300, pounce: 96, reach: 24,
+      creep: 0.26,                 // the slow stiff-legged walk in
+      burst: 1.0, dash: 190,       // ...and the leap, which is all of it
+      catchChance: 0.55,
+      feedMs: [3200, 5000],
+      every: [26000, 46000], chance: 0.62, cool: 21000, missCool: 13000,
+      st: { stalk: "foxstalk", strike: "foxpounce", feed: "foxeat", miss: "foxmiss" },
+    }),
   ],
 });
 

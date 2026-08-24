@@ -11,6 +11,7 @@ import { SPECIES_PROFILE, speciesSize, PREY_PROFILE, PREY_KEYS,
          apparentFromBulk, BULK_ANCHOR } from "./SpeciesProfile.js";
 import { gait, gaitIn, speedCap, rescueReach, SPEED, GAIT_DEF } from "./Gait.js";
 import { stepEthogram, ethoSwimP, ethoShare, ETHOGRAM, ETHO_STATES, ETHO_Z_STATES, ETHO_OWNWATER_STATES, setTreeMetrics, setForageMetrics, ethoOffstage, hogCurl, squirrelBolt } from "./Ethogram.js";
+import { stepRemains, leaveRemains, nearestRemains, eatRemains } from "./Ethogram.js";
 import { setPreyTerrain, stepPrey, spawnPrey, removePrey, preyReport, preyBlocked,
          preyList, preyAt, nearestPrey, isPreyClaimed,
          claimPrey, releasePrey, consumePrey, habitatOk,
@@ -3029,6 +3030,18 @@ export default function SocialAnimalsRPG() {
       // against the same functions the suite exercises
       W.__prey.api = { preyList, preyAt, nearestPrey, isPreyClaimed,
                        claimPrey, releasePrey, consumePrey };
+      // ---- REMAINS, as the world holds them ---------------------------
+      // A carcass is not a prey and is not on world.prey: it is what the
+      // KILLER left, it outlives the animal, and it is the wolf's whole
+      // reason to come down off the ridge. Handed over live rather than
+      // copied, so a check reads the same list the scavenge event reads.
+      W.__remains = () => W.remains || [];
+      W.__remainsLeave = (x, y, species, by) =>
+        leaveRemains(W, x, y, species || "goat", by || "test", performance.now());
+      W.__remainsNear = (x, y, r, opt) =>
+        nearestRemains(W, x, y, r == null ? Infinity : r, opt || {});
+      W.__remainsEat = (rem) => eatRemains(rem);
+      W.__remainsStep = () => stepRemains(W, performance.now());
       W.__rock = { breaks: ROCK_BREAKS, profile: ROCK_PROFILE, cave: ROCK_CAVE,
                    highEntry: [...ROCK_HIGH_ENTRY],
                    // WHO COMES OFF THE CAVE'S TERRACE AT THE EDGE, handed
@@ -7875,6 +7888,9 @@ function stepWorld(world, cfg, dt) {
   // mouse that saw the fox and a mouse that walked into it. Prey are not
   // part of any pair work above: see the header of Prey.js.
   if (def.prey) stepPrey(world, cfg, dt, now);
+  // ...and the carcasses the cougar leaves, which outlive the animal and
+  // are the whole reason the wolf comes down off the ridge
+  if (def.prey) stepRemains(world, now);
 }
 
 /**
