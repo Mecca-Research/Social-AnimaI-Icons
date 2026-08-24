@@ -2669,6 +2669,481 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
   chk(!perr, 'nothing threw inside a stepped frame', perr || 'clean');
   await page2.close();
 }
+/* =====================================================================
+ * THE PREY POPULATION
+ * =====================================================================
+ *
+ * Thirteen small animals that arrive on their own, keep to a habitat and
+ * leave again — the food source the hunting side is built on. They live on
+ * world.prey, never in world.agents, and the first check here is that the
+ * roster did not notice.
+ *
+ * EVERYTHING BELOW IS PUMPED, NOT WAITED ON. Headless rAF is 3-4fps and the
+ * sim clamps dt to 50ms, so "wait 30 seconds" buys about a hundred frames of
+ * a hundred different lengths. These checks drive requestAnimationFrame
+ * directly and count frames, the way the terrace checks above do.
+ */
+{
+  const frame = () => page.evaluate(
+    'new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)))');
+
+  // ---- the roster did not grow ---------------------------------------
+  const roster = await page.evaluate(`(function (w) {
+    const keys = Object.keys(w.def.roster);
+    const prey = w.__prey ? w.__prey.keys : [];
+    return { n: keys.length, keys: keys,
+             overlap: prey.filter(function (k) { return keys.indexOf(k) >= 0; }),
+             ceiling: keys.length,
+             agentSpecies: w.agents.map(function (a) { return a.species; }),
+             preyInAgents: w.agents.filter(function (a) { return prey.indexOf(a.species) >= 0; })
+                            .map(function (a) { return a.species; }),
+             maxLabel: (document.body.textContent.match(/Animals: \\d+ \\/ (\\d+)/) || [])[1] };
+  })(window.__saiWorld)`);
+  chk(roster.n === 14 && roster.overlap.length === 0,
+    'the cast is still fourteen and no prey species is in the roster',
+    `${roster.n} in the roster, ${roster.overlap.length} prey keys found in it`);
+  chk(roster.preyInAgents.length === 0,
+    'and no prey has been added to world.agents — they are a separate list',
+    roster.preyInAgents.length ? roster.preyInAgents.join(', ')
+      : `${roster.agentSpecies.length} agents, all of them cast`);
+  chk(roster.maxLabel === '14', 'and + Icon still tops out at fourteen',
+    `the toolbar reads / ${roster.maxLabel}`);
+
+  // ---- the state names are free --------------------------------------
+  // THE SINGLE BIGGEST RISK IN THIS BATCH. data-state drives the CSS and the
+  // selectors are global: a name used by two species silently gives one
+  // animal the other's animation and nothing throws. This asks the CSS
+  // itself, rule by rule, rather than trusting a grep that has gone stale.
+  const names = await page.evaluate(`(function (w) {
+    const st = w.__prey.states;
+    const ethoStates = [];
+    (window.__saiEtho.states || new Set()).forEach(function (s) { ethoStates.push(s); });
+    let rules = 0; const hits = [];
+    // CSSRuleList is array-LIKE and not iterable in this build: a for...of
+    // over it silently visits nothing and the scan reports a clean zero.
+    const walk = function (rl) {
+      for (let i = 0; i < rl.length; i++) {
+        const r = rl[i];
+        if (r.cssRules && r.cssRules.length) { walk(r.cssRules); continue; }
+        const sel = r.selectorText; if (!sel) continue; rules++;
+        for (const s of st) {
+          if (sel.indexOf('"' + s + '"') >= 0 || sel.indexOf("'" + s + "'") >= 0
+              || sel.indexOf('=' + s + ']') >= 0) hits.push(s + ' <- ' + sel);
+        }
+      }
+    };
+    for (const sheet of document.styleSheets) {
+      let list = null; try { list = sheet.cssRules; } catch (e) { continue; }
+      walk(list);
+    }
+    return { st: st, rules: rules, hits: hits,
+             clash: st.filter(function (s) { return ethoStates.indexOf(s) >= 0; }),
+             ethoN: ethoStates.length };
+  })(window.__saiWorld)`);
+  chk(names.clash.length === 0,
+    'no prey state name is already claimed by an ethogram',
+    names.clash.length ? names.clash.join(', ')
+      : `${names.st.length} prey states against ${names.ethoN} the cast owns`);
+  chk(names.rules > 500 && names.hits.length === 0,
+    'and none of them matches a CSS rule that was written for something else',
+    names.hits.length ? names.hits[0] : `${names.rules} rules scanned, no collision`);
+  chk(names.st.every((s) => /^prey/.test(s)),
+    'every prey state is prefixed, so the next thirteen cannot collide either',
+    names.st.join(' '));
+
+  // ---- the sizes are derived, and they ladder correctly ---------------
+  const sz = await page.evaluate(`(function (w) {
+    const P = w.__prey.profile, B = w.__prey.bulk, C = window.__saiProfile;
+    const bad = [], drift = [];
+    for (const k of Object.keys(P)) {
+      const r = P[k];
+      const want = B.apparentFromBulk(r.mass, r.len, r.hgt);
+      if (Math.abs(want - r.apparent) > 0.06) drift.push(k + ' ' + r.apparent + ' vs ' + want.toFixed(2));
+      if (Math.abs(r.size - r.apparent / (r.fill * 2.7)) > 0.02) bad.push(k);
+    }
+    // PREY FIRST, and it stays that way even though no key overlaps today.
+    // One did: the prey mouse was called mouse and the neighborhood already
+    // had a pet of that name. Looking a prey key up in the cast's table
+    // returns a row with no apparent, and an undefined in a comparator
+    // sorts the whole ladder into nonsense rather than failing.
+    const app = function (k) { return (P[k] || C[k]).apparent; };
+    return { drift: drift, bad: bad,
+             ladder: Object.keys(P).concat(Object.keys(C).filter(function (k) { return C[k].apparent; }))
+               .sort(function (a, b) { return app(b) - app(a); }),
+             woodmouse: P.woodmouse.apparent, bear: C.bear.apparent, frog: C.frog.apparent,
+             goat: P.goat.apparent, boar: P.boar.apparent, deer: C.deer.apparent,
+             wolf: C.wolf.apparent, cougar: C.cougar.apparent,
+             beetle: P.beetle.apparent, hare: P.hare.apparent, skunk: C.skunk.apparent,
+             minBox: Math.min.apply(null, Object.keys(P).map(function (k) { return P[k].size * 3.1; })) };
+  })(window.__saiWorld)`);
+  chk(sz.drift.length === 0,
+    'every prey size comes out of the bulk index, not out of a hand',
+    sz.drift.length ? sz.drift.join('; ') : '13 rows reproduce apparentFromBulk exactly');
+  chk(sz.bad.length === 0, 'and the table is self-consistent: size = apparent / (fill * 2.7)',
+    sz.bad.length ? sz.bad.join(', ') : 'all 13 rows');
+  chk(sz.woodmouse < sz.frog && sz.woodmouse / sz.bear < 0.30 && sz.woodmouse / sz.bear > 0.18,
+    'a wood mouse reads as a mouse next to a bear',
+    `wood mouse ${sz.woodmouse}px against bear ${sz.bear}px — ${(100 * sz.woodmouse / sz.bear).toFixed(0)}%`);
+  chk(sz.goat < sz.deer && sz.goat > sz.wolf && sz.boar < sz.wolf && sz.boar > sz.cougar,
+    'and the two big prey land where their real bulk puts them',
+    `goat ${sz.goat} under the deer's ${sz.deer}; boar ${sz.boar} between ` +
+    `the wolf's ${sz.wolf} and the cougar's ${sz.cougar}`);
+  chk(sz.ladder[0] === 'bear' && sz.ladder[sz.ladder.length - 1] === 'beetle',
+    'the bear is still the biggest thing in the world, and a beetle the smallest',
+    `largest ${sz.ladder[0]}, smallest ${sz.ladder[sz.ladder.length - 1]}: ` +
+    sz.ladder.slice(0, 3).join(' > ') + ' ... ' + sz.ladder.slice(-3).join(' > '));
+  chk(sz.hare < sz.skunk, 'and a hare is smaller than a skunk, which is what life says',
+    `hare ${sz.hare} against skunk ${sz.skunk}`);
+
+  // ---- ONE OF EACH, and any subset may coexist ------------------------
+  const one = await page.evaluate(`(function (w) {
+    w.__prey.clear();
+    const first = w.__prey.keys.map(function (k) { return !!w.__prey.spawn(k); });
+    const second = w.__prey.keys.map(function (k) { return w.__prey.spawn(k); });
+    const blocked = w.__prey.keys.map(function (k) { return w.__prey.blocked(k); });
+    const forced = w.__prey.keys.map(function (k) { return w.__prey.spawn(k, true); });
+    const byKey = {}; for (const p of w.prey) byKey[p.species] = (byKey[p.species] || 0) + 1;
+    return { first: first.filter(Boolean).length, second: second.filter(Boolean).length,
+             forced: forced.filter(Boolean).length,
+             blocked: blocked.filter(function (b) { return b === 'already out'; }).length,
+             live: w.prey.length,
+             dupes: Object.keys(byKey).filter(function (k) { return byKey[k] > 1; }) };
+  })(window.__saiWorld)`);
+  chk(one.first === 13 && one.live === 13 && one.dupes.length === 0,
+    'all thirteen prey can be out at once, and no species is out twice',
+    `${one.live} alive, ${one.dupes.length} duplicated`);
+  chk(one.second === 0 && one.blocked === 13,
+    'and a second of the same species is refused while the first is alive',
+    `${one.second} extra spawned; ${one.blocked}/13 reported "already out"`);
+  chk(one.forced === 0,
+    'the one-of-each rule is not something `force` can talk its way past',
+    `${one.forced} got through on a forced spawn`);
+
+  // ...and it holds while the world runs, not just at the moment it is set
+  let dupeFrames = 0, over = 0;
+  for (let i = 0; i < 60; i++) {
+    await frame();
+    const s = await page.evaluate(`(function (w) {
+      const seen = {}; let d = 0;
+      for (const p of w.prey) { if (seen[p.species]) d++; seen[p.species] = 1; }
+      return { d: d, n: w.prey.length }; })(window.__saiWorld)`);
+    if (s.d) dupeFrames++;
+    if (s.n > 13) over++;
+  }
+  chk(dupeFrames === 0 && over === 0,
+    'and it goes on holding with the generator running',
+    `60 frames, ${dupeFrames} with a duplicate, ${over} over thirteen alive`);
+
+  // ---- gone means gone, and then available again ----------------------
+  const gone = await page.evaluate(`(function (w) {
+    const before = w.prey.length;
+    const p = w.__prey.of('hare');
+    const left = w.__prey.leave('hare');
+    const rep1 = w.__prey();
+    const denied = w.__prey.spawn('hare');
+    w.__prey.ready('hare');
+    const rep2 = w.__prey();
+    const again = w.__prey.spawn('hare');
+    return { before: before, left: left, alive: p.alive, state: p.state,
+             inList: w.prey.indexOf(p) >= 0,
+             cool: rep1.cooldown.hare || 0, blocked: w.__prey.blocked('hare'),
+             denied: !!denied,
+             availableAfter: rep2.available.indexOf('hare') >= 0,
+             again: !!again, sameId: again && again.id === p.id,
+             stat: w.__prey().stat };
+  })(window.__saiWorld)`);
+  chk(gone.left && !gone.alive && !gone.inList && gone.state === 'preygone',
+    'a prey that leaves is off the list and knows it is off the list',
+    `alive ${gone.alive}, still in world.prey ${gone.inList}, state ${gone.state}`);
+  chk(gone.cool > 20000 && gone.denied === false,
+    'and its species is unavailable until the cooldown runs out',
+    `${Math.round(gone.cool / 1000)}s to wait; a spawn in the meantime returned ` +
+    (gone.denied ? 'an animal' : 'nothing'));
+  chk(gone.availableAfter && gone.again && !gone.sameId,
+    'and available again once it has — as a NEW animal, not the old one back',
+    gone.again ? 'a fresh instance with a fresh id' : 'it did not come back');
+
+  // ---- arrival is a walk in from an edge ------------------------------
+  const arr = await page.evaluate(`(function (w) {
+    const B = w.bounds, out = [];
+    for (const k of w.__prey.keys) {
+      const prof = w.__prey.profile[k];
+      if (prof.arrival !== 'edge') continue;
+      w.__prey.leave(k); w.__prey.ready(k);
+      const p = w.__prey.spawn(k);
+      if (!p) { out.push({ k: k, none: true }); continue; }
+      out.push({ k: k, x: Math.round(p.x), y: Math.round(p.y), inn: p._in,
+                 off: p.x < 0 || p.y < 0 || p.x > B.w || p.y > B.h,
+                 moving: Math.hypot(p.vx, p.vy) > 1 });
+    }
+    return out;
+  })(window.__saiWorld)`);
+  const offAll = arr.filter((a) => a.off).length, movAll = arr.filter((a) => a.moving).length;
+  chk(arr.length === 10 && offAll === 10 && movAll === 10,
+    'every prey that walks in starts off the edge of the map and walking',
+    `${offAll}/${arr.length} began off stage, ${movAll} of them already moving`);
+  const goatArr = arr.find((a) => a.k === 'goat');
+  chk(goatArr && goatArr.x < 0,
+    'and the goat comes in off the west side, which is the only one with rock on it',
+    goatArr ? `entered at x ${goatArr.x}` : 'no goat');
+
+  // ---- HABITATS, ASKED OF THE RULE. A 60 x 40 sweep of the whole stage
+  // against the world's own habitatOk, so the constraint is checked
+  // everywhere rather than wherever an animal happened to wander in the
+  // seconds a headless suite can afford.
+  const hab = await page.evaluate(`(function (w) {
+    const B = w.bounds, NX = 60, NY = 40;
+    const r = { goatOffRock: 0, goatOnRock: 0, goatInWall: 0, goatWrongLvl: 0,
+                crayOnLand: 0, crayInLake: 0, floorInLake: 0, floorOnFace: 0,
+                floorOnTerrace: 0, floorOk: 0, n: 0 };
+    for (let i = 0; i < NX; i++) for (let j = 0; j < NY; j++) {
+      const x = (i + 0.5) / NX * B.w, y = (j + 0.5) / NY * B.h;
+      r.n++;
+      const z = w.rockZoneAt(x, y), rho = w.lakeRhoAt(x, y);
+      // the goat, standing on the talus
+      if (w.__prey.okAt('goat', x, y, { lvl: 0 })) {
+        if (!z.on) r.goatOffRock++; else r.goatOnRock++;
+        if (z.wall) r.goatInWall++;
+        if (z.level !== 0) r.goatWrongLvl++;
+      }
+      // ...and on the shelf: the rule must let him stand there too, or the
+      // terraces are decoration
+      if (w.__prey.okAt('goat', x, y, { lvl: 1 }) && z.level !== 1) r.goatWrongLvl++;
+      // the crayfish, once it has reached the water
+      if (w.__prey.okAt('crayfish', x, y)) { if (rho >= 0.95) r.crayOnLand++; else r.crayInLake++; }
+      // ...and everybody on the forest floor
+      if (w.__prey.okAt('woodmouse', x, y)) {
+        r.floorOk++;
+        if (rho < 1.0) r.floorInLake++;
+        if (z.on && z.wall) r.floorOnFace++;
+        if (z.on && z.level !== 0) r.floorOnTerrace++;
+      }
+    }
+    return r;
+  })(window.__saiWorld)`);
+  chk(hab.goatOffRock === 0 && hab.goatInWall === 0 && hab.goatWrongLvl === 0 && hab.goatOnRock > 8,
+    'the goat may stand on the rock formation and nowhere else',
+    `${hab.goatOnRock} of ${hab.n} sample points are legal for him, ` +
+    `${hab.goatOffRock} of them off the bluff, ${hab.goatInWall} inside a face`);
+  chk(hab.crayOnLand === 0 && hab.crayInLake > 20,
+    'a settled crayfish may only be in the lake',
+    `${hab.crayInLake} legal points, all of them wet; ${hab.crayOnLand} on land`);
+  chk(hab.floorInLake === 0 && hab.floorOnFace === 0 && hab.floorOnTerrace === 0 && hab.floorOk > 800,
+    'and the forest-floor prey stay off the water, off the faces and off the terraces',
+    `${hab.floorOk} legal points of ${hab.n}: ${hab.floorInLake} wet, ` +
+    `${hab.floorOnFace} in stone, ${hab.floorOnTerrace} up a terrace`);
+
+  // ---- ...and the movers obey it. The rule above is only worth having if
+  // the thing that walks actually asks it, so: every prey, every frame, for
+  // as many frames as a headless browser can be asked for.
+  const walk = await page.evaluate(`(async function (w) {
+    w.__prey.clear();
+    for (const k of w.__prey.keys) w.__prey.spawn(k, true);
+    // PUT THEM ON STAGE FIRST. They arrive off the edge and walk in, and
+    // ninety headless frames is about four seconds of simulated time — a
+    // wood mouse covers 90px in that. Left to arrive on their own, nine of the
+    // thirteen are still off the map when the soak ends and the check
+    // quietly measures four animals. Arrival has its own check above; this
+    // one is about where they are ALLOWED to be, so they are dropped on a
+    // legal spot and the habitat rule takes it from there.
+    const B = w.bounds;
+    for (const p of w.prey) {
+      if (p._in) continue;
+      const opt = p.habitat === 'rock' ? { lvl: 0 } : {};
+      for (let i = 0; i < 400; i++) {
+        const x = (0.03 + Math.random() * 0.94) * B.w, y = (0.08 + Math.random() * 0.86) * B.h;
+        if (w.__prey.okAt(p.species, x, y, opt)) { p.x = x; p.y = y; break; }
+      }
+      p._in = true; p._settled = p.habitat === 'lake';
+      p._goal = null; p._hold = 0; p.leaveAt = performance.now() + 9e6;
+    }
+    const frame = function () { return new Promise(function (r) {
+      requestAnimationFrame(function () { setTimeout(r, 0); }); }); };
+    const bad = {}, seen = {}, litter = {}, note = function (o, k) { o[k] = (o[k] || 0) + 1; };
+    for (let f = 0; f < 90; f++) {
+      await frame();
+      for (const p of w.prey) {
+        if (!p._in || p.state === 'preyexit') continue;
+        note(seen, p.species);
+        const z = w.rockZoneAt(p.x, p.y), rho = w.lakeRhoAt(p.x, p.y);
+        if (p.habitat === 'rock') {
+          if (!z.on) note(bad, p.species + ' left the rock');
+          else if (z.wall && !p._leap) note(bad, p.species + ' stood inside a wall');
+        } else if (p.habitat === 'lake') {
+          if (p._settled && rho > 0.95) note(bad, p.species + ' left the lake');
+        } else if (p.habitat === 'litter') {
+          const s = p._site;
+          if (!s) note(bad, p.species + ' has no wood');
+          else {
+            note(litter, p.species + ' on a ' + s.kind);
+            if (Math.hypot(p.x - s.px, (p.y - s.py) / 0.45) > s.half * 0.62)
+              note(bad, p.species + ' wandered off its log');
+          }
+        } else {
+          if (rho < 1.0) note(bad, p.species + ' walked into the lake');
+          if (z.on && z.wall) note(bad, p.species + ' walked into a cliff');
+          if (z.on && z.level !== 0) note(bad, p.species + ' walked up a terrace');
+        }
+      }
+    }
+    return { bad: bad, seen: Object.keys(seen).length, litter: Object.keys(litter),
+             frames: 90, total: Object.keys(seen).reduce(function (s, k) { return s + seen[k]; }, 0) };
+  })(window.__saiWorld)`);
+  const badList = Object.keys(walk.bad);
+  chk(badList.length === 0,
+    'and over ninety frames with all thirteen out, none of them breaks it',
+    badList.length ? badList.map((k) => k + ' x' + walk.bad[k]).join('; ')
+      : `${walk.total} animal-frames across ${walk.seen} species, clean`);
+  chk(walk.litter.length >= 2 && walk.litter.every((s) => / on a (log|root|soil)$/.test(s)),
+    'the grubs, beetles and worms are in the logs, the roots and the ground',
+    walk.litter.join('; ') || 'nothing in the litter');
+
+  // ---- the goat uses the terraces -------------------------------------
+  // Given a spot on the shelf to want, he has to LEAVE THE GROUND to get
+  // there: the bands are separated by cliff faces and nothing in this world
+  // changes level by walking.
+  const climb = await page.evaluate(`(async function (w) {
+    const frame = function () { return new Promise(function (r) {
+      requestAnimationFrame(function () { setTimeout(r, 0); }); }); };
+    let g = w.__prey.of('goat');
+    if (!g) { w.__prey.ready('goat'); g = w.__prey.spawn('goat', true); }
+    if (!g) return { none: true };
+    // put him on the talus, on stage, and point him at the shelf above
+    const B = w.bounds;
+    for (let i = 0; i < 200; i++) {
+      const x = (0.01 + Math.random() * 0.07) * B.w, y = (0.72 + Math.random() * 0.2) * B.h;
+      if (w.__prey.okAt('goat', x, y, { lvl: 0 })) { g.x = x; g.y = y; break; }
+    }
+    g._in = true; g._lvl = 0; g._hold = 0; g._leap = null; g._threat = null;
+    g.state = 'preywander'; g._goal = null; g.leaveAt = performance.now() + 9e6;
+    const lvls = [0], states = {}, air = [];
+    for (let f = 0; f < 120; f++) {
+      if (!g._goal) g._goal = { x: g.x, y: g.y, lvl: 1 };
+      await frame();
+      states[g.state] = (states[g.state] || 0) + 1;
+      if (g.z > 1) air.push(Math.round(g.z));
+      if (lvls[lvls.length - 1] !== g._lvl) lvls.push(g._lvl);
+      if (g._lvl === 1) break;
+    }
+    const z = w.rockZoneAt(g.x, g.y);
+    return { lvls: lvls.join(''), states: states, maxZ: air.length ? Math.max.apply(null, air) : 0,
+             band: z.band, wall: z.wall, on: z.on, level: z.level, lvl: g._lvl };
+  })(window.__saiWorld)`);
+  chk(!climb.none && climb.lvls.indexOf('1') > 0,
+    'the goat gets up onto the cave shelf, which he can only do by leaping',
+    climb.none ? 'no goat' : `terraces seen: ${climb.lvls}, ending in the ${climb.band}`);
+  chk(!climb.none && (climb.states.preyclimb || 0) > 0 && climb.maxZ > 8,
+    'and it is a leap: he leaves the ground to do it',
+    climb.none ? 'no goat' : `${climb.states.preyclimb || 0} frames airborne, apex z ${climb.maxZ}`);
+  chk(!climb.none && climb.on && !climb.wall && climb.level === climb.lvl,
+    'and he lands on the drawn terrace, not inside the face',
+    climb.none ? 'no goat' : `standing in the ${climb.band}, terrace ${climb.level}`);
+
+  // ---- FLEEING. The rule is a size comparison, so it needs no list.
+  const flee = await page.evaluate(`(async function (w) {
+    const frame = function () { return new Promise(function (r) {
+      requestAnimationFrame(function () { setTimeout(r, 0); }); }); };
+    const bear = w.agents.find(function (a) { return a.species === 'bear'; });
+    const squirrel = w.agents.find(function (a) { return a.species === 'squirrel'; });
+    const park = function (o, x, y) { o.x = x; o.y = y; o.vx = 0; o.vy = 0; o.z = 0;
+      o.state = 'idle'; o.dragging = false; o._plat = null; o._rockHop = null;
+      o.idleUntil = performance.now() + 9e6; o.noEventUntil = performance.now() + 9e6; };
+    const run = async function (species, pred, gap) {
+      // EVERY RUN CLEARS THE WHOLE CAST OUT AGAIN. The first version parked
+      // them once at the top: the bear from the first run was still standing
+      // where the second run put its wood mouse, so the "it ignores a squirrel
+      // 500px away" check was measuring a wood mouse fleeing a bear at 110px.
+      for (const a of w.agents) park(a, -900, -900);
+      w.__prey.leave(species); w.__prey.ready(species);
+      const p = w.__prey.spawn(species, true);
+      if (!p) return null;
+      const B = w.bounds;
+      p.x = 0.55 * B.w; p.y = 0.72 * B.h; p._in = true; p._settled = false;
+      p._hold = 0; p._goal = null; p._threat = null; p._fleeUntil = 0;
+      p.leaveAt = performance.now() + 9e6;
+      park(pred, p.x - gap, p.y);
+      const d0 = Math.hypot(p.x - pred.x, p.y - pred.y);
+      let sawFlee = 0;
+      for (let f = 0; f < 14; f++) {
+        park(pred, pred.x, pred.y);
+        await frame();
+        if (p.state === 'preyflee') sawFlee++;
+      }
+      return { flee: sawFlee, d0: Math.round(d0),
+               d1: Math.round(Math.hypot(p.x - pred.x, p.y - pred.y)), state: p.state };
+    };
+    const mouseBear = await run('woodmouse', bear, 110);
+    const mouseSquirrel = await run('woodmouse', squirrel, 500);
+    const hareSquirrel = await run('hare', squirrel, 90);
+    return { mouseBear: mouseBear, mouseSquirrel: mouseSquirrel, hareSquirrel: hareSquirrel };
+  })(window.__saiWorld)`);
+  const mb = flee.mouseBear, ms = flee.mouseSquirrel, hs = flee.hareSquirrel;
+  chk(mb && mb.flee > 4 && mb.d1 > mb.d0 + 20,
+    'a wood mouse with a bear on top of it runs, and gets further away',
+    mb ? `${mb.flee}/14 frames fleeing, ${mb.d0}px -> ${mb.d1}px` : 'no wood mouse');
+  chk(ms && ms.flee === 0,
+    'and it ignores one that is nowhere near it',
+    ms ? `${ms.flee} frames of panic at ${ms.d0}px` : 'no wood mouse');
+  chk(hs && hs.flee === 0,
+    'a hare does not run from a squirrel: the fear rule is the size table',
+    hs ? `squirrel 29.3px against a hare of 37.4px, ${hs.flee}/14 frames fleeing` : 'no hare');
+
+  // ---- CLAIM AND CONSUME: the contract the hunting side is built on ----
+  const hunt = await page.evaluate(`(function (w) {
+    w.__prey.leave('vole'); w.__prey.ready('vole');
+    const p = w.__prey.spawn('vole', true);
+    if (!p) return { none: true };
+    p._in = true; p.x = 0.5 * w.bounds.w; p.y = 0.6 * w.bounds.h;
+    const A = 'hunterA', Bh = 'hunterB';
+    const first = w.__prey.api.claimPrey(w, p, A);
+    const steal = w.__prey.api.claimPrey(w, p, Bh);
+    const refresh = w.__prey.api.claimPrey(w, p, A);
+    const eatenByB = w.__prey.api.consumePrey(w, p, Bh);
+    const found = w.__prey.near(p.x, p.y, 400, { hunterId: Bh });
+    const foundByA = w.__prey.near(p.x, p.y, 400, { hunterId: A, species: 'vole' });
+    const before = w.prey.length, stat0 = w.__prey().stat.eaten;
+    const eatenByA = w.__prey.api.consumePrey(w, p, A);
+    const rep = w.__prey();
+    return { none: false, first: first, steal: steal, refresh: refresh,
+             eatenByB: eatenByB, eatenByA: eatenByA,
+             hiddenFromB: !found || found.p.species !== 'vole',
+             visibleToA: !!foundByA && foundByA.p.species === 'vole',
+             gone: w.prey.indexOf(p) < 0, alive: p.alive, state: p.state,
+             claimedBy: p.claimedBy, hunted: p.hunted,
+             cool: rep.cooldown.vole || 0, blocked: w.__prey.blocked('vole'),
+             eaten: rep.stat.eaten - stat0, before: before, after: w.prey.length,
+             respawn: !!w.__prey.spawn('vole') };
+  })(window.__saiWorld)`);
+  chk(!hunt.none && hunt.first && !hunt.steal && hunt.refresh,
+    'a claim is exclusive, and the holder can refresh it',
+    hunt.none ? 'no vole' : `A took it, B was refused, A refreshed it`);
+  chk(!hunt.none && hunt.hiddenFromB && hunt.visibleToA,
+    'and a claimed prey drops out of everybody else’s search',
+    hunt.none ? 'no vole' : 'B’s nearestPrey skipped it, A’s found it');
+  chk(!hunt.none && !hunt.eatenByB && hunt.eatenByA,
+    'only the holder of the claim can eat it',
+    hunt.none ? 'no vole' : `B refused, A succeeded`);
+  chk(!hunt.none && hunt.gone && !hunt.alive && hunt.state === 'preygone'
+      && hunt.after === hunt.before - 1 && hunt.eaten === 1,
+    'and eating it takes the instance off the map on that frame',
+    hunt.none ? 'no vole' : `world.prey ${hunt.before} -> ${hunt.after}, ` +
+      `the reference reads alive ${hunt.alive} / state ${hunt.state}`);
+  chk(!hunt.none && hunt.cool >= 55000 && hunt.blocked === 'on cooldown' && !hunt.respawn,
+    'and the species goes on the LONGER cooldown, so it does not walk straight back',
+    hunt.none ? 'no vole' : `${Math.round(hunt.cool / 1000)}s, against 25-70s for one that wandered off`);
+
+  // ---- and after all of that, the cast is still the cast ---------------
+  const after = await page.evaluate(`(function (w) {
+    return { roster: Object.keys(w.def.roster).length, agents: w.agents.length,
+             preySpecies: w.agents.filter(function (a) {
+               return w.__prey.keys.indexOf(a.species) >= 0; }).length,
+             prey: w.prey.length };
+  })(window.__saiWorld)`);
+  chk(after.roster === 14 && after.preySpecies === 0,
+    'the roster is untouched by every one of the checks above',
+    `${after.roster} species in the roster, ${after.agents} agents, ` +
+    `${after.prey} prey — and none of the prey in the agent list`);
+}
 
 chk(errs.length === 0, 'no JS errors', errs.length ? errs[0] : 'clean');
 console.log(`\n${fail.length ? 'FAIL ' + fail.length : 'ALL PASS'} (${pass.length} passed)`);

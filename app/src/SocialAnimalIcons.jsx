@@ -1,10 +1,20 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import { Critter, SPECIES, ALL_SPECIES, FROG_TONGUE, FROG_BURIED, TURTLE_BEAK } from "./Critters.jsx";
+// ...and the same module again by namespace, which is how PreyNode reads the
+// prey art. A namespace read of a missing export is undefined rather than a
+// link-time error, so a prey key with no drawing yet degrades to a dot
+// instead of taking the whole bundle down.
+import * as CritterArt from "./Critters.jsx";
 import { PET_SPECIES } from "./CrittersPets.jsx";
-import { SPECIES_PROFILE, speciesSize } from "./SpeciesProfile.js";
+import { SPECIES_PROFILE, speciesSize, PREY_PROFILE, PREY_KEYS,
+         apparentFromBulk, BULK_ANCHOR } from "./SpeciesProfile.js";
 import { gait, gaitIn, speedCap, rescueReach, SPEED, GAIT_DEF } from "./Gait.js";
 import { stepEthogram, ethoSwimP, ethoShare, ETHOGRAM, ETHO_STATES, ETHO_Z_STATES, ETHO_OWNWATER_STATES, setTreeMetrics, setForageMetrics, ethoOffstage, hogCurl, squirrelBolt } from "./Ethogram.js";
+import { setPreyTerrain, stepPrey, spawnPrey, removePrey, preyReport, preyBlocked,
+         preyList, preyAt, nearestPrey, isPreyClaimed,
+         claimPrey, releasePrey, consumePrey, habitatOk,
+         PREY_STATES, PREY_STATE_LIST, PREY_CLAIM_MS } from "./Prey.js";
 
 /**
  * Social Animal Icons v0.11 — Lakeside world
@@ -2853,18 +2863,24 @@ export default function SocialAnimalsRPG() {
   // the three things painted back over an animal at zIndex 12
   const lakeRefs = useRef({ bugs: new Map(), weeds: new Map(),
                             padTop: new Map(), mudTop: new Map(), silt: new Map() });
+  const preyRefs = useRef(new Map()); // prey id -> HTMLElement
   const [cfg, setCfg] = useState(DEFAULTS);
   const cfgRef = useRef(cfg); cfgRef.current = cfg; // the RAF loop reads the live value
   const [worldKey, setWorldKey] = useState("forest");
 
   // UI snapshot
-  const [snapshot, setSnapshot] = useState({ agents: [], bounds: { w: 0, h: 0 }, selectedId: null });
+  const [snapshot, setSnapshot] = useState({ agents: [], prey: [], bounds: { w: 0, h: 0 }, selectedId: null });
 
   // runtime
   const worldRef = useRef({
     bounds: { w: 1600, h: 1000 }, // large
     def: WORLDS.forest,
     agents: [],
+    // the prey population. A live list and a per-species availability clock;
+    // see Prey.js. Held beside `agents` and never inside it.
+    prey: [],
+    preyCool: {},
+    preyStat: { spawned: 0, left: 0, eaten: 0 },
     running: true,
     damCount: damAtRest(),
     dreyN: dreyAtRest(),
@@ -2961,6 +2977,58 @@ export default function SocialAnimalsRPG() {
                               setCfg((c) => ({ ...c, speed: n })); return n; };
       W.__seedCast = (n) => { W.agents = seedAgents(W, n || Object.keys(W.def.roster).length);
                               return W.agents.length; };
+      /* ---------------- the prey population, for suites and for the
+       * hunting side. __prey() is the READOUT — what is alive, what is on
+       * cooldown and for how long, what could be generated right now — and
+       * the imperative helpers hang off it, in the shape of __seedCast:
+       * they are the world's own paths, not copies of them.
+       *
+       *   W.__prey()                    the report
+       *   W.__prey.spawn(key[, force])  generate one. Obeys one-of-each and
+       *                                 the cooldown unless forced.
+       *   W.__prey.leave(key)           it wanders off: the "left" cooldown
+       *   W.__prey.eat(key, hunterId)   a predator takes it: "eaten"
+       *   W.__prey.clear()              empty the map and every cooldown
+       *   W.__prey.near(x, y, r, opt)   what a hunter's search would find
+       *   W.__prey.claim/release(key, hunterId)
+       *   W.__prey.api                  the exact functions a predator calls
+       *   W.__prey.states               the nine state names, so a suite can
+       *                                 prove none of them is already taken
+       */
+      const preyOf = (key) => (W.prey || []).find((p) => p.species === key) || null;
+      W.__prey = () => preyReport(W);
+      W.__prey.spawn = (key, force) => spawnPrey(W, key, { force: !!force });
+      W.__prey.leave = (key) => { const p = preyOf(key); return p ? removePrey(W, p, "left") : false; };
+      W.__prey.eat = (key, who) => { const p = preyOf(key); return p ? consumePrey(W, p, who || "test") : false; };
+      W.__prey.clear = () => { W.prey = []; W.preyCool = {};
+                               W.preyStat = { spawned: 0, left: 0, eaten: 0 }; return true; };
+      W.__prey.of = preyOf;
+      W.__prey.blocked = (key) => preyBlocked(W, key);
+      W.__prey.near = (x, y, r, opt) => nearestPrey(W, x, y, r, opt || {});
+      W.__prey.claim = (key, who) => { const p = preyOf(key); return p ? claimPrey(W, p, who || "test") : false; };
+      W.__prey.release = (key, who) => { const p = preyOf(key); return p ? releasePrey(p, who || "test") : false; };
+      W.__prey.ready = (key) => { if (W.preyCool) delete W.preyCool[key]; return true; };
+      W.__prey.states = PREY_STATE_LIST.slice();
+      W.__prey.keys = PREY_KEYS.slice();
+      W.__prey.profile = PREY_PROFILE;
+      W.__prey.claimMs = PREY_CLAIM_MS;
+      // the size rule itself, so a suite checks the derivation rather than
+      // the thirteen numbers it happened to produce
+      W.__prey.bulk = { anchor: BULK_ANCHOR, apparentFromBulk };
+      // WHERE MAY THIS SPECIES STAND — the rule, asked directly, so a suite
+      // can sweep the whole stage in one pass instead of waiting for an
+      // animal to try to walk somewhere. Headless rAF is three frames a
+      // second; a habitat checked by watching is a habitat barely checked.
+      W.__prey.okAt = (species, x, y, o) => habitatOk(W, {
+        habitat: (PREY_PROFILE[species] || {}).habitat || "floor",
+        _lvl: (o && o.lvl) || 0,
+        _settled: !(o && o.settled === false),
+        _site: (o && o.site) || null,
+      }, x, y);
+      // the hunting side's own entry points, so a predator agent can wire
+      // against the same functions the suite exercises
+      W.__prey.api = { preyList, preyAt, nearestPrey, isPreyClaimed,
+                       claimPrey, releasePrey, consumePrey };
       W.__rock = { breaks: ROCK_BREAKS, profile: ROCK_PROFILE, cave: ROCK_CAVE,
                    highEntry: [...ROCK_HIGH_ENTRY],
                    // WHO COMES OFF THE CAVE'S TERRACE AT THE EDGE, handed
@@ -3104,7 +3172,7 @@ export default function SocialAnimalsRPG() {
       worldRef.current.frames = (worldRef.current.frames || 0) + 1;
       dt = Math.min(0.05, Math.max(0, dt));
       if (worldRef.current.running) stepWorld(worldRef.current, cfgRef.current, dt);
-      renderWorld(worldRef.current, iconsRef, padsRef, damRefs, pitRefs, lakeRefs);
+      renderWorld(worldRef.current, iconsRef, padsRef, damRefs, pitRefs, lakeRefs, preyRefs);
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
@@ -3113,6 +3181,11 @@ export default function SocialAnimalsRPG() {
     const ui = setInterval(() => {
       setSnapshot((s) => ({
         agents: worldRef.current.agents.map(minify),
+        // WHICH prey exist, at snapshot rate; WHERE they are, every frame,
+        // out of renderWorld. Same split the cast uses, and for the same
+        // reason: a prey crossing the map does not change React's mind
+        // about anything.
+        prey: (worldRef.current.prey || []).map(minifyPrey),
         bounds: { ...worldRef.current.bounds },
         selectedId: s.selectedId && worldRef.current.agents.find(a=>a.id===s.selectedId) ? s.selectedId : (worldRef.current.agents[0]?.id || null)
       }));
@@ -3137,6 +3210,10 @@ export default function SocialAnimalsRPG() {
     w.agents = seedAgents(w, DEFAULTS.numAgents);
     // the three structures a world accumulates: logs, buried nuts, courses
     w.damCount = 0; w.dreyN = 0; w.caches = null;
+    // ...and the prey, which is a population rather than a structure: an
+    // empty map with nothing on cooldown, so the first arrivals are as
+    // likely as they were on a fresh page.
+    w.prey = []; w.preyCool = {}; w.preyStat = { spawned: 0, left: 0, eaten: 0 };
   };
   const switchWorld = (key) => {
     if (!WORLDS[key]) return;
@@ -3145,7 +3222,10 @@ export default function SocialAnimalsRPG() {
     w.def = WORLDS[key];
     w.agents = seedAgents(w, DEFAULTS.numAgents);
     w.damCount = damAtRest(); w.dreyN = dreyAtRest(); w.caches = null;
-    setSnapshot((s) => ({ ...s, selectedId: null }));
+    // the prey belong to the forest. Leaving them standing across a world
+    // switch would put a crayfish in a swimming pool.
+    w.prey = []; w.preyCool = {}; w.preyStat = { spawned: 0, left: 0, eaten: 0 };
+    setSnapshot((s) => ({ ...s, prey: [], selectedId: null }));
   };
 
   const selectId = (id) => setSnapshot((s) => ({ ...s, selectedId: id }));
@@ -3208,6 +3288,14 @@ export default function SocialAnimalsRPG() {
         {/* Agents */}
         {snapshot.agents.map((a) => (
           <IconNode key={a.id} a={a} iconsRef={iconsRef} worldRef={worldRef} onSelect={()=>selectId(a.id)} />
+        ))}
+
+        {/* The prey. Same layer as the cast — they are animals — and after
+            them in the DOM so a mouse under a bear's nose is not hidden by
+            him. Depth against the trunks and the logs is driven per frame
+            in renderWorld by the same two rules the cast uses. */}
+        {(snapshot.prey || []).map((p) => (
+          <PreyNode key={p.id} p={p} preyRefs={preyRefs} />
         ))}
 
         {/* the boughs paint last, over the animals: anything up in the
@@ -6163,6 +6251,32 @@ WORLDS.forest.rock = { breaks: ROCK_BREAKS, cave: ROCK_CAVE,
                        levels: { ground: ROCK_LEVEL_GROUND, shelf: ROCK_LEVEL_SHELF,
                                  plateau: ROCK_LEVEL_PLATEAU } };
 
+/* ---------------- the prey population ----------------------------------
+ * The food source: thirteen small animals that generate themselves, arrive
+ * from an edge, keep to their habitat and leave again. They live on
+ * `world.prey`, NOT in `world.agents` and NOT in any roster — see the
+ * contract at the top of Prey.js, which is the file the hunting side reads.
+ *
+ * `def.prey` is the switch, set here and on no other world, the same way
+ * `def.rock` is. The neighborhood has pets, not prey.
+ *
+ * Prey.js is a leaf: it knows the animals and the rules and nothing about
+ * where the lake or the bluff is. Everything geometric is handed over here,
+ * as the SAME functions the rest of the world walks by — setTreeMetrics and
+ * setForageMetrics do this for the ethogram for exactly the same reason. A
+ * copy of the shoreline inside Prey.js would be a second shoreline.
+ */
+WORLDS.forest.prey = true;
+setPreyTerrain({
+  EDGE_OFF,
+  ROCK_BREAKS, ROCK_BAND_LINES,
+  rockZone, rockLevelAt, rockBreakY,
+  lakeRho, lakePoint,
+  enterFromEdge,
+  siteHalf: FORAGE_SITE_HALF,
+  rand, clamp, perSec,
+});
+
 // The log is drawn at reference size times this, so a dam on a small window
 // is a small dam and stays the same share of its own lake. Geometric mean of
 // the two lake radii, which is the only single number that treats a tall
@@ -6744,6 +6858,112 @@ function IconNode({ a, iconsRef, worldRef, onSelect }) {
     </div>
   );
 }
+
+/* ---------------- A prey on the map ----------------
+ * Deliberately thinner than IconNode. Prey are scenery you hunt, not
+ * characters you manage: no drag handlers, no selection, no relationship
+ * panel, and `pointer-events: none` so a mouse standing on a bear never
+ * steals the bear's grab.
+ *
+ * `data-state` is NOT written here. It is driven every frame in
+ * renderWorld, because a bolt lasts about a second and the React snapshot
+ * runs at 300ms — a flee that shows up two frames late is a flee nobody
+ * saw. What React owns is which prey EXIST; the rest is imperative.
+ *
+ * data-prey and data-variant are for the art: the species key, and the
+ * rat's coat. See the sprite contract in the report.
+ */
+function PreyNode({ p, preyRefs }) {
+  const ref = useRef(null);
+  useEffect(() => { preyRefs.current.set(p.id, ref.current);
+                    return () => preyRefs.current.delete(p.id); }, [p.id]);
+  const box = p.r * 3.1;
+  // PREY_SPECIES first — that is where the thirteen drawings live, kept OUT
+  // of SPECIES because the forest roster is built off SPECIES and thirteen
+  // extra keys in it make __seedCast() open a twenty-seven-animal world.
+  // ALL_SPECIES second, since that is where they are merged for lookups.
+  const art = (CritterArt.PREY_SPECIES && CritterArt.PREY_SPECIES[p.species])
+           || ALL_SPECIES[p.species];
+  return (
+    <div ref={ref} className="absolute -translate-x-1/2 -translate-y-1/2 select-none pointer-events-none flex items-center justify-center"
+      style={{ left: 0, top: 0, zIndex: 10, width: box, height: box }}>
+      <div className="sai-sprite sai-prey" data-prey={p.species} data-variant={p.variant || ""} data-dir="1">
+        {/* `variant` is the rat's coat, rolled once at spawn and carried on
+            the instance so it cannot change mid-life. Critter ignores the
+            prop on builds that predate it, and derives its own stable coat
+            from the sprite uid when it is not passed. */}
+        {art ? <Critter speciesKey={p.species} r={p.r} variant={p.variant || undefined} />
+             : <PreyStub p={p} />}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A PLACEHOLDER, AND IT IS MEANT TO LOOK LIKE ONE. The thirteen prey
+ * drawings are being made in Critters.jsx in parallel with this file; until
+ * a species turns up in ALL_SPECIES there is nothing to render, and the
+ * alternative — letting Critter() fall through to its `|| SPECIES.fox`
+ * default — would put thirteen tiny foxes on the map and, worse, thirteen
+ * extra `svg.sai-crit--fox` nodes for tests/sizes.mjs to average the fox's
+ * own measurement over.
+ *
+ * So: the same rig the real sprites use (viewBox 0 0 120 120, ground at
+ * y 103, facing RIGHT, `sai-crit-*` classes so the shared walk cycle drives
+ * it) on a root class of its OWN — `sai-prey-root`, never `sai-crit-root` —
+ * so nothing that queries for a critter can ever find one of these. When
+ * the art lands this disappears and nothing else moves.
+ */
+function PreyStub({ p }) {
+  const size = p.r * 2.7;
+  const prof = PREY_PROFILE[p.species] || {};
+  const coat = prof.coats && p.variant
+    ? prof.coats.find((c) => c.id === p.variant) : null;
+  const fur = coat ? coat.fur : (PREY_STUB_TINT[p.species] || "#8a7a62");
+  const belly = coat ? coat.belly : "#d8cdb8";
+  const low = prof.habitat === "litter" || p.species === "gartersnake";
+  return (
+    <svg className={`sai-prey-root sai-prey--${p.species}`} width={size} height={size}
+      viewBox="0 0 120 120" style={{ overflow: "visible", display: "block" }}>
+      <ellipse className="sai-prey-shadow" cx="60" cy="104" rx="24" ry="5" fill="rgba(8,14,8,.35)" />
+      {low ? (
+        // the low, legless ones: a lozenge lying on the ground line
+        <g className="sai-crit-body">
+          <ellipse cx="58" cy="96" rx="34" ry="8.5" fill={fur} />
+          <ellipse cx="58" cy="93.5" rx="27" ry="4.6" fill={belly} opacity=".45" />
+          <circle className="sai-crit-head" cx="90" cy="94" r="8" fill={fur} />
+          <circle cx="93" cy="92" r="1.5" fill="#12100c" />
+        </g>
+      ) : (
+        <g>
+          <g className="sai-crit-leg sai-crit-leg-bl"><rect x="40" y="88" width="5" height="15" rx="2.4" fill={fur} /></g>
+          <g className="sai-crit-leg sai-crit-leg-fl"><rect x="70" y="88" width="5" height="15" rx="2.4" fill={fur} /></g>
+          <g className="sai-crit-body">
+            <ellipse cx="58" cy="82" rx="28" ry="17" fill={fur} />
+            <ellipse cx="58" cy="90" rx="20" ry="8" fill={belly} opacity=".5" />
+          </g>
+          <g className="sai-crit-tail"><path d="M 31 80 q -16 -4 -20 6" stroke={fur} strokeWidth="4" fill="none" strokeLinecap="round" /></g>
+          <g className="sai-crit-leg sai-crit-leg-br"><rect x="46" y="90" width="5" height="13" rx="2.4" fill={fur} opacity=".85" /></g>
+          <g className="sai-crit-leg sai-crit-leg-fr"><rect x="76" y="90" width="5" height="13" rx="2.4" fill={fur} opacity=".85" /></g>
+          <g className="sai-crit-head">
+            <circle cx="86" cy="72" r="13" fill={fur} />
+            <g className="sai-crit-ear"><circle cx="82" cy="61" r="5.5" fill={fur} /><circle cx="82" cy="61" r="3" fill={belly} opacity=".6" /></g>
+            <path d="M 97 74 q 8 2 9 5 q -6 2 -10 0 Z" fill={fur} />
+            <circle cx="92" cy="70" r="2.1" fill="#12100c" />
+            <circle cx="104" cy="78" r="1.4" fill="#2a2119" />
+          </g>
+        </g>
+      )}
+    </svg>
+  );
+}
+/** stand-in colours, so thirteen placeholders are thirteen different animals */
+const PREY_STUB_TINT = {
+  woodmouse: "#9a8d7c", vole: "#6f6555", rat: "#7a6650", hare: "#b09876",
+  gopher: "#a08453", grouse: "#8b6f4b", gartersnake: "#4b6b3c",
+  boar: "#4d4038", goat: "#e6e2d8", crayfish: "#9c4a34",
+  grub: "#e4d7ba", beetle: "#2f2a25", earthworm: "#b57f75",
+};
 
 // --------------- Top-bar relationship readout ---------------
 function RelStats({ worldRef, id }) {
@@ -7648,6 +7868,13 @@ function stepWorld(world, cfg, dt) {
       if (!ethoOffstage(a, ethoCtx)) enterFromEdge(a, world, gait(a, ethoCtx, 0.35));
     }
   }
+
+  // ---- and the prey, LAST, after the cast has finished moving.
+  // A flee is about where the predator IS, not where it was at the top of
+  // the frame, and one frame of lag on a bolt is the difference between a
+  // mouse that saw the fox and a mouse that walked into it. Prey are not
+  // part of any pair work above: see the header of Prey.js.
+  if (def.prey) stepPrey(world, cfg, dt, now);
 }
 
 /**
@@ -7955,7 +8182,7 @@ function muskFlee(v, cfg) {
   }
 }
 
-function renderWorld(world, iconsRef, padsRef, damRefs, pitRefs, lakeRefs) {
+function renderWorld(world, iconsRef, padsRef, damRefs, pitRefs, lakeRefs, preyRefs) {
   const t = performance.now() / 1000;
   // drifting lily pads
   if (world.pads && padsRef) {
@@ -8181,6 +8408,43 @@ function renderWorld(world, iconsRef, padsRef, damRefs, pitRefs, lakeRefs) {
       sprite.style.transform = `translate(${jx}px, ${jy - (a.z || 0)}px) scaleX(${dir})`;
     }
   }
+
+  // ---- the prey. The same three jobs — place it, decide its depth, pose
+  // it — with none of the pair choreography, because prey do not engage.
+  if (preyRefs && world.prey) {
+    for (const p of world.prey) {
+      const el = preyRefs.current.get(p.id);
+      if (!el) continue;
+      el.style.left = `${p.x}px`; el.style.top = `${p.y}px`;
+      // depth, off the SAME two rules the cast uses: a grub on the far side
+      // of a log has to go behind the log, or the log is not there.
+      const zi = (behindTrunk(p, world.def, world.bounds)
+               || behindLog(p, world.forage)) ? '1' : '10';
+      if (el.style.zIndex !== zi) el.style.zIndex = zi;
+      const sprite = el.firstElementChild;
+      if (!sprite) continue;
+      // data-state every frame, not every snapshot: see PreyNode.
+      if (sprite.dataset.state !== p.state) sprite.dataset.state = p.state;
+      const nowMs = performance.now();
+      let dispV = 0;
+      if (p._pt != null) {
+        const dts = (nowMs - p._pt) / 1000;
+        if (dts > 0.001) dispV = Math.hypot(p.x - p._px, p.y - p._py) / dts;
+      }
+      p._px = p.x; p._py = p.y; p._pt = nowMs;
+      const wasWalking = sprite.dataset.walking === '1';
+      sprite.dataset.walking = (wasWalking ? dispV > 3 : dispV > 6) ? '1' : '';
+      // the crayfish gets the world's generic swimming rig like any swimmer
+      sprite.dataset.swimming = world.def.hasWater && p.habitat === 'lake'
+        && p._settled && inWater(world.bounds, p.x, p.y) ? '1' : '';
+      sprite.dataset.air = (p.z || 0) > 3 ? '1' : '';
+      // ...and a flag for the hunted one, which is a fact about a MOMENT the
+      // way data-musk is: the claim can lapse between two snapshots.
+      sprite.dataset.hunted = p.hunted ? '1' : '';
+      sprite.dataset.dir = String(p._dir || 1);
+      sprite.style.transform = `translate(0px, ${-(p.z || 0)}px) scaleX(${p._dir || 1})`;
+    }
+  }
 }
 
 /**
@@ -8290,3 +8554,5 @@ function behindLog(a, sites) {
 
 function getAgent(world, id) { return world.agents.find(a => a.id === id); }
 function minify(a) { return { id: a.id, species: a.species, emoji: a.emoji, x: a.x, y: a.y, r: a.r, state: a.state, relationsSize: a.relations.size }; }
+/** ...and the same for a prey. `variant` is the rat's coat. */
+function minifyPrey(p) { return { id: p.id, species: p.species, variant: p.variant, r: p.r, habitat: p.habitat }; }

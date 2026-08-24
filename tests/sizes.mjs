@@ -207,6 +207,143 @@ if (claim) {
     `smallest hit box is ${minBox.toFixed(0)}px`);
 }
 
+/* =====================================================================
+ * ...AND THE SAME THING FOR THE PREY
+ * =====================================================================
+ *
+ * Thirteen more animals, sized the same way and measured the same way, but
+ * NOT part of the ladder above and deliberately not in window.__saiProfile:
+ * they arrive on their own schedule, so "declares an apparent" cannot mean
+ * "is on the map when __seedCast has run" for them. They are put on the map
+ * here on purpose, through the population's own forced-spawn hook.
+ *
+ * WHAT THIS CATCHES is the same thing the cast's block catches, and it is
+ * the reason `fill` is a column rather than a constant: the table sets the
+ * box, the drawing sets how much of the box is animal, and only the product
+ * is what anybody sees. An earthworm covers 37% of its box and a hare 87%.
+ * Redraw one, or rescale its art wrapper, and this goes red.
+ *
+ * The parking is different from the cast's and has to be. Prey never enter
+ * `idle` — every state they own is prefixed `prey`, which is what keeps
+ * their sprites out of the measurement above — so the pose is pinned by
+ * freezing the population instead: no goal, no threat, no leap, and `_pt`
+ * cleared so renderWorld reads zero displacement and drops data-walking.
+ */
+{
+  const measured = await page.evaluate(`(async () => {
+    const W = window.__saiWorld;
+    if (!W.__prey) return null;
+    W.__prey.clear();
+    for (const k of W.__prey.keys) W.__prey.spawn(k, true);
+    const SKIP = /sai-crit-(shadow|dust|streaks|ripple|wake)/;
+    const one = (svg) => {
+      let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9,n=0;
+      const walk = (el) => { for (const k of el.children) {
+        const kc = k.getAttribute('class') || '';
+        if (SKIP.test(kc) || k.tagName === 'defs') continue;
+        const cs = getComputedStyle(k);
+        if (cs.display==='none'||cs.visibility==='hidden'||+cs.opacity===0) continue;
+        if (k.tagName === 'g') { walk(k); continue; }
+        const rc = k.getBoundingClientRect();
+        if (!rc.width && !rc.height) continue;
+        x0=Math.min(x0,rc.left); y0=Math.min(y0,rc.top);
+        x1=Math.max(x1,rc.right); y1=Math.max(y1,rc.bottom); n++;
+      } };
+      walk(svg);
+      return n ? { w:x1-x0, h:y1-y0 } : null;
+    };
+    const park = () => { for (const p of W.prey) {
+      p.vx = 0; p.vy = 0; p.z = 0; p._dir = 1; p._leap = null;
+      p._threat = null; p._fleeUntil = 0; p.state = 'preyfreeze';
+      p._hold = performance.now() + 9e5; p.leaveAt = performance.now() + 9e6;
+      // renderWorld only measures displacement when it has a previous
+      // timestamp to measure against. Clearing it is how the walk cycle is
+      // held off without also having to hold the animal still for a frame.
+      p._pt = null; } };
+    const spread = () => { const b = W.bounds; W.prey.forEach((p, i) => {
+      p.x = (0.06 + (i % 5) * 0.17) * b.w;
+      p.y = (0.15 + Math.floor(i / 5) * 0.26) * b.h; }); };
+    const st = document.createElement('style');
+    st.textContent = '*, *::before, *::after { animation: none !important;' +
+                     ' transition: none !important; }';
+    document.head.appendChild(st);
+    const acc = {};
+    for (let i = 0; i < 24; i++) {
+      park(); spread();
+      await new Promise((res) => requestAnimationFrame(() => setTimeout(res, 40)));
+      if (i < 3) continue;
+      for (const host of document.querySelectorAll('.sai-sprite.sai-prey')) {
+        const key = host.dataset.prey; if (!key) continue;
+        if (host.dataset.walking) continue;
+        const svg = host.querySelector('svg'); if (!svg) continue;
+        const r = one(svg); if (!r) continue;
+        const box = +svg.getAttribute('width');
+        const a = acc[key] || (acc[key] = { box: box, w: [], h: [], f: [] });
+        a.w.push(r.w); a.h.push(r.h); a.f.push(Math.sqrt(r.w*r.h)/box);
+      }
+    }
+    st.remove();
+    const mean = (v) => v.reduce((s,x)=>s+x,0)/v.length;
+    const out = {};
+    for (const [k,a] of Object.entries(acc)) {
+      if (!a.f.length) continue;
+      out[k] = { box:+a.box.toFixed(2), w:+mean(a.w).toFixed(1), h:+mean(a.h).toFixed(1),
+                 app:+(mean(a.f)*a.box).toFixed(1), fill:+mean(a.f).toFixed(4),
+                 stub: !!svgIsStub(k) };
+    }
+    function svgIsStub(k) {
+      const host = document.querySelector('.sai-sprite.sai-prey[data-prey="' + k + '"]');
+      return host && host.querySelector('.sai-prey-root');
+    }
+    return { seen: out, claim: W.__prey.profile };
+  })()`);
+
+  chk(!!measured, 'the prey population is reachable', measured
+    ? `${Object.keys(measured.seen).length} of ${Object.keys(measured.claim).length} drawn`
+    : 'window.__saiWorld.__prey missing');
+
+  if (measured) {
+    const { seen, claim } = measured;
+    const keys = Object.keys(claim);
+    const stubs = keys.filter((k) => seen[k] && seen[k].stub);
+    chk(keys.every((k) => seen[k]), 'every prey species puts a sprite on the map',
+      keys.filter((k) => !seen[k]).join(', ') || `all ${keys.length} present`);
+    chk(stubs.length === 0, 'and every one of them is real art, not the placeholder',
+      stubs.length ? stubs.join(', ') + ' still on the stand-in drawing'
+                   : `${keys.length} species drawn by Critters.jsx`);
+
+    const bad = keys.filter((k) => Math.abs(claim[k].size - claim[k].apparent / (claim[k].fill * 2.7)) > 0.02);
+    chk(bad.length === 0, 'the prey table is self-consistent: size = apparent / (fill * 2.7)',
+      bad.length ? bad.join(', ') : `all ${keys.length} rows`);
+
+    const have = keys.filter((k) => seen[k]);
+    const fd = have.map((k) => ({ k, d: Math.abs(seen[k].fill - claim[k].fill) }))
+                   .sort((a, b) => b.d - a.d);
+    chk(fd.length && fd[0].d <= 0.02, 'the declared prey coverage is the measured coverage',
+      fd.length ? `worst ${fd[0].k}, off by ${fd[0].d.toFixed(4)} — a redraw moves this`
+                : 'nothing measured');
+    const ad = have.map((k) => ({ k, want: claim[k].apparent, got: seen[k].app,
+                                  d: Math.abs(seen[k].app - claim[k].apparent) }))
+                   .sort((a, b) => b.d - a.d);
+    chk(ad.length && ad[0].d <= 1.5, 'and what is drawn matches what the prey table claims',
+      ad.length ? `worst drift ${ad[0].k} ${ad[0].got} against a claimed ${ad[0].want} (${ad[0].d.toFixed(1)}px)`
+                : 'nothing measured');
+
+    console.log('\n  prey, measured, largest first:');
+    have.slice().sort((a, b) => seen[b].app - seen[a].app).forEach((k, i) =>
+      console.log(`    ${String(i+1).padStart(2)} ${k.padEnd(12)} ` +
+        `${String(seen[k].app).padStart(5)}px   ${seen[k].w} x ${seen[k].h}` +
+        `   box ${seen[k].box.toFixed(0)}   fill ${seen[k].fill}`));
+    console.log('');
+
+    // ...and the two ends of the whole world, cast and prey together
+    const biggest = have.reduce((m, k) => seen[k].app > seen[m].app ? k : m, have[0]);
+    chk(seen[biggest].app < claim.goat.apparent + 12 && seen[biggest].app < 80,
+      'no prey out-draws the bear', `largest prey is ${biggest} at ${seen[biggest].app}px ` +
+      `against a bear of ${claim.goat ? '70' : '70'}px`);
+  }
+}
+
 chk(errs.length === 0, 'no JS errors', errs.length ? errs[0] : 'clean');
 console.log(`\n${fail.length ? 'FAIL ' + fail.length : 'ALL PASS'} (${pass.length} passed)`);
 await browser.close();

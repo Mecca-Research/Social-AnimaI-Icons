@@ -280,3 +280,248 @@ export const speciesApparent = (k) => SPECIES_PROFILE[k]?.apparent ?? null;
 export const speciesFill = (k) => SPECIES_PROFILE[k]?.fill ?? null;
 /** real-world top speed in km/h — the gait core scales down from this */
 export const speciesTopSpeed = (k) => (SPECIES_PROFILE[k]?.speed ?? 20);
+
+/* =====================================================================
+ * THE BULK INDEX, AS A FUNCTION
+ * =====================================================================
+ *
+ * The fourteen `apparent` numbers above were computed by hand from the rule
+ * in this file's header and then written down. That was fine for fourteen.
+ * Thirteen prey follow, and a rule that only exists in prose gets applied
+ * differently the second time — so here it is as code, and tests/world.mjs
+ * feeds the cast's own real dimensions back through it and checks that it
+ * reproduces the shipped column. It does, to 0.64px RMS across the fourteen;
+ * the two worst (raccoon 1.9px, skunk 1.3px) are how long you call a tail.
+ *
+ *     B        = mass^(1/6) * bodyLength^(1/4) * height^(1/4)
+ *     apparent = 70 * (B / B_bear)^0.45
+ *
+ * kg and metres, TAIL EXCLUDED from bodyLength — a length that is all tail
+ * adds silhouette, not mass. The units cancel in the ratio, so the only
+ * thing that matters is being consistent with the anchor.
+ */
+/** the bear's own three numbers: 90-270kg, 1.2-2m, 75-105cm, at their midpoints */
+export const BULK_ANCHOR = { mass: 180, len: 1.6, hgt: 0.9, apparent: 70 };
+/** mass^(1/6) * len^(1/4) * hgt^(1/4) — kg and metres, tail excluded */
+export const bulkIndex = (mass, len, hgt) =>
+  Math.pow(mass, 1 / 6) * Math.pow(len, 1 / 4) * Math.pow(hgt, 1 / 4);
+const B_BEAR = bulkIndex(BULK_ANCHOR.mass, BULK_ANCHOR.len, BULK_ANCHOR.hgt);
+/** ...compressed onto the screen against the bear at 70px */
+export const apparentFromBulk = (mass, len, hgt) =>
+  BULK_ANCHOR.apparent * Math.pow(bulkIndex(mass, len, hgt) / B_BEAR, 0.45);
+
+/* =====================================================================
+ * PREY — a second table, and why it is a second table
+ * =====================================================================
+ *
+ * These are the food source: generated at random, one of each at most, in
+ * and out of the world on their own. They are NOT part of any world's
+ * roster — see Prey.js, which owns the population — and they get their own
+ * table for two reasons, one of them load-bearing.
+ *
+ * THE LOAD-BEARING ONE. tests/sizes.mjs takes "declares `apparent`" to mean
+ * "is on the map once __seedCast() has run", and prey are not — they arrive
+ * when they feel like it. Thirteen rows with an `apparent` in
+ * window.__saiProfile turn that suite red and take the frog-is-smallest and
+ * hedgehog-is-eleventh ladder checks with them, none of which is about
+ * anything that has gone wrong. Keeping prey out of SPECIES_PROFILE keeps
+ * that suite measuring the fourteen it was written to measure.
+ *
+ * THE OTHER ONE. A key is a key across the whole app: ALL_SPECIES is one
+ * flat map and Critters.jsx renders whatever a key resolves to, in every
+ * world. The prey mouse was called `mouse` for exactly as long as it took
+ * to discover that the neighborhood already has a pet mouse at size 20.8,
+ * and that one key repainted the other. It is `woodmouse` now, and this
+ * table being separate is the second line of defence rather than the first:
+ * even with distinct keys, a prey row in SPECIES_PROFILE would be a size
+ * for the WHOLE app rather than a size for the forest floor.
+ *
+ * SIZES ARE DERIVED, NOT PICKED. `mass`/`len`/`hgt` are real animals at the
+ * midpoint of the range in `dims`; `apparent` falls out of apparentFromBulk
+ * and nothing else. What that buys: the goat lands just under the deer, the
+ * boar between the cougar and the wolf, the hare under the skunk, and the
+ * wood mouse at 26% of the bear — a mouse that reads as a mouse next to a
+ * bear, which was the ask.
+ *
+ * `fill` IS MEASUREMENT, not intent — sqrt(w*h) of the drawn silhouette
+ * over its own box, read off the real sprites in a real browser with the
+ * animations killed, exactly the way tests/sizes.mjs reads the cast's. It
+ * is what turns an intended size into a box: an earthworm's drawing covers
+ * 37% of its box and a hare's 87%, so the same 13.9px of worm needs a box
+ * two and a half times the hare's per pixel of animal. REDRAW A PREY AND
+ * THIS NUMBER MOVES. tests/sizes.mjs re-measures all thirteen and fails if
+ * the table and the screen stop agreeing, which is the whole reason the
+ * column exists rather than a guess at it.
+ *
+ * The default below is what a row gets before its art exists — the cast's
+ * own mean. Every one of the thirteen has a measured number now; the
+ * fallback is here for the fourteenth.
+ */
+export const PREY_FILL_PROVISIONAL = 0.72;
+
+/** one row, with everything that can be derived actually derived */
+function preyRow(o) {
+  // ROUNDED FIRST, then divided. The other way round the two columns
+  // disagree in the second decimal — `size` derived from 18.05 against an
+  // `apparent` printed as 18.1 — and the self-consistency check that guards
+  // this table has nothing to hold on to.
+  const apparent = +apparentFromBulk(o.mass, o.len, o.hgt).toFixed(1);
+  const fill = o.fill ?? PREY_FILL_PROVISIONAL;
+  return { ...o, fill, apparent,
+    size: +(apparent / (fill * 2.7)).toFixed(2),
+    // cruise, as a fraction of cfg.speed, in Gait.js's own units. Compressed
+    // off the real top speed rather than chosen: sqrt puts the hare at .75
+    // and the worm at .12, and it lands the wood mouse on .44 — which is
+    // exactly what Gait.js hand-picked for the PET mouse, arrived at from
+    // the other direction.
+    cruise: +(0.10 + 0.80 * Math.sqrt(Math.min(o.speed, 72) / 72)).toFixed(3),
+  };
+}
+
+/**
+ * `habitat` is the constraint, and it is the part of this table the sim
+ * actually enforces:
+ *   floor   open forest floor: off the water, off the bluff's faces
+ *   rock    the bluff ONLY, and on its terraces — nothing else goes here
+ *   lake    the water
+ *   litter  pinned to a fallen log, a surface root or a patch of bare soil
+ * `arrival` is how it gets here: "edge" walks in from off screen through the
+ * world's own enterFromEdge; "surface" is the litter trio, which was in the
+ * wood all along. See Prey.js for why those three do not walk.
+ */
+export const PREY_PROFILE = {
+  // ---------------- forest floor ----------------
+  // `woodmouse`, not `mouse`: the neighborhood already has a pet of that
+  // name and one key is one drawing everywhere. See the note above.
+  woodmouse: preyRow({
+    mass: 0.0315, len: 0.09, hgt: 0.03, speed: 13, habitat: "floor", arrival: "edge",
+    dims: "18-45g · 7.5-10.5cm body · 2.5-3.5cm",
+    profile: "The smallest thing on four legs here — a quarter of a frog's bulk.",
+    habits: "Runs the edges in short bursts and freezes between them. Never " +
+            "crosses open ground in one go if it can help it.",
+  }),
+  vole: preyRow({
+    mass: 0.0475, len: 0.11, hgt: 0.036, speed: 8, habitat: "floor", arrival: "edge",
+    dims: "30-65g · 9-13cm body · 3-4.2cm",
+    profile: "Blunter and heavier than a wood mouse, on shorter legs and a short tail.",
+    habits: "Keeps to runways in the grass. Slower than a wood mouse and less " +
+            "inclined to dash: it would rather sit still under something.",
+  }),
+  rat: preyRow({
+    mass: 0.35, len: 0.228, hgt: 0.073, speed: 13, habitat: "floor", arrival: "edge",
+    dims: "200-500g · 20-25.5cm body · 6-8.5cm",
+    profile: "Ten times a wood mouse and it shows: a real animal rather than a scrap.",
+    habits: "Bold and methodical along a wall or a log. The one prey here " +
+            "that comes in three coats — see `coats`.",
+    // "Rats (different colors)" is a COAT, not three species. The instance
+    // carries which one; Prey.js rolls it at spawn and mirrors it to
+    // data-variant so the drawing can key off it.
+    coats: [
+      { id: "brown", name: "Brown rat",  fur: "#7a6650", belly: "#c9bba6" },
+      { id: "black", name: "Black rat",  fur: "#3b3630", belly: "#8d8579" },
+      { id: "hooded", name: "Hooded rat", fur: "#efe6d8", belly: "#f6f1e8", hood: "#4a4038" },
+    ],
+  }),
+  hare: preyRow({
+    mass: 2.15, len: 0.46, hgt: 0.23, speed: 48, habitat: "floor", arrival: "edge",
+    dims: "1.3-3kg · 40-52cm body · 20-26cm at shoulder",
+    profile: "The biggest of the small prey, and by a distance the fastest.",
+    habits: "Sits absolutely still until the last moment, then leaves at " +
+            "speed on a zig-zag. Freezing is the first defence, not the run.",
+  }),
+  gopher: preyRow({
+    mass: 0.175, len: 0.19, hgt: 0.06, speed: 10, habitat: "floor", arrival: "edge",
+    dims: "100-250g · 15-23cm body · 5-7cm",
+    profile: "A cylinder with forepaws. NOT A BEAVER: no paddle tail, no " +
+             "bulk, and a head that is mostly cheek pouches and incisors.",
+    habits: "Works a short circuit and drops out of sight at the end of it. " +
+            "Spends more of its time head-down than any other prey here.",
+  }),
+  grouse: preyRow({
+    mass: 0.6, len: 0.44, hgt: 0.275, speed: 40, habitat: "floor", arrival: "edge",
+    dims: "450-750g · 40-48cm · 25-30cm standing",
+    profile: "Chicken-shaped and ground-bound, between a hedgehog and a hare.",
+    habits: "Walks and pecks, and relies on not being seen. Flushes in a " +
+            "clatter only when something is nearly on top of it.",
+  }),
+  gartersnake: preyRow({
+    mass: 0.14, len: 0.675, hgt: 0.029, speed: 3, habitat: "floor", arrival: "edge",
+    dims: "80-200g · 45-90cm · 2.2-3.5cm thick",
+    profile: "Long and nearly weightless. Length that is all body — the one " +
+             "animal here whose whole length counts toward the bulk index.",
+    habits: "Basks in the open, then flows away into cover. Slow over " +
+            "distance and impossible to corner.",
+  }),
+  boar: preyRow({
+    mass: 75, len: 1.3, hgt: 0.675, speed: 40, habitat: "floor", arrival: "edge",
+    dims: "50-100kg · 1.1-1.5m · 55-80cm at shoulder",
+    profile: "Between the cougar and the wolf on the screen and heavier than " +
+             "both in life. Prey by appetite, not by temperament.",
+    habits: "Roots as it walks, in a straight line, without much interest in " +
+            "what else is on the map. Only the largest predators move it.",
+  }),
+  // ---------------- the bluff, and nowhere else ----------------
+  goat: preyRow({
+    mass: 92.5, len: 1.4, hgt: 1.05, speed: 25, habitat: "rock", arrival: "edge",
+    dims: "45-140kg · 1.2-1.6m · 90-120cm at shoulder",
+    profile: "The second largest animal in the world after the bear, and just " +
+             "under the deer on screen.",
+    habits: "The rock formation ONLY. Walks the terraces and changes level by " +
+            "leaping the face between them, which is the entire point of a " +
+            "mountain goat. Never sets foot on the forest floor.",
+  }),
+  // ---------------- the lake ----------------
+  crayfish: preyRow({
+    mass: 0.055, len: 0.11, hgt: 0.033, speed: 1.5, habitat: "lake", arrival: "edge",
+    dims: "30-80g · 7-15cm · 2.5-4cm",
+    profile: "Vole-sized on screen, and almost all of it claw and carapace.",
+    habits: "Walks in overland — they do — and then stays in the water. " +
+            "Creeps the bottom; backs away from trouble rather than turning.",
+  }),
+  // ---------------- in the wood and in the ground ----------------
+  grub: preyRow({
+    mass: 0.002, len: 0.03, hgt: 0.01, speed: 0.05, habitat: "litter", arrival: "surface",
+    sites: ["log", "root"],
+    dims: "1-3g · 2-4cm · 0.8-1.2cm",
+    profile: "The smallest thing in the world by mass, and it looks it.",
+    habits: "Lies in rotten wood with one end showing. Does not travel; the " +
+            "most it manages is to curl and shift. This is what the skunk " +
+            "and the hedgehog are digging for.",
+  }),
+  beetle: preyRow({
+    mass: 0.0018, len: 0.028, hgt: 0.009, speed: 1.5, habitat: "litter", arrival: "surface",
+    sites: ["log", "root", "soil"],
+    dims: "0.5-3g · 1.5-4cm · 0.6-1.2cm",
+    profile: "The smallest on screen. Lighter than a grub and faster than " +
+             "everything else in the litter by a factor of thirty.",
+    habits: "Runs a hand's breadth of bark at a time, stops dead, runs again.",
+  }),
+  earthworm: preyRow({
+    mass: 0.0045, len: 0.145, hgt: 0.0065, speed: 0.03, habitat: "litter", arrival: "surface",
+    sites: ["soil", "root", "log"],
+    dims: "3-6g · 9-20cm · 0.5-0.8cm thick",
+    profile: "Long and thin, so it reads bigger than the grub on a third of " +
+             "its height and twice its mass.",
+    habits: "Half in the ground. Withdraws rather than flees, which does not " +
+            "save it from anything that digs.",
+  }),
+};
+
+/** the thirteen, in table order. FIXED — these keys are a contract. */
+export const PREY_KEYS = Object.freeze(Object.keys(PREY_PROFILE));
+/** true if this key names a prey species rather than a cast member */
+export const isPreySpecies = (k) => Object.prototype.hasOwnProperty.call(PREY_PROFILE, k);
+/** sprite radius for a prey species */
+export const preySize = (k) => (PREY_PROFILE[k]?.size ?? 10);
+/** what it is MEANT to measure on screen — the number the ladder is built on */
+export const preyApparent = (k) => PREY_PROFILE[k]?.apparent ?? null;
+/** cruise, as a fraction of cfg.speed, in Gait.js's units */
+export const preyCruise = (k) => (PREY_PROFILE[k]?.cruise ?? 0.3);
+/** real-world top speed in km/h */
+export const preyTopSpeed = (k) => (PREY_PROFILE[k]?.speed ?? 10);
+/**
+ * How big anything is on screen, prey or cast, in one call — the prey's
+ * fear rule is a size comparison across the two tables and needs one answer.
+ */
+export const anyApparent = (k) =>
+  SPECIES_PROFILE[k]?.apparent ?? PREY_PROFILE[k]?.apparent ?? null;
