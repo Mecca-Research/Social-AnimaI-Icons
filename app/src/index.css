@@ -5691,3 +5691,297 @@ body {
   .sai-sprite[data-turt="turtstir"] .sai-crit--turtle .sai-crit-leg{ animation:none; }
   .sai-sprite[data-turt="turtstir"] .sai-crit--turtle .sai-crit-lid{ transform:scaleY(0); }
 }
+/* ==================== v0.43 the beaver's forestry ====================
+   Five states and one new posture. The posture is drawn whole and swapped
+   in — the same trick the raccoon's wash and the bear's tree poses use —
+   because a four-legged rig cannot sit back on its tail, and sitting back
+   on its tail is the entire read of a beaver cutting a tree.
+
+   STATE NAMES ARE GLOBAL in this file: every selector below is prefixed
+   with a state nothing else in the world owns (bvgnaw, bvfell, bvlimb,
+   bvbark, bvslap) and, where the ordinary rig is in play, with
+   .sai-crit--beaver as well, so nothing here can reach another species. */
+
+.sai-crit-bvsitpose, .sai-crit-bvchips, .sai-crit-bvslap{ display:none; }
+.bvsit-strip{ display:none; }
+.bvsit-body, .bvsit-head, .bvsit-jaw, .bvsit-paws{ transform-box:fill-box; }
+
+/* the three states that sit up. The walking rig goes away underneath them,
+   including the tail — the pose draws its own, flat on the ground, because
+   a propped tail is a different shape from a dragged one. */
+.sai-sprite[data-state="bvgnaw"] .sai-crit-bvsitpose,
+.sai-sprite[data-state="bvfell"] .sai-crit-bvsitpose,
+.sai-sprite[data-state="bvbark"] .sai-crit-bvsitpose{ display:inline; }
+.sai-sprite[data-state="bvgnaw"] .sai-crit-body,
+.sai-sprite[data-state="bvgnaw"] .sai-crit-head,
+.sai-sprite[data-state="bvgnaw"] .sai-crit-tail,
+.sai-sprite[data-state="bvgnaw"] .sai-crit-leg,
+.sai-sprite[data-state="bvgnaw"] .sai-crit-tailscuff,
+.sai-sprite[data-state="bvfell"] .sai-crit-body,
+.sai-sprite[data-state="bvfell"] .sai-crit-head,
+.sai-sprite[data-state="bvfell"] .sai-crit-tail,
+.sai-sprite[data-state="bvfell"] .sai-crit-leg,
+.sai-sprite[data-state="bvfell"] .sai-crit-tailscuff,
+.sai-sprite[data-state="bvbark"] .sai-crit-body,
+.sai-sprite[data-state="bvbark"] .sai-crit-head,
+.sai-sprite[data-state="bvbark"] .sai-crit-tail,
+.sai-sprite[data-state="bvbark"] .sai-crit-leg,
+.sai-sprite[data-state="bvbark"] .sai-crit-tailscuff{ display:none; }
+/* ...and he is never dragging a paddle while he works, whatever the sim
+   thinks his displacement is */
+.sai-sprite[data-state="bvlimb"] .sai-crit--beaver .sai-crit-tailscuff,
+.sai-sprite[data-state="bvslap"] .sai-crit--beaver .sai-crit-tailscuff{ display:none; }
+
+/* ---- bvgnaw: chisels into the bole, and the whole animal behind them ----
+   The pump is the point. A beaver does not nibble a trunk, he drives his
+   head into it with his shoulders and takes a bite out on every stroke, so
+   the body rocks at 0.42s and the jaw chatters at four times that rate
+   inside it. */
+.sai-sprite[data-state="bvgnaw"] .bvsit-body{
+  transform-origin:40% 96%; animation:sai-bv-gnawpump .42s ease-in-out infinite; }
+.sai-sprite[data-state="bvgnaw"] .bvsit-head{
+  transform-origin:22% 62%; animation:sai-bv-gnawhead .21s ease-in-out infinite; }
+.sai-sprite[data-state="bvgnaw"] .bvsit-jaw{
+  transform-origin:50% 6%; animation:sai-bv-chatter .105s linear infinite; }
+.sai-sprite[data-state="bvgnaw"] .bvsit-paws{
+  transform-origin:80% 40%; animation:sai-bv-pawgrip 1.3s ease-in-out infinite; }
+@keyframes sai-bv-gnawpump{
+  0%,100%{ transform:rotate(-2.6deg) translate(-1.2px,0); }
+  55%    { transform:rotate(3.2deg) translate(2.2px,.6px); } }
+@keyframes sai-bv-gnawhead{
+  0%,100%{ transform:rotate(-1.6deg); }
+  50%    { transform:rotate(2.4deg) translate(1px,.4px); } }
+@keyframes sai-bv-chatter{
+  0%,100%{ transform:scaleY(1) translateY(0); }
+  50%    { transform:scaleY(.62) translateY(-.8px); } }
+@keyframes sai-bv-pawgrip{
+  0%,100%{ transform:translate(0,0) rotate(0deg); }
+  50%    { transform:translate(-1.4px,1.6px) rotate(-4deg); } }
+
+/* ---- bvfell: he stops, and looks up ----
+   One-shot and held, because the tree is doing the acting: everything the
+   viewer needs to read is the pole going over at zIndex 2, and an animal
+   still chewing through it would fight that. He leans back off the butt
+   and his head comes up — the only time this beaver looks at anything. */
+.sai-sprite[data-state="bvfell"] .bvsit-body{
+  transform-origin:40% 96%; animation:sai-bv-fellback 1.5s cubic-bezier(.3,.7,.3,1) forwards; }
+.sai-sprite[data-state="bvfell"] .bvsit-head{
+  transform-origin:22% 62%; animation:sai-bv-felllook 1.5s cubic-bezier(.25,.8,.3,1) forwards; }
+@keyframes sai-bv-fellback{
+  0%  { transform:rotate(2.4deg) translate(1.6px,.4px); }
+  38% { transform:rotate(-11deg) translate(-5.4px,-.6px); }
+  100%{ transform:rotate(-7.5deg) translate(-4px,0); } }
+@keyframes sai-bv-felllook{
+  0%  { transform:rotate(1.6deg); }
+  40% { transform:rotate(-15deg) translate(-1px,-2.4px); }
+  100%{ transform:rotate(-12deg) translate(-.6px,-1.8px); } }
+
+/* ---- bvlimb: cutting the pole into lengths ----
+   The ordinary four-legged rig, head down at the timber, and the beat is a
+   BITE AND A WRENCH rather than a chew: 0.66s of setting the teeth, pulling
+   the head sideways against the grain, and letting go. That is how a branch
+   actually comes off, and it is what tells this apart from the gnaw. */
+.sai-sprite[data-state="bvlimb"] .sai-crit--beaver .sai-crit-head{
+  transform-origin:18% 88%; animation:sai-bv-wrench .66s cubic-bezier(.4,0,.5,1) infinite; }
+.sai-sprite[data-state="bvlimb"] .sai-crit--beaver .sai-crit-body{
+  transform-origin:50% 100%; animation:sai-bv-haul .66s cubic-bezier(.4,0,.5,1) infinite; }
+.sai-sprite[data-state="bvlimb"] .sai-crit--beaver .sai-crit-tail{
+  transform-origin:88% 60%; animation:sai-bv-limbtail .66s ease-in-out infinite; }
+@keyframes sai-bv-wrench{
+  0%    { transform:rotate(26deg) translate(-3px,7px); }
+  30%   { transform:rotate(31deg) translate(-3.6px,9.4px); }
+  46%   { transform:rotate(16deg) translate(-1px,6px) scaleX(.96); }
+  60%   { transform:rotate(30deg) translate(-3.4px,9px); }
+  100%  { transform:rotate(26deg) translate(-3px,7px); } }
+@keyframes sai-bv-haul{
+  0%,100%{ transform:rotate(3deg) translateY(1.6px); }
+  46%    { transform:rotate(-2.4deg) translate(-2.4px,.4px); } }
+@keyframes sai-bv-limbtail{
+  0%,100%{ transform:rotate(4deg); } 46%{ transform:rotate(-7deg); } }
+
+/* ---- bvbark: the cambium, which is the whole reason for the tree ----
+   Sitting up with a strip in both forepaws, turning it end over end and
+   rasping the pale side. Slow hands, fast teeth: the strip travels at
+   1.35s and the incisors work at a tenth of that, which is the difference
+   between eating and gnawing. */
+.sai-sprite[data-state="bvbark"] .bvsit-strip{ display:inline; }
+.sai-sprite[data-state="bvbark"] .bvsit-paws{
+  transform-origin:80% 40%; animation:sai-bv-barkturn 1.35s ease-in-out infinite; }
+.sai-sprite[data-state="bvbark"] .bvsit-head{
+  transform-origin:22% 62%; animation:sai-bv-barkrasp .27s ease-in-out infinite; }
+.sai-sprite[data-state="bvbark"] .bvsit-jaw{
+  transform-origin:50% 6%; animation:sai-bv-chatter .135s linear infinite; }
+.sai-sprite[data-state="bvbark"] .bvsit-body{
+  transform-origin:40% 96%; animation:sai-bv-barksettle 3.2s ease-in-out infinite; }
+@keyframes sai-bv-barkturn{
+  0%,100%{ transform:translate(0,0) rotate(0deg); }
+  28%    { transform:translate(-2.6px,-1.2px) rotate(7deg); }
+  64%    { transform:translate(1.8px,1.4px) rotate(-6deg); } }
+@keyframes sai-bv-barkrasp{
+  0%,100%{ transform:rotate(0deg) translate(0,0); }
+  50%    { transform:rotate(2deg) translate(.8px,.5px); } }
+@keyframes sai-bv-barksettle{
+  0%,100%{ transform:rotate(-1deg); } 50%{ transform:rotate(1.4deg); } }
+
+/* ---- the chips, off both cutting states ----
+   Four flakes on staggered loops, thrown out and down from the muzzle and
+   gone. Faster off the limbing than off the gnaw, because a wrench takes
+   more off than a nibble. */
+.sai-sprite[data-state="bvgnaw"] .sai-crit-bvchips,
+.sai-sprite[data-state="bvlimb"] .sai-crit-bvchips{ display:inline; }
+.bvchip{ transform-box:fill-box; transform-origin:50% 50%; opacity:0; }
+.sai-sprite[data-state="bvgnaw"] .bvchip-a,
+.sai-sprite[data-state="bvlimb"] .bvchip-a{ animation:sai-bv-chip .62s linear infinite; }
+.sai-sprite[data-state="bvgnaw"] .bvchip-b,
+.sai-sprite[data-state="bvlimb"] .bvchip-b{ animation:sai-bv-chip2 .62s linear .17s infinite; }
+.sai-sprite[data-state="bvgnaw"] .bvchip-c,
+.sai-sprite[data-state="bvlimb"] .bvchip-c{ animation:sai-bv-chip .62s linear .33s infinite; }
+.sai-sprite[data-state="bvgnaw"] .bvchip-d,
+.sai-sprite[data-state="bvlimb"] .bvchip-d{ animation:sai-bv-chip2 .62s linear .48s infinite; }
+.sai-sprite[data-state="bvlimb"] .bvchip-a,
+.sai-sprite[data-state="bvlimb"] .bvchip-b,
+.sai-sprite[data-state="bvlimb"] .bvchip-c,
+.sai-sprite[data-state="bvlimb"] .bvchip-d{ animation-duration:.46s; }
+@keyframes sai-bv-chip{
+  0%  { opacity:0; transform:translate(0,0) rotate(0deg); }
+  12% { opacity:1; }
+  100%{ opacity:0; transform:translate(11px,15px) rotate(150deg); } }
+@keyframes sai-bv-chip2{
+  0%  { opacity:0; transform:translate(0,0) rotate(0deg); }
+  12% { opacity:1; }
+  100%{ opacity:0; transform:translate(15px,9px) rotate(-190deg); } }
+
+/* ---- bvslap: the paddle onto the timber ----
+   The tail is the rig's OWN tail swung hard, not a second drawing: up over
+   his back through the first third, down through five hundredths of a
+   second, and the rest of the beat is the water still moving. The body
+   takes the recoil, which is what stops it reading as a wagging tail. */
+.sai-sprite[data-state="bvslap"] .sai-crit-bvslap{ display:inline; }
+.sai-sprite[data-state="bvslap"] .sai-crit--beaver .sai-crit-tail{
+  transform-origin:88% 60%; animation:sai-bv-slap 1.15s cubic-bezier(.25,.6,.2,1) infinite; }
+.sai-sprite[data-state="bvslap"] .sai-crit--beaver .sai-crit-body{
+  transform-origin:50% 100%; animation:sai-bv-slaprecoil 1.15s ease-out infinite; }
+.sai-sprite[data-state="bvslap"] .sai-crit--beaver .sai-crit-head{
+  transform-origin:50% 92%; animation:sai-bv-slaphead 1.15s ease-out infinite; }
+@keyframes sai-bv-slap{
+  0%   { transform:rotate(0deg); }
+  34%  { transform:rotate(-64deg) translateY(-2px); }
+  40%  { transform:rotate(-70deg) translateY(-3px); }
+  46%  { transform:rotate(15deg) translateY(2px); }
+  54%  { transform:rotate(8deg) translateY(1px); }
+  100% { transform:rotate(0deg); } }
+@keyframes sai-bv-slaprecoil{
+  0%,32%{ transform:none; }
+  40%   { transform:translateY(-2.2px) rotate(-2deg); }
+  48%   { transform:translateY(2.4px) rotate(2.6deg); }
+  70%   { transform:translateY(-.6px); }
+  100%  { transform:none; } }
+@keyframes sai-bv-slaphead{
+  0%,32%{ transform:none; }
+  46%   { transform:translateY(2.6px) rotate(3deg); }
+  100%  { transform:none; } }
+.bvslap-ring, .bvslap-ring2, .bvslap-sheet{ transform-box:fill-box; transform-origin:50% 100%; opacity:0; }
+.sai-sprite[data-state="bvslap"] .bvslap-ring{ animation:sai-bv-slapring 1.15s ease-out infinite; }
+.sai-sprite[data-state="bvslap"] .bvslap-ring2{ animation:sai-bv-slapring 1.15s ease-out .06s infinite; }
+.sai-sprite[data-state="bvslap"] .bvslap-sheet{
+  animation:sai-bv-slapsheet 1.15s cubic-bezier(.15,.8,.4,1) infinite; }
+@keyframes sai-bv-slapring{
+  0%,44%{ opacity:0; transform:scale(.35); }
+  50%   { opacity:.85; transform:scale(.6); }
+  100%  { opacity:0; transform:scale(1.9); } }
+@keyframes sai-bv-slapsheet{
+  0%,44%{ opacity:0; transform:scaleY(.15) translateY(6px); }
+  54%   { opacity:1; transform:scaleY(1.05) translateY(-1px); }
+  76%   { opacity:.55; transform:scaleY(.85) translateY(2px); }
+  100%  { opacity:0; transform:scaleY(.4) translateY(7px); } }
+
+/* ==================== the food trees themselves ====================
+   Standing and felled are drawn on ONE anchor and swapped here, because the
+   stump has to be the bole's own foot: the beaver's working spots are read
+   off that drawing, and two anchors would mean two answers. `data-felled`
+   is polled off the live world (see foodTreeState) — the React snapshot
+   only re-renders on a state change, and a tree comes down mid-bout. */
+.ft-felled{ display:none; }
+.ft-standing{ transform-box:fill-box; transform-origin:50% 100%; }
+.ft-billets{ opacity:0; }
+
+/* GOING OVER. Both drawings are up for the 1.2s of the fall and they cross
+   over inside it: the standing tree rotates about the foot of its own bole
+   to 78deg — which lands its crown within a few px of where the felled
+   drawing paints one — and fades out as the felled art fades in. Without
+   the crossfade the swap is a pop, because a pole at 78deg and a pole
+   foreshortened flat are not the same silhouette. */
+/* 1.0s of animation inside a 1.2s window on purpose. The window is
+   FT_FALL_MS, measured on performance.now(); the animation is measured on
+   the document timeline, and those two are a frame apart at 60fps and a
+   third of a second apart when the page is being driven headlessly. Give
+   the fall its own 200ms of slack and the tree is always all the way over
+   before the standing drawing is taken away. */
+[data-felled="fall"] .ft-standing{ animation:sai-ft-topple 1s linear forwards; }
+[data-felled="fall"] .ft-felled{ display:inline; animation:sai-ft-land 1s linear forwards; }
+[data-felled="1"] .ft-standing{ display:none; }
+[data-felled="1"] .ft-felled{ display:inline; }
+/* the billets are what the LIMBING makes, so they arrive a beat after the
+   tree is down rather than with it */
+[data-felled="1"] .ft-billets{ animation:sai-ft-billets .9s ease-out 2.4s both; }
+[data-felled="fall"] .ft-billets{ opacity:0; }
+/* ...and the coppice: a cut aspen or willow stump suckers, so the pole
+   comes back UP out of the same foot it went down from */
+[data-felled="grow"] .ft-standing{ animation:sai-ft-sprout 1.2s cubic-bezier(.2,1.1,.4,1) forwards; }
+[data-felled="grow"] .ft-felled{ display:inline; animation:sai-ft-clear 1.2s linear forwards; }
+/* The ACCELERATION IS IN THE KEYFRAMES and the timing function is linear,
+   which is the only way to write a fall whose middle you can actually see: a
+   single ease-in over 0..78deg spends four fifths of its length within five
+   degrees of upright, so every frame of it reads as a tree standing still.
+   The kick back at 18% is the hinge tearing before it goes. */
+@keyframes sai-ft-topple{
+  0%  { transform:rotate(0deg); opacity:1; }
+  18% { transform:rotate(-5deg); opacity:1; }
+  42% { transform:rotate(14deg); opacity:1; }
+  66% { transform:rotate(38deg); opacity:1; }
+  88% { transform:rotate(64deg); opacity:1; }
+  100%{ transform:rotate(80deg); opacity:0; } }
+@keyframes sai-ft-land{ 0%,86%{ opacity:0; } 100%{ opacity:1; } }
+@keyframes sai-ft-billets{ 0%{ opacity:0; } 100%{ opacity:1; } }
+@keyframes sai-ft-sprout{
+  0%  { transform:rotate(66deg) scale(.3); opacity:0; }
+  30% { opacity:1; }
+  100%{ transform:rotate(0deg) scale(1); opacity:1; } }
+@keyframes sai-ft-clear{ 0%,40%{ opacity:1; } 100%{ opacity:0; } }
+
+@media (prefers-reduced-motion: reduce){
+  /* THE POSES STAY, every time: sitting back on the tail with a strip of
+     bark in both hands is a fact about the animal, not a motion. What stops
+     is the beating — the pump, the chatter, the chips, the slap and the
+     water it throws. The tree still has to get from standing to down, so
+     the two crossfades keep running: they are the only animations here
+     carrying information the still frame does not. */
+  .sai-sprite[data-state="bvgnaw"] .bvsit-body,
+  .sai-sprite[data-state="bvgnaw"] .bvsit-head,
+  .sai-sprite[data-state="bvgnaw"] .bvsit-jaw,
+  .sai-sprite[data-state="bvgnaw"] .bvsit-paws,
+  .sai-sprite[data-state="bvbark"] .bvsit-paws,
+  .sai-sprite[data-state="bvbark"] .bvsit-head,
+  .sai-sprite[data-state="bvbark"] .bvsit-jaw,
+  .sai-sprite[data-state="bvbark"] .bvsit-body,
+  .sai-sprite[data-state="bvlimb"] .sai-crit--beaver .sai-crit-body,
+  .sai-sprite[data-state="bvlimb"] .sai-crit--beaver .sai-crit-tail,
+  .sai-sprite[data-state="bvslap"] .sai-crit--beaver .sai-crit-tail,
+  .sai-sprite[data-state="bvslap"] .sai-crit--beaver .sai-crit-body,
+  .sai-sprite[data-state="bvslap"] .sai-crit--beaver .sai-crit-head,
+  .bvchip, .bvslap-ring, .bvslap-ring2, .bvslap-sheet{ animation:none; }
+  .sai-sprite[data-state="bvgnaw"] .sai-crit-bvchips,
+  .sai-sprite[data-state="bvlimb"] .sai-crit-bvchips,
+  .sai-sprite[data-state="bvslap"] .sai-crit-bvslap{ display:none; }
+  /* held, not animated: the fell still ends with his head up */
+  .sai-sprite[data-state="bvfell"] .bvsit-body,
+  .sai-sprite[data-state="bvfell"] .bvsit-head{ animation:none; }
+  .sai-sprite[data-state="bvfell"] .bvsit-body{
+    transform-origin:40% 96%; transform:rotate(-7.5deg) translate(-4px,0); }
+  .sai-sprite[data-state="bvfell"] .bvsit-head{
+    transform-origin:22% 62%; transform:rotate(-12deg) translate(-.6px,-1.8px); }
+  /* the limbing pose is still a head down in the timber */
+  .sai-sprite[data-state="bvlimb"] .sai-crit--beaver .sai-crit-head{
+    animation:none; transform-origin:18% 88%; transform:rotate(26deg) translate(-3px,7px); }
+  [data-felled="1"] .ft-billets{ animation:none; opacity:1; }
+}

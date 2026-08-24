@@ -1119,6 +1119,106 @@ function BeaverDraw({ uid }) {
         <path d="M 140 64 q 4.4 5 0 10" stroke="#dff3fb" strokeWidth="2" fill="none" strokeLinecap="round" opacity=".7" />
         <path d="M 134 78.5 q 6 1.6 10 -.6" stroke="#dff3fb" strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".45" />
       </g>
+
+      {/* ================= THE FORESTRY POSES =================
+          UP ON HIS HIND LEGS, which the four-legged rig cannot reach — the
+          same argument the raccoon's three poses and the bear's tree poses
+          make, and drawn the same way: whole, swapped in by CSS, with the
+          walking rig switched off underneath it.
+
+          One pose serves three states because it is one posture:
+            bvgnaw  incisors into the standing bole, jaws chattering
+            bvfell  chewing stopped, head UP, watching it go
+            bvbark  a strip of bark held in both forepaws, rasped side to
+                    side — a beaver eats the living layer on the INSIDE of
+                    the bark, and that is what this pose is for
+          What separates them is entirely in the animation, plus the strip,
+          which only bvbark draws.
+
+          He sits back on the tail, which is a prop and not decoration: a
+          beaver's tail is the third leg of the tripod he cuts from, and
+          drawing it flat on the ground under him is the one line that says
+          "sitting up" rather than "rearing". */}
+      <g className="sai-crit-bvsitpose">
+        {/* the paddle, flat behind him, taking his weight */}
+        <ellipse cx="24" cy="99" rx="21" ry="7.5" fill={tailC} transform="rotate(-5 24 99)" />
+        <ellipse cx="24" cy="99" rx="21" ry="7.5" fill="none" stroke={tailD} strokeWidth="1.3" transform="rotate(-5 24 99)" />
+        <path d="M 10 96.5 l 26 3 M 11 101 l 25 -1" stroke={tailD} strokeWidth="1" opacity=".5" />
+        {/* hind foot, webbed, planted forward of the haunch */}
+        <path d="M 58 92 q 9 2 14 8 q -6 3.4 -14 2 Z" fill={F[2]} />
+        <path d="M 60 96 l 8 3.4 M 62 93.6 l 8 4.6" stroke="#3f2812" strokeWidth="1" opacity=".5" />
+        {/* haunch and the upright trunk of him, leaning in at the tree */}
+        <ellipse cx="47" cy="80" rx="20" ry="19" fill={`url(#${uid}f)`} />
+        <g className="bvsit-body">
+          <ellipse cx="55" cy="60" rx="18.5" ry="22" fill={`url(#${uid}f)`} transform="rotate(9 55 60)" />
+          <BackShade cx={51} cy={56} rx={17} ry={20} color="#3f2812" op={.22} />
+          <Under cx={62} cy={64} rx={16} ry={19} color={belly} k={.5} opacity={.9} />
+          {/* the head rides the body, so the whole animal rocks as one */}
+          <g className="bvsit-head">
+            <g className="sai-crit-ear"><circle cx="58" cy="27" r="4.4" fill={F[1]} /><circle cx="58" cy="27.5" r="2.1" fill={F[2]} /></g>
+            <circle cx="72" cy="38" r="17" fill={`url(#${uid}f)`} />
+            <ellipse cx="85" cy="41" rx="9" ry="7" fill={belly} transform="rotate(-14 85 41)" />
+            <path d="M 86 36.6 q 4.2 0 4.2 3 q 0 2.6 -4.2 2.6 q -4.2 0 -4.2 -2.6 q 0 -3 4.2 -3 Z" fill={ink} />
+            {/* THE CHISELS. Four teeth, orange-faced the way a beaver's
+                actually are, and drawn long: they are the tool the whole
+                errand runs on and at this size they have to be legible. */}
+            <g className="bvsit-jaw">
+              <rect x="81.6" y="43.4" width="4.2" height="9.4" rx="1.3" fill="#ffeecb" stroke="#c08a3a" strokeWidth=".6" />
+              <rect x="86.2" y="43.2" width="4.2" height="9.8" rx="1.3" fill="#fff6de" stroke="#c08a3a" strokeWidth=".6" />
+              <path d="M 82 44.6 h 8.2" stroke="#d79c47" strokeWidth="1.2" opacity=".8" />
+              {/* the lower pair, shorter, working against them */}
+              <rect x="82.6" y="51.6" width="3.6" height="5.4" rx="1.1" fill="#f4e3bd" stroke="#c08a3a" strokeWidth=".5" />
+              <rect x="86.4" y="51.4" width="3.6" height="5.6" rx="1.1" fill="#f9ecc9" stroke="#c08a3a" strokeWidth=".5" />
+            </g>
+            <FaceKit lid={F[1]} e1={[68, 33]} e2={[80, 31]} er={2.9} iris={ink} mouths={false} />
+          </g>
+          {/* both forepaws up in front of the chest, which is where a
+              beaver's are whenever he is not walking on them */}
+          <g className="bvsit-paws">
+            <ellipse cx="72" cy="62" rx="6.4" ry="5" fill={F[1]} transform="rotate(-24 72 62)" />
+            <path d="M 76 58.6 l 3.4 -2 M 77 61.4 l 3.6 -1.2 M 76.6 64.4 l 3.4 .4" stroke={F[2]} strokeWidth="1.3" strokeLinecap="round" fill="none" />
+            <ellipse cx="66" cy="68" rx="6" ry="4.6" fill={F[2]} transform="rotate(-18 66 68)" />
+            {/* WHAT IS IN THEM, and only while he is eating: a strip of bark
+                turned over and over, pale side up. The pale side is the
+                cambium — the part he is actually after. */}
+            <g className="bvsit-strip">
+              <path d="M 62 72 C 70 66 79 60 88 56 L 90.4 60.6 C 81 65 72 71 64.6 76.6 Z" fill="#8a5f34" />
+              <path d="M 62.6 73.4 C 70 68 79 62 87.6 58 L 88.8 60.4 C 80.4 64.4 71.4 70.4 64 75.8 Z" fill="#e8d3a4" />
+              <path d="M 88 56 l 2.4 4.6" stroke="#6b4a2a" strokeWidth="1.1" strokeLinecap="round" />
+            </g>
+          </g>
+        </g>
+      </g>
+
+      {/* CHIPS. Not part of the pose — the limbing runs on the ordinary
+          four-legged rig with his head down, and chips come off both. They
+          fly from the muzzle in both, which is why they are anchored here
+          and not inside either drawing. */}
+      <g className="sai-crit-bvchips">
+        <path className="bvchip bvchip-a" d="M 88 50 l 6 -2.2 l 1.2 3 l -6 2.2 Z" fill="#f0dcae" />
+        <path className="bvchip bvchip-b" d="M 92 56 l 5.4 -1.4 l 1 2.6 l -5.4 1.4 Z" fill="#dcc189" />
+        <path className="bvchip bvchip-c" d="M 86 59 l 4.6 -2.6 l 1.4 2.4 l -4.6 2.6 Z" fill="#fbeecb" />
+        <path className="bvchip bvchip-d" d="M 94 47 l 5 -1 l .8 2.8 l -5 1 Z" fill="#e6cf9c" />
+      </g>
+
+      {/* THE SLAP. The tail itself is the rig's own `.sai-crit-tail` swung
+          by CSS — one drawing, not two — so what is here is only the water
+          it throws: a sheet off the blade, a ring going out from where it
+          landed, and half a dozen drops. All of it behind him, because the
+          tail is behind him. */}
+      <g className="sai-crit-bvslap">
+        <ellipse className="bvslap-ring" cx="22" cy="100" rx="20" ry="6" fill="none" stroke="#dff3fb" strokeWidth="2.4" opacity=".75" />
+        <ellipse className="bvslap-ring2" cx="22" cy="100" rx="12" ry="4" fill="none" stroke="#eaf7fd" strokeWidth="1.8" opacity=".6" />
+        <g className="bvslap-sheet">
+          <path d="M 6 98 C 2 88 4 79 12 72" stroke="#e8f7fd" strokeWidth="3.4" fill="none" strokeLinecap="round" opacity=".8" />
+          <path d="M 36 97 C 42 89 42 80 36 73" stroke="#e8f7fd" strokeWidth="3" fill="none" strokeLinecap="round" opacity=".7" />
+          <path d="M 20 95 C 19 84 20 76 24 69" stroke="#f4fbff" strokeWidth="2.4" fill="none" strokeLinecap="round" opacity=".65" />
+          <circle cx="9" cy="66" r="2.6" fill="#eaf7fd" opacity=".85" />
+          <circle cx="27" cy="61" r="2.2" fill="#f4fbff" opacity=".8" />
+          <circle cx="40" cy="70" r="1.9" fill="#eaf7fd" opacity=".7" />
+          <circle cx="17" cy="57" r="1.6" fill="#f4fbff" opacity=".7" />
+        </g>
+      </g>
     </g>
   );
 }

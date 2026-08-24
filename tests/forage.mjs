@@ -70,12 +70,14 @@ const world = await page.evaluate(`(w => ({ forage: (w.forage||[]).length,
   eth: Object.keys(window.__saiEtho.ETHOGRAM).sort().join(','),
   states: [...window.__saiEtho.states].sort().join(',') }))(window.__saiWorld)`);
 // 13 left in the clearing, the five-site south-east ground the west berry
-// thicket moved to, and the hedgehog's SEVEN pieces of timber — four logs
-// now, since the two the background used to draw as scenery are real sites.
-// Both the count and the kinds are pinned, so adding a site stays a
+// thicket moved to, the hedgehog's SEVEN pieces of timber — four logs now,
+// since the two the background used to draw as scenery are real sites — and
+// the beaver's TWO food trees on the lake's north-east bank, which are a
+// forage kind and not entries in FOREST_TREES for the reasons written over
+// them. Both the count and the kinds are pinned, so adding a site stays a
 // deliberate edit to this line rather than something a suite quietly
 // absorbs.
-chk(world.forage === 25 && world.kinds === 'berry,log,nut,root,shrub,soil',
+chk(world.forage === 27 && world.kinds === 'berry,foodtree,log,nut,root,shrub,soil',
   'forage sites', `${world.forage} sites, kinds: ${world.kinds}`);
 chk(world.eth.includes('squirrel'), 'squirrel has an ethogram', world.eth);
 

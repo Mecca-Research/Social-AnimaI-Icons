@@ -1247,12 +1247,34 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
       }
       if (w.lakeRhoAt(x, y) < 1.10) bad.push('a plant in the lake');
     }
-    return { n: out.length, bad };
+    // ...and INSIDE AN ALLOWED ARC. The plants are swept, not placed: the
+    // world publishes the arcs of shoreline the sweep was let look in, and
+    // this holds the drawn result to them. Asking the table where its
+    // entries are would only read a constant back to itself; asking whether
+    // a DRAWN plant is inside the RULE catches the case that matters, which
+    // is somebody hand-nudging one out of its arc.
+    const arcs = w.def.plantArcs || [], off = [];
+    const degs = out.map(([x, y]) => w.lakeAngleAt(x, y));
+    for (const deg of degs)
+      if (!arcs.some(a => deg >= a.t0 - 1.5 && deg <= a.t1 + 1.5)) off.push(Math.round(deg));
+    // and the top-RIGHT of the lake is now the beaver's cutting, so nothing
+    // green may be left standing in it: -70 to -5 degrees is that quadrant.
+    const inTR = degs.filter(d => d > -70 && d < -5).length;
+    const topLeft = degs.filter(d => d >= -115 && d <= -85).length;
+    return { n: out.length, bad, off, inTR, topLeft, arcs: arcs.length };
   })(window.__saiWorld)`);
   chk(r.n >= 10, 'the forest still has ferns and reeds in it', `${r.n} drawn`);
   chk(r.bad.length === 0, 'and not one of them is standing in something',
     r.bad.length ? r.bad.slice(0, 4).join('; ')
-                 : `${r.n} plants, all clear of six trunks, 25 sites and the lake`);
+                 : `${r.n} plants, all clear of six trunks, 27 sites and the lake`);
+  chk(r.arcs > 0 && r.off.length === 0,
+    'every one of them is inside an arc the sweep was allowed to look in',
+    r.off.length ? `outside every arc at ${r.off.join(', ')} deg`
+                 : `${r.n} plants over ${r.arcs} arcs of shoreline`);
+  chk(r.inTR === 0, "and the lake's top right is clear of them for the food trees",
+    r.inTR ? `${r.inTR} still standing between -70 and -5 deg` : 'nothing green in that quadrant');
+  chk(r.topLeft >= 5, '...because they went to the top left',
+    `${r.topLeft} on the arc between -115 and -85 deg`);
 }
 
 // ==================== the owl has two nests ====================
@@ -1330,6 +1352,265 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
   // smallest animal in the world is 44px across.
   chk(r.pockets <= 4, 'no water is walled off behind it',
     `${r.pockets} orphan cells of ${r.cells}`);
+}
+
+// ============ the beaver's cutting: geometry ============
+// Two food trees on the lake's TOP-RIGHT bank, worked by one animal and no
+// other. These are geometry checks asked of the world's own predicates —
+// where the shore is, how wide a site is drawn, how big a crown is — so they
+// hold at whatever stage shape the browser gave them.
+{
+  const r = await page.evaluate(`(w => {
+    const b = w.bounds, HALF = w.__siteHalf || {}, F = (w.forage || []);
+    const ft = F.filter(f => f.kind === 'foodtree');
+    // the world's OWN tightest site pair, so a new site is held to "never be
+    // the tightest thing on the map" rather than to a number written down
+    let worldPair = 1e9;
+    for (let i = 0; i < F.length; i++) for (let j = i + 1; j < F.length; j++) {
+      if (F[i].kind === 'foodtree' && F[j].kind === 'foodtree') continue;
+      const d = Math.hypot(F[i].px - F[j].px, F[i].py - F[j].py);
+      if (d < worldPair) worldPair = d;
+    }
+    const rows = ft.map(f => {
+      const s = f.s || 1, d = f.dir || 1;
+      // Where the gnaw pose stands: FT_GNAW_DX along the fall line — which
+      // is NEGATIVE, the far side of the bole — with his feet on the drawn
+      // foot of it. Beaver r 25.5, sprite box r*2.7, ground line at 103 of
+      // 120: the same arithmetic ftSpot() does, and the two spots the fall
+      // reaches are checked as well, since the whole risk on this bank is a
+      // working spot that lands in the lake.
+      const bv = w.agents.find(a => a.species === 'beaver');
+      const rr = bv ? bv.r : 25.5, feet = rr * 2.7 * (103 - 60) / 120;
+      const gx = f.px - 16 * s * d, gy = f.py - 6 * s - feet;
+      const bx = f.px + 34 * s * d;
+      let trunk = 1e9, crown = -1e9, site = 1e9;
+      for (const t of (w.def.trees || [])) {
+        trunk = Math.min(trunk, Math.hypot(f.px - t.x * b.w, f.py - t.y * b.h));
+        const cr = w.__crowns[t.kind || 'oak'];
+        crown = Math.max(crown, Math.min(cr.half * t.s - Math.abs(f.px - t.x * b.w),
+          f.py - (t.y * b.h - cr.topPx * t.s), (t.y * b.h - cr.botPx * t.s) - f.py));
+      }
+      for (const q of F) { if (q === f) continue;
+        site = Math.min(site, Math.hypot(f.px - q.px, f.py - q.py)); }
+      return { wood: f.wood, deg: +w.lakeAngleAt(f.px, f.py).toFixed(1),
+               rho: +w.lakeRhoAt(f.px, f.py).toFixed(3),
+               gnawRho: +w.lakeRhoAt(gx, gy).toFixed(3), gnawWet: w.inWaterAt(gx, gy),
+               limbRho: +w.lakeRhoAt(bx, gy).toFixed(3), limbWet: w.inWaterAt(bx, gy),
+               trunk: Math.round(trunk), site: Math.round(site), crown: Math.round(crown),
+               half: (HALF.foodtree || 0) * s, felled: !!f.felled };
+    });
+    // art-to-art between the two of them, along the fall lines
+    let arts = null;
+    if (ft.length === 2) {
+      const e = ft.map(f => { const s = f.s || 1, d = f.dir || 1, h = (HALF.foodtree || 0) * s;
+        return d > 0 ? [f.px - 16 * s, f.px + h] : [f.px - h, f.px + 16 * s]; });
+      arts = Math.round(Math.max(e[0][0], e[1][0]) - Math.min(e[0][1], e[1][1]));
+    }
+    // the DRAWN thing: both states on one anchor, and the near lip painted
+    // again in the canopy pass
+    const wraps = [...document.querySelectorAll('[data-felled]')];
+    const atZ = (z) => wraps.filter(d => d.style.zIndex === String(z)).length;
+    return { n: ft.length, rows, worldPair: Math.round(worldPair), arts,
+             wraps: wraps.length, base: atZ(2), over: atZ(12),
+             standing: document.querySelectorAll('.ft-standing').length,
+             felledInk: document.querySelectorAll('.ft-felled').length };
+  })(window.__saiWorld)`);
+  chk(r.n === 2, 'the beaver has food trees to cut', `${r.n} on the bank`);
+  const tr = r.rows.filter(x => x.deg > -70 && x.deg < -5).length;
+  chk(tr === r.n, "and they stand on the lake's top right",
+    r.rows.map(x => `${x.wood} at ${x.deg} deg`).join(', '));
+  const dry = r.rows.filter(x => x.rho >= 1.10).length;
+  chk(dry === r.n, 'on the bank and not in the water',
+    r.rows.map(x => `${x.wood} rho ${x.rho}`).join(', '));
+  // The rule the FOREST_TREES table exists to keep, applied to the thing
+  // that replaced a tree here: an animal must be able to STAND where the
+  // drawing says he works, and this bank is where a trunk's own working
+  // spots used to land in the lake.
+  const wetSpots = r.rows.filter(x => x.gnawWet || x.gnawRho < 1.0 || x.limbWet || x.limbRho < 1.0);
+  chk(wetSpots.length === 0, 'and every spot he works one from is ashore, never in the lake',
+    wetSpots.length ? wetSpots.map(x => `${x.wood} at rho ${x.gnawRho}/${x.limbRho}`).join('; ')
+                    : r.rows.map(x => `${x.wood} rho ${x.gnawRho} at the bole, ${x.limbRho} out on the pole`).join(', '));
+  const nearTrunk = r.rows.filter(x => x.trunk < 96);
+  chk(nearTrunk.length === 0, 'no food tree is inside a trunk\'s reach ring',
+    nearTrunk.length ? `${nearTrunk[0].wood} ${nearTrunk[0].trunk}px from one`
+                     : `nearest trunk ${Math.min(...r.rows.map(x => x.trunk))}px away`);
+  const tight = r.rows.filter(x => x.site < r.worldPair);
+  chk(tight.length === 0, 'and neither is the tightest thing on the map',
+    tight.length ? `${tight[0].wood} ${tight[0].site}px from a site, against the world's own ${r.worldPair}px`
+                 : `nearest other site ${Math.min(...r.rows.map(x => x.site))}px, world's own tightest ${r.worldPair}px`);
+  const underCrown = r.rows.filter(x => x.crown > 0);
+  chk(underCrown.length === 0, 'and no oak paints over either of them',
+    underCrown.length ? `${underCrown[0].wood} ${underCrown[0].crown}px inside a crown box`
+                      : `clear by ${-Math.max(...r.rows.map(x => x.crown))}px at the worst`);
+  chk(r.arts !== null && r.arts > 0,
+    'the two felled trunks do not lie across each other',
+    `${r.arts}px of ground between the far ends of the two drawings`);
+  // THE ANIMAL BROUGHT HIS OWN SCENERY, three times in this project's life.
+  // He does not here: the pole is drawn at 2 under him and its near lip
+  // again at 12 over him, on the same anchor.
+  chk(r.base === 2 && r.over === 2 && r.standing === 2 && r.felledInk === 4,
+    'each food tree is painted under him at 2 and its near lip over him at 12',
+    `${r.base} at zIndex 2, ${r.over} at 12; ${r.standing} standing drawings, ${r.felledInk} felled`);
+}
+
+// ============ the cutting, watched ============
+// FOUR PHASES ON ONE WALK OUT: chew the bole through sitting up, watch it
+// go, cut the pole into lengths, eat the cambium. This is a behaviour check
+// and it is budgeted in FRAMES rather than in wall clock — headless rAF runs
+// at three or four a second, so a bout that is twenty-five seconds of
+// simulated time is a hundred frames and an unknown number of milliseconds.
+// Each phase is also pulled forward the moment it is SEEN: what is under
+// test is the chain and what it does to the tree, not how long a beaver
+// chews, and the durations are two lines of the descriptor away.
+{
+  const r = await page.evaluate(`(async (w) => {
+    const bv = w.agents.find(a => a.species === 'beaver');
+    if (!bv) return { none: 'no beaver in the roster' };
+    const f = (w.forage || []).find(q => q.kind === 'foodtree');
+    if (!f) return { none: 'no food tree in the world' };
+    const frame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 16)));
+    const S = bv._eth;
+    const park = () => { const t = performance.now();
+      for (const e of window.__saiEtho.ETHOGRAM.beaver.events) {
+        if (e.id === 'forestry') continue;
+        S.cd[e.id] = t + 9e6; S.seekAt[e.id] = t + 9e6; S.armed[e.id] = 0; }
+      S.seekAt.forestry = 0; S.cd.forestry = 0;
+      bv.noEventUntil = t + 9e6; bv.intentUntil = t + 9e6; bv.intent = 'wander'; };
+    for (const a of w.agents) if (a !== bv) {
+      a.noEventUntil = performance.now() + 9e6; a.intentUntil = performance.now() + 9e6;
+      a.state = 'idle'; a.vx = 0; a.vy = 0; a.x = 0.14 * w.bounds.w; a.y = 0.35 * w.bounds.h; }
+    f.felled = false; f.regrowAt = 0; f.userId = null;
+    // stand him on the errand's own working spot, so the walk leg is one
+    // frame and the frames left over are the bout
+    const home = { x: f.px + 20 * (f.s||1) * (f.dir||1),
+                   y: f.py - 6 * (f.s||1) - bv.r * 2.7 * (103 - 60) / 120 };
+    bv.x = home.x; bv.y = home.y; bv.z = 0; bv.vx = 0; bv.vy = 0;
+    bv.state = 'wander'; bv._ftSite = null; bv._carry = null;
+    const seen = []; let last = '', felledAt = -1, standingWhenSeen = null;
+    for (let i = 0; i < 520; i++) {
+      if (bv.state === 'wander' || bv.state === 'idle') {
+        bv.x = home.x; bv.y = home.y; bv.vx = 0; bv.vy = 0; park();
+      }
+      await frame();
+      if (bv.state !== last) {
+        seen.push(bv.state); last = bv.state;
+        if (bv.state === 'bvgnaw') standingWhenSeen = !f.felled;
+        if (f.felled && felledAt < 0) felledAt = seen.length - 1;
+        // pull the phase forward: the chain is what is under test
+        if (bv.state.indexOf('bv') === 0 && bv.state !== 'bvtotree')
+          bv.stateUntil = performance.now() + 90;
+      } else if (bv.state.indexOf('bv') === 0 && bv.state !== 'bvtotree') {
+        bv.stateUntil = Math.min(bv.stateUntil, performance.now() + 90);
+      }
+      if (seen.length > 1 && bv.state === 'wander' && seen.indexOf('bvbark') >= 0) break;
+    }
+    const out = { chain: seen.join('>'), felled: !!f.felled, felledAt,
+                  standingWhenSeen, regrow: Math.round((f.regrowAt || 0) - performance.now()),
+                  frames: w.frames };
+    // put the tree back up for whatever runs after this
+    f.felled = false; f.regrowAt = 0; f.userId = null; f.grewAt = -1e9;
+    bv.state = 'wander'; bv._ftSite = null; bv._faceDir = 0;
+    return out;
+  })(window.__saiWorld)`);
+  const c = r.chain || '';
+  chk(!r.none && /bvgnaw/.test(c), 'he sits up and chews the bole through',
+    r.none || c || 'nothing happened');
+  chk(r.standingWhenSeen === true && /bvgnaw>bvfell/.test(c),
+    'and the tree only comes down once he has, never on a timer',
+    r.standingWhenSeen === true ? `standing when he started, down at step ${r.felledAt}: ${c}`
+                                : `it was already down when he started chewing: ${c}`);
+  chk(/bvfell>bvlimb/.test(c), 'then he cuts the pole into lengths', c);
+  chk(/bvlimb>bvbark/.test(c), 'and finishes on the inner bark', c);
+  chk(r.regrow > 60000, 'and the stump is left to coppice rather than gone for good',
+    `${Math.round(r.regrow / 1000)}s until it throws a new pole`);
+}
+
+// ============ the tail slap, from the second layer on ============
+// "Starting from the second layer, and continuing afterwards." The plan is
+// laid in courses — the world publishes them as def.damCourses — so the
+// second layer begins at the first course's length, and that is the gate.
+// Watched from both sides of it, because a gate nothing tests is a gate
+// that quietly opens: one log short of the second course he must NOT go, and
+// one log into it he must.
+{
+  const r = await page.evaluate(`(async (w) => {
+    const bv = w.agents.find(a => a.species === 'beaver');
+    if (!bv) return { none: 'no beaver' };
+    const first = (w.def.damCourses || [])[0];
+    if (!first) return { none: 'the world does not say how the dam is coursed' };
+    const frame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 16)));
+    const S = bv._eth, was = w.damCount | 0;
+    for (const a of w.agents) if (a !== bv) {
+      a.noEventUntil = performance.now() + 9e6; a.intentUntil = performance.now() + 9e6;
+      a.state = 'idle'; a.vx = 0; a.vy = 0; }
+    const park = () => { const t = performance.now();
+      for (const e of window.__saiEtho.ETHOGRAM.beaver.events) {
+        if (e.id === 'slap') continue;
+        S.cd[e.id] = t + 9e6; S.seekAt[e.id] = t + 9e6; S.armed[e.id] = 0; }
+      S.seekAt.slap = 0; S.cd.slap = 0;
+      bv.noEventUntil = t + 9e6; bv.intentUntil = t + 9e6; bv.intent = 'wander'; };
+    // He thinks of it while SWIMMING, so both runs start him in open water
+    // inside the arch — where the dam is not yet, at either count.
+    const run = async (count, frames) => {
+      w.damCount = count;
+      const p = w.lakePointAt(3.2, 0.74);
+      bv.x = p.x; bv.y = p.y; bv.z = 0; bv.vx = 0; bv.vy = 0;
+      bv.state = 'wander'; bv._eth.goal = null; bv._faceDir = 0;
+      let got = 0, onDam = null;
+      for (let i = 0; i < frames; i++) {
+        if (bv.state === 'wander' || bv.state === 'idle') park();
+        await frame();
+        if (bv.state === 'bvslap') { got = i + 1; onDam = w.onDamAt(bv.x, bv.y); break; }
+      }
+      return { got, onDam, state: bv.state };
+    };
+    const below = await run(first - 1, 90);
+    bv.state = 'wander'; bv._eth.goal = null;
+    const above = await run(first + 4, 300);
+    w.damCount = was; bv.state = 'wander'; bv._eth.goal = null; bv._faceDir = 0;
+    return { first, below, above, plan: (w.def.dam || []).length,
+             courses: (w.def.damCourses || []).join('/') };
+  })(window.__saiWorld)`);
+  chk(!r.none && r.courses === '8/8/7/7',
+    'the dam is laid in courses and the world says so',
+    r.none || `${r.courses} logs of arch, then the dome, ${r.plan} in all`);
+  chk(!r.none && r.below && r.below.got === 0,
+    'one log short of the second layer he has nothing to slap',
+    r.none || `${r.below.got ? 'slapped anyway at frame ' + r.below.got : 'still ' + r.below.state}`
+              + ` with ${r.first - 1} logs down`);
+  chk(!r.none && r.above && r.above.got > 0,
+    'and from the second layer on, he goes and beats the timber',
+    r.none || (r.above.got ? `in the slap ${r.above.got} frames after the errand`
+                           : `still ${r.above.state} after 300 frames`));
+  chk(!r.none && r.above && r.above.onDam === true,
+    'standing ON the structure while he does it, not beside it',
+    r.none || (r.above.onDam === null ? 'never got there'
+      : r.above.onDam ? 'his own position reports land' : 'he is beating open water'));
+}
+
+// ============ the state names are his alone ============
+// CSS SELECTORS ARE GLOBAL. A state name used by two species silently hands
+// one animal the other's animation, and this release added five names to a
+// world that is having thirteen more species written into it in parallel.
+// The engine throws on a name claimed twice inside ONE species; nothing
+// catches it across two, because two species sharing a state is legal and
+// deliberate (the frog and the turtle both sit on floats). So it is checked.
+{
+  const r = await page.evaluate(`(() => {
+    const E = window.__saiEtho.ETHOGRAM;
+    const mine = ['bvtotree','bvgnaw','bvfell','bvlimb','bvbark','bvtodam','bvslap'];
+    const missing = mine.filter(s => !E.beaver.byState.has(s));
+    const shared = [];
+    for (const [sp, eth] of Object.entries(E)) {
+      if (sp === 'beaver') continue;
+      for (const s of mine) if (eth.byState.has(s)) shared.push(sp + ' owns ' + s);
+    }
+    return { missing, shared, species: Object.keys(E).length };
+  })()`);
+  chk(r.missing.length === 0, 'the beaver owns all seven of his new states',
+    r.missing.length ? 'missing ' + r.missing.join(', ') : 'damrun plus seven');
+  chk(r.shared.length === 0, 'and no other species owns one of them',
+    r.shared.length ? r.shared.join('; ') : `checked against ${r.species - 1} other ethograms`);
 }
 
 // THE RACCOON WASHES IN THE WATER TILE AGAINST THE BANK. He used to take the

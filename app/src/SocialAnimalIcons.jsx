@@ -1409,8 +1409,88 @@ const FORAGE_SITES = [
   // in that corner at all nine stage shapes.
   { x: .385, y: .070, s: 0.90, kind: "root", dir: -1 },
   { x: .775, y: .700, s: 1.05, kind: "root", dir:  1 },
+
+  // ---- the beaver's cutting: food trees on the lake's TOP-RIGHT bank ----
+  //
+  // WHY THESE ARE A FORAGE SITE AND NOT AN ENTRY IN FOREST_TREES, which was
+  // the first thing this had to decide. Three reasons, and any one of them
+  // is enough:
+  //
+  //   1. FOREST_TREES is a SHARED fixture. Six behaviours pick a trunk out
+  //      of it by rule and not by index — the bear's rub and his climb, the
+  //      deer's rub and his bed, the raccoon's climb and his den, the owl's
+  //      nest — so an aspen added there is instantly a tree a bear rears
+  //      against. Every one of those behaviours works a trunk from its WEST
+  //      face, and a trunk on this bank has its west face over the water:
+  //      that is v0.36's "a tree stood in the lake", and it is rule 2 of the
+  //      six the tree table is solved against. A kind nobody else's picker
+  //      names cannot be picked up by anybody else's picker.
+  //   2. A food tree has TWO states and a trunk has one. It has to be
+  //      fellable: standing, then down. FOREST_TREES has nowhere to put that
+  //      — and the other six behaviours would go on climbing the stump.
+  //   3. Forage sites already carry everything this needs: a claim slot so
+  //      two animals never work one tree (`claimSite`), per-site mutable
+  //      state on `world.forage` (the nut trees' `shake` is the precedent),
+  //      art in ForageLayer at zIndex 2 with an over-pass available in
+  //      ForageCanopyLayer at 12, and a `dir` that mirrors the drawing.
+  //
+  // WHERE THEY WENT. Solved the way the trees and the moved browse shrub
+  // were: sweep the bank, take the anchor that maximises the SMALLEST
+  // margin, at nine stage shapes. Two rules close on this corner and there
+  // is very little between them — the lake's north shore leaves only 34px
+  // of bank at the map's top edge on a squat window, and its east shore
+  // only 45px at the right edge — which is why these are 0.80 saplings and
+  // not full trees, and why there are two of them and not three: a third
+  // could be placed, but not without its felled trunk lying across its
+  // neighbour's. Worst margins over the nine, both trees:
+  //     5.3px  the aspen's crown under the top of the stage (1248x664)
+  //     6.1px  the willow's own working spot clear of the drawn shore
+  //            (984x732) — the beaver stands ashore to cut, never in it
+  //    54.5px  between the two of them, against a world whose own tightest
+  //            site pair is 44.4px at that shape
+  // and at the five SQUAT shapes this corner has no room at all, which is
+  // stated rather than solved (the tree table already excludes two of them
+  // for the same reason): the aspen's crown overhangs the top of the stage
+  // by up to 8.9px at 944x532, and one corner of the beaver's own sprite
+  // reaches lake rho 0.953 at 884x552 — his hind paw on the mud, never his
+  // anchor, so he is never in the water and never gets the swimming rig.
+  //
+  // `wood` picks the bark and the leaf, nothing else: the behaviour, the
+  // geometry and every clearance above are identical for both.
+  { x: .870, y: .108, s: 0.80, kind: "foodtree", wood: "aspen",  dir:  1 },
+  { x: .952, y: .145, s: 0.80, kind: "foodtree", wood: "willow", dir: -1 },
 ];
 const FORAGE_REACH = 26;   // how close counts as "at" a site
+// ---------------- The beaver's food trees ----------------
+// Every number the felling behaviour stands on, read off the art below and
+// off nothing else — the geometry-as-physics contract. Local units are the
+// site's own: ForageLayer maps a local y to `py + (y - 16) * s`, so a local
+// y of 10 is FT_BASE_PX = 6 stage px above the anchor at scale 1.
+const FT_BASE_PX = 6;      // the drawn foot of the bole / the stump's base
+const FT_TOP_PX = 78;      // the highest ink the standing crown paints
+const FT_HALF = 46;        // the widest either state reaches, either side
+// Where he works, in local px along the fall line from the bole, at scale 1.
+// NEGATIVE IS THE FAR SIDE, and the sign is the whole point of the first
+// two: he chews the trunk from the side it is NOT going to fall on, and he
+// steps further back as it goes. Drawn the other way round — sitting on the
+// fall line — the crown swings through him on its way down and the shot
+// reads as a tree landing on a beaver, which is what the first cut of this
+// did. Once it is down he walks round it onto the pole, which is the only
+// side the branches and the bark are on.
+const FT_GNAW_DX = -16;    // sitting up at the base, on the far side of it
+const FT_FELL_DX = -30;    // ...and back out of the way as it comes over
+const FT_LIMB_DX = 34;     // out along the fallen trunk, cutting it up
+const FT_BARK_DX = 27;     // back at the butt, working the inner bark
+// How long the drawn tree takes to go over, and how long a stump takes to
+// throw a new pole. THE COPPICE CLOCK IS A CONCESSION TO THE VIEWER and the
+// only number here that is: a beaver who fells two trees and never fells
+// another is the truthful version, and it means the one animation the whole
+// errand is FOR is something you see twice in a session. Aspen and willow
+// both sucker hard from a cut stump, so regrowth is at least the right
+// mechanism — four minutes is not.
+const FT_FALL_MS = 1200;
+const FT_GROW_MS = 1400;
+const FT_COPPICE_MS = 240000;
 // ---------------- Ferns and reeds ----------------
 // OUT OF THE BACKGROUND, and for the same reason the two scenery logs came
 // out of it in v0.37: `preserveAspectRatio="xMidYMid slice"` crops the short
@@ -1429,35 +1509,80 @@ const FORAGE_REACH = 26;   // how close counts as "at" a site
 // They are scenery, so they paint at z-index 1: over the ground, under the
 // trunks and forage at 2, well under the animals at 10. Nothing walks behind
 // a fern, and nothing has to.
+/**
+ * WHERE A FERN OR A REED IS ALLOWED TO GROW — the sweep's INPUT, and the
+ * only thing that was changed to move them.
+ *
+ * The plants are not placed, they are swept: walk the shoreline angle by
+ * angle inside these arcs, and take the first radius outward from the
+ * waterline, in rho 1.14..1.80, that clears every trunk and crown, every
+ * forage site's drawn art, the goose's sward, the four bare-earth patches
+ * and the screen edges at nine stage shapes. The table below is what that
+ * sweep returned for exactly these arcs — so moving a plant means moving an
+ * ARC, and the world's own check (tests/world.mjs) holds every drawn plant
+ * to being inside one.
+ *
+ * Degrees of the lake's own angle: 0 is due east of its centre, -90 is
+ * straight up, 180 is due west. The three arcs, and what closes each end:
+ *
+ *   -111 .. -88   THE TOP-LEFT SHORE, and this is the arc that changed. It
+ *                 used to run -109 .. -31, which is the top and then the
+ *                 whole north-east flank, and that flank is now the beaver's
+ *                 cutting. West of -111 the top-centre fallen log's own
+ *                 drawn art closes it — 91px of timber plus the 34px every
+ *                 plant keeps off a site — which is the "not in the way of
+ *                 the logs" half of the brief, kept by the sweep rather than
+ *                 by eye. East of -88 is the lake's north pole and then the
+ *                 top-RIGHT, which is no longer plant ground.
+ *     26 ..  54   the east flank and the turn onto the bottom shore
+ *    112 .. 126   the bottom shore
+ *
+ * The WEST shore returns nothing at all, correctly: the clearing's own
+ * forage sites own that ground.
+ *
+ * WHAT THE MOVE COST, said plainly. The old top-and-flank arc was 78 degrees
+ * long and carried seven plants. The top-left is 23 degrees long, and 23
+ * degrees of that shoreline is 98px at the tightest of the nine shapes —
+ * because the map's top edge is only 34px above the lake there, the band is
+ * a strip rather than a field. Six plants go in it, at 20.6px of separation
+ * at 1000x800 and 26.2px at the reference, against the 43px the world's own
+ * bottom-shore trio keeps. Six and not seven: a seventh took it to 17px,
+ * which is two reeds growing out of each other rather than a reed bed.
+ */
+const PLANT_ARCS = [
+  { t0: -111, t1: -88 },   // the top-left shore
+  { t0:   26, t1:  54 },   // the east flank
+  { t0:  112, t1: 126 },   // the bottom shore
+];
 const PLANTS = [
   // ON THE LAKE, and nowhere else. Scattered across the map they were
   // fourteen small green shapes competing with fourteen animals for the
   // eye; gathered onto one shoreline they are a habitat, and a fern or a
   // rush is a thing that grows where the ground is wet anyway.
   //
-  // Swept round the shore rather than placed: each is the first radius
-  // outward from the waterline, at its own angle, that clears every trunk,
-  // every site's drawn art, the goose's sward and the screen edges at nine
-  // stage shapes — and sits between rho 1.14 and 1.80: past the mud liner,
-  // which runs 1.00 to 1.08, so nothing is standing in the water or on the
-  // wet, and still close enough to read as lakeside rather than as something
-  // in a field near a lake. The
-  // TOP and BOTTOM arcs are sampled twice as densely as the flanks. The
-  // west shore returns nothing at all, correctly: the clearing's own sites
-  // own that ground.
-  { x: .630, y: .050, s: 1.05, kind: "reed" },   // top shore, -109deg
-  { x: .768, y: .042, s: 1.20, kind: "reed" },   // -76
-  { x: .798, y: .062, s: 1.00, kind: "fern" },   // -68
-  { x: .825, y: .084, s: 1.15, kind: "reed" },   // -60
-  { x: .860, y: .109, s: 0.95, kind: "fern" },   // -49
-  { x: .891, y: .126, s: 1.10, kind: "reed" },   // -40
-  { x: .929, y: .149, s: 1.05, kind: "fern" },   // east flank, -31
+  // rho 1.14..1.80 is past the mud liner, which runs 1.00 to 1.08, so
+  // nothing is standing in the water or on the wet, and still close enough
+  // to read as lakeside rather than as something in a field near a lake.
+  // The drifting logs never reach it either: the floats are held inside
+  // rho 0.97 minus 38px, so the whole plant band is dry ground they cannot
+  // fetch up on.
+  //
+  // The six on the top-left came off the sweep together and their kinds and
+  // scales are the six that used to stand on the north-east flank, carried
+  // over unchanged — the same plants, moved, not new ones.
+  { x: .624, y: .056, s: 1.05, kind: "reed" },   // top-left shore, -111deg, rho 1.14
+  { x: .634, y: .031, s: 1.20, kind: "reed" },   // -107, rho 1.22
+  { x: .654, y: .040, s: 1.00, kind: "fern" },   // -103, rho 1.14
+  { x: .675, y: .033, s: 1.15, kind: "reed" },   //  -98, rho 1.14
+  { x: .697, y: .029, s: 0.95, kind: "fern" },   //  -93, rho 1.14
+  { x: .719, y: .029, s: 1.10, kind: "reed" },   //  -88, rho 1.14
   { x: .952, y: .397, s: 1.00, kind: "reed" },   // 26
   { x: .856, y: .483, s: 1.15, kind: "reed" },   // bottom shore, 54
   { x: .599, y: .555, s: 1.00, kind: "fern" },   // 112
   { x: .592, y: .507, s: 1.20, kind: "reed" },   // 118
   { x: .551, y: .500, s: 1.10, kind: "fern" },   // 126
 ];
+
 
 function PlantLayer({ bounds }) {
   const { w, h } = bounds;
@@ -1486,18 +1611,203 @@ function PlantLayer({ bounds }) {
   );
 }
 
-function ForageLayer({ bounds, sites }) {
+/**
+ * A BEAVER FOOD TREE, in both of its states, on one anchor.
+ *
+ * Standing and felled are drawn TOGETHER and swapped by CSS off the
+ * wrapper's `data-felled`, the same trick the raccoon's three poses use —
+ * because the two states have to share an anchor exactly. The stump is the
+ * bole's own foot, and the felled pole is hinged on it: move one and the
+ * behaviour that walks to it goes to the wrong place, since FT_GNAW_DX /
+ * FT_LIMB_DX / FT_BARK_DX are read off this drawing and off nothing else.
+ *
+ * Local units, floor at y 16 (ForageLayer maps a local y to py + (y-16)*s).
+ * The bole's foot is y 10 (FT_BASE_PX = 6 px up), the crown's highest ink is
+ * y -62 (FT_TOP_PX = 78 up) and nothing reaches past x 46 (FT_HALF) either
+ * way. `dir` is applied by the caller's mirror, so +x is always "the way it
+ * falls" and the beaver's own working spots are the same numbers times dir.
+ */
+function FoodTreeArt({ f, i }) {
+  const willow = f.wood === "willow";
+  const bark = willow ? "#8a7a5c" : "#cfd4c0";
+  const barkD = willow ? "#5f533b" : "#9aa189";
+  const scar = willow ? "#443a28" : "#3d4236";
+  const leaf = willow ? ["#5f8c46", "#71a355", "#4d7638"] : ["#8fbf55", "#a8d16a", "#74a544"];
+  const wood = "#e8d3a4", woodD = "#c2a672";   // exposed heartwood: the cut face
+  return (
+    <g transform={`scale(${f.dir || 1} 1)`}>
+      {/* ------------------------------ STANDING ------------------------ */}
+      <g className="ft-standing">
+        {/* root flare, so the bole grows out of the ground instead of being
+            stuck into it */}
+        <path d="M -9 10 C -7 4 -5.6 1 -4.6 -1 L 4.6 -1 C 5.6 1 7 4 9 10 Z" fill={barkD} />
+        {/* the bole. Foot y 10, top y -40 — the crown carries it from there */}
+        <path d="M -4.6 10 L -3.1 -41 L 3.1 -41 L 4.6 10 Z" fill={bark} />
+        <path d="M -4.6 10 L -3.1 -41 L -0.6 -41 L -1.1 10 Z" fill={barkD} opacity=".55" />
+        {willow ? (
+          <path d="M -2.6 4 L -2.2 -22 M 0.4 6 L 0.8 -26 M 2.8 2 L 2.4 -18"
+            stroke={scar} strokeWidth="1.1" fill="none" opacity=".7" />
+        ) : (
+          <>
+            {/* the aspen's black eyes — the one mark that names the tree */}
+            <ellipse cx="-1.8" cy="-8" rx="1.7" ry="2.6" fill={scar} opacity=".85" />
+            <ellipse cx="2.2" cy="-22" rx="1.5" ry="2.3" fill={scar} opacity=".8" />
+            <ellipse cx="-1.2" cy="-33" rx="1.2" ry="1.9" fill={scar} opacity=".7" />
+          </>
+        )}
+        <g className="sai-bg-sway"
+           style={{ animationDuration: `${5.4 + i * 0.4}s`, animationDelay: `${i * 0.8}s`,
+                    transformOrigin: "50% 100%" }}>
+          {/* two limbs out of the top of the bole, then the crown on them */}
+          <path d="M -1 -34 C -7 -40 -12 -44 -16 -46 M 1.5 -30 C 8 -37 13 -41 17 -43"
+            stroke={barkD} strokeWidth="2.6" fill="none" strokeLinecap="round" />
+          {willow ? (
+            <>
+              <ellipse cx="-8" cy="-47" rx="15" ry="10" fill={leaf[2]} />
+              <ellipse cx="9" cy="-49" rx="15" ry="10" fill={leaf[0]} />
+              <ellipse cx="0" cy="-55" rx="14" ry="9" fill={leaf[1]} />
+              {/* the whole point of a willow: it hangs */}
+              <path d="M -18 -46 C -19 -38 -18 -32 -16 -27 M -10 -42 C -11 -33 -10 -27 -8 -22
+                       M 0 -46 C 0 -37 1 -30 3 -25 M 10 -44 C 10 -35 11 -29 13 -24
+                       M 18 -47 C 19 -39 18 -34 16 -30"
+                stroke={leaf[0]} strokeWidth="2.1" fill="none" strokeLinecap="round" opacity=".9" />
+            </>
+          ) : (
+            <>
+              <ellipse cx="-11" cy="-47" rx="13" ry="10" fill={leaf[2]} />
+              <ellipse cx="11" cy="-48" rx="13" ry="10" fill={leaf[0]} />
+              <ellipse cx="0" cy="-54" rx="14" ry="10.5" fill={leaf[1]} />
+              <ellipse cx="-7" cy="-58" rx="8" ry="6" fill={leaf[0]} opacity=".92" />
+              <ellipse cx="7" cy="-57" rx="7" ry="5.4" fill={leaf[1]} opacity=".85" />
+              {/* the round leaves an aspen is named for, on their flat stalks */}
+              <circle cx="-16" cy="-42" r="2.6" fill={leaf[1]} />
+              <circle cx="15" cy="-40" r="2.4" fill={leaf[0]} />
+              <circle cx="0" cy="-62" r="2.2" fill={leaf[1]} />
+            </>
+          )}
+        </g>
+      </g>
+
+      {/* ------------------------------- FELLED -------------------------- */}
+      <g className="ft-felled">
+        {/* chips. Nothing else in this world leaves a mark like this */}
+        <g className="ft-chips-lying">
+          <path d="M -14 12.4 l 5 -1.6 l .8 2 l -5 1.6 Z" fill={wood} opacity=".92" />
+          <path d="M -8 14.6 l 4.4 -.6 l .4 1.9 l -4.4 .7 Z" fill={woodD} opacity=".85" />
+          <path d="M 8 13.6 l 5.2 -1.2 l .6 2 l -5.2 1.2 Z" fill={wood} opacity=".9" />
+          <path d="M 17 11.2 l 4 -1.8 l 1 1.8 l -4 1.8 Z" fill={woodD} opacity=".8" />
+          <path d="M -19 13.8 l 3.6 -1 l .5 1.7 l -3.6 1 Z" fill={wood} opacity=".7" />
+        </g>
+        {/* THE POLE, hinged on the stump and lying down the fall line. Drawn
+            as a stroke rather than a slab so it is round, the way the drift
+            logs on the lake are. It starts at x 8 and not at the bole,
+            because the STUMP is painted after it and would otherwise be
+            swallowed by an 11px stroke — and the stump is the one mark that
+            says a beaver did this rather than the wind. */}
+        <path d="M 8 -1 C 17 0 27 3 39 8" stroke={barkD} strokeWidth="11.5"
+          fill="none" strokeLinecap="round" />
+        <path d="M 8 -3.4 C 17 -2.4 27 0.6 38 5.4" stroke={bark} strokeWidth="4.6"
+          fill="none" strokeLinecap="round" opacity=".95" />
+        {/* the butt he chewed through, still showing the pale face */}
+        <ellipse cx="8" cy="-1" rx="2.6" ry="5.6" fill={wood} opacity=".9" />
+        {/* THE STUMP, and it is the whole signature: a beaver's cut is an
+            hourglass gnawed from both sides down to a point, with the pale
+            heartwood open at the top and chips all round the foot. */}
+        <path d="M -5.6 10 C -5.2 4 -4.6 1 -3.6 -1.5 L 3.6 -1.5 C 4.6 1 5.2 4 5.6 10 Z" fill={bark} />
+        <path d="M -3.6 -1.5 C -2.2 -5.6 -0.8 -7.8 0.4 -8.8 C 2.2 -7.2 3.2 -4.4 3.6 -1.5 Z" fill={wood} />
+        <path d="M -3.6 -1.5 C -2.2 -5.6 -0.8 -7.8 0.4 -8.8" stroke={woodD} strokeWidth="1"
+          fill="none" strokeLinecap="round" />
+        {/* the tooth grooves that took it down, on the near face */}
+        <path d="M -3.8 2.4 C -1.8 0.6 1.4 0.2 3.8 1.6 M -4.4 5.6 C -2 3.8 1.6 3.4 4.6 4.8"
+          stroke={scar} strokeWidth=".9" fill="none" strokeLinecap="round" opacity=".7" />
+        {/* WHERE HE HAS BEEN EATING: bark off, cambium showing. This is the
+            meal, and it is the only part of a felled tree that changes. */}
+        <path className="ft-peel" d="M 13 -1.4 C 19 -0.6 25 1 31 3.4" stroke={wood}
+          strokeWidth="4.2" fill="none" strokeLinecap="round" opacity=".9" />
+        {/* branch stubs, cut back short — what limbing leaves behind */}
+        <path d="M 19 -3 l 3.4 -6.4 M 29 1.6 l 4.6 -5.6" stroke={barkD} strokeWidth="3.4"
+          fill="none" strokeLinecap="round" />
+        <circle cx="22.6" cy="-9.8" r="1.8" fill={wood} />
+        <circle cx="33.9" cy="-4.4" r="1.8" fill={wood} />
+        {/* the crown, down and flattened where it landed */}
+        {willow ? (
+          <>
+            <ellipse cx="43" cy="7" rx="11" ry="6" fill={leaf[2]} />
+            <ellipse cx="38" cy="10.5" rx="9" ry="4.4" fill={leaf[0]} />
+            <path d="M 44 3 C 47 6 48 9 47 12 M 36 4 C 39 7 40 10 39 13"
+              stroke={leaf[0]} strokeWidth="1.8" fill="none" strokeLinecap="round" opacity=".85" />
+          </>
+        ) : (
+          <>
+            <ellipse cx="42" cy="6.5" rx="11" ry="6.4" fill={leaf[2]} />
+            <ellipse cx="37" cy="10.4" rx="9" ry="4.6" fill={leaf[0]} />
+            <circle cx="46" cy="2.6" r="2.4" fill={leaf[1]} />
+            <circle cx="33" cy="4.4" r="2.1" fill={leaf[1]} opacity=".9" />
+          </>
+        )}
+        {/* THE BILLETS: branch lengths cut short enough to drag. They fade in
+            a beat after the tree is down, which is when he is cutting them. */}
+        <g className="ft-billets">
+          <rect x="-19" y="10.4" width="15" height="4.6" rx="2.3" fill={barkD} transform="rotate(-9 -11.5 12.7)" />
+          <rect x="-19" y="10.4" width="15" height="1.9" rx=".95" fill={bark} transform="rotate(-9 -11.5 12.7)" opacity=".9" />
+          <rect x="-4" y="13.6" width="13" height="4.2" rx="2.1" fill={barkD} transform="rotate(5 2.5 15.7)" />
+          <rect x="-4" y="13.6" width="13" height="1.7" rx=".85" fill={bark} transform="rotate(5 2.5 15.7)" opacity=".9" />
+          <ellipse cx="9.4" cy="15.9" rx="1.5" ry="2.1" fill={wood} />
+          <ellipse cx="-3.9" cy="12.5" rx="1.6" ry="2.3" fill={wood} />
+        </g>
+      </g>
+    </g>
+  );
+}
+
+/**
+ * WHAT STATE A DRAWN SITE IS IN, polled rather than rendered. The React
+ * snapshot only re-renders on a state change and a tree comes down in the
+ * middle of a bout, so `data-felled` is driven off the live world exactly
+ * the way ForageCanopyLayer already drives the nut trees' `data-shake`.
+ * Four values, and the CSS picks the drawing off them:
+ *   ""      standing
+ *   "fall"  going over, for FT_FALL_MS
+ *   "1"     down
+ *   "grow"  a new pole off the stump, for FT_GROW_MS
+ */
+function foodTreeState(f, now) {
+  if (!f) return "";
+  if (f.felled) return now - (f.fellAt || 0) < FT_FALL_MS ? "fall" : "1";
+  return now - (f.grewAt || -1e9) < FT_GROW_MS ? "grow" : "";
+}
+function useFelledPoll(worldRef, refs) {
+  useEffect(() => {
+    const t = setInterval(() => {
+      const now = performance.now(), live = worldRef.current.forage;
+      for (const [i, el] of refs.current) {
+        const s = foodTreeState(live && live[i], now);
+        if (el.dataset.felled !== s) el.dataset.felled = s;
+      }
+    }, 120);
+    return () => clearInterval(t);
+  }, [worldRef, refs]);
+}
+
+function ForageLayer({ bounds, sites, worldRef }) {
+  const refs = useRef(new Map());
+  useFelledPoll(worldRef, refs);
   const { w, h } = bounds;
   if (!w || !h) return null;
   return (
     <>
       {sites.map((f, i) => (
-        <div key={i} style={{ position: "absolute", left: f.x * w, top: f.y * h, zIndex: 2,
+        <div key={i} data-felled={f.kind === "foodtree" ? "" : undefined}
+          ref={f.kind !== "foodtree" ? undefined
+            : (el) => { if (el) refs.current.set(i, el); else refs.current.delete(i); }}
+          style={{ position: "absolute", left: f.x * w, top: f.y * h, zIndex: 2,
           pointerEvents: "none", transform: `translate(-50%,-100%) scale(${f.s})`,
           transformOrigin: "50% 100%" }}>
           <svg width="96" height="104" viewBox="-48 -88 96 104" style={{ display: "block", overflow: "visible" }}>
             <ellipse cx="2" cy="9" ry="7" fill="#0d2415" opacity=".38"
-              rx={f.kind === "log" ? 84 : f.kind === "root" ? 48 : f.kind === "soil" ? 30 : 26} />
+              rx={f.kind === "log" ? 84 : f.kind === "root" ? 48 : f.kind === "soil" ? 30
+                : f.kind === "foodtree" ? 20 : 26} />
+            {f.kind === "foodtree" && <FoodTreeArt f={f} i={i} />}
             {f.kind === "berry" && (<>
               {/* WHAT HAS ALREADY DROPPED. Three animals now work the ground
                   under a bush rather than the crop on it — the skunk's whole
@@ -1775,7 +2085,12 @@ const DREY_COURSES = 6;                 // platform, floor, walls, roof, moss, l
 //   berry  foliage cx 14 rx 20        shrub  cx 13 rx 19
 //   nut    leaf path to x 28 + stroke soil   shadow rx 30
 //   log    end ellipse cx 84 rx 7     root   path x 54 + stroke 17
-const FORAGE_SITE_HALF = { berry: 34, nut: 30, shrub: 32, soil: 30, log: 91, root: 63 };
+// `foodtree` is FT_HALF: the felled pole's own crown, at local x 46, is the
+// widest ink either of its two states paints — wider than the standing crown
+// at 17 — so one number covers both and the skunk's pits, the fern sweep and
+// every clearance in this file keep one answer for "how wide is a food tree".
+const FORAGE_SITE_HALF = { berry: 34, nut: 30, shrub: 32, soil: 30, log: 91, root: 63,
+                           foodtree: FT_HALF };
 const PIT_HALF_PX = 20;   // PitLayer's outermost spoil ellipse, cx 14 rx 5.4
 
 // What the squirrel's ethogram needs to know about the map, handed over
@@ -1807,6 +2122,18 @@ setForageMetrics({
   //   endPx  the middle of that end face, above the anchor: the end ellipse
   //          is cy -5.5 and a local y is (16 - y) px up.
   log: { endDX: 84, endPx: 21.5 },
+  // The beaver's food trees. Every one of these is read off FoodTreeArt
+  // above and off nothing else — the drawn shape IS the interaction shape,
+  // so a tree redrawn a size smaller moves the spot he sits at with it.
+  // `basePx` is the foot of the bole and of the stump (they are the same
+  // point, which is what lets one anchor carry both states); the three DX
+  // are along the fall line, in local px at scale 1, and the site's own
+  // `dir` mirrors them. `fallMs` and `coppiceMs` are the two clocks the
+  // errand needs and the layer draws to.
+  foodtree: { basePx: FT_BASE_PX, topPx: FT_TOP_PX, half: FT_HALF,
+              gnawDX: FT_GNAW_DX, fellDX: FT_FELL_DX,
+              limbDX: FT_LIMB_DX, barkDX: FT_BARK_DX,
+              fallMs: FT_FALL_MS, coppiceMs: FT_COPPICE_MS },
   // Critter() draws the 120-unit sprite box at r * 2.7 px. (NOT r * 3.1 —
   // that is the container div; see the note in the squirrel's ethogram.)
   spritePx: 2.7,
@@ -1932,6 +2259,7 @@ function DreyLayer({ bounds, worldRef }) {
  */
 function ForageCanopyLayer({ bounds, sites, worldRef }) {
   const refs = useRef(new Map());
+  const felledRefs = useRef(new Map());
   useEffect(() => {
     const t = setInterval(() => {
       const now = performance.now(), live = worldRef.current.forage;
@@ -1942,10 +2270,44 @@ function ForageCanopyLayer({ bounds, sites, worldRef }) {
     }, 120);
     return () => clearInterval(t);
   }, [worldRef]);
+  useFelledPoll(worldRef, felledRefs);
   const { w, h } = bounds;
   if (!w || !h) return null;
   return (
     <>
+      {/* THE FALLEN POLE'S NEAR LIP, and the fourth animation to stop
+          bringing its own timber. He cuts the branches and eats the bark
+          standing BEHIND the trunk he felled — that is where the work is —
+          and the site paints at 2 while he paints at 10, so without this his
+          paws would be drawn on top of the log they are meant to be behind.
+          Same anchor, same transform and the same centre line ForageLayer
+          draws the pole on, dropped half a stroke and drawn a third as
+          thick: the bottom of the timber and nothing above it, so his legs
+          go behind it and the rest of him stays out in front. Only while it
+          is DOWN — a standing tree has nothing to hide. */}
+      {sites.map((f, i) => (f.kind !== "foodtree" ? null : (
+        <div key={"ft" + i} data-felled=""
+          ref={(el) => { if (el) felledRefs.current.set(i, el); else felledRefs.current.delete(i); }}
+          style={{ position: "absolute", left: f.x * w, top: f.y * h, zIndex: 12,
+            pointerEvents: "none", transform: `translate(-50%,-100%) scale(${f.s})`,
+            transformOrigin: "50% 100%" }}>
+          <svg width="96" height="104" viewBox="-48 -88 96 104" style={{ display: "block", overflow: "visible" }}>
+            <g transform={`scale(${f.dir || 1} 1)`}>
+              <g className="ft-felled">
+                <path d="M 4 3 C 15 4 26 7 39 12" stroke="#4a3d28" strokeWidth="4"
+                  fill="none" strokeLinecap="round" />
+                {/* and the one billet lying nearest the camera, for the same
+                    reason: he steps over it, not through it */}
+                <g className="ft-billets">
+                  <rect x="-4" y="16.2" width="13" height="1.8" rx=".9" fill="#4a3d28"
+                    transform="rotate(5 2.5 17.1)" />
+                </g>
+              </g>
+            </g>
+          </svg>
+        </div>
+      )))}
+
       {/* THE OVER-LAYER, and the reason three animations stopped faking
           their own occlusion. A log has to be UNDER the animal working it
           (he is standing on it, or in front of it) and OVER one part of him
@@ -2695,6 +3057,13 @@ export default function SocialAnimalsRPG() {
                               mudBeds: W.mudBeds || [], bugR: BUG_R, bugWob: BUG_WOB,
                               weedHalf: WEED_HALF, mudHalf: MUDBED_HALF,
                               mudRho: MUDBED_RHO, regrow: WEED_REGROW });
+      // ...and the inverse, in DEGREES, because the ferns and reeds are held
+      // to arcs of the shoreline and a suite that re-derived the angle would
+      // be carrying its own copy of LAKE. 0 is due east of the lake's centre,
+      // -90 straight up, 180 due west — the same convention PLANT_ARCS uses.
+      W.lakeAngleAt = (x, y) => Math.atan2((y - LAKE.cy * W.bounds.h) / (LAKE.ry * W.bounds.h),
+                                           (x - LAKE.cx * W.bounds.w) / (LAKE.rx * W.bounds.w))
+                               * 180 / Math.PI;
       // ...and the dam, as the sim itself sees it: the drawn logs for this
       // window, and the land test that is built out of them. A suite that
       // carried its own copy of either would keep passing after the plan
@@ -2830,7 +3199,7 @@ export default function SocialAnimalsRPG() {
         {/* the drey paints after the trunk it is in and before the animals,
             so he works its near face and the canopy still veils its crown */}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <DreyLayer bounds={snapshot.bounds} worldRef={worldRef} />}
-        {worldKey === "forest" && snapshot.bounds.w > 0 && <ForageLayer bounds={snapshot.bounds} sites={FORAGE_SITES} />}
+        {worldKey === "forest" && snapshot.bounds.w > 0 && <ForageLayer bounds={snapshot.bounds} sites={FORAGE_SITES} worldRef={worldRef} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <PadLayer padsRef={padsRef} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <DamLayer damRefs={damRefs} bounds={snapshot.bounds} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <PitLayer pitRefs={pitRefs} />}
@@ -5776,6 +6145,17 @@ const DAM_PLAN = (() => {
 // the plan reaches the beaver's ethogram as def.dam. Attached here rather
 // than in the WORLDS literal above, which is evaluated 1300 lines earlier.
 WORLDS.forest.dam = DAM_PLAN;
+// ...and how the plan is LAYERED, which is a different fact from how long it
+// is and the one the tail slap is gated on. Four courses of arch, then the
+// dome; the beaver's ethogram asks for the first course's length so that
+// "from the second layer onwards" is a rule about the structure and not the
+// number 8 written down twice.
+WORLDS.forest.damCourses = DAM_ARCH.n.slice();
+// ...and the arcs of shoreline a fern or a reed is allowed to grow on, so a
+// suite holds every drawn plant to the sweep's INPUT rather than to the
+// coordinates it happened to return. Attached here for the same reason the
+// dam is: PLANT_ARCS is declared 4000 lines above the WORLDS literal.
+WORLDS.forest.plantArcs = PLANT_ARCS;
 // ...and the bluff, so the grounded rules and the ethogram both know there
 // is terrain on the west edge. A world without this flag simply has no rock,
 // which is every world but this one.
@@ -6399,6 +6779,14 @@ function stepWorld(world, cfg, dt) {
     for (const f of world.forage) {
       // a claim dies with the animal that made it, or when it wanders off
       if (f.userId && !agents.some((c) => c.id === f.userId && c._eth && c._eth.claim === f)) f.userId = null;
+      // THE COPPICE CLOCK. A cut aspen or willow stump suckers, and this is
+      // the only reason the felling is something you can see more than twice
+      // — see FT_COPPICE_MS, which is the one number in the food trees that
+      // is a concession to the viewer rather than to the animal. Two
+      // comparisons per site per frame, and it never runs while he is on it.
+      if (f.felled && f.regrowAt && now >= f.regrowAt && !f.userId) {
+        f.felled = false; f.regrowAt = 0; f.grewAt = now;
+      }
     }
   }
   // a pit that has weathered away frees its slot for the next one. Cheap,
