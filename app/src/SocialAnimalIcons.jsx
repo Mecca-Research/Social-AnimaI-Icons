@@ -1,5 +1,6 @@
+
 import React, { useEffect, useRef, useState } from "react";
-import { Critter, SPECIES, ALL_SPECIES } from "./Critters.jsx";
+import { Critter, SPECIES, ALL_SPECIES, FROG_TONGUE, FROG_BURIED, TURTLE_BEAK } from "./Critters.jsx";
 import { PET_SPECIES } from "./CrittersPets.jsx";
 import { SPECIES_PROFILE, speciesSize } from "./SpeciesProfile.js";
 import { gait, gaitIn, speedCap, rescueReach, SPEED, GAIT_DEF } from "./Gait.js";
@@ -295,6 +296,244 @@ function shallowBandAt(bounds, t, reach = STAND_REACH) {
   }
   return [far, near];
 }
+// ================= LAKE LIFE: what lives in the water ==================
+/**
+ * THE FROG'S OWN SHALLOWS — the third pose to ask shallowBandAt the same
+ * question, after the goose's dabble and the raccoon's wash. Measured off
+ * FrogDraw rather than guessed, at r 19.9 (0.44775 stage px per unit of the
+ * 120-unit viewBox) with the drawing's own scale(.92) applied:
+ *
+ *   the rig's ground shadow  ellipse cx60 cy105 rx29 ry6 (NOT inside the
+ *     pose group, so unscaled)          -> px -13.0..+13.0 across,
+ *                                          +20.1..+22.8 down
+ *   the body ellipse    cx61 cy85 rx29 ry17.5, scaled  -> -11.5..+12.4,
+ *                                                          +4.7..+19.2 down
+ *   the far eye dome    cx90 r8.4, scaled              -> +15.8 across,
+ *                                                          -0.6 (just above)
+ *
+ * `up` is a token 10 and not 1 because the strike lifts his head — but the
+ * TONGUE leaves the box over the water he is facing, which is not the thing
+ * a band exists to protect. He is a third the raccoon's width across, which
+ * is why shore he can sit on exists where nothing else here fits.
+ */
+const FROG_REACH = { side: 17, down: 23, up: 10 };
+
+// stage px per unit of a sprite's 120-unit viewBox, per unit of the
+// animal's r — Critter draws the box at r * 2.7 and centres it on the anchor
+const SPRITE_UNIT = 2.7 / 120;
+/**
+ * WHERE THE FROG'S TONGUE ACTUALLY ENDS, in stage px. FROG_TONGUE is the
+ * drawn sticky pad's centre in the sprite's own box (exported by Critters so
+ * there is one copy of the number); the sprite is centred on the anchor and
+ * mirrored on `dir`, and that is the whole conversion. The ambush strikes at
+ * what is inside `pad` of this point and at nothing else, so the reach is
+ * read off the drawing rather than declared beside it.
+ */
+function frogTipAt(x, y, r, dir) {
+  const k = r * SPRITE_UNIT, d = dir < 0 ? -1 : 1;
+  return { x: x + d * (FROG_TONGUE.x - 60) * k,
+           y: y + (FROG_TONGUE.y - 60) * k,
+           pad: FROG_TONGUE.pad * k,
+           // the other end of the same band: what he catches travels back
+           // down it to here, which is his mouth
+           rootX: x + d * (FROG_TONGUE.root.x - 60) * k,
+           rootY: y + (FROG_TONGUE.root.y - 60) * k };
+}
+/** ...and the same for the turtle's shearing beak, for the same reason */
+function turtleBeakAt(x, y, r, dir) {
+  const k = r * SPRITE_UNIT;
+  return { x: x + (dir < 0 ? -1 : 1) * (TURTLE_BEAK.x - 60) * k,
+           y: y + (TURTLE_BEAK.y - 60) * k };
+}
+
+/**
+ * THE INSECTS, AND WHY THEY GO ROUND.
+ *
+ * A sit-and-wait predator needs something that PASSES. Scenery does not
+ * pass — the lake already had a dragonfly and it is a CSS loop in the water
+ * art, not an object — so these are real positions the sim steps, and the
+ * frog's strike is a real distance test against them.
+ *
+ * Five of them are AMBUSH insects and their round is not placed, it is
+ * SOLVED: for each one the shore is walked until an angle is found where a
+ * frog-shaped animal can sit in the shallows at all (shallowBandAt with his
+ * pose reach), the tongue tip of a frog sitting there is computed, and the
+ * insect's circle is centred one radius lake-ward of that tip. So the round
+ * passes exactly through the end of his tongue, once a lap, and the whole
+ * behaviour is a consequence of two drawings rather than a coincidence
+ * arranged in the ethogram. The other four work open water and are there to
+ * be a lake with insects over it.
+ *
+ * `per` is seconds per lap. 7-13s against R 22-42 is 15-30 px/s: slow
+ * enough to watch cross, fast enough that a wait is a wait and not a vigil.
+ */
+const BUG_R = 5.5;          // the drawn body's own half-width, stage px
+const BUG_WOB = 2.5;        // ...and how far the drift can take it off the round
+const BUG_SPECS = [
+  { kind: "damsel",  shore: 5.60, R: 42, per: 9.2 },
+  { kind: "damsel",  shore: 0.35, R: 38, per: 8.1 },
+  { kind: "midge",   shore: 1.10, R: 34, per: 7.0 },
+  { kind: "damsel",  shore: 2.05, R: 40, per: 10.4 },
+  { kind: "midge",   shore: 4.45, R: 36, per: 7.8 },
+  { kind: "mayfly",  open: [0.90, 0.40], R: 30, per: 12.0 },
+  { kind: "midge",   open: [5.00, 0.48], R: 26, per: 9.6 },
+  { kind: "strider", open: [1.55, 0.55], R: 22, per: 11.0 },
+  { kind: "strider", open: [0.15, 0.30], R: 24, per: 13.0 },
+];
+
+/**
+ * THE PLANTS. Submerged weed, bottom algae and floating duckweed — the
+ * three things the brief names, and the three the turtle bites chunks off.
+ * Held in the lake's own polar coordinates so they scale with it, clamped
+ * inside damClearRho like the floats so a weed bed never ends up under a
+ * hundred logs, and kept out of the beaver's sector entirely.
+ *
+ * `crop` is how far a turtle has eaten it down: 0 whole, 1 grazed, 2 bare.
+ * It grows back on a timer, so a lake with one turtle in it never runs out
+ * and a bed he has just worked is not the bed he goes to next.
+ */
+const WEED_SPECS = [
+  { t: 0.20, rho: 0.42, kind: "weed",  s: 1.00 },
+  { t: 0.60, rho: 0.68, kind: "duck",  s: 1.10 },
+  { t: 1.00, rho: 0.30, kind: "algae", s: 1.05 },
+  { t: 1.40, rho: 0.55, kind: "weed",  s: 0.92 },
+  { t: 1.80, rho: 0.58, kind: "duck",  s: 1.00 },
+  { t: 2.20, rho: 0.44, kind: "weed",  s: 1.08 },
+  { t: 4.10, rho: 0.36, kind: "algae", s: 0.95 },
+  { t: 4.50, rho: 0.62, kind: "weed",  s: 1.04 },
+  { t: 4.90, rho: 0.44, kind: "duck",  s: 0.90 },
+  { t: 5.30, rho: 0.70, kind: "weed",  s: 1.12 },
+  { t: 5.70, rho: 0.50, kind: "algae", s: 1.00 },
+  { t: 6.05, rho: 0.64, kind: "weed",  s: 0.96 },
+];
+const WEED_HALF = 26;        // how wide a bed is painted, stage px at s 1
+const WEED_REGROW = 42000;   // ms for one level of crop to come back
+
+/**
+ * THE SHORELINE MUD. Three hollows in the liner the lake already paints
+ * from rho 1.00 to 1.08 — the frog's other bed, and the one place on this
+ * map where "buried" is a thing an animal can actually be. rho 1.035 puts
+ * the hollow in the middle of the drawn brown, and the RIM of each one is
+ * painted again at zIndex 12 so a frog down in it is under something.
+ */
+const MUDBED_SPECS = [{ t: 6.05 }, { t: 5.55 }, { t: 4.75 }];
+const MUDBED_RHO = 1.035;
+const MUDBED_HALF = 22;
+// How far BELOW a frog's anchor the mud he is in gets drawn. The sprite is
+// centred on its anchor and the buried pose paints at the ground line, so a
+// hollow drawn on the anchor is a hollow he sits underneath — which is
+// exactly what the first version of this looked like. Read off the drawing.
+const MUD_SINK = Math.round((FROG_BURIED.y - 60) * speciesSize("frog") * SPRITE_UNIT);
+
+/**
+ * Build the insects for this stage. The ambush five are solved against the
+ * shore; the open four are placed and then pulled in off the dam.
+ */
+function lakeBugs(bounds) {
+  const cx = LAKE.cx * bounds.w, cy = LAKE.cy * bounds.h;
+  const fr = speciesSize("frog");
+  const out = [];
+  for (let i = 0; i < BUG_SPECS.length; i++) {
+    const s = BUG_SPECS[i];
+    let home = null, perch = null, tip = null;
+    if (s.shore !== undefined) {
+      // walk out from the asked-for angle, both ways, until a shore exists
+      // that a frog can sit on — the same sweep douseSpot uses
+      for (let k = 0; k < 36 && !home; k++) {
+        const t = s.shore + (k === 0 ? 0 : (k & 1 ? 1 : -1) * Math.ceil(k / 2) * 0.09);
+        const band = shallowBandAt(bounds, t, FROG_REACH);
+        if (!band) continue;
+        const p = lakePoint(bounds, t, band[1]);      // the shallow lip itself
+        const dir = cx > p.x ? 1 : -1;                // he faces the water
+        const q = frogTipAt(p.x, p.y, fr, dir);
+        // one radius lake-ward of the tip: the round then passes THROUGH it
+        const dx = cx - q.x, dy = cy - q.y, d = Math.hypot(dx, dy) || 1;
+        const h = { x: q.x + (dx / d) * s.R, y: q.y + (dy / d) * s.R };
+        if (!ringClearOfDam(bounds, h, s.R)) continue;
+        home = h; perch = { x: p.x, y: p.y, t, dir }; tip = q;
+      }
+    }
+    if (!home) {
+      const pol = s.open || [s.shore || 0, 0.45];
+      let rho = Math.min(pol[1], damClearRho(pol[0]) - 0.06, 0.86);
+      const p = lakePoint(bounds, pol[0], Math.max(0.12, rho));
+      home = { x: p.x, y: p.y };
+    }
+    out.push({ i, kind: s.kind, hx: home.x, hy: home.y, R: s.R, per: s.per,
+               x: home.x + s.R, y: home.y, ang: (i * 2.39) % (Math.PI * 2),
+               p1: i * 1.7 + 0.4, p2: i * 2.9 + 1.1, rot: 0,
+               perch, tip, goneUntil: 0, userId: null });
+  }
+  return out;
+}
+/** is a whole circular round clear of the finished dam and inside the lake? */
+function ringClearOfDam(bounds, h, R) {
+  for (let k = 0; k < 16; k++) {
+    const a = (k / 16) * Math.PI * 2;
+    const x = h.x + Math.cos(a) * R, y = h.y + Math.sin(a) * R;
+    if (lakeRho(bounds, x, y) > 0.985) return false;
+    if (onDamLog(bounds, x, y)) return false;
+    const pa0 = Math.atan2((y - LAKE.cy * bounds.h) / (LAKE.ry * bounds.h),
+                           (x - LAKE.cx * bounds.w) / (LAKE.rx * bounds.w));
+    const pa = pa0 < 0 ? pa0 + Math.PI * 2 : pa0;
+    if (lakeRho(bounds, x, y) > damClearRho(pa)) return false;
+  }
+  return true;
+}
+/** the weed beds and the shoreline mud, in stage px for this window */
+function lakeWeeds(bounds) {
+  return WEED_SPECS.map((s, i) => {
+    const rho = Math.min(s.rho, damClearRho(s.t) - 0.06, 0.90);
+    const p = lakePoint(bounds, s.t, Math.max(0.12, rho));
+    return { i, kind: s.kind, s: s.s, x: p.x, y: p.y, t: s.t, rho,
+             crop: 0, cropAt: 0, userId: null };
+  });
+}
+/**
+ * The shoreline hollows, SOLVED rather than placed — and the rule that
+ * solves them is the one the goose's dabble band taught this world: what has
+ * to land on the right ground is the DRAWING, not the anchor.
+ *
+ * A frog's buried mound paints MUD_SINK px below his anchor, and "MUD_SINK
+ * px down the screen" is not "MUD_SINK px out along the ray". On the lake's
+ * SOUTH shore down-screen points away from the water, so putting his mound
+ * in the middle of the liner would put his anchor in the lake — a frog whose
+ * body is on the mud and whose position is in the water, which turns the
+ * swimming rig on over a buried animal. On the NORTH and EAST shores
+ * down-screen points back toward the water, and both can be true at once.
+ *
+ * So each bed sweeps out from its asked-for angle until it finds a shore
+ * where the mound lands mid-liner AND the anchor is still dry, and the
+ * lake's south side simply has no hollows. That is the same answer
+ * shallowBandAt gives about its own short axis, arrived at the same way.
+ */
+function lakeMudBeds(bounds) {
+  const out = [];
+  for (const s of MUDBED_SPECS) {
+    let bed = null;
+    for (let k = 0; k < 44 && !bed; k++) {
+      let t = s.t + (k === 0 ? 0 : (k & 1 ? 1 : -1) * Math.ceil(k / 2) * 0.08);
+      t %= Math.PI * 2; if (t < 0) t += Math.PI * 2;
+      if (t > DAM_SECTOR[0] && t < DAM_SECTOR[1]) continue;
+      let rho = MUDBED_RHO;
+      for (let j = 0; j < 24; j++) {
+        const q = lakePoint(bounds, t, rho);
+        const got = lakeRho(bounds, q.x, q.y + MUD_SINK);
+        if (Math.abs(got - MUDBED_RHO) < 0.002) break;
+        rho += (MUDBED_RHO - got) * 0.8;
+      }
+      const p = lakePoint(bounds, t, rho);
+      if (rho < 1.005) continue;                       // his mound ashore, him afloat
+      if (p.x < 46 || p.y < 34 || p.x > bounds.w - 46 || p.y > bounds.h - 34) continue;
+      if (onDamLog(bounds, p.x, p.y)) continue;
+      if (out.some((o) => Math.hypot(o.x - p.x, o.y - p.y) < MUDBED_HALF * 3)) continue;
+      bed = { x: p.x, y: p.y, t, rho };
+    }
+    if (bed) out.push({ i: out.length, bedI: out.length, ...bed, userId: null });
+  }
+  return out;
+}
+
 // ---------------- Forest trees ----------------
 // SIX big trunked trees: two down the west edge, two on the east flank
 // clear of the lake, one at the raised end of the big fallen log in the
@@ -2248,6 +2487,10 @@ export default function SocialAnimalsRPG() {
   const padsRef = useRef(new Map()); // lily pad index -> HTMLElement
   const damRefs = useRef(new Map()); // dam log index -> HTMLElement
   const pitRefs = useRef(new Map()); // skunk pit index -> HTMLElement
+  // the lake's own life: insects that move, plants that get eaten down, and
+  // the three things painted back over an animal at zIndex 12
+  const lakeRefs = useRef({ bugs: new Map(), weeds: new Map(),
+                            padTop: new Map(), mudTop: new Map(), silt: new Map() });
   const [cfg, setCfg] = useState(DEFAULTS);
   const cfgRef = useRef(cfg); cfgRef.current = cfg; // the RAF loop reads the live value
   const [worldKey, setWorldKey] = useState("forest");
@@ -2423,6 +2666,35 @@ export default function SocialAnimalsRPG() {
       // world uses rather than a copy of it that can drift
       W.__douseReach = DOUSE_REACH;
       W.lakePointAt = (t, rho) => lakePoint(W.bounds, t, rho);
+      W.lakeRhoAt = (x, y) => lakeRho(W.bounds, x, y);
+      // ...and the frog's own band, plus the two reaches read off the two
+      // drawings. A suite that carried its own copy of a tongue's length
+      // would go on passing after the tongue was redrawn, which is the
+      // whole reason the goose's band is exported the same way.
+      W.frogBandAt = (t) => shallowBandAt(W.bounds, t, FROG_REACH);
+      W.__frogReach = FROG_REACH;
+      W.frogTipAt = (x, y, r, dir) => frogTipAt(x, y, r, dir);
+      W.turtleBeakAt = (x, y, r, dir) => turtleBeakAt(x, y, r, dir);
+      // THE LAKE'S LIFE, as the sim holds it. The insects are live objects
+      // with a round each, so a check on "does anything ever pass his
+      // tongue" is geometry and does not have to be watched.
+      // WHO OWNS WHICH STATE NAME. The engine throws when one species
+      // claims a state twice, and says nothing at all when TWO species claim
+      // the same one — which is a silent CSS collision that hands one animal
+      // another's animation. With a dozen species being drawn against one
+      // stylesheet at a time, that is worth a check rather than a habit.
+      W.__ethoOwners = () => {
+        const m = {};
+        for (const k of Object.keys(ETHOGRAM)) m[k] = Array.from(ETHOGRAM[k].byState.keys());
+        return m;
+      };
+      // how far below a frog's anchor his buried pose is drawn — the number
+      // the mud beds are solved against, so a suite checks the world's copy
+      W.__mudSink = MUD_SINK;
+      W.__lakeLife = () => ({ bugs: W.bugs || [], weeds: W.weeds || [],
+                              mudBeds: W.mudBeds || [], bugR: BUG_R, bugWob: BUG_WOB,
+                              weedHalf: WEED_HALF, mudHalf: MUDBED_HALF,
+                              mudRho: MUDBED_RHO, regrow: WEED_REGROW });
       // ...and the dam, as the sim itself sees it: the drawn logs for this
       // window, and the land test that is built out of them. A suite that
       // carried its own copy of either would keep passing after the plan
@@ -2463,7 +2735,7 @@ export default function SocialAnimalsRPG() {
       worldRef.current.frames = (worldRef.current.frames || 0) + 1;
       dt = Math.min(0.05, Math.max(0, dt));
       if (worldRef.current.running) stepWorld(worldRef.current, cfgRef.current, dt);
-      renderWorld(worldRef.current, iconsRef, padsRef, damRefs, pitRefs);
+      renderWorld(worldRef.current, iconsRef, padsRef, damRefs, pitRefs, lakeRefs);
       requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
@@ -2550,6 +2822,10 @@ export default function SocialAnimalsRPG() {
         {worldKey === "forest" && snapshot.bounds.w > 0 && <RockLayer bounds={snapshot.bounds} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <Lake bounds={snapshot.bounds} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <PlantLayer bounds={snapshot.bounds} />}
+        {/* the lake's larder — submerged weed, bottom algae, duckweed and
+            the three shoreline mud hollows — with the water at zIndex 1.
+            After Lake() so it paints on the blue and not under it. */}
+        {worldKey === "forest" && snapshot.bounds.w > 0 && <WeedLayer bounds={snapshot.bounds} weedRefs={lakeRefs.current.weeds} />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <TreeLayer bounds={snapshot.bounds} part="trunk" />}
         {/* the drey paints after the trunk it is in and before the animals,
             so he works its near face and the canopy still veils its crown */}
@@ -2569,6 +2845,14 @@ export default function SocialAnimalsRPG() {
             branches is hidden by the leaves the way it would be for real */}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <TreeLayer bounds={snapshot.bounds} part="canopy" />}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <ForageCanopyLayer bounds={snapshot.bounds} sites={FORAGE_SITES} worldRef={worldRef} />}
+        {/* ...and the lake's own canopy pass: the lily over a sleeping frog,
+            the rim of the mud over a buried one, the silt over one on the
+            bottom. Nothing the water owns can cover an animal from zIndex 1,
+            so what has to cover him is drawn again up here. */}
+        {worldKey === "forest" && snapshot.bounds.w > 0 && <LakeCanopyLayer bounds={snapshot.bounds}
+          padTopRef={lakeRefs.current.padTop} mudTopRef={lakeRefs.current.mudTop} siltRef={lakeRefs.current.silt} />}
+        {/* the insects fly OVER everything, which is where insects are */}
+        {worldKey === "forest" && snapshot.bounds.w > 0 && <BugLayer bugRefs={lakeRefs.current.bugs} />}
       </div>
     </div>
   );
@@ -5036,57 +5320,321 @@ const PAD_SPECS = [
   { log: true, len: 58 }, { log: true, len: 46 }, { log: true, len: 52 },
   { log: true, len: 50 },
 ];
+/**
+ * ONE FLOAT, DRAWN ONCE. Both the drifting pad at zIndex 2 and the copy the
+ * lake's canopy pass paints at 12 over a frog asleep under it come out of
+ * here, so the lily that hides him is the lily that is there — not a second
+ * one drawn to look like it. `veil` drops the shadow pool, which is the one
+ * mark a copy laid over an animal must not repeat.
+ */
+function PadArt({ s, i, veil }) {
+  const W = s.log ? s.len + 16 : s.rp * 2 + 16;
+  const H = s.log ? 40 : s.rp * 2 + 16;
+  return (
+    <svg width={W} height={H}
+      viewBox={`${-W / 2} ${-H / 2} ${W} ${H}`}
+      style={{ display: "block", marginLeft: -W / 2, marginTop: -H / 2, overflow: "visible" }}>
+      <g className={`sai-water-pad pad-${"abcd"[i % 4]}`}>
+        {s.log ? (
+          <>
+            {/* a weathered drift log, end ring facing out */}
+            {!veil && <ellipse cx="2" cy="5" rx={s.len / 2} ry="8.5" fill="#06231a" opacity="0.4" />}
+            <rect x={-s.len / 2} y="-9" width={s.len} height="18" rx="8" fill="#6b4a2a" />
+            <rect x={-s.len / 2} y="-9" width={s.len} height="7" rx="3.5" fill="#8a6236" opacity=".85" />
+            <path d={`M ${-s.len / 2 + 9} 3 h ${s.len - 22} M ${-s.len / 2 + 13} 6.2 h ${s.len - 32}`}
+              stroke="#4e3620" strokeWidth="1.3" strokeLinecap="round" opacity=".65" />
+            <circle cx={-s.len / 5} cy="-3.4" r="2" fill="#4e3620" opacity=".6" />
+            <ellipse cx={s.len / 2} cy="0" rx="4.8" ry="9" fill="#a87c4f" />
+            <ellipse cx={s.len / 2} cy="0" rx="2.4" ry="4.8" fill="#8a6236" />
+          </>
+        ) : (
+          <>
+            {!veil && <ellipse cx="1" cy="3" rx={s.rp} ry={s.rp * 0.62} fill="#06231a" opacity="0.4" />}
+            <path d={`M 2 ${-s.rp * 0.66} A ${s.rp} ${s.rp * 0.66} 0 1 1 -2 ${-s.rp * 0.66} L -1 -1 Z`}
+              fill="url(#sailake-pad)" transform={`rotate(${[18, -24, 8, -10, 24, -14, 6, 0, 0][i]})`} />
+          </>
+        )}
+        {s.bloom && (
+          <g className="sai-water-bloom" style={{ transformOrigin: "-2px -3px" }}>
+            <g transform="translate(-2 -3)">
+              {[0, 60, 120, 180, 240, 300].map((a) => (
+                <ellipse key={a} cx="0" cy="-4.4" rx="2.2" ry="5" fill="#ffd6e8" transform={`rotate(${a})`} opacity="0.95" />
+              ))}
+              {[30, 90, 150, 210, 270, 330].map((a) => (
+                <ellipse key={a} cx="0" cy="-3.2" rx="1.8" ry="4" fill="#ff9ecb" transform={`rotate(${a})`} />
+              ))}
+              <circle cx="0" cy="0" r="2.4" fill="#ffd166" />
+            </g>
+          </g>
+        )}
+      </g>
+    </svg>
+  );
+}
+
 function PadLayer({ padsRef }) {
   return (
     <>
-      {PAD_SPECS.map((s, i) => {
-        const W = s.log ? s.len + 16 : s.rp * 2 + 16;
-        const H = s.log ? 40 : s.rp * 2 + 16;
-        return (
+      {PAD_SPECS.map((s, i) => (
         <div key={i}
           ref={(el) => { if (el) padsRef.current.set(i, el); else padsRef.current.delete(i); }}
           style={{ position: "absolute", left: 0, top: 0, zIndex: 2, pointerEvents: "none", willChange: "transform" }}>
-          <svg width={W} height={H}
-            viewBox={`${-W / 2} ${-H / 2} ${W} ${H}`}
-            style={{ display: "block", marginLeft: -W / 2, marginTop: -H / 2, overflow: "visible" }}>
-            <g className={`sai-water-pad pad-${"abcd"[i % 4]}`}>
-              {s.log ? (
-                <>
-                  {/* a weathered drift log, end ring facing out */}
-                  <ellipse cx="2" cy="5" rx={s.len / 2} ry="8.5" fill="#06231a" opacity="0.4" />
-                  <rect x={-s.len / 2} y="-9" width={s.len} height="18" rx="8" fill="#6b4a2a" />
-                  <rect x={-s.len / 2} y="-9" width={s.len} height="7" rx="3.5" fill="#8a6236" opacity=".85" />
-                  <path d={`M ${-s.len / 2 + 9} 3 h ${s.len - 22} M ${-s.len / 2 + 13} 6.2 h ${s.len - 32}`}
-                    stroke="#4e3620" strokeWidth="1.3" strokeLinecap="round" opacity=".65" />
-                  <circle cx={-s.len / 5} cy="-3.4" r="2" fill="#4e3620" opacity=".6" />
-                  <ellipse cx={s.len / 2} cy="0" rx="4.8" ry="9" fill="#a87c4f" />
-                  <ellipse cx={s.len / 2} cy="0" rx="2.4" ry="4.8" fill="#8a6236" />
-                </>
-              ) : (
-                <>
-              <ellipse cx="1" cy="3" rx={s.rp} ry={s.rp * 0.62} fill="#06231a" opacity="0.4" />
-              <path d={`M 2 ${-s.rp * 0.66} A ${s.rp} ${s.rp * 0.66} 0 1 1 -2 ${-s.rp * 0.66} L -1 -1 Z`}
-                fill="url(#sailake-pad)" transform={`rotate(${[18, -24, 8, -10, 24, -14, 6, 0, 0][i]})`} />
-                </>
-              )}
-              {s.bloom && (
-                <g className="sai-water-bloom" style={{ transformOrigin: "-2px -3px" }}>
-                  <g transform="translate(-2 -3)">
-                    {[0, 60, 120, 180, 240, 300].map((a) => (
-                      <ellipse key={a} cx="0" cy="-4.4" rx="2.2" ry="5" fill="#ffd6e8" transform={`rotate(${a})`} opacity="0.95" />
-                    ))}
-                    {[30, 90, 150, 210, 270, 330].map((a) => (
-                      <ellipse key={a} cx="0" cy="-3.2" rx="1.8" ry="4" fill="#ff9ecb" transform={`rotate(${a})`} />
-                    ))}
-                    <circle cx="0" cy="0" r="2.4" fill="#ffd166" />
-                  </g>
+          <PadArt s={s} i={i} />
+        </div>
+      ))}
+    </>
+  );
+}
+
+/**
+ * THE WEED BEDS AND THE SHORELINE MUD — the lake's larder, at zIndex 1 with
+ * the water it grows in. The turtle is drawn at 10 and swims OVER them,
+ * which is right: he crops the bottom from above it.
+ *
+ * `data-crop` is set on the wrapper by the sim, and the CSS thins the plant
+ * out as it is eaten. Nothing here moves position — the beds are fixed
+ * geometry, rebuilt only on a resize — so they are laid out in React and
+ * never touched by renderWorld.
+ */
+function WeedLayer({ bounds, weedRefs, world }) {
+  const { w, h } = bounds;
+  const beds = React.useMemo(() => (w && h ? lakeWeeds({ w, h }) : []), [w, h]);
+  const mud = React.useMemo(() => (w && h ? lakeMudBeds({ w, h }) : []), [w, h]);
+  if (!w || !h) return null;
+  return (
+    <>
+      {/* the hollows first: they are holes in the bank, under everything */}
+      {mud.map((m, i) => (
+        <div key={`m${i}`} style={{ position: "absolute", left: m.x, top: m.y, zIndex: 1,
+          pointerEvents: "none" }}>
+          {/* viewBox (0,0) IS the bed's anchor — the spot the frog's own
+              anchor goes — and the hollow is drawn MUD_SINK below it, where
+              his feet and his buried mound are. */}
+          <svg width={MUDBED_HALF * 2 + 16} height="1" viewBox={`${-MUDBED_HALF - 8} 0 ${MUDBED_HALF * 2 + 16} 1`}
+            style={{ display: "block", marginLeft: -MUDBED_HALF - 8, overflow: "visible" }}>
+            <ellipse cx="0" cy={MUD_SINK + 1} rx={MUDBED_HALF} ry="10.5" fill="#2a1c10" opacity=".85" />
+            <ellipse cx="-1" cy={MUD_SINK - 1} rx={MUDBED_HALF - 5} ry="7.5" fill="#1c1209" opacity=".8" />
+            <path d={`M ${-MUDBED_HALF + 3} ${MUD_SINK - 3} q 8 -5 18 -4`} stroke="#5d4425" strokeWidth="2" fill="none" opacity=".5" />
+            <circle cx={MUDBED_HALF - 8} cy={MUD_SINK + 4} r="2.2" fill="#40301c" opacity=".7" />
+          </svg>
+        </div>
+      ))}
+      {beds.map((p, i) => (
+        <div key={i} className="sai-weed" data-crop="0"
+          ref={(el) => { if (el) weedRefs.set(i, el); else weedRefs.delete(i); }}
+          style={{ position: "absolute", left: p.x, top: p.y, zIndex: 1,
+            pointerEvents: "none", transform: `translate(-50%,-50%) scale(${p.s})` }}>
+          <svg width={WEED_HALF * 2 + 20} height="76" viewBox={`${-WEED_HALF - 10} -38 ${WEED_HALF * 2 + 20} 76`}
+            style={{ display: "block", overflow: "visible" }}>
+            {p.kind === "weed" && (<>
+              {/* submerged milfoil: feathery, dark, and dulled by the water
+                  over it. The tall tips are the first thing a beak takes. */}
+              <ellipse cx="0" cy="16" rx={WEED_HALF} ry="8" fill="#08302a" opacity=".55" />
+              {/* SUBMERGED, and it has to LOOK it. Drawn in the same greens
+                  as the shoreline reeds but a third darker and at .62, the
+                  weed read as a stand of rushes growing out of the lake —
+                  the one thing a plant a turtle swims down to must not look
+                  like. The water over it is the opacity. */}
+              <g className="sai-weed-frond" opacity=".62">
+                <g className="sai-weed-crop2">
+                  <path d="M -14 16 C -17 0 -14 -18 -9 -34" stroke="#215c40" strokeWidth="3.4" fill="none" strokeLinecap="round" />
+                  <path d="M 4 16 C 3 -2 7 -20 13 -36" stroke="#255e3b" strokeWidth="3.2" fill="none" strokeLinecap="round" />
+                  <path d="M -9 -34 l -6 -4 M -10 -26 l 7 -5 M -11 -18 l -7 -4 M 13 -36 l 6 -5 M 10 -27 l -6 -5 M 9 -19 l 7 -4"
+                    stroke="#347a52" strokeWidth="1.6" strokeLinecap="round" fill="none" opacity=".9" />
                 </g>
-              )}
+                <g className="sai-weed-crop1">
+                  <path d="M -3 17 C -5 4 -2 -10 2 -22" stroke="#1e5138" strokeWidth="3.6" fill="none" strokeLinecap="round" />
+                  <path d="M 14 17 C 15 6 19 -6 24 -17" stroke="#215c40" strokeWidth="3" fill="none" strokeLinecap="round" />
+                  <path d="M -21 17 C -24 7 -24 -4 -22 -14" stroke="#1b4a34" strokeWidth="2.8" fill="none" strokeLinecap="round" />
+                  <path d="M 2 -22 l 6 -4 M 0 -14 l -6 -4 M 24 -17 l 5 -4 M -22 -14 l -6 -3"
+                    stroke="#347a52" strokeWidth="1.5" strokeLinecap="round" fill="none" opacity=".85" />
+                </g>
+                {/* the crowns, which never go: a bed grazed to the root is a
+                    bed that never comes back, and this one has to */}
+                <path d="M -20 17 q 6 -6 12 -1 M 6 18 q 6 -6 13 -2" stroke="#18452f" strokeWidth="3" fill="none" strokeLinecap="round" />
+              </g>
+            </>)}
+            {p.kind === "algae" && (<>
+              {/* a bottom mat. Blotchy, flat, and with the odd bubble coming
+                  off it, which is the only thing that says it is alive. */}
+              <g className="sai-weed-mat">
+                <ellipse cx="0" cy="10" rx={WEED_HALF} ry="12" fill="#2c6b45" />
+                <g className="sai-weed-crop2">
+                  <ellipse cx="-11" cy="5" rx="12" ry="7" fill="#3d8a55" opacity=".9" />
+                  <ellipse cx="12" cy="13" rx="11" ry="6.4" fill="#347a4c" opacity=".9" />
+                </g>
+                <g className="sai-weed-crop1">
+                  <ellipse cx="4" cy="4" rx="9" ry="5.2" fill="#4a9c62" opacity=".85" />
+                  <ellipse cx="-16" cy="14" rx="8" ry="4.6" fill="#2f7048" opacity=".85" />
+                </g>
+                <circle cx="-6" cy="-2" r="1.7" fill="#cdf3ff" opacity=".5" />
+                <circle cx="9" cy="-6" r="1.3" fill="#cdf3ff" opacity=".42" />
+              </g>
+            </>)}
+            {p.kind === "duck" && (<>
+              {/* duckweed: a raft of tiny leaves ON the surface, so it is the
+                  brightest of the three and casts nothing */}
+              <g className="sai-weed-mat">
+                <ellipse cx="0" cy="8" rx={WEED_HALF - 2} ry="10" fill="#3f8a4e" opacity=".35" />
+                <g className="sai-weed-crop2">
+                  {[[-18, 3], [-9, -2], [1, 1], [10, -3], [18, 2], [-14, 10], [-4, 12], [6, 9]].map(([x, y], k) => (
+                    <ellipse key={k} cx={x} cy={y} rx="4.2" ry="3.2" fill={k % 2 ? "#7fd08a" : "#63bd74"} />
+                  ))}
+                </g>
+                <g className="sai-weed-crop1">
+                  {[[15, 10], [-20, -1], [-1, -5], [21, -2], [8, 14]].map(([x, y], k) => (
+                    <ellipse key={k} cx={x} cy={y} rx="3.8" ry="2.9" fill={k % 2 ? "#6cc47c" : "#54ae67"} />
+                  ))}
+                </g>
+                {[[-11, 5], [3, 6], [12, 3]].map(([x, y], k) => (
+                  <ellipse key={k} cx={x} cy={y} rx="3.4" ry="2.6" fill="#4ea363" />
+                ))}
+              </g>
+            </>)}
+          </svg>
+        </div>
+      ))}
+    </>
+  );
+}
+
+/**
+ * THE INSECTS, at zIndex 12 — over the animals, because they are in the AIR
+ * over the water and everything else here is on it or in it. It also means
+ * the frog's tongue passes UNDER the fly it is reaching for, which is the
+ * right way round: the pad closes on it from below.
+ *
+ * Positions come from the sim every frame; this only draws them.
+ */
+function BugLayer({ bugRefs }) {
+  return (
+    <>
+      {BUG_SPECS.map((s, i) => (
+        <div key={i} className="sai-bug" data-gone=""
+          ref={(el) => { if (el) bugRefs.set(i, el); else bugRefs.delete(i); }}
+          style={{ position: "absolute", left: 0, top: 0, zIndex: 12, pointerEvents: "none", willChange: "transform" }}>
+          <svg width="34" height="24" viewBox="-17 -12 34 24"
+            style={{ display: "block", marginLeft: -17, marginTop: -12, overflow: "visible" }}>
+            {s.kind === "damsel" && (
+              <g className="sai-bug-body">
+                <g className="sai-bug-wing sai-bug-wing-l"><ellipse cx="-6" cy="-2.5" rx="8" ry="2.6" fill="#bfeef2" opacity=".6" /></g>
+                <g className="sai-bug-wing"><ellipse cx="6" cy="-2.5" rx="8" ry="2.6" fill="#bfeef2" opacity=".6" /></g>
+                <g className="sai-bug-wing sai-bug-wing-l"><ellipse cx="-5" cy="1.4" rx="6.6" ry="2.1" fill="#d8f7fb" opacity=".5" /></g>
+                <g className="sai-bug-wing"><ellipse cx="5" cy="1.4" rx="6.6" ry="2.1" fill="#d8f7fb" opacity=".5" /></g>
+                <rect x="-1" y="-1.6" width="12.5" height="2.1" rx="1.05" fill="#0e7d90" />
+                <rect x="-1" y="-1.6" width="12.5" height="1" rx=".5" fill="#3fd7e2" opacity=".6" />
+                <circle cx="-2.6" cy="-.6" r="2.4" fill="#2ba6b8" />
+                <circle cx="-3.4" cy="-1.3" r=".9" fill="#08343c" />
+              </g>
+            )}
+            {s.kind === "mayfly" && (
+              <g className="sai-bug-body">
+                <g className="sai-bug-wing sai-bug-wing-l"><ellipse cx="-3" cy="-5" rx="3.4" ry="6.4" fill="#f2f7d8" opacity=".62" /></g>
+                <g className="sai-bug-wing"><ellipse cx="3" cy="-5" rx="3.4" ry="6.4" fill="#f2f7d8" opacity=".62" /></g>
+                <path d="M 1 1 C 5 2.5 9 4 12 6" stroke="#c9b98a" strokeWidth="1" fill="none" strokeLinecap="round" />
+                <path d="M 1 1 C 5 1 9 1.6 12 2.6" stroke="#c9b98a" strokeWidth="1" fill="none" strokeLinecap="round" />
+                <ellipse cx="-1" cy=".4" rx="4.4" ry="2" fill="#d8c98f" />
+                <circle cx="-4.6" cy=".2" r="1.7" fill="#8a7742" />
+              </g>
+            )}
+            {s.kind === "midge" && (
+              <g className="sai-bug-body">
+                <g className="sai-bug-wing sai-bug-wing-l"><ellipse cx="-3" cy="-1.6" rx="4.4" ry="1.8" fill="#e6f6ff" opacity=".55" /></g>
+                <g className="sai-bug-wing"><ellipse cx="3" cy="-1.6" rx="4.4" ry="1.8" fill="#e6f6ff" opacity=".55" /></g>
+                <ellipse cx="0" cy="0" rx="3.2" ry="1.9" fill="#3c3326" />
+                <circle cx="-2.4" cy="-.4" r="1.4" fill="#211c14" />
+              </g>
+            )}
+            {s.kind === "strider" && (
+              <g>
+                {/* he is ON the surface film, not over it: the dimples his
+                    feet make are drawn and the legs sit in them */}
+                <g className="sai-bug-dimple" fill="none" stroke="#cdf3ff" strokeWidth="1">
+                  <ellipse cx="-8" cy="-4" rx="3" ry="1.6" /><ellipse cx="9" cy="-4" rx="3" ry="1.6" />
+                  <ellipse cx="-9" cy="5" rx="3" ry="1.6" /><ellipse cx="10" cy="5" rx="3" ry="1.6" />
+                </g>
+                <path d="M -1 -1 L -8 -4 M 1 -1 L 9 -4 M -1 1 L -9 5 M 1 1 L 10 5 M -1 0 L -6 1 M 1 0 L 7 1"
+                  stroke="#2d2a20" strokeWidth=".9" strokeLinecap="round" fill="none" />
+                <ellipse cx="0" cy="0" rx="4.6" ry="1.5" fill="#37342a" />
+                <circle cx="4" cy="0" r="1.2" fill="#22201a" />
+              </g>
+            )}
+          </svg>
+        </div>
+      ))}
+    </>
+  );
+}
+
+/**
+ * THE LAKE'S CANOPY PASS — everything painted OVER an animal at zIndex 12.
+ *
+ * The rule this exists for: an animal is drawn at 10 and the water, the mud
+ * and the lily pads at 1 and 2, so nothing the lake owns can cover him. This
+ * project has fixed "the animal brought his own scenery" three times — a
+ * hedgehog carrying a log inside his sprite, a goose tinting his own head to
+ * suggest water over it — and a frog asleep UNDER a lily is exactly that
+ * shape of problem. So the lily is drawn again, here, from the same PadArt,
+ * and the mud rim and the silt are drawn here too.
+ *
+ *   pad copies  one per lily, index-aligned to world.pads and moved by
+ *               renderWorld with it. Held at opacity 0 rather than display
+ *               none so its drift animation stays in step with the original.
+ *   mud rims    one per shoreline hollow, fixed geometry.
+ *   silt        a pool of two, assigned to whoever is down in the bottom mud.
+ */
+const SILT_SLOTS = 2;
+function LakeCanopyLayer({ bounds, padTopRef, mudTopRef, siltRef }) {
+  const { w, h } = bounds;
+  const mud = React.useMemo(() => (w && h ? lakeMudBeds({ w, h }) : []), [w, h]);
+  if (!w || !h) return null;
+  return (
+    <>
+      {PAD_SPECS.map((s, i) => (s.log ? null : (
+        <div key={`p${i}`} className="sai-lakeveil"
+          ref={(el) => { if (el) padTopRef.set(i, el); else padTopRef.delete(i); }}
+          style={{ position: "absolute", left: 0, top: 0, zIndex: 12, opacity: 0,
+            pointerEvents: "none", willChange: "transform, opacity" }}>
+          <PadArt s={s} i={i} veil />
+        </div>
+      )))}
+      {mud.map((m, i) => (
+        <div key={`m${i}`} className="sai-lakeveil"
+          ref={(el) => { if (el) mudTopRef.set(i, el); else mudTopRef.delete(i); }}
+          style={{ position: "absolute", left: m.x, top: m.y, zIndex: 12, opacity: 0,
+            pointerEvents: "none" }}>
+          {/* THE NEAR LIP of the hollow, over the top of him. The buried
+              pose draws its mound centred MUD_SINK below the anchor and its
+              eye domes from 12 to 17 down, so a rim from MUD_SINK-2 down
+              laps the bottom of the eyes and buries everything under them,
+              which is what being sunk in mud looks like from above. */}
+          <svg width={MUDBED_HALF * 2 + 20} height="1" viewBox={`${-MUDBED_HALF - 10} 0 ${MUDBED_HALF * 2 + 20} 1`}
+            style={{ display: "block", marginLeft: -MUDBED_HALF - 10, overflow: "visible" }}>
+            <ellipse cx="0" cy={MUD_SINK + 5} rx={MUDBED_HALF + 2} ry="7" fill="#3b2a17" />
+            <ellipse cx="-2" cy={MUD_SINK + 3.5} rx={MUDBED_HALF - 4} ry="4.6" fill="#4c371e" opacity=".9" />
+            <path d={`M ${-MUDBED_HALF} ${MUD_SINK + 3} q 10 -4 21 -2 q 9 1.6 15 4`} stroke="#5d4425" strokeWidth="1.8" fill="none" opacity=".55" />
+          </svg>
+        </div>
+      ))}
+      {Array.from({ length: SILT_SLOTS }, (_, i) => (
+        <div key={`s${i}`} className="sai-lakeveil"
+          ref={(el) => { if (el) siltRef.set(i, el); else siltRef.delete(i); }}
+          style={{ position: "absolute", left: 0, top: 0, zIndex: 12, opacity: 0,
+            pointerEvents: "none", willChange: "transform, opacity" }}>
+          {/* the water and the silt closing over a frog who has just gone
+              into the bottom. Translucent on purpose: he is hidden, not
+              deleted, and an animal you cannot find at all reads as a bug. */}
+          <svg width="80" height="44" viewBox="-40 -22 80 44"
+            style={{ display: "block", marginLeft: -40, marginTop: -22, overflow: "visible" }}>
+            <g className="sai-veil-silt">
+              <ellipse cx="0" cy="12" rx="33" ry="14" fill="#0c3f4c" opacity=".72" />
+              <ellipse cx="-5" cy="10" rx="24" ry="9" fill="#3b2f1d" opacity=".5" />
+              <ellipse cx="7" cy="14" rx="15" ry="6" fill="#54452c" opacity=".38" />
+              <path d="M -22 4 q 10 -5 20 -2 q 9 2.6 16 1" stroke="#7fd7e6" strokeWidth="1.4" fill="none" opacity=".35" />
             </g>
           </svg>
         </div>
-        );
-      })}
+      ))}
     </>
   );
 }
@@ -5875,7 +6423,65 @@ function stepWorld(world, cfg, dt) {
     damLogs: () => (def.hasWater ? damLogs(bounds) : null),
     damVia: (ax, ay, bx, by) => (def.hasWater ? damVia(bounds, ax, ay, bx, by) : null),
     swimSpot: () => (def.hasWater ? lakeSwimSpot(bounds) : null),
-    onBareEarth: (x, y, pad) => onBareEarth(def, bounds, x, y, pad) };
+    // how far out of the lake a point is, for the one behaviour that is
+    // about the BANK rather than about the water: the frog's shoreline bolt
+    lakeRho: (x, y) => (def.hasWater ? lakeRho(bounds, x, y) : 9),
+    onBareEarth: (x, y, pad) => onBareEarth(def, bounds, x, y, pad),
+    // ---- the lake's own life, for the two animals that live off it ------
+    // Handed over as the LIVE arrays and as the world's own arithmetic, not
+    // as copies: the insects are moving, so an ethogram that cached one
+    // would strike where it used to be, and the reach the strike is allowed
+    // is read off the sprite (frogTipAt) rather than declared beside it.
+    bugs: () => (def.hasWater ? world.bugs || null : null),
+    weeds: () => (def.hasWater ? world.weeds || null : null),
+    mudBeds: () => (def.hasWater ? world.mudBeds || null : null),
+    frogBand: (t) => (def.hasWater ? shallowBandAt(bounds, t, FROG_REACH) : null),
+    frogTip: (a, dir) => frogTipAt(a.x, a.y, a.r, dir === undefined ? (a._faceDir || 1) : dir),
+    turtleBeak: (a, dir) => turtleBeakAt(a.x, a.y, a.r, dir === undefined ? (a._faceDir || 1) : dir),
+    bugR: BUG_R, weedHalf: WEED_HALF, mudHalf: MUDBED_HALF };
+
+  // ---- the lake's insects, weed beds and shoreline mud ------------------
+  // Rebuilt only when the stage changes shape. The insects then MOVE, every
+  // frame, because a sit-and-wait predator with nothing passing is just a
+  // frog sitting down — see BUG_SPECS for how the five ambush rounds are
+  // solved against the frog's own reach.
+  if (def.hasWater) {
+    if (!world.bugs || world.bugs.length !== BUG_SPECS.length ||
+        world.lifeW !== bounds.w || world.lifeH !== bounds.h) {
+      world.bugs = lakeBugs(bounds);
+      world.weeds = lakeWeeds(bounds);
+      world.mudBeds = lakeMudBeds(bounds);
+      world.lifeW = bounds.w; world.lifeH = bounds.h;
+    }
+    const tsec = now / 1000;
+    for (const b of world.bugs) {
+      // a strider does not fly, he shoves: the same round, taken in surges
+      const surge = b.kind === "strider"
+        ? 0.35 + 2.1 * Math.pow(Math.max(0, Math.sin(tsec * 1.6 + b.p1)), 3) : 1;
+      b.ang += (Math.PI * 2 / b.per) * surge * dt;
+      // ...and a slow drift off the round, two incommensurate sines like
+      // everything else here, held inside BUG_WOB so the tangency the
+      // ambush is built on still holds at the worst of it
+      const wx = BUG_WOB * 0.62 * (Math.sin(tsec * 0.37 + b.p1) + 0.6 * Math.sin(tsec * 0.79 + b.p2));
+      const wy = BUG_WOB * 0.62 * (Math.cos(tsec * 0.31 + b.p2) + 0.6 * Math.sin(tsec * 0.61 + b.p1));
+      const px = b.x, py = b.y;
+      b.x = b.hx + Math.cos(b.ang) * b.R + wx;
+      b.y = b.hy + Math.sin(b.ang) * b.R + wy;
+      b.rot = Math.atan2(b.y - py, b.x - px) * 180 / Math.PI;
+      if (b.goneUntil && now >= b.goneUntil) b.goneUntil = 0;
+      // a frog who has been dragged off his perch is not still waiting for
+      // this one, and nobody else can book it while he notionally is
+      if (b.userId && !agents.some((c) => c.id === b.userId && c._eth && c._eth.claim === b)) b.userId = null;
+    }
+    // eaten weed grows back, one level at a time
+    for (const p of world.weeds) {
+      if (p.crop > 0 && now >= p.cropAt + WEED_REGROW) { p.crop--; p.cropAt = now; }
+      if (p.userId && !agents.some((c) => c.id === p.userId && c._eth && c._eth.claim === p)) p.userId = null;
+    }
+    for (const m of world.mudBeds) {
+      if (m.userId && !agents.some((c) => c.id === m.userId && c._eth && c._eth.claim === m)) m.userId = null;
+    }
+  }
 
   // ---- floats (lily pads + drift logs): VERY slow quasi-chaotic drift
   // (sums of incommensurate sines), held inside a "strange attractor" rim
@@ -5890,7 +6496,7 @@ function stepWorld(world, cfg, dt) {
       const rhos = [.55, .6, .5, .42, .62, .38, .52, .45, .6, .5, .58]; // last: top-right
       world.pads = angs.map((ang, i) => ({
         ...lakePoint(bounds, ang, rhos[i]),
-        p1: ang * 2.3, p2: ang * 5.1 + 1.7, userId: null,
+        p1: ang * 2.3, p2: ang * 5.1 + 1.7, userId: null, padI: i,
         log: !!PAD_SPECS[i].log,   // the turtle only hauls out on a log
       }));
     }
@@ -6961,7 +7567,7 @@ function muskFlee(v, cfg) {
   }
 }
 
-function renderWorld(world, iconsRef, padsRef, damRefs, pitRefs) {
+function renderWorld(world, iconsRef, padsRef, damRefs, pitRefs, lakeRefs) {
   const t = performance.now() / 1000;
   // drifting lily pads
   if (world.pads && padsRef) {
@@ -7001,6 +7607,59 @@ function renderWorld(world, iconsRef, padsRef, damRefs, pitRefs) {
       el.style.display = "";
       el.style.opacity = String(o);
       el.style.transform = `translate(${p.x}px, ${p.y}px) scale(${p.s})`;
+    }
+  }
+  // ---- the lake's life, and the three things drawn back over an animal --
+  if (lakeRefs && world.def?.hasWater) {
+    const L = lakeRefs.current, nowMs = performance.now();
+    // insects: moved every frame, and hidden for the few seconds after one
+    // has been eaten. `rot` points the drawing down its own round.
+    for (const b of world.bugs || []) {
+      const el = L.bugs.get(b.i);
+      if (!el) continue;
+      el.style.transform = `translate(${b.x}px, ${b.y}px) rotate(${b.rot.toFixed(1)}deg)`;
+      const gone = b.goneUntil > nowMs ? '1' : '';
+      if (el.dataset.gone !== gone) el.dataset.gone = gone;
+    }
+    // how far each weed bed has been eaten down
+    for (const p of world.weeds || []) {
+      const el = L.weeds.get(p.i);
+      if (!el) continue;
+      const c = String(p.crop | 0);
+      if (el.dataset.crop !== c) el.dataset.crop = c;
+    }
+    // THE CANOPY PASS. Every slot is re-driven every frame, so nothing can
+    // be left showing over an animal who has moved on.
+    const sleeper = new Map();     // pad index -> the frog asleep under it
+    let siltN = 0, mudOn = new Set();
+    for (const a of world.agents) {
+      if (a.species !== 'frog') continue;
+      const claim = a._eth && a._eth.claim;
+      if (a.state === 'frogdoze' && claim && claim.padI !== undefined) sleeper.set(claim.padI, a);
+      if ((a.state === 'frogdig' || a.state === 'frogsunk') && claim && claim.bedI !== undefined) mudOn.add(claim.bedI);
+      if (a.state === 'frogmud' && siltN < SILT_SLOTS) {
+        const el = L.silt.get(siltN++);
+        if (el) {
+          // the cloud sits over the mound the buried pose draws, which is
+          // 18px below his anchor at r 19.9
+          el.style.transform = `translate(${a.x}px, ${a.y + a.r * 0.55}px)`;
+          el.style.opacity = '1';
+        }
+      }
+    }
+    for (let i = siltN; i < SILT_SLOTS; i++) {
+      const el = L.silt.get(i); if (el && el.style.opacity !== '0') el.style.opacity = '0';
+    }
+    for (const [i, el] of L.padTop) {
+      const p = world.pads && world.pads[i];
+      if (!p) continue;
+      el.style.transform = `translate(${p.x}px, ${p.y}px)`;
+      const on = sleeper.has(i) ? '1' : '0';
+      if (el.style.opacity !== on) el.style.opacity = on;
+    }
+    for (const [i, el] of L.mudTop) {
+      const on = mudOn.has(i) ? '1' : '0';
+      if (el.style.opacity !== on) el.style.opacity = on;
     }
   }
   for (const a of world.agents) {
@@ -7052,6 +7711,19 @@ function renderWorld(world, iconsRef, padsRef, damRefs, pitRefs) {
       sprite.dataset.fly = a.state === ROCK_FLY_STATE ? '1' : '';
       // whatever he is holding: a berry, a nut, a fish. CSS shows the item.
       sprite.dataset.carry = a._carry || '';
+      // THE TWO LAKE SPECIALISTS' OWN STATE ATTRIBUTE, driven from HERE and
+      // not from data-state. data-state arrives through the React snapshot,
+      // which lands about every 300ms, and the frog's tongue strike is 260 —
+      // keyed off data-state it is a behaviour that half the time never
+      // reaches the DOM at all, and the swallow behind it is barely better.
+      // This is the same reason data-burst and data-fly exist. It carries
+      // the state name rather than a flag so one attribute covers all nine
+      // of his and all five of the turtle's, and it is empty on every other
+      // animal, so nothing here can reach another species' sprite.
+      const fst = a.species === 'frog' ? a.state : '';
+      if (sprite.dataset.frog !== fst) sprite.dataset.frog = fst;
+      const tst = a.species === 'turtle' ? a.state : '';
+      if (sprite.dataset.turt !== tst) sprite.dataset.turt = tst;
       // the cat's pre-jump pause at a fence (little crouch via CSS)
       sprite.dataset.prep = nowMs < (a.hopPrepUntil || 0) ? '1' : '';
       // which flavor of break-up is running, so the CSS can wind the leg

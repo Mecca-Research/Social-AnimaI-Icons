@@ -96,7 +96,7 @@
 //                              ENGINE
 // ---------------------------------------------------------------------
 
-import { gait } from "./Gait.js";
+import { gait, SPEED } from "./Gait.js";
 import { SPECIES_PROFILE } from "./SpeciesProfile.js";
 
 /** species key -> compiled ethogram */
@@ -3295,6 +3295,355 @@ const FLOAT_EVENT = {
   states: ["padsit"],
 };
 
+// ---------------------------------------------------------------------
+//  THE LAKE'S TWO SPECIALISTS — everything below this rule belongs to the
+//  frog and the turtle, and every state name in it begins "frog" or "turt".
+//  (State names are GLOBAL CSS selectors. The engine throws on a clash
+//  inside one species; a clash across two is silent, and gives one animal
+//  another's animation. The prefix is the whole defence.)
+// ---------------------------------------------------------------------
+
+/**
+ * A CREEP, WHICH IS NOT A GAIT.
+ *
+ * Two things here move slower than any urgency in the ladder can express: a
+ * turtle shearing his way across a weed bed, and the same turtle sculling
+ * backwards. gait()'s floor is the species' OWN cruise — 36 px/s for a
+ * turtle in water — and a bed is 26px across, so a cropping turtle driven
+ * by gait crosses the whole plant in less than a second and then stands in
+ * open water miming.
+ *
+ * So these two ease toward a point instead, the same way the raccoon's wash
+ * and the goose's dabble hold theirs: an exponential approach at `k` per
+ * second, which starts at k * distance px/s and dies away as he arrives.
+ * That is a statement about the ACTION, not a discount on the animal, which
+ * is the distinction the speed table exists to protect.
+ */
+function creepToward(a, c, t, k) {
+  const f = Math.min(1, c.dt * k);
+  a.x += (t.x - a.x) * f; a.y += (t.y - a.y) * f;
+  a.vx = 0; a.vy = 0;
+}
+
+// ---- THE FROG'S AMBUSH ------------------------------------------------
+const AMBUSH_HOLD = [10000, 17000];  // how long a wait lasts if nothing comes
+const AMBUSH_MEALS = 3;              // ...and how many he takes before moving on
+const TONGUE_MS = 260;               // == sai-frog-tongue in index.css
+const GULP_MS = 420;                 // == sai-frog-gulp
+const BUG_GONE = [6000, 11000];      // how long an eaten insect stays eaten
+
+/**
+ * THE PERCH THAT BELONGS TO AN INSECT.
+ *
+ * He does not pick a nice spot and hope. Every ambush insect's round was
+ * BUILT around a frog-sized animal sitting at one particular place on the
+ * shore (see BUG_SPECS in SocialAnimalIcons.jsx): the round passes through
+ * the tongue tip of a frog sitting there, once a lap. So the choice here is
+ * which insect to wait for, and the spot comes with it.
+ */
+function ambushPerch(a, c) {
+  const bugs = c.bugs && c.bugs();
+  if (!bugs) return null;
+  let best = null, bd = Infinity;
+  for (const b of bugs) {
+    if (!b.perch) continue;                  // an open-water insect has none
+    if (b.userId != null && b.userId !== a.id) continue;
+    const d = Math.hypot(b.perch.x - a.x, b.perch.y - a.y);
+    if (d < bd) { bd = d; best = b; }
+  }
+  return best ? { x: best.perch.x, y: best.perch.y, site: best } : null;
+}
+
+/**
+ * WHAT THE TONGUE WOULD ACTUALLY REACH, this frame. The tip is where the
+ * drawing puts it and the catch radius is the drawn sticky pad plus the
+ * insect's own body — so a strike can only ever land on something the
+ * picture says he is touching. Any insect will do, not only the one he came
+ * for: a frog that ignored a fly because it was the wrong fly would be a
+ * frog obeying a data structure.
+ */
+function bugInReach(a, c) {
+  const bugs = c.bugs && c.bugs();
+  if (!bugs) return null;
+  const tip = c.frogTip(a);
+  const R = tip.pad + c.bugR;
+  for (const b of bugs) {
+    if (b.goneUntil > c.now) continue;
+    if (Math.hypot(b.x - tip.x, b.y - tip.y) <= R) return b;
+  }
+  return null;
+}
+
+function driveAmbush(a, c, S) {
+  a.vx = 0; a.vy = 0;
+  // hold the spot to the pixel. The band is a few px wide and the insect's
+  // whole round is measured from this point; a separation nudge that moved
+  // him 6px would move the tip out from under the round.
+  const p = S.claim && S.claim.perch;
+  if (p) { a.x = p.x; a.y = p.y; }
+
+  if (a.state === "frogtongue") {
+    // THE FLY RIDES THE TONGUE HOME. The insect is a real object with a
+    // position of its own, and the sim steps it before the animals — so
+    // unless the strike takes it over, it goes on flying its round while
+    // the tongue is stuck to it, and then vanishes from wherever it had got
+    // to. It is carried down the drawn band instead, on the band's own
+    // extension curve (see sai-frog-tongue: out by 34% of the window, held
+    // to 54%, back by the end), which is what makes the catch read.
+    const b = a._frogBug;
+    if (b) {
+      const tip = c.frogTip(a);
+      const u = Math.min(1, Math.max(0, 1 - (a.stateUntil - c.now) / TONGUE_MS));
+      const ext = u < 0.34 ? u / 0.34 : u < 0.54 ? 1 : Math.max(0, 1 - (u - 0.54) / 0.46);
+      b.x = tip.rootX + (tip.x - tip.rootX) * ext;
+      b.y = tip.rootY + (tip.y - tip.rootY) * ext;
+    }
+    if (c.now >= a.stateUntil) {
+      // ...and only NOW is it gone. Hiding it at the moment of the strike
+      // made the tongue reach an insect that was no longer there.
+      if (b) { b.goneUntil = c.now + c.rand(BUG_GONE[0], BUG_GONE[1]); a._frogBug = null; }
+      a.state = "froggulp"; a.stateUntil = c.now + GULP_MS;
+    }
+    return;
+  }
+  if (a.state === "froggulp") {
+    if (c.now < a.stateUntil) return;
+    if ((a._frogAte || 0) >= AMBUSH_MEALS) {
+      a._faceDir = 0;
+      endEvent(a, c, { reroll: true, quiet: 1200, stop: true });
+      return;
+    }
+    a.state = "frogstill";
+    return;
+  }
+
+  // frogstill — and this IS the behaviour. He does nothing at all until one
+  // of them comes inside the reach of the drawing.
+  const b = bugInReach(a, c);
+  if (b) {
+    a._frogBug = b;
+    a._frogAte = (a._frogAte || 0) + 1;
+    a.state = "frogtongue"; a.stateUntil = c.now + TONGUE_MS;
+    return;
+  }
+  if (c.now >= (a._frogTill || 0)) {
+    a._faceDir = 0;
+    endEvent(a, c, { reroll: true, quiet: 900, stop: true });
+  }
+}
+
+// ---- THE FROG'S ESCAPE ------------------------------------------------
+/**
+ * WHO IS WORTH LEAVING THE BANK FOR. Not "anything bigger", which would have
+ * him bolting from the goose all day: these are the six that would eat him.
+ */
+const FROG_THREATS = new Set(["fox", "wolf", "cougar", "bear", "raccoon", "owl"]);
+const FROG_SPOOK = 120;      // px — how close he lets one get
+const FROG_BANK = [1.00, 1.60];   // ...and the strip of shore this is about
+const FROG_LEAP_PX = 96;     // the leap itself: one to two metres, to scale
+const LEAP_MS = 520;         // one hop's flight — the water usually ends it first
+const FROG_HOPS = 3;         // ...and how many he will chain to reach it
+const DIVE_MS = 620;         // == the plunge rings, going down
+const MUD_HOLD = [4200, 7000];
+
+/** the nearest predator close enough to jump for, or null */
+function frogThreat(a, c) {
+  if (!c.def.hasWater || !c.lakeRho) return null;
+  const r = c.lakeRho(a.x, a.y);
+  // A SHORELINE escape. A frog caught out in the middle of the clearing has
+  // no water to go to and runs like everything else does.
+  if (r < FROG_BANK[0] || r > FROG_BANK[1]) return null;
+  let best = null, bd = FROG_SPOOK;
+  for (const o of c.world.agents) {
+    if (o === a || !FROG_THREATS.has(o.species)) continue;
+    const d = Math.hypot(o.x - a.x, o.y - a.y);
+    if (d < bd) { bd = d; best = o; }
+  }
+  return best;
+}
+
+/**
+ * WHERE HE GOES. Straight out from the bank is the shortest way wet, bent a
+ * third of the way round toward "away from whatever that was" — so he
+ * always lands in water, and he never lands nearer the thing he is leaving.
+ */
+function frogEscapeAim(a, c, threat) {
+  const B = c.bounds, cx = c.LAKE.cx * B.w, cy = c.LAKE.cy * B.h;
+  let bx = cx - a.x, by = cy - a.y;
+  const d = Math.hypot(bx, by) || 1; bx /= d; by /= d;
+  if (threat) {
+    let tx = a.x - threat.x, ty = a.y - threat.y;
+    const td = Math.hypot(tx, ty) || 1; tx /= td; ty /= td;
+    bx = bx * 0.68 + tx * 0.32; by = by * 0.68 + ty * 0.32;
+    const nd = Math.hypot(bx, by) || 1; bx /= nd; by /= nd;
+  }
+  const p = { x: a.x + bx * FROG_LEAP_PX, y: a.y + by * FROG_LEAP_PX };
+  // ...unless that is a hundred logs. The dam is land, and a frog escaping
+  // onto it has escaped onto the thing he was escaping from.
+  if (c.onDam && c.onDam(p.x, p.y)) return { x: cx, y: cy };
+  return p;
+}
+
+function driveLeap(a, c, S) {
+  if (a.state === "frogleap") {
+    if (a._frogAim) stepTowardAt(a, c, a._frogAim, gait(a, c, 1.0));
+    if (c.isWet(a.x, a.y)) {
+      a.state = "frogdive"; a.stateUntil = c.now + DIVE_MS;
+      // ...and now he wants DEPTH rather than distance
+      const deep = c.swimSpot && c.swimSpot();
+      if (deep) a._frogAim = deep;
+      return;
+    }
+    if (c.now < a.stateUntil) return;
+    // A CHAIN OF HOPS, and this is the one thing the first version of this
+    // got wrong: one leap covers 96px and the bank he starts from is up to
+    // 0.6 of rho wide, so the window ran out with him still dry and the
+    // dive began on land. A frog crossing ground goes in leaps — so the
+    // window re-opens, with a fresh burst under it, rather than dropping
+    // him where he stands. Three at most: past that he was never near
+    // enough to the water for this to have been a shoreline escape.
+    if ((a._frogHops = (a._frogHops || 1) + 1) <= FROG_HOPS) {
+      a.stateUntil = c.now + LEAP_MS;
+      a._burstUntil = c.now + ((SPEED.frog && SPEED.frog.bMs) || 300);
+      // ...and the next hop is aimed FROM WHERE HE NOW IS. The first aim is
+      // a point 96px out; a second hop still driving at it would turn him
+      // round the moment he overshot it, which is a frog escaping backwards.
+      a._frogAim = frogEscapeAim(a, c, null);
+      return;
+    }
+    a._frogAim = null; a._faceDir = 0;
+    endEvent(a, c, { cool: 9000, reroll: true, quiet: 900, stop: true });
+    return;
+  }
+  if (a.state === "frogdive") {
+    if (a._frogAim) stepTowardAt(a, c, a._frogAim, gait(a, c, 0.45));
+    if (c.now < a.stateUntil) return;
+    a.vx = 0; a.vy = 0;
+    // He is only in the mud if he actually got wet. A leap that fetched up
+    // on a bank is a leap, and it ends here rather than burying him in dry
+    // ground and calling it a bottom.
+    if (!c.isWet(a.x, a.y)) {
+      a._frogAim = null; a._faceDir = 0;
+      endEvent(a, c, { cool: 8000, reroll: true, quiet: 900, stop: true });
+      return;
+    }
+    a.state = "frogmud"; a.stateUntil = c.now + c.rand(MUD_HOLD[0], MUD_HOLD[1]);
+    return;
+  }
+  // frogmud — down in the bottom silt and completely still until it leaves
+  a.vx = 0; a.vy = 0;
+  if (c.now < a.stateUntil) return;
+  a._frogAim = null; a._faceDir = 0;
+  endEvent(a, c, { reroll: true, quiet: 1400, stop: true });
+}
+
+// ---- THE FROG ASLEEP --------------------------------------------------
+const FROG_NAP = [17000, 28000];
+const FROG_DIG = [2200, 3200];
+
+/** a free LILY, never a drift log — he sleeps under the leaf, not on wood */
+function nearestLily(a, c) {
+  const pads = c.world.pads;
+  if (!pads) return null;
+  let best = null, bd = Infinity;
+  for (const p of pads) {
+    if (p.log) continue;
+    if (p.userId != null && p.userId !== a.id) continue;
+    const d = Math.hypot(p.x - a.x, p.y - a.y);
+    if (d < bd) { bd = d; best = p; }
+  }
+  return best ? { x: best.x, y: best.y, site: best } : null;
+}
+/** ...or a free hollow in the shoreline mud */
+function nearestMudBed(a, c) {
+  const beds = c.mudBeds && c.mudBeds();
+  if (!beds) return null;
+  let best = null, bd = Infinity;
+  for (const m of beds) {
+    if (m.userId != null && m.userId !== a.id) continue;
+    const d = Math.hypot(m.x - a.x, m.y - a.y);
+    if (d < bd) { bd = d; best = m; }
+  }
+  return best ? { x: best.x, y: best.y, site: best } : null;
+}
+const lakeVia = (a, c, g) => (g && c.damVia ? c.damVia(a.x, a.y, g.x, g.y) : null);
+
+// ---- THE TURTLE'S WEED BED --------------------------------------------
+const CROP_MS = [1500, 2300];   // one shear
+const CHEW_MS = [1500, 2300];   // ...and the mouthful that follows it
+const CROP_BITES = [3, 5];
+// where on a bed the beak has to be for each kind: the milfoil's fronds
+// stand ABOVE its anchor, the algae mat and the duckweed raft lie on it
+const WEED_BITE = { weed: -8, algae: 6, duck: 4 };
+
+function nearestWeed(a, c) {
+  const ws = c.weeds && c.weeds();
+  if (!ws) return null;
+  let best = null, bd = Infinity;
+  for (const p of ws) {
+    if (p.crop >= 2) continue;                 // grazed out; let it come back
+    if (p.userId != null && p.userId !== a.id) continue;
+    const d = Math.hypot(p.x - a.x, p.y - a.y);
+    if (d < bd) { bd = d; best = p; }
+  }
+  return best ? { x: best.x, y: best.y, site: best } : null;
+}
+
+/** put his BEAK on the plant, which is what "at the weed bed" has to mean */
+function beakOnto(a, c, p, tx, ty) {
+  const dir = tx > a.x ? 1 : -1;
+  a._faceDir = dir;
+  const b = c.turtleBeak(a, dir);
+  a.x += tx - b.x; a.y += ty - b.y;
+}
+/**
+ * The next mouthful, a little way across the bed from the last one. The
+ * bed's painted half-width arrives on the ctx (c.weedHalf) rather than
+ * being copied here, so a plant redrawn wider is a plant he works wider.
+ */
+function cropAim(c, p) {
+  const h = (c.weedHalf || 26) * (p.s || 1) * 0.75;
+  return { x: p.x + c.rand(-h, h), y: p.y + (WEED_BITE[p.kind] || 0) + c.rand(-5, 5) };
+}
+
+function driveGraze(a, c, S) {
+  const p = S.claim;
+  if (!p) { a._faceDir = 0; endEvent(a, c, { reroll: true, quiet: 900, stop: true }); return; }
+  if (a.state === "turtchew") {
+    a.vx = 0; a.vy = 0;
+    if (c.now < a.stateUntil) return;
+    if ((a._turtBites || 0) <= 0) {
+      a._faceDir = 0;
+      endEvent(a, c, { reroll: true, quiet: 1200, stop: true });
+      return;
+    }
+    a._turtAim = cropAim(c, p);
+    a.state = "turtcrop"; a.stateUntil = c.now + c.rand(CROP_MS[0], CROP_MS[1]);
+    return;
+  }
+  // turtcrop — swimming ALONG THE BOTTOM while he cuts. A grazer who holds
+  // still is a grazer eating one leaf for two seconds.
+  if (a._turtAim) {
+    const dir = a._faceDir || 1;
+    const b = c.turtleBeak(a, dir);
+    // the creep is aimed at the BEAK's target, so what crosses the bed is
+    // his mouth and not his shell
+    creepToward(a, c, { x: a.x + (a._turtAim.x - b.x), y: a.y + (a._turtAim.y - b.y) }, 0.9);
+  }
+  if (c.now < a.stateUntil) return;
+  a._turtBites = (a._turtBites || 1) - 1;
+  if (p.crop < 2) { p.crop++; p.cropAt = c.now; }   // a chunk is gone off it
+  a.state = "turtchew"; a.stateUntil = c.now + c.rand(CHEW_MS[0], CHEW_MS[1]);
+}
+
+// ---- THE TURTLE BACKING UP --------------------------------------------
+const BACK_MS = [4200, 6400];
+const BACK_PX = 82;
+
+// ---- ...AND ASLEEP ON A LOG -------------------------------------------
+const TURT_NAP = [20000, 32000];
+const TURT_STIR = [2600, 3400];
+
 defineEthogram("frog", {
   domainOf: (a, c) => (c.def.hasWater && c.isWet(a.x, a.y) ? "water" : "land"),
 
@@ -3310,8 +3659,18 @@ defineEthogram("frog", {
 
   // a drag lifts him off a float mid-sit, and the state that leaves him in
   // is not one this ethogram will ever end — so the float has to be handed
-  // back here, and the throat sac shut off, or he croaks all the way home
-  tick(a, c, S) { if (S.claim) releaseClaim(a, S); if (a._chorus) a._chorus = false; },
+  // back here, and the throat sac shut off, or he croaks all the way home.
+  // The forced facing goes back too: the ambush pins it at the waterline and
+  // a frog carried away still looking east is a frog walking sideways.
+  tick(a, c, S) {
+    if (S.claim) releaseClaim(a, S);
+    if (a._chorus) a._chorus = false;
+    if (a._faceDir) a._faceDir = 0;
+    if (a._frogAim) a._frogAim = null;
+    // a fly stuck to a tongue that is no longer striking is a fly that got
+    // away, and it has to be let go of or it stays pinned to his mouth
+    if (a._frogBug) a._frogBug = null;
+  },
 
   events: [
     {
@@ -3326,6 +3685,126 @@ defineEthogram("frog", {
       },
       drive: driveFloat,
     },
+
+    // ---- SIT AND WAIT -------------------------------------------------
+    // The appetite is for a PLACE, not for a fly: he goes to the waterline
+    // and stops, and whether anything comes is the insect's business. That
+    // is why the bout has a clock of its own (AMBUSH_HOLD) as well as a
+    // meal count — a wait that catches nothing is still a wait, and has to
+    // be able to end.
+    //
+    // Domain water, because the perch IS water: the shallow band tops out
+    // at rho 0.94 and inWater() calls anything under 0.97 wet. He is stood
+    // on the bottom in an inch of it, which is where a frog waits.
+    {
+      id: "ambush", domain: "water", trigger: "seek",
+      every: [26000, 46000], chance: 0.60, cool: 15000,
+      states: ["frogstill", "frogtongue", "froggulp"], ownsWater: true,
+      goto: {
+        state: "toambush", within: 12, giveUp: 26000, none: 9000, lost: 9000,
+        urgency: 0.35, pick: ambushPerch, via: lakeVia,
+      },
+      begin(a, c, S, g) {
+        a.vx = 0; a.vy = 0;
+        // Take the spot EXACTLY. `within` is a radius and the insect's whole
+        // round was built off this one point, so arriving near it is not the
+        // same as arriving at it — the same correction the raccoon's wash
+        // needed against its 5.6px band.
+        const b = (g && g.site) || S.claim;
+        if (b && b.perch) { a.x = b.perch.x; a.y = b.perch.y; a._faceDir = b.perch.dir; }
+        a._frogTill = c.now + c.rand(AMBUSH_HOLD[0], AMBUSH_HOLD[1]);
+        a._frogAte = 0;
+        a.state = "frogstill";
+      },
+      drive: driveAmbush,
+    },
+
+    // ---- THE EXPLOSIVE WATER LEAP -------------------------------------
+    // An `approach` on a PREDATOR rather than on a feature — the only one
+    // in this file whose trigger is another animal. Edge-gated like every
+    // other approach, so one fox walking past the bank is one bolt and not
+    // one a frame; `miss` keeps a refusal from being re-rolled continuously
+    // while he stands there and it circles.
+    {
+      id: "waterleap", domain: "land", trigger: "approach",
+      chance: 0.92, miss: 3500, cool: 20000,
+      near: frogThreat,
+      states: ["frogleap", "frogdive", "frogmud"], ownsWater: true,
+      begin(a, c, S, threat) {
+        a._frogAim = frogEscapeAim(a, c, threat);
+        a._faceDir = a._frogAim.x > a.x ? 1 : -1;
+        // the burst window Gait opens for a leap, opened by hand: this IS
+        // his 300ms 14x kick, and it is what makes the launch explosive
+        // rather than a fast walk into the lake
+        a._burstUntil = c.now + ((SPEED.frog && SPEED.frog.bMs) || 300);
+        a._frogHops = 1;
+        a.state = "frogleap"; a.stateUntil = c.now + LEAP_MS;
+      },
+      drive: driveLeap,
+    },
+
+    // ---- ASLEEP, TWO WAYS ---------------------------------------------
+    // One appetite, two beds, and they are genuinely different places to
+    // be: under a leaf out on the water, or down in the bank. The lily is
+    // the commoner of the two because there are seven of them and three
+    // hollows, and because a frog that sleeps afloat is the picture.
+    {
+      id: "frognap", domain: "water", trigger: "seek",
+      every: [95000, 165000], chance: 0.55, cool: 70000,
+      variants: [
+        {
+          id: "naplily", w: 3, states: ["frogdoze"], ownsWater: true,
+          goto: { state: "tolily", within: 12, giveUp: 30000, none: 11000,
+                  lost: 11000, urgency: 0.30, pick: nearestLily,
+                  track: (a, c, ref) => ref.site },
+          begin(a, c, S) {
+            a.vx = 0; a.vy = 0;
+            a.state = "frogdoze"; a.stateUntil = c.now + c.rand(FROG_NAP[0], FROG_NAP[1]);
+          },
+          drive(a, c, S) {
+            const p = S.claim;
+            if (!p) { endEvent(a, c, { reroll: true, quiet: 900, stop: true }); return; }
+            // AT the lily, not ON it. driveFloat seats a rider 20px up so
+            // his feet are on the leaf; this leaves him in the water with
+            // the leaf OVER him. The 1px is measured, not chosen: the float
+            // pose paints its back 7.8px below his anchor and its eye domes
+            // from 8.1 to 13.7, while a leaf covers 7.3px (the smallest pad)
+            // to 10.6px (the largest) either side of the pad's centre. One
+            // pixel up puts his whole back and the top of both eyes under
+            // the leaf and leaves the eyes themselves at its rim — hidden,
+            // rather than gone, which is what a frog under a lily looks
+            // like from above and is also the only version of this you can
+            // tell is a frog.
+            a.x = p.x; a.y = p.y - 1; a.vx = 0; a.vy = 0;
+            if (c.now >= a.stateUntil) endEvent(a, c, { reroll: true, quiet: 1400, stop: true });
+          },
+        },
+        {
+          id: "napmud", w: 2, states: ["frogdig", "frogsunk"],
+          goto: { state: "tomudbed", within: 14, giveUp: 26000, none: 13000,
+                  lost: 13000, urgency: 0.30, pick: nearestMudBed, via: lakeVia },
+          begin(a, c, S, g) {
+            a.vx = 0; a.vy = 0;
+            const m = (g && g.site) || S.claim;
+            if (m) { a.x = m.x; a.y = m.y; }
+            a._faceDir = c.LAKE.cx * c.bounds.w > a.x ? 1 : -1;
+            a.state = "frogdig"; a.stateUntil = c.now + c.rand(FROG_DIG[0], FROG_DIG[1]);
+          },
+          drive(a, c, S) {
+            a.vx = 0; a.vy = 0;
+            const m = S.claim;
+            if (m) { a.x = m.x; a.y = m.y; }
+            if (c.now < a.stateUntil) return;
+            if (a.state === "frogdig") {
+              a.state = "frogsunk"; a.stateUntil = c.now + c.rand(FROG_NAP[0], FROG_NAP[1]);
+              return;
+            }
+            a._faceDir = 0;
+            endEvent(a, c, { reroll: true, quiet: 1400, stop: true });
+          },
+        },
+      ],
+    },
   ],
 });
 
@@ -3339,7 +3818,11 @@ defineEthogram("turtle", {
     water: { share: 0.70, dwell: [18000, 34000], travel: 30000, pull: 0.90 },
   },
 
-  tick(a, c, S) { if (S.claim) releaseClaim(a, S); },
+  tick(a, c, S) {
+    if (S.claim) releaseClaim(a, S);
+    if (a._faceDir) a._faceDir = 0;
+    if (a._turtAim) a._turtAim = null;
+  },
 
   events: [
     {
@@ -3355,6 +3838,112 @@ defineEthogram("turtle", {
         a.vx = 0; a.vy = 0;
       },
       drive: driveFloat,
+    },
+
+    // ---- THE WEED BED --------------------------------------------------
+    // His whole living, and the one behaviour on this map that CONSUMES the
+    // thing it works: every shear takes a level off the plant and the plant
+    // grows it back over about forty seconds, so a bed he has just been
+    // through is not the bed he goes to next, and a lake with one turtle in
+    // it never runs out. Nothing else here does that — a berry bush is the
+    // same bush after six animals have eaten from it.
+    {
+      id: "graze", domain: "water", trigger: "seek",
+      every: [38000, 66000], chance: 0.62, cool: 20000,
+      states: ["turtcrop", "turtchew"], ownsWater: true,
+      goto: {
+        state: "toweed", within: 30, giveUp: 30000, none: 10000, lost: 10000,
+        urgency: 0.32, pick: nearestWeed, via: lakeVia,
+      },
+      begin(a, c, S, g) {
+        a.vx = 0; a.vy = 0;
+        const p = (g && g.site) || S.claim;
+        if (!p) { endEvent(a, c, { reroll: true, quiet: 800, stop: true }); return; }
+        // ARRIVING AT A PLANT MEANS ARRIVING WITH YOUR MOUTH IN IT. `within`
+        // is a 30px radius around the bed's anchor and his beak is 18px in
+        // front of his own — so the walk gets him close and this puts the
+        // shearing edge on the fronds.
+        beakOnto(a, c, p, p.x, p.y + (WEED_BITE[p.kind] || 0));
+        a._turtBites = Math.round(c.rand(CROP_BITES[0], CROP_BITES[1]));
+        a._turtAim = cropAim(c, p);
+        a.state = "turtcrop"; a.stateUntil = c.now + c.rand(CROP_MS[0], CROP_MS[1]);
+      },
+      drive: driveGraze,
+    },
+
+    // ---- BACKING UP ----------------------------------------------------
+    // Not a retreat and not a manoeuvre out of anything: a pond turtle
+    // sculls backwards with the long front claws to fan silt or a scent
+    // toward himself, and it is one of the few things he does that reads
+    // instantly as a turtle rather than as a slow animal. Water only, and
+    // rare enough to be a thing you catch him at.
+    {
+      id: "backpaddle", domain: "water", trigger: "seek",
+      every: [40000, 72000], chance: 0.50, cool: 30000,
+      states: ["turtback"], ownsWater: true,
+      begin(a, c) {
+        a.vx = 0; a.vy = 0;
+        // he keeps looking where he was looking. _faceDir outranks the
+        // renderer's "point him down his own velocity", and that override is
+        // the entire difference between backing up and turning round.
+        const dir = a._faceDir || (a.vx < -4 ? -1 : 1);
+        a._faceDir = dir;
+        let t = { x: a.x - dir * BACK_PX, y: a.y + c.rand(-26, 26) };
+        // ...into water, and not into the dam or the bank. If backing up
+        // would put him aground he backs the other way instead, which is
+        // also what a turtle who has just touched something does.
+        if (!c.isWet(t.x, t.y) || (c.onDam && c.onDam(t.x, t.y))) {
+          t = { x: a.x + dir * BACK_PX * 0.6, y: a.y + c.rand(-20, 20) };
+          a._faceDir = -dir;
+        }
+        a._turtAim = t;
+        a.state = "turtback"; a.stateUntil = c.now + c.rand(BACK_MS[0], BACK_MS[1]);
+      },
+      drive(a, c) {
+        // the same ease the crop uses, and for the same reason: a backward
+        // scull is slower than this animal's own cruise, which is gait()'s
+        // floor. 0.34 per second is ~28px/s off the mark and dying away.
+        if (a._turtAim) creepToward(a, c, a._turtAim, 0.34);
+        if (c.now < a.stateUntil) return;
+        a._turtAim = null; a._faceDir = 0;
+        endEvent(a, c, { reroll: true, quiet: 1000, stop: true });
+      },
+    },
+
+    // ---- ASLEEP ON A DRIFT LOG -----------------------------------------
+    // The bask and this are the same posture in the same place and they are
+    // NOT the same behaviour: a bask is 7-14s of an animal with his eyes
+    // open, this is half a minute with them shut and his head drawn in, and
+    // it is a good deal rarer. Logs only, like the bask — he does not sleep
+    // on a lily any more than he basks on one.
+    {
+      id: "lognap", domain: "water", trigger: "seek",
+      every: [100000, 170000], chance: 0.55, cool: 75000,
+      states: ["turtnap", "turtstir"], ownsWater: true,
+      goto: { state: "tologbed", within: 12, giveUp: 30000, none: 12000,
+              lost: 12000, urgency: 0.32, pick: (a, c) => nearestFloat(a, c, true),
+              track: (a, c, ref) => ref.site },
+      begin(a, c) {
+        a.vx = 0; a.vy = 0;
+        a.state = "turtnap"; a.stateUntil = c.now + c.rand(TURT_NAP[0], TURT_NAP[1]);
+      },
+      drive(a, c, S) {
+        const p = S.claim;
+        if (!p) { endEvent(a, c, { reroll: true, quiet: 900, stop: true }); return; }
+        // BALANCED on it — the same 20px seat the bask uses, so his feet are
+        // on the timber and not in the water beside it, and the log's own
+        // drift carries him while he sleeps.
+        a.x = p.x; a.y = p.y - 20; a.vx = 0; a.vy = 0;
+        if (c.now < a.stateUntil) return;
+        if (a.state === "turtnap") {
+          a.state = "turtstir"; a.stateUntil = c.now + c.rand(TURT_STIR[0], TURT_STIR[1]);
+          return;
+        }
+        endEvent(a, c, { reroll: true, quiet: 1200 });
+        // and off, the same push back into the water the bask ends with
+        const ang = c.rand(0, Math.PI * 2), sp = gait(a, c, 0.15);
+        a.vx = Math.cos(ang) * sp; a.vy = Math.sin(ang) * sp;
+      },
     },
   ],
 });

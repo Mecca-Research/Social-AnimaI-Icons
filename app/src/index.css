@@ -5241,3 +5241,453 @@ body {
   .sai-crit--beetle .sai-crit-shadow{
     animation:none; transform:translateY(-30px) scale(1.46,1.65); opacity:.18; }
 }
+/* ==================================================================
+   v0.43  LAKE LIFE — the frog's three behaviours and the turtle's three
+   ==================================================================
+   Every rule here is scoped to one species, and every pose group it shows
+   is display:none by default (below), so nothing in this block can reach
+   another animal's sprite. That matters more than usual right now: state
+   names are global selectors and thirteen species are being drawn against
+   this same file. Every name claimed here starts "frog" or "turt".
+
+   WHAT THE STATES ARE
+     frogstill  the wait. Nothing moves. That IS the behaviour.
+     frogtongue the strike: 260ms, tongue only.
+     froggulp   the swallow.
+     frogleap   the escape launch, with the squeak.
+     frogdive   going in.
+     frogmud    down in the bottom silt, eyes open, waiting him out.
+     frogdig    burrowing into the shoreline mud.
+     frogsunk   asleep in it.
+     frogdoze   asleep afloat, under a lily the lake paints over him.
+     turtcrop   the beak shearing weed off the bottom.
+     turtchew   the mouthful.
+     turtback   sculling backwards on the front claws.
+     turtnap    asleep balanced on a drift log.
+     turtstir   waking on it.                                            */
+
+.sai-crit-tonguepose, .sai-crit-squeak, .sai-crit-plunge,
+.sai-crit-buriedpose, .sai-crit-mudspray, .sai-crit-floatpose,
+.sai-crit-jawridge, .sai-crit-chunk, .sai-crit-clawwash{ display:none; }
+
+/* ---------------- FROG: SIT AND WAIT ---------------- */
+/* The whole read of an ambush predator is that he is not doing anything.
+   Every idle loop the rig runs is switched off — breath, head bob, blink,
+   shadow pulse — and what is left is one 4.6s swell of the throat, small
+   enough that you have to look for it. Take even that away and he reads as
+   a paused sprite rather than a held one. */
+.sai-sprite[data-frog="frogstill"] .sai-crit--frog .sai-crit-head,
+.sai-sprite[data-frog="frogstill"] .sai-crit--frog .sai-crit-leg,
+.sai-sprite[data-frog="frogstill"] .sai-crit--frog .sai-crit-shadow,
+.sai-sprite[data-frog="frogtongue"] .sai-crit--frog .sai-crit-leg,
+.sai-sprite[data-frog="froggulp"] .sai-crit--frog .sai-crit-leg{ animation:none; }
+.sai-sprite[data-frog="frogstill"] .sai-crit--frog .sai-crit-lid,
+.sai-sprite[data-frog="frogtongue"] .sai-crit--frog .sai-crit-lid{
+  animation:none; transform:scaleY(0); }
+.sai-sprite[data-frog="frogstill"] .sai-crit--frog .sai-crit-body{
+  animation:sai-frog-hold 4.6s ease-in-out infinite; }
+@keyframes sai-frog-hold{ 0%,100%{transform:scaleY(1);} 50%{transform:scaleY(1.014);} }
+
+/* THE TONGUE. Drawn at full reach and scaled out of the mouth: 90ms out,
+   50ms stuck to it, 120ms back — which is the 260ms the state runs for, so
+   `forwards` never has anything to hold. The origin is the left edge of the
+   drawn band, which is the corner of his mouth. */
+.sai-sprite[data-frog="frogtongue"] .sai-crit--frog .sai-crit-tonguepose{
+  display:inline; transform-box:fill-box; transform-origin:0% 50%;
+  animation:sai-frog-tongue .26s cubic-bezier(.2,.85,.3,1) forwards; }
+@keyframes sai-frog-tongue{
+  0%   {transform:scaleX(.02) scaleY(.6);}
+  34%  {transform:scaleX(1) scaleY(1);}
+  54%  {transform:scaleX(1) scaleY(1);}
+  100% {transform:scaleX(.02) scaleY(.5);}
+}
+.sai-sprite[data-frog="frogtongue"] .sai-crit--frog .sai-crit-mouth-open{
+  opacity:1; animation:sai-frog-gape .26s ease-out forwards; }
+.sai-sprite[data-frog="frogtongue"] .sai-crit--frog .sai-crit-mouth-rest{ opacity:0; }
+@keyframes sai-frog-gape{ 0%{transform:scale(.2);} 22%{transform:scale(1.1);} 100%{transform:scale(.3);} }
+/* the head snaps 2px forward with the tongue and settles. Two pixels: a
+   strike that moves the animal is a lunge, and he is not lunging. */
+.sai-sprite[data-frog="frogtongue"] .sai-crit--frog .sai-crit-head{
+  animation:sai-frog-strikehead .26s cubic-bezier(.2,.85,.3,1) forwards; }
+@keyframes sai-frog-strikehead{
+  0%{transform:translate(0,0);} 26%{transform:translate(2px,-1px);}
+  60%{transform:translate(1px,0);} 100%{transform:translate(0,0);}
+}
+
+/* THE SWALLOW. Eyes shut — a frog pulls its eyeballs down through the roof
+   of its mouth to push the mouthful back, which is why this is a blink and
+   not a chew — and the throat sac takes one pass. */
+.sai-sprite[data-frog="froggulp"] .sai-crit--frog .sai-crit-lid{
+  animation:sai-frog-gulplid .42s ease-in-out forwards; }
+@keyframes sai-frog-gulplid{
+  0%{transform:scaleY(0);} 25%,60%{transform:scaleY(1);} 100%{transform:scaleY(0);}
+}
+.sai-sprite[data-frog="froggulp"] .sai-crit--frog .sai-crit-croaksac{
+  display:inline; transform-box:fill-box; transform-origin:50% 15%;
+  animation:sai-frog-gulp .42s ease-in-out forwards; }
+@keyframes sai-frog-gulp{
+  0%{transform:scale(.3);} 30%{transform:scale(1.05) translateY(1px);}
+  70%{transform:scale(.7);} 100%{transform:scale(.3);}
+}
+.sai-sprite[data-frog="froggulp"] .sai-crit--frog .sai-crit-head{
+  animation:sai-frog-gulphead .42s ease-in-out forwards; }
+@keyframes sai-frog-gulphead{
+  0%,100%{transform:rotate(0) translateY(0);} 40%{transform:rotate(-5deg) translateY(-1.4px);}
+}
+
+/* ---------------- FROG: THE EXPLOSIVE WATER LEAP ---------------- */
+/* The pose is the one the burst window already draws — a frog leaving the
+   bank is the same animal doing the same thing as a frog crossing a path —
+   so this reuses it outright and adds the one thing that is different: the
+   squeak. It rides the STATE and not data-burst, because the state is the
+   fact and the burst window is 300ms of it. */
+/* the flight is longer than the 300ms burst window Gait opens — LEAP_MS in
+   Ethogram.js is 520 and the water usually ends it sooner — so the pose
+   runs over the whole of it rather than landing early and waiting. */
+.sai-sprite[data-frog="frogleap"] .sai-crit--frog{ --sai-leap:.52s; }
+.sai-sprite[data-frog="frogleap"] .sai-crit--frog .sai-crit-leappose,
+.sai-sprite[data-frog="frogdive"] .sai-crit--frog .sai-crit-leappose{ display:inline; }
+.sai-sprite[data-frog="frogleap"] .sai-crit--frog .sai-crit-body,
+.sai-sprite[data-frog="frogleap"] .sai-crit--frog .sai-crit-head,
+.sai-sprite[data-frog="frogleap"] .sai-crit--frog .sai-crit-leg,
+.sai-sprite[data-frog="frogdive"] .sai-crit--frog .sai-crit-body,
+.sai-sprite[data-frog="frogdive"] .sai-crit--frog .sai-crit-head,
+.sai-sprite[data-frog="frogdive"] .sai-crit--frog .sai-crit-leg{ display:none; }
+.sai-sprite[data-frog="frogleap"] .sai-crit--frog .sai-crit-leappose{
+  transform-box:fill-box; transform-origin:16% 100%;
+  animation:sai-frog-leap var(--sai-leap,.3s) cubic-bezier(.22,.9,.3,1) forwards; }
+.sai-sprite[data-frog="frogleap"] .sai-crit--frog .leap-hind{
+  transform-box:fill-box; transform-origin:100% 0%;
+  animation:sai-frog-kick var(--sai-leap,.3s) cubic-bezier(.22,.9,.3,1) forwards; }
+.sai-sprite[data-frog="frogleap"] .sai-crit--frog .leap-fore{
+  transform-box:fill-box; transform-origin:0% 20%;
+  animation:sai-frog-catch var(--sai-leap,.3s) ease-out forwards; }
+/* ONE SHORT SHARP NOTE. 190ms, out and gone — set against the chorus's
+   .82s rolling loop there is no frame of one that reads as the other. */
+.sai-sprite[data-frog="frogleap"] .sai-crit--frog .sai-crit-squeak{
+  display:inline; transform-box:fill-box; transform-origin:0% 100%;
+  animation:sai-frog-squeak .19s ease-out forwards; }
+@keyframes sai-frog-squeak{
+  0%  {opacity:0; transform:scale(.35) translate(-3px,4px);}
+  30% {opacity:1; transform:scale(1) translate(0,0);}
+  100%{opacity:0; transform:scale(1.35) translate(5px,-5px);}
+}
+
+/* GOING IN. He is drawn over the water at zIndex 10 and the lake at 1, so
+   nothing here can cover him — the closing surface is painted again over
+   the top by the lake's canopy pass. All this does is take him down. */
+.sai-sprite[data-frog="frogdive"] .sai-crit--frog .sai-crit-plunge{ display:inline; }
+.sai-sprite[data-frog="frogdive"] .sai-crit--frog .plunge-ring{
+  transform-box:fill-box; transform-origin:50% 50%;
+  animation:sai-frog-plunge .62s ease-out infinite; }
+.sai-sprite[data-frog="frogdive"] .sai-crit--frog .plunge-ring:nth-child(2){ animation-delay:.2s; }
+@keyframes sai-frog-plunge{
+  0%{transform:scale(.25); opacity:.95;} 100%{transform:scale(1.9); opacity:0;}
+}
+.sai-sprite[data-frog="frogdive"] .sai-crit--frog .plunge-spray{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-frog-spray .5s ease-out forwards; }
+@keyframes sai-frog-spray{
+  0%{opacity:0; transform:scaleY(.2);} 20%{opacity:.9; transform:scaleY(1.1);}
+  100%{opacity:0; transform:scaleY(1.4) translateY(-4px);}
+}
+.sai-sprite[data-frog="frogdive"] .sai-crit-root{
+  animation:sai-frog-sink .55s ease-in forwards; }
+@keyframes sai-frog-sink{
+  0%{transform:scale(1); opacity:1;} 100%{transform:scale(.7); opacity:.38;}
+}
+.sai-sprite[data-frog="frogdive"] .sai-crit--frog .sai-crit-shadow{ opacity:0; }
+
+/* IN THE BOTTOM MUD. Eyes open — this is not sleep, it is a frog waiting
+   for a fox to leave — and the silt the lake paints over him is what makes
+   the difference between hidden and merely small. */
+.sai-sprite[data-frog="frogmud"] .sai-crit--frog .sai-crit-buriedpose,
+.sai-sprite[data-frog="frogsunk"] .sai-crit--frog .sai-crit-buriedpose{ display:inline; }
+.sai-sprite[data-frog="frogmud"] .sai-crit--frog .sai-crit-body,
+.sai-sprite[data-frog="frogmud"] .sai-crit--frog .sai-crit-head,
+.sai-sprite[data-frog="frogmud"] .sai-crit--frog .sai-crit-leg,
+.sai-sprite[data-frog="frogmud"] .sai-crit--frog .sai-crit-shadow,
+.sai-sprite[data-frog="frogsunk"] .sai-crit--frog .sai-crit-body,
+.sai-sprite[data-frog="frogsunk"] .sai-crit--frog .sai-crit-head,
+.sai-sprite[data-frog="frogsunk"] .sai-crit--frog .sai-crit-leg,
+.sai-sprite[data-frog="frogsunk"] .sai-crit--frog .sai-crit-shadow{ display:none; }
+.sai-sprite[data-frog="frogmud"] .sai-crit--frog .buried-shut,
+.sai-sprite[data-frog="frogsunk"] .sai-crit--frog .buried-open{ display:none; }
+.sai-sprite[data-frog="frogmud"] .sai-crit-root{ opacity:.62; }
+.sai-sprite[data-frog="frogmud"] .sai-crit--frog .buried-open{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-frog-watch 3.8s ease-in-out infinite; }
+@keyframes sai-frog-watch{
+  0%,44%,100%{transform:translateY(0);} 52%{transform:translateY(-.9px);}
+}
+/* ASLEEP IN THE SHORELINE MUD. The mound breathes, at 6.2s. Nothing else. */
+.sai-sprite[data-frog="frogsunk"] .sai-crit--frog .sai-crit-buriedpose{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-frog-mudbreath 6.2s ease-in-out infinite; }
+@keyframes sai-frog-mudbreath{
+  0%,100%{transform:scaleY(1);} 50%{transform:scaleY(1.035) translateY(-.6px);}
+}
+
+/* DIGGING IN. Rump first, which is how a frog does it: the hind feet cut
+   and he settles backwards into the hole they make. */
+.sai-sprite[data-frog="frogdig"] .sai-crit--frog .sai-crit-mudspray{
+  display:inline; transform-box:fill-box; transform-origin:100% 100%;
+  animation:sai-frog-clods .52s ease-out infinite; }
+@keyframes sai-frog-clods{
+  0%{opacity:0; transform:scale(.3) translate(6px,4px);}
+  25%{opacity:.95;}
+  100%{opacity:0; transform:scale(1.15) translate(-7px,-6px);}
+}
+.sai-sprite[data-frog="frogdig"] .sai-crit--frog .sai-crit-body{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-frog-settle .52s ease-in-out infinite; }
+@keyframes sai-frog-settle{
+  0%,100%{transform:translate(0,0) rotate(0);}
+  30%{transform:translate(-1.6px,1.6px) rotate(-3deg);}
+  65%{transform:translate(1.4px,2.4px) rotate(2.4deg);}
+}
+.sai-sprite[data-frog="frogdig"] .sai-crit--frog .sai-crit-head{
+  animation:sai-frog-dighead .52s ease-in-out infinite; }
+@keyframes sai-frog-dighead{
+  0%,100%{transform:translateY(0);} 50%{transform:translateY(1.8px);}
+}
+
+/* ASLEEP AT THE SURFACE, UNDER A LILY. The pose is drawn across a
+   waterline; all this adds is the swell under it. The lily itself is NOT
+   here — see PadLayer's canopy copy in SocialAnimalIcons.jsx. */
+.sai-sprite[data-frog="frogdoze"] .sai-crit--frog .sai-crit-floatpose{ display:inline; }
+.sai-sprite[data-frog="frogdoze"] .sai-crit--frog .sai-crit-body,
+.sai-sprite[data-frog="frogdoze"] .sai-crit--frog .sai-crit-head,
+.sai-sprite[data-frog="frogdoze"] .sai-crit--frog .sai-crit-leg,
+.sai-sprite[data-frog="frogdoze"] .sai-crit--frog .sai-crit-shadow{ display:none; }
+.sai-sprite[data-frog="frogdoze"] .sai-crit--frog .sai-crit-floatpose{
+  transform-box:fill-box; transform-origin:50% 60%;
+  animation:sai-frog-doze 5.8s ease-in-out infinite; }
+@keyframes sai-frog-doze{
+  0%,100%{transform:translateY(0) rotate(-.5deg);}
+  50%{transform:translateY(-1.4px) rotate(.6deg);}
+}
+.sai-sprite[data-frog="frogdoze"] .sai-crit--frog .float-ring{
+  transform-box:fill-box; transform-origin:50% 50%;
+  animation:sai-frog-dozering 5.8s ease-out infinite; }
+@keyframes sai-frog-dozering{
+  0%{transform:scale(.8); opacity:.5;} 100%{transform:scale(1.25); opacity:0;}
+}
+
+/* ---------------- TURTLE: THE WEED BED ---------------- */
+/* Head down and the beak working. The ridges show only while he is cutting,
+   which is the only time you would ever see them on a live turtle. */
+.sai-sprite[data-turt="turtcrop"] .sai-crit--turtle .sai-crit-jawridge{ display:inline; }
+.sai-sprite[data-turt="turtcrop"] .sai-crit--turtle .sai-crit-head{
+  transform-box:fill-box; transform-origin:10% 40%;
+  animation:sai-turt-crop .84s ease-in-out infinite; }
+@keyframes sai-turt-crop{
+  0%,100%{transform:rotate(20deg) translate(1px,3px);}
+  38%{transform:rotate(30deg) translate(3px,6px);}
+  56%{transform:rotate(26deg) translate(2px,4px);}
+}
+.sai-sprite[data-turt="turtcrop"] .sai-crit--turtle .sai-crit-mouth-open{
+  opacity:1; animation:sai-turt-bite .84s ease-in-out infinite; }
+.sai-sprite[data-turt="turtcrop"] .sai-crit--turtle .sai-crit-mouth-rest{ opacity:0; }
+@keyframes sai-turt-bite{
+  0%,100%{transform:scaleY(.15);} 34%{transform:scaleY(1);} 52%{transform:scaleY(.1);}
+}
+/* the feet plant and haul him along the bottom, diagonal pairs — this is a
+   walk on the bed of the lake and not a swim over it */
+.sai-sprite[data-turt="turtcrop"] .sai-crit--turtle .sai-crit-leg-fr,
+.sai-sprite[data-turt="turtcrop"] .sai-crit--turtle .sai-crit-leg-bl{
+  animation:sai-turt-crawlA 1.68s ease-in-out infinite; }
+.sai-sprite[data-turt="turtcrop"] .sai-crit--turtle .sai-crit-leg-fl,
+.sai-sprite[data-turt="turtcrop"] .sai-crit--turtle .sai-crit-leg-br{
+  animation:sai-turt-crawlA 1.68s ease-in-out infinite -.84s; }
+@keyframes sai-turt-crawlA{
+  0%,100%{transform:rotate(-12deg);} 50%{transform:rotate(12deg);}
+}
+/* THE MOUTHFUL. The chunk is in the beak and he works it back — the whole
+   reason to draw a piece coming off is that a grazer who never removes
+   anything is miming. */
+.sai-sprite[data-turt="turtchew"] .sai-crit--turtle .sai-crit-chunk{
+  display:inline; transform-box:fill-box; transform-origin:0% 50%;
+  animation:sai-turt-mouthful 1.1s ease-in-out infinite; }
+@keyframes sai-turt-mouthful{
+  0%{transform:translate(2px,-1px) rotate(-6deg);}
+  50%{transform:translate(-1px,1px) rotate(5deg);}
+  100%{transform:translate(2px,-1px) rotate(-6deg);}
+}
+.sai-sprite[data-turt="turtchew"] .sai-crit--turtle .sai-crit-head{
+  transform-box:fill-box; transform-origin:10% 40%;
+  animation:sai-turt-chew 1.1s ease-in-out infinite; }
+@keyframes sai-turt-chew{
+  0%,100%{transform:rotate(6deg) translateY(0);} 50%{transform:rotate(2deg) translateY(-1.2px);}
+}
+.sai-sprite[data-turt="turtchew"] .sai-crit--turtle .sai-crit-mouth-open{
+  opacity:1; animation:sai-turt-bite 1.1s ease-in-out infinite; }
+.sai-sprite[data-turt="turtchew"] .sai-crit--turtle .sai-crit-mouth-rest{ opacity:0; }
+
+/* ---------------- TURTLE: BACKING UP ---------------- */
+/* The long front claws scull FORWARD and the water goes with them. The
+   splash is ahead of him and the animal is going the other way, which is
+   the whole picture — and it is why the ethogram pins his facing rather
+   than letting the renderer point him down his own velocity. */
+.sai-sprite[data-turt="turtback"] .sai-crit--turtle .sai-crit-clawwash{
+  display:inline; transform-box:fill-box; transform-origin:0% 60%;
+  animation:sai-turt-wash .92s ease-in-out infinite; }
+@keyframes sai-turt-wash{
+  0%{opacity:.2; transform:translateX(2px) scale(.82);}
+  40%{opacity:.9; transform:translateX(-1px) scale(1.06);}
+  100%{opacity:.2; transform:translateX(2px) scale(.82);}
+}
+.sai-sprite[data-turt="turtback"] .sai-crit--turtle .sai-crit-leg-fr{
+  animation:sai-turt-scullA .92s ease-in-out infinite; }
+.sai-sprite[data-turt="turtback"] .sai-crit--turtle .sai-crit-leg-fl{
+  animation:sai-turt-scullA .92s ease-in-out infinite -.12s; }
+@keyframes sai-turt-scullA{
+  0%,100%{transform:rotate(-26deg) translateX(1px);}
+  45%{transform:rotate(30deg) translateX(3px);}
+}
+/* the hind feet trail: they are not driving this */
+.sai-sprite[data-turt="turtback"] .sai-crit--turtle .sai-crit-leg-br,
+.sai-sprite[data-turt="turtback"] .sai-crit--turtle .sai-crit-leg-bl{
+  animation:sai-turt-trail 2.6s ease-in-out infinite; }
+@keyframes sai-turt-trail{ 0%,100%{transform:rotate(-6deg);} 50%{transform:rotate(-1deg);} }
+.sai-sprite[data-turt="turtback"] .sai-crit--turtle .sai-crit-body{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-turt-tip .92s ease-in-out infinite; }
+@keyframes sai-turt-tip{
+  0%,100%{transform:rotate(-2deg) translateX(0);} 45%{transform:rotate(-4.5deg) translateX(-1.4px);}
+}
+
+/* ---------------- TURTLE: ASLEEP ON A DRIFT LOG ---------------- */
+/* He is BALANCED on it, so the sleep is a slow list from side to side on
+   top of the log's own drift, and the head is drawn back against the shell.
+   Eyes shut outright: the rig's blink is a 5.4s loop, and a sleeping animal
+   that opens its eyes every five seconds is a resting one. */
+.sai-sprite[data-turt="turtnap"] .sai-crit--turtle .sai-crit-lid{
+  animation:none; transform:scaleY(1); }
+.sai-sprite[data-turt="turtnap"] .sai-crit--turtle .sai-crit-head{
+  transform-box:fill-box; transform-origin:6% 60%;
+  animation:sai-turt-tuck 7.4s ease-in-out infinite; }
+@keyframes sai-turt-tuck{
+  0%,100%{transform:translate(-4px,1.6px) rotate(4deg);}
+  50%{transform:translate(-4.6px,2.4px) rotate(5.4deg);}
+}
+.sai-sprite[data-turt="turtnap"] .sai-crit--turtle .sai-crit-body{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-turt-nap 7.4s ease-in-out infinite; }
+@keyframes sai-turt-nap{
+  0%,100%{transform:rotate(-1.4deg) scaleY(1);}
+  50%{transform:rotate(1.4deg) scaleY(1.025);}
+}
+.sai-sprite[data-turt="turtnap"] .sai-crit--turtle .sai-crit-leg,
+.sai-sprite[data-turt="turtnap"] .sai-crit--turtle .sai-crit-tail{ animation:none; }
+/* ...and the wake: eyes open, head comes back out, one stretch, over the
+   state's own window. */
+.sai-sprite[data-turt="turtstir"] .sai-crit--turtle .sai-crit-lid{
+  animation:sai-turt-wake 2.6s ease-out forwards; }
+@keyframes sai-turt-wake{
+  0%{transform:scaleY(1);} 30%{transform:scaleY(.5);} 45%{transform:scaleY(.9);}
+  70%,100%{transform:scaleY(0);}
+}
+.sai-sprite[data-turt="turtstir"] .sai-crit--turtle .sai-crit-head{
+  transform-box:fill-box; transform-origin:6% 60%;
+  animation:sai-turt-neckout 2.6s ease-out forwards; }
+@keyframes sai-turt-neckout{
+  0%{transform:translate(-4px,1.6px) rotate(4deg);}
+  55%{transform:translate(2px,-1.6px) rotate(-6deg);}
+  100%{transform:translate(0,0) rotate(0);}
+}
+.sai-sprite[data-turt="turtstir"] .sai-crit--turtle .sai-crit-leg{
+  animation:sai-turt-stretch 2.6s ease-out forwards; }
+@keyframes sai-turt-stretch{
+  0%{transform:rotate(0);} 40%{transform:rotate(-16deg);} 100%{transform:rotate(0);}
+}
+
+/* ---------------- the lake's own new life ---------------- */
+/* Insects. They MOVE — that is the point of them; a sit-and-wait predator
+   with nothing passing is just a frog sitting down — and the moving is done
+   by the sim, which drives each one's transform every frame. All the CSS
+   owns is the wingbeat, which is far too fast to drive from a 60Hz sim. */
+.sai-bug-wing{ transform-box:fill-box; transform-origin:100% 50%;
+  animation:sai-bug-beat .09s linear infinite; }
+.sai-bug-wing-l{ transform-origin:0% 50%; animation-name:sai-bug-beatl; }
+@keyframes sai-bug-beat{ 0%,100%{transform:rotate(-16deg) scaleY(.9);} 50%{transform:rotate(16deg) scaleY(1.05);} }
+@keyframes sai-bug-beatl{ 0%,100%{transform:rotate(16deg) scaleY(.9);} 50%{transform:rotate(-16deg) scaleY(1.05);} }
+.sai-bug-body{ transform-box:fill-box; transform-origin:50% 50%;
+  animation:sai-bug-hover 1.4s ease-in-out infinite; }
+@keyframes sai-bug-hover{ 0%,100%{transform:translateY(-.6px);} 50%{transform:translateY(.8px);} }
+/* the water strider does not fly; he shoves, and the dimples his feet make
+   are the only part of him the water shows */
+.sai-bug-dimple{ animation:sai-bug-dimple 1.9s ease-in-out infinite; }
+@keyframes sai-bug-dimple{ 0%,100%{opacity:.45;} 50%{opacity:.8;} }
+/* eaten: the sim hides the whole insect for a beat and brings it back on
+   its round. The fade is what stops one vanishing under the tongue. */
+.sai-bug[data-gone="1"]{ opacity:0; transition:opacity .12s linear; }
+
+/* Submerged weed, algae and duckweed. They sway; a still plant under water
+   is a picture of a plant. `data-crop` is how much is left after a turtle
+   has been through, driven onto the layer by the sim. */
+.sai-weed-frond{ transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-weed-sway 6.4s ease-in-out infinite; }
+@keyframes sai-weed-sway{
+  0%,100%{transform:rotate(-4deg) scaleY(1);} 50%{transform:rotate(5deg) scaleY(.97);}
+}
+.sai-weed-mat{ animation:sai-weed-breathe 8.2s ease-in-out infinite; }
+@keyframes sai-weed-breathe{ 0%,100%{opacity:.72;} 50%{opacity:.92;} }
+.sai-weed[data-crop="1"] .sai-weed-crop2{ opacity:.4; }
+.sai-weed[data-crop="2"] .sai-weed-crop2{ display:none; }
+.sai-weed[data-crop="2"] .sai-weed-crop1{ opacity:.5; }
+
+/* The lake's canopy pass — what is painted OVER an animal at zIndex 12: the
+   lily a sleeping frog is under, the rim of the mud he is buried in, and
+   the silt that closes over one on the bottom. None of it belongs inside a
+   sprite, and all of it used to. */
+.sai-lakeveil{ pointer-events:none; }
+.sai-veil-silt{ transform-box:fill-box; transform-origin:50% 50%;
+  animation:sai-veil-silt 4.6s ease-in-out infinite; }
+@keyframes sai-veil-silt{ 0%,100%{opacity:.6; transform:scale(1);} 50%{opacity:.82; transform:scale(1.07);} }
+
+@media (prefers-reduced-motion: reduce){
+  /* The POSES stay — a frog with his tongue out is the behaviour, and a
+     turtle asleep on a log is a turtle asleep on a log. Only the loops go,
+     and the one-shots are pinned at the frame that carries the meaning. */
+  .sai-sprite[data-frog="frogstill"] .sai-crit--frog .sai-crit-body,
+  .sai-sprite[data-frog="froggulp"] .sai-crit--frog .sai-crit-croaksac,
+  .sai-sprite[data-frog="froggulp"] .sai-crit--frog .sai-crit-head,
+  .sai-sprite[data-frog="froggulp"] .sai-crit--frog .sai-crit-lid,
+  .sai-sprite[data-frog="frogdive"] .sai-crit--frog .plunge-ring,
+  .sai-sprite[data-frog="frogdive"] .sai-crit--frog .plunge-spray,
+  .sai-sprite[data-frog="frogmud"] .sai-crit--frog .buried-open,
+  .sai-sprite[data-frog="frogsunk"] .sai-crit--frog .sai-crit-buriedpose,
+  .sai-sprite[data-frog="frogdig"] .sai-crit--frog .sai-crit-mudspray,
+  .sai-sprite[data-frog="frogdig"] .sai-crit--frog .sai-crit-body,
+  .sai-sprite[data-frog="frogdig"] .sai-crit--frog .sai-crit-head,
+  .sai-sprite[data-frog="frogdoze"] .sai-crit--frog .sai-crit-floatpose,
+  .sai-sprite[data-frog="frogdoze"] .sai-crit--frog .float-ring,
+  .sai-sprite[data-turt="turtcrop"] .sai-crit--turtle .sai-crit-head,
+  .sai-sprite[data-turt="turtcrop"] .sai-crit--turtle .sai-crit-mouth-open,
+  .sai-sprite[data-turt="turtcrop"] .sai-crit--turtle .sai-crit-leg,
+  .sai-sprite[data-turt="turtchew"] .sai-crit--turtle .sai-crit-chunk,
+  .sai-sprite[data-turt="turtchew"] .sai-crit--turtle .sai-crit-head,
+  .sai-sprite[data-turt="turtchew"] .sai-crit--turtle .sai-crit-mouth-open,
+  .sai-sprite[data-turt="turtback"] .sai-crit--turtle .sai-crit-clawwash,
+  .sai-sprite[data-turt="turtback"] .sai-crit--turtle .sai-crit-leg,
+  .sai-sprite[data-turt="turtback"] .sai-crit--turtle .sai-crit-body,
+  .sai-sprite[data-turt="turtnap"] .sai-crit--turtle .sai-crit-head,
+  .sai-sprite[data-turt="turtnap"] .sai-crit--turtle .sai-crit-body,
+  .sai-bug-wing, .sai-bug-body, .sai-bug-dimple,
+  .sai-weed-frond, .sai-weed-mat, .sai-veil-silt{ animation:none; }
+  /* held at full reach, which is the frame that says what he just did */
+  .sai-sprite[data-frog="frogtongue"] .sai-crit--frog .sai-crit-tonguepose{
+    animation:none; transform:none; }
+  .sai-sprite[data-frog="frogtongue"] .sai-crit--frog .sai-crit-head,
+  .sai-sprite[data-frog="frogtongue"] .sai-crit--frog .sai-crit-mouth-open,
+  .sai-sprite[data-frog="frogleap"] .sai-crit--frog .sai-crit-leappose,
+  .sai-sprite[data-frog="frogleap"] .sai-crit--frog .leap-hind,
+  .sai-sprite[data-frog="frogleap"] .sai-crit--frog .leap-fore,
+  .sai-sprite[data-frog="frogleap"] .sai-crit--frog .sai-crit-squeak,
+  .sai-sprite[data-frog="frogdive"] .sai-crit-root,
+  .sai-sprite[data-turt="turtstir"] .sai-crit--turtle .sai-crit-lid,
+  .sai-sprite[data-turt="turtstir"] .sai-crit--turtle .sai-crit-head,
+  .sai-sprite[data-turt="turtstir"] .sai-crit--turtle .sai-crit-leg{ animation:none; }
+  .sai-sprite[data-turt="turtstir"] .sai-crit--turtle .sai-crit-lid{ transform:scaleY(0); }
+}

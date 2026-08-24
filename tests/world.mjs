@@ -916,7 +916,14 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
 // lockstep on open water, which is the one pairing that reads as machinery.
 {
   const r = await page.evaluate(`(w => {
-    const els = [...document.querySelectorAll('.sai-water-pad')];
+    // ...and the SEVEN COPIES the lake's canopy pass now holds are not
+    // floats: they are the same seven lilies drawn a second time at zIndex
+    // 12 so one can be painted over a frog asleep under it, off the same
+    // PadArt and therefore carrying the same pad- class on purpose. Counting
+    // them here read 18 floats against 11 in the world. The floats are the
+    // ones NOT in the canopy pass.
+    const els = [...document.querySelectorAll('.sai-water-pad')]
+      .filter(e => !e.closest('.sai-lakeveil'));
     const cls = els.map(e => [...e.classList].find(c => c.startsWith('pad-')) || 'NONE');
     const st = els.map(e => { const s = getComputedStyle(e);
       return s.animationDuration + '/' + s.animationDelay; });
@@ -1878,6 +1885,508 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
   chk(r.bad.length === 0, 'no forage site is painted over by a crown',
     r.bad.length ? r.bad.slice(0, 3).join('; ')
                  : `${r.n} sites, all clear of six crowns at six stage shapes`);
+}
+// ==================== LAKE LIFE: the frog and the turtle ====================
+/**
+ * A SECOND PAGE, ON A VIRTUAL CLOCK, and both halves of that matter.
+ *
+ * Virtual, because every check below is about a behaviour and headless rAF
+ * runs at about four frames a second with dt clamped: the frog's ambush is a
+ * ten-second wait for an insect on a nine-second round, which is forty real
+ * seconds of nothing, and his strike is 260ms — one frame. `__pump` advances
+ * a manual 16.667ms clock so a bout is budgeted in the sim's own time.
+ *
+ * Second page, because installing that clock on the page the rest of this
+ * suite uses would stop its rAF dead. Its own errors go into the same `errs`
+ * bucket, so the last check still speaks for both.
+ *
+ * ONE THING THE PUMP CANNOT DO: CSS animations run on the document timeline,
+ * which a stubbed rAF never advances — every pose renders at its 0% frame.
+ * So the checks here ask which drawing is SHOWING (a computed display, which
+ * needs no frames) and never how far through its cycle it is. The pictures
+ * were taken on the real clock; see the report.
+ */
+{
+  const page2 = await browser.newPage({ viewport: { width: 1500, height: 940 } });
+  page2.on('pageerror', (e) => errs.push('lake page: ' + e.message));
+  await page2.addInitScript(() => {
+    let t = 1000; const cbs = [];
+    performance.now = () => t;
+    window.requestAnimationFrame = (cb) => { cbs.push(cb); return cbs.length; };
+    window.cancelAnimationFrame = () => {};
+    window.__pump = (n) => { for (let i = 0; i < n; i++) { t += 16.667;
+      const list = cbs.splice(0); for (const c of list) { try { c(t); } catch (e) { window.__perr = String(e); } } } };
+  });
+  await page2.goto(process.env.SAI_URL || 'http://localhost:5173/', { waitUntil: 'networkidle' });
+  await page2.waitForTimeout(1800);
+  await page2.evaluate('window.__pump(30)');
+  await page2.evaluate('window.__saiWorld.__seedCast && window.__saiWorld.__seedCast()');
+  // the React snapshot is a 300ms setInterval on the REAL clock, and the
+  // sprites do not exist in the DOM until it has run — three of the checks
+  // below read computed styles off them
+  await page2.waitForTimeout(800);
+  await page2.evaluate('window.__pump(20)');
+
+  // the fixture: park everyone but the subject, hand an animal a clean
+  // ledger in a chosen domain, and re-offer one event every frame until it
+  // takes. Re-offering is how a 0.6 chance becomes a check that runs.
+  await page2.evaluate(`(() => {
+    const w = window.__saiWorld;
+    w.__park = (keep) => { for (const o of w.agents) if (o.species !== keep) {
+      o.x = -900; o.y = -900; o.state = 'idle'; o.vx = o.vy = 0; o._eth = null;
+      o.idleUntil = 9e9; o.intentUntil = 9e9; o.noEventUntil = 9e9; } };
+    w.__free = (a, dom) => {
+      a.dragging = false; a.z = 0; a.state = 'wander'; a.intent = 'wander';
+      a.intentUntil = 0; a.noEventUntil = 0; a.idleUntil = 0; a._carry = null;
+      a._faceDir = 0; a._eth = null;
+      window.__pump(1);
+      const S = a._eth;
+      if (S) { S.domain = dom; S.left = 9e6; S.tripUntil = performance.now() + 9e6; }
+    };
+    // ...and MUZZLE THE SIBLINGS while it does, which forage.mjs learned
+    // the same way: an appetite held permanently due is still only offered
+    // after the events above it in the list have had their turn, and the
+    // frog's ambush comes round often enough to take every window his nap
+    // was waiting for. The check then reports "never dozed" about an
+    // ethogram that dozes perfectly well.
+    w.__evs = { frog: ['float', 'ambush', 'waterleap', 'frognap'],
+                turtle: ['float', 'graze', 'backpaddle', 'lognap'] };
+    w.__drive = (a, id, want, frames) => {
+      const sibs = (w.__evs[a.species] || []).filter((e) => e !== id);
+      for (let i = 0; i < frames; i++) {
+        const S = a._eth;
+        if (S) {
+          S.cd[id] = 0; S.seekAt[id] = 0; S.near[id] = false;
+          for (const e of sibs) { S.cd[e] = performance.now() + 9e6; S.armed[e] = 0; }
+        }
+        a.noEventUntil = 0;
+        if (want.indexOf(a.state) >= 0) return i;
+        window.__pump(1);
+        if (want.indexOf(a.state) >= 0) return i;
+      }
+      return -1;
+    };
+    w.__spriteOf = (species) => {
+      const all = Array.prototype.slice.call(document.querySelectorAll('.sai-sprite'));
+      return all.find((e) => e.querySelector('.sai-crit--' + species)) || null;
+    };
+  })()`);
+
+  // ---- 1. there IS more life in the lake, and it is where it should be --
+  const L = await page2.evaluate(`(() => {
+    const w = window.__saiWorld, l = w.__lakeLife();
+    const wet = l.weeds.filter((p) => w.lakeRhoAt(p.x, p.y) < 0.95).length;
+    const kinds = {}; for (const p of l.weeds) kinds[p.kind] = (kinds[p.kind] | 0) + 1;
+    return { bugs: l.bugs.length, amb: l.bugs.filter((b) => b.perch).length,
+             weeds: l.weeds.length, wet, kinds, mud: l.mudBeds.length,
+             bugR: l.bugR, wob: l.bugWob, regrow: l.regrow };
+  })()`);
+  chk(L.bugs >= 8 && L.weeds >= 10 && L.mud >= 2,
+    'the lake has insects and plants in it now',
+    `${L.bugs} insects, ${L.weeds} plants (${JSON.stringify(L.kinds)}), ${L.mud} shoreline hollows`);
+  chk(L.wet === L.weeds, 'every plant is in the water rather than beside it',
+    `${L.wet}/${L.weeds} at rho < 0.95`);
+
+  // ---- 2. the insects MOVE, which is the whole point of them -----------
+  const M = await page2.evaluate(`(() => {
+    const w = window.__saiWorld, b0 = w.__lakeLife().bugs.map((b) => ({ x: b.x, y: b.y }));
+    for (const a of w.agents) { a.x = -900; a.y = -900; a.state = 'idle';
+      a.idleUntil = 9e9; a.intentUntil = 9e9; a.noEventUntil = 9e9; }
+    for (let i = 0; i < 120; i++) window.__pump(1);      // two seconds of sim
+    const b1 = w.__lakeLife().bugs;
+    const moved = b1.map((b, i) => Math.hypot(b.x - b0[i].x, b.y - b0[i].y));
+    const px = document.querySelectorAll('.sai-bug').length;
+    const el = document.querySelectorAll('.sai-bug')[0];
+    return { min: Math.min.apply(null, moved), max: Math.max.apply(null, moved),
+             px, tr: el ? el.style.transform : '' };
+  })()`);
+  chk(M.min > 4 && M.px === L.bugs,
+    'and they move — a sit-and-wait predator needs something that passes',
+    `${M.px} drawn; over 2s of sim the slowest went ${M.min.toFixed(1)}px and the fastest ${M.max.toFixed(1)}px`);
+
+  // ---- 3. the ambush is GEOMETRY, not a coincidence ---------------------
+  // Every ambush insect's round was built to pass through the tongue tip of
+  // a frog sitting at its perch. That is a fact about two drawings and can
+  // be asked of the world rather than waited for.
+  const G = await page2.evaluate(`(() => {
+    const w = window.__saiWorld, l = w.__lakeLife();
+    const fr = w.agents.find((a) => a.species === 'frog');
+    const r = fr ? fr.r : 19.9;
+    const out = [];
+    for (const b of l.bugs) {
+      if (!b.perch) continue;
+      const tip = w.frogTipAt(b.perch.x, b.perch.y, r, b.perch.dir);
+      const d = Math.hypot(tip.x - b.hx, tip.y - b.hy);
+      const band = w.frogBandAt(b.perch.t);
+      out.push({ off: d - b.R, catchR: tip.pad + l.bugR,
+                 rho: w.lakeRhoAt(b.perch.x, b.perch.y),
+                 band: band ? [band[0], band[1]] : null,
+                 dam: w.onDamAt(b.perch.x, b.perch.y) });
+    }
+    return { out, n: out.length };
+  })()`);
+  {
+    const worst = Math.max(...G.out.map((o) => Math.abs(o.off)));
+    const room = Math.min(...G.out.map((o) => o.catchR)) - L.wob;
+    chk(G.n >= 4 && worst <= room,
+      "each ambush insect's round passes through the frog's own tongue tip",
+      `${G.n} rounds, worst miss ${worst.toFixed(2)}px against ${room.toFixed(2)}px of ` +
+      `catch left after the ${L.wob}px drift`);
+    const bad = G.out.filter((o) => !(o.rho < 0.97) || !o.band || o.dam);
+    chk(bad.length === 0, 'and every perch is water a frog-shaped animal can sit in',
+      bad.length ? `${bad.length} bad: ${JSON.stringify(bad[0])}`
+                 : `rho ${G.out.map((o) => o.rho.toFixed(3)).join(', ')}, all inside their own band, none on timber`);
+  }
+
+  // ---- 4. nothing new stands on the finished dam ------------------------
+  // Asked with the dam BUILT, because the plan is what a weed bed has to
+  // dodge and the lake opens with nothing placed. Put back afterwards.
+  const D = await page2.evaluate(`(() => {
+    const w = window.__saiWorld, was = w.damCount | 0;
+    w.damCount = (w.def.dam || []).length;
+    window.__pump(1);
+    const l = w.__lakeLife();
+    let weeds = 0, mud = 0, rounds = 0;
+    for (const p of l.weeds) if (w.onDamAt(p.x, p.y)) weeds++;
+    for (const m of l.mudBeds) if (w.onDamAt(m.x, m.y)) mud++;
+    for (const b of l.bugs) {
+      for (let k = 0; k < 24; k++) {
+        const t = k / 24 * Math.PI * 2;
+        if (w.onDamAt(b.hx + Math.cos(t) * b.R, b.hy + Math.sin(t) * b.R)) { rounds++; break; }
+      }
+    }
+    w.damCount = was; window.__pump(1);
+    return { weeds, mud, rounds, logs: (w.def.dam || []).length };
+  })()`);
+  chk(D.weeds === 0 && D.mud === 0 && D.rounds === 0,
+    'and none of it is under the beaver, with all hundred logs standing',
+    `${D.weeds} plants, ${D.mud} hollows and ${D.rounds} insect rounds on the timber`);
+
+  // ---- 5. the hollows are hollows in the DRAWN mud ----------------------
+  const H = await page2.evaluate(`(() => {
+    const w = window.__saiWorld, l = w.__lakeLife();
+    const sink = w.__mudSink;
+    return l.mudBeds.map((m) => ({
+      anchor: w.lakeRhoAt(m.x, m.y),                       // where he stands
+      mound: w.lakeRhoAt(m.x, m.y + sink),                 // where he is DRAWN
+      sink }));
+  })()`);
+  {
+    const dry = H.every((m) => m.anchor >= 1.00);
+    const inLiner = H.every((m) => m.mound > 1.00 && m.mound < 1.08);
+    chk(dry && inLiner,
+      'a buried frog is drawn in the mud liner and stood on dry ground',
+      H.map((m) => `anchor ${m.anchor.toFixed(3)} / mound ${m.mound.toFixed(3)}`).join('; ') +
+      ` (the pose sinks ${H[0].sink}px)`);
+  }
+
+  // ---- 6. no state name here belongs to anyone else ---------------------
+  const O = await page2.evaluate(`(() => {
+    const own = window.__saiWorld.__ethoOwners();
+    const mine = ['frogstill','frogtongue','froggulp','frogleap','frogdive','frogmud',
+                  'frogdig','frogsunk','frogdoze','toambush','tolily','tomudbed',
+                  'turtcrop','turtchew','turtback','turtnap','turtstir','toweed','tologbed'];
+    const clash = [];
+    for (const s of mine) {
+      const who = Object.keys(own).filter((k) => own[k].indexOf(s) >= 0);
+      if (who.length !== 1) clash.push(s + ' -> ' + (who.join('+') || 'nobody'));
+    }
+    return { clash, n: mine.length, species: Object.keys(own).length };
+  })()`);
+  chk(O.clash.length === 0,
+    'every state name the lake claims belongs to exactly one species',
+    O.clash.length ? O.clash.join(', ')
+                   : `${O.n} names across ${O.species} ethograms, no sharing`);
+
+  // ---- 7. every one of them draws something of its own ------------------
+  const P = await page2.evaluate(`(() => {
+    const w = window.__saiWorld;
+    const want = [['frog','frogtongue','.sai-crit-tonguepose'],
+                  ['frog','frogleap','.sai-crit-squeak'],
+                  ['frog','frogleap','.sai-crit-leappose'],
+                  ['frog','frogdive','.sai-crit-plunge'],
+                  ['frog','frogmud','.sai-crit-buriedpose'],
+                  ['frog','frogdig','.sai-crit-mudspray'],
+                  ['frog','frogsunk','.sai-crit-buriedpose'],
+                  ['frog','frogdoze','.sai-crit-floatpose'],
+                  ['turtle','turtcrop','.sai-crit-jawridge'],
+                  ['turtle','turtchew','.sai-crit-chunk'],
+                  ['turtle','turtback','.sai-crit-clawwash']];
+    const bad = [];
+    for (const row of want) {
+      const el = w.__spriteOf(row[0]);
+      if (!el) { bad.push(row[1] + ': no sprite'); continue; }
+      const k = row[0] === 'frog' ? 'frog' : 'turt';
+      const keep = el.dataset[k];
+      el.dataset[k] = row[1];
+      const g = el.querySelector(row[2]);
+      const d = g ? getComputedStyle(g).display : 'missing';
+      el.dataset[k] = keep;
+      if (d === 'none' || d === 'missing') bad.push(row[1] + ' ' + row[2] + ': ' + d);
+    }
+    return { bad, n: want.length };
+  })()`);
+  chk(P.bad.length === 0, 'and every one of them puts its own drawing on screen',
+    P.bad.length ? P.bad.join('; ') : `${P.n} state-to-pose pairs, all showing`);
+
+  // ---- 8. THE AMBUSH, watched ------------------------------------------
+  // Budgeted in SIMULATED time: 40s of it. He has to hold still first —
+  // that is the behaviour — so the check counts the frames he spends doing
+  // nothing before the tongue goes out, and fails saying what it saw.
+  const A = await page2.evaluate(`(() => {
+    const w = window.__saiWorld, a = w.agents.find((x) => x.species === 'frog');
+    if (!a) return { none: 'no frog' };
+    w.__park('frog');
+    const b0 = w.__lakeLife().bugs.find((z) => z.perch);
+    a.x = b0.perch.x; a.y = b0.perch.y;
+    w.__free(a, 'water');
+    const got = w.__drive(a, 'ambush', ['frogstill'], 300);
+    if (got < 0) return { none: 'never settled to wait; state ' + a.state };
+    const x0 = a.x, y0 = a.y;
+    let still = 0, moved = 0, strike = -1, hitDist = -1, ate = null;
+    for (let i = 0; i < 2400 && strike < 0; i++) {
+      window.__pump(1);
+      if (a.state === 'frogstill') { still++;
+        moved = Math.max(moved, Math.hypot(a.x - x0, a.y - y0)); }
+      if (a.state === 'frogtongue') {
+        strike = i;
+        const tip = w.frogTipAt(a.x, a.y, a.r, a._faceDir || 1);
+        for (const b of w.__lakeLife().bugs) {
+          const d = Math.hypot(b.x - tip.x, b.y - tip.y);
+          if (hitDist < 0 || d < hitDist) hitDist = d;
+        }
+        ate = a._frogBug ? 1 : 0;
+      }
+    }
+    // ...and the fly is taken: it rides the tongue in and then goes away
+    let gone = 0;
+    for (let i = 0; i < 90; i++) { window.__pump(1);
+      if (a.state === 'froggulp') gone = w.__lakeLife().bugs.filter((b) => b.goneUntil > performance.now()).length; }
+    const tip = w.frogTipAt(a.x, a.y, a.r, a._faceDir || 1);
+    return { still, moved, strike, hitDist, ate, gone,
+             catchR: tip.pad + w.__lakeLife().bugR, state: a.state, meals: a._frogAte | 0 };
+  })()`);
+  chk(!A.none && A.strike > 0,
+    'the frog waits at the waterline and then the tongue goes out',
+    A.none || `held still for ${A.still} frames (${(A.still / 60).toFixed(1)}s of sim), ` +
+      `struck on frame ${A.strike}`);
+  chk(!A.none && A.moved < 0.6,
+    'and he does not move a pixel while he waits',
+    A.none || `worst drift over ${A.still} waiting frames: ${(A.moved || 0).toFixed(2)}px`);
+  chk(!A.none && A.hitDist >= 0 && A.hitDist <= A.catchR,
+    'and what he strikes is inside the reach the drawing gives him',
+    A.none || `nearest insect ${A.hitDist.toFixed(2)}px from the drawn tongue tip, ` +
+      `which catches inside ${A.catchR.toFixed(2)}px`);
+  chk(!A.none && A.gone >= 1,
+    'and the insect is eaten rather than merely reached at',
+    A.none || `${A.gone} insect(s) off the water after the swallow, ${A.meals} taken this bout`);
+
+  // ---- 9. THE EXPLOSIVE WATER LEAP -------------------------------------
+  const W2 = await page2.evaluate(`(() => {
+    const w = window.__saiWorld, a = w.agents.find((x) => x.species === 'frog');
+    const fox = w.agents.find((x) => x.species === 'fox');
+    if (!a || !fox) return { none: 'no frog or no fox' };
+    w.__park('frog');
+    const p = w.lakePointAt(1.0, 1.22);
+    a.x = p.x; a.y = p.y; w.__free(a, 'land');
+    window.__pump(2);
+    const q = w.lakePointAt(1.0, 1.62);
+    fox.x = q.x; fox.y = q.y; fox.state = 'wander'; fox.vx = 0; fox.vy = 0;
+    fox.idleUntil = 9e9; fox.intentUntil = 9e9; fox.noEventUntil = 9e9;
+    const rho0 = w.lakeRhoAt(a.x, a.y), d0 = Math.hypot(fox.x - a.x, fox.y - a.y);
+    const got = w.__drive(a, 'waterleap', ['frogleap'], 300);
+    if (got < 0) return { none: 'never left the bank; state ' + a.state + ' at rho ' + rho0.toFixed(2) };
+    const burst = a._burstUntil > performance.now();
+    const seen = {}; let diveRho = null, mudRho = null;
+    for (let i = 0; i < 900; i++) {
+      window.__pump(1);
+      seen[a.state] = (seen[a.state] | 0) + 1;
+      if (a.state === 'frogdive' && diveRho === null) diveRho = w.lakeRhoAt(a.x, a.y);
+      if (a.state === 'frogmud' && mudRho === null) mudRho = w.lakeRhoAt(a.x, a.y);
+      if (mudRho !== null) break;
+    }
+    return { seen, burst, rho0, d0, diveRho, mudRho,
+             d1: Math.hypot(fox.x - a.x, fox.y - a.y), state: a.state };
+  })()`);
+  chk(!W2.none && W2.burst,
+    'a fox on the bank launches the frog into the lake, on his burst',
+    W2.none || `bolted from rho ${W2.rho0.toFixed(2)} with the fox ${Math.round(W2.d0)}px away, ` +
+      'burst window open');
+  chk(!W2.none && W2.diveRho !== null && W2.diveRho < 0.97,
+    'and he is IN the water by the time the dive starts',
+    W2.none || `entered at rho ${W2.diveRho === null ? 'never' : W2.diveRho.toFixed(3)} ` +
+      `(0.97 is the waterline); frames ${JSON.stringify(W2.seen)}`);
+  chk(!W2.none && W2.mudRho !== null && W2.mudRho < 0.97 && W2.d1 > W2.d0,
+    'and he ends up down in the bottom mud, further off than he started',
+    W2.none || `bottom at rho ${W2.mudRho === null ? 'never reached' : W2.mudRho.toFixed(3)}, ` +
+      `${Math.round(W2.d1)}px from the fox against ${Math.round(W2.d0)}px`);
+
+  // ---- 10. ASLEEP UNDER A LILY, and the lily is drawn OVER him ----------
+  // This project has fixed "the animal brought his own scenery" three times.
+  // The frog is at zIndex 10 and the pads at 2, so the leaf that hides him
+  // has to be painted again in the canopy pass — and this is the check that
+  // says it actually is.
+  const S1 = await page2.evaluate(`(() => {
+    const w = window.__saiWorld, a = w.agents.find((x) => x.species === 'frog');
+    if (!a) return { none: 'no frog' };
+    w.__park('frog');
+    const pad = w.pads.filter((p) => !p.log)[0];
+    a.x = pad.x + 30; a.y = pad.y + 30; w.__free(a, 'water');
+    window.__pump(2);
+    // ONE appetite, two beds, and the pick is a 3:2 roll — so the budget is
+    // for several bouts and not for one. 9000 frames is 150s of sim, about
+    // six naps: the odds of never drawing the lily are under a percent.
+    const got = w.__drive(a, 'frognap', ['frogdoze'], 9000);
+    if (got < 0) return { none: 'never dozed; state ' + a.state };
+    const claim = a._eth.claim;
+    const veils = Array.prototype.slice.call(document.querySelectorAll('.sai-lakeveil'));
+    let over = null;
+    for (const v of veils) {
+      if (+v.style.opacity < 0.5) continue;
+      const z = +getComputedStyle(v).zIndex;
+      const m = /translate\\(([-0-9.]+)px, *([-0-9.]+)px\\)/.exec(v.style.transform || '');
+      if (!m) continue;
+      const d = Math.hypot(+m[1] - a.x, +m[2] - a.y);
+      if (!over || d < over.d) over = { d, z };
+    }
+    const sp = w.__spriteOf('frog');
+    return { onLily: !!claim && !claim.log, dy: a.y - claim.y, over,
+             spriteZ: sp ? +getComputedStyle(sp.parentElement).zIndex : null };
+  })()`);
+  chk(!S1.none && S1.onLily,
+    'the frog sleeps afloat at a lily and not on a drift log',
+    S1.none || `claimed a ${S1.onLily ? 'lily pad' : 'log'}, sitting ${(-S1.dy).toFixed(0)}px above its centre`);
+  chk(!S1.none && S1.over && S1.over.d < 4 && S1.over.z > S1.spriteZ,
+    'and the lily that hides him is painted OVER him, not inside his sprite',
+    S1.none || (S1.over ? `a canopy lily at zIndex ${S1.over.z} sits ${S1.over.d.toFixed(1)}px ` +
+      `from him, against the sprite's ${S1.spriteZ}` : 'nothing is drawn over him'));
+
+  // ---- 11. ...or buried in the shoreline mud ---------------------------
+  const S2 = await page2.evaluate(`(() => {
+    const w = window.__saiWorld, a = w.agents.find((x) => x.species === 'frog');
+    if (!a) return { none: 'no frog' };
+    w.__park('frog');
+    const bed = w.__lakeLife().mudBeds[0];
+    a.x = bed.x - 40; a.y = bed.y - 30; w.__free(a, 'water');
+    window.__pump(2);
+    const got = w.__drive(a, 'frognap', ['frogdig', 'frogsunk'], 16000);   // the rarer of the two beds
+    if (got < 0) return { none: 'never went to ground; state ' + a.state };
+    let sunk = -1;
+    for (let i = 0; i < 400 && sunk < 0; i++) { window.__pump(1); if (a.state === 'frogsunk') sunk = i; }
+    const rim = Array.prototype.slice.call(document.querySelectorAll('.sai-lakeveil'))
+      .filter((v) => +v.style.opacity > 0.5).length;
+    return { sunk, rim, at: a._eth.claim ? Math.hypot(a.x - a._eth.claim.x, a.y - a._eth.claim.y) : -1,
+             rho: w.lakeRhoAt(a.x, a.y) };
+  })()`);
+  chk(!S2.none && S2.sunk >= 0 && S2.at >= 0 && S2.at < 2,
+    'the other way he sleeps is dug into a shoreline hollow',
+    S2.none || `dug in and settled ${S2.sunk} frames later, ${S2.at.toFixed(1)}px off the bed ` +
+      `at rho ${S2.rho.toFixed(3)}`);
+  chk(!S2.none && S2.rim >= 1,
+    'and the rim of it is painted over him too',
+    S2.none || `${S2.rim} canopy piece(s) showing while he is under`);
+
+  // ---- 12. THE TURTLE ON THE BOTTOM ------------------------------------
+  const T1 = await page2.evaluate(`(() => {
+    const w = window.__saiWorld, a = w.agents.find((x) => x.species === 'turtle');
+    if (!a) return { none: 'no turtle' };
+    w.__park('turtle');
+    const bed = w.__lakeLife().weeds[3];
+    a.x = bed.x - 70; a.y = bed.y; w.__free(a, 'water');
+    window.__pump(2);
+    const got = w.__drive(a, 'graze', ['turtcrop'], 2000);
+    if (got < 0) return { none: 'never got his head down; state ' + a.state };
+    const p = a._eth.claim;
+    const beak = w.turtleBeakAt(a.x, a.y, a.r, a._faceDir || 1);
+    const off = Math.hypot(beak.x - p.x, beak.y - p.y);
+    const crop0 = p.crop;
+    let x0 = a.x, y0 = a.y, crept = 0, bites = 0, chew = 0;
+    for (let i = 0; i < 1500; i++) {
+      window.__pump(1);
+      if (a.state === 'turtcrop') crept = Math.max(crept, Math.hypot(a.x - x0, a.y - y0));
+      if (a.state === 'turtchew') chew++;
+      if (p.crop > crop0 + bites - 1 && p.crop > crop0) bites = p.crop - crop0;
+      if (a.state !== 'turtcrop' && a.state !== 'turtchew') break;
+    }
+    return { off, crop0, crop1: p.crop, kind: p.kind, crept, chew,
+             half: w.__lakeLife().weedHalf * (p.s || 1), state: a.state };
+  })()`);
+  chk(!T1.none && T1.off <= T1.half,
+    'the turtle arrives at a weed bed with his BEAK in it, not his shell',
+    T1.none || `the drawn shearing edge is ${T1.off.toFixed(1)}px from the bed's centre, ` +
+      `which is painted ${T1.half.toFixed(0)}px wide`);
+  chk(!T1.none && T1.crop1 > T1.crop0 && T1.chew > 0,
+    'and a chunk actually comes off it',
+    T1.none || `${T1.kind} bed went from crop level ${T1.crop0} to ${T1.crop1}, ` +
+      `with ${T1.chew} frames of chewing`);
+  chk(!T1.none && T1.crept > 3,
+    'and he swims along the bottom while he cuts rather than standing still',
+    T1.none || `crept ${T1.crept.toFixed(1)}px across the bed`);
+
+  // ...and it grows back, or one turtle strips the lake
+  const T2 = await page2.evaluate(`(() => {
+    const w = window.__saiWorld, l = w.__lakeLife();
+    const p = l.weeds.find((x) => x.crop > 0) || l.weeds[0];
+    if (!p.crop) { p.crop = 2; p.cropAt = performance.now(); }
+    const was = p.crop;
+    const need = Math.ceil(l.regrow / 16.667) + 30;
+    for (let i = 0; i < need; i++) window.__pump(1);
+    return { was, now: p.crop, secs: (l.regrow / 1000) };
+  })()`);
+  chk(T2.now < T2.was, 'and the bed grows back, so the lake is not stripped bare',
+    `crop ${T2.was} -> ${T2.now} over ${T2.secs}s of sim`);
+
+  // ---- 13. BACKING UP --------------------------------------------------
+  const T3 = await page2.evaluate(`(() => {
+    const w = window.__saiWorld, a = w.agents.find((x) => x.species === 'turtle');
+    if (!a) return { none: 'no turtle' };
+    w.__park('turtle');
+    const p = w.lakePointAt(0.4, 0.45);
+    a.x = p.x; a.y = p.y; w.__free(a, 'water'); a._faceDir = 1;
+    window.__pump(2);
+    const got = w.__drive(a, 'backpaddle', ['turtback'], 900);
+    if (got < 0) return { none: 'never backed up; state ' + a.state };
+    const dir = a._faceDir, x0 = a.x, y0 = a.y;
+    let turned = 0;
+    for (let i = 0; i < 260; i++) { window.__pump(1);
+      if (a._faceDir !== dir) turned++;
+      if (a.state !== 'turtback') break; }
+    const sp = w.__spriteOf('turtle');
+    return { dir, dx: a.x - x0, moved: Math.hypot(a.x - x0, a.y - y0), turned,
+             sdir: sp ? sp.dataset.dir : null, state: a.state };
+  })()`);
+  chk(!T3.none && T3.moved > 8 && T3.dx * T3.dir < 0 && T3.turned === 0,
+    'the turtle sculls BACKWARDS without turning round',
+    T3.none || `facing ${T3.dir > 0 ? 'east' : 'west'} the whole way and travelling ` +
+      `${Math.abs(T3.dx).toFixed(0)}px the other way (${T3.moved.toFixed(0)}px in all)`);
+
+  // ---- 14. ASLEEP ON A DRIFT LOG ---------------------------------------
+  const T4 = await page2.evaluate(`(() => {
+    const w = window.__saiWorld, a = w.agents.find((x) => x.species === 'turtle');
+    if (!a) return { none: 'no turtle' };
+    w.__park('turtle');
+    const log = w.pads.filter((p) => p.log)[0];
+    a.x = log.x + 50; a.y = log.y + 40; w.__free(a, 'water');
+    window.__pump(2);
+    const got = w.__drive(a, 'lognap', ['turtnap'], 3000);
+    if (got < 0) return { none: 'never turned in; state ' + a.state };
+    const p = a._eth.claim;
+    let off = 0, drift = 0;
+    const px = p.x, py = p.y;
+    for (let i = 0; i < 400; i++) { window.__pump(1);
+      if (a.state !== 'turtnap') break;
+      off = Math.max(off, Math.hypot(a.x - p.x, a.y - (p.y - 20)));
+      drift = Math.hypot(p.x - px, p.y - py); }
+    return { log: !!p.log, off, drift, state: a.state };
+  })()`);
+  chk(!T4.none && T4.log && T4.off < 1.5,
+    'and he sleeps balanced on a floating LOG, riding it as it drifts',
+    T4.none || `on a ${T4.log ? 'drift log' : 'lily pad'}, never more than ${T4.off.toFixed(2)}px ` +
+      `off his seat while it moved ${T4.drift.toFixed(1)}px under him`);
+
+  const perr = await page2.evaluate('window.__perr || ""');
+  chk(!perr, 'nothing threw inside a stepped frame', perr || 'clean');
+  await page2.close();
 }
 
 chk(errs.length === 0, 'no JS errors', errs.length ? errs[0] : 'clean');

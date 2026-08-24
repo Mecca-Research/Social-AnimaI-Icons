@@ -2126,10 +2126,22 @@ function SquirrelDraw({ uid }) {
 }
 
 // ---------------- TURTLE — scute-tiled shell dome, stubby legs, sage skin ----------------
+// ---- WHERE THE TURTLE'S BEAK IS, for the same reason FROG_TONGUE exists.
+// He crops submerged weed, and "he is at the plant" has to mean his JAWS are
+// in it and not that his shell is somewhere near it. This is the shearing
+// edge of the beak in the sprite's 120-unit viewBox, after TURTLE_G.
+const TURTLE_G = { cx: 60, cy: 106, k: 0.98 };
+const TURTLE_BEAK_LOCAL = [108, 72];
+export const TURTLE_BEAK = {
+  x: TURTLE_G.cx + TURTLE_G.k * (TURTLE_BEAK_LOCAL[0] - TURTLE_G.cx),
+  y: TURTLE_G.cy + TURTLE_G.k * (TURTLE_BEAK_LOCAL[1] - TURTLE_G.cy),
+};
+
 function TurtleDraw({ uid }) {
   const S = ["#a8804a", "#7d5c30", "#54401e"], scute = "#c9a86a", skin = ["#a9c97e", "#7da257", "#527238"], ink = "#26330f";
+  const weed = ["#4e9c5f", "#3d7d4a", "#79c98a"];
   return (
-    <g transform="translate(60 106) scale(.98) translate(-60 -106)">
+    <g transform={`translate(${TURTLE_G.cx} ${TURTLE_G.cy}) scale(${TURTLE_G.k}) translate(${-TURTLE_G.cx} ${-TURTLE_G.cy})`}>
       <defs>
         <Fur id={`${uid}s`} c={S} />
         <Fur id={`${uid}k`} c={skin} />
@@ -2151,6 +2163,33 @@ function TurtleDraw({ uid }) {
         <ellipse cx="104" cy="68.5" rx="4.6" ry="3.8" fill={skin[1]} />
         <circle cx="105.4" cy="67.2" r=".9" fill={ink} />
         <FaceKit lid={skin[1]} e1={[91, 63]} e2={[99.5, 61.5]} er={2.6} iris={ink} mouth={[101, 73]} blushCol="#e8a48e" />
+      </g>
+
+      {/* ================= THE POND TURTLE, FEEDING =======================
+          He has no teeth. The beak is a shearing edge with two horn-like
+          ridges on it, and the reason to draw them is that they are the
+          whole mechanism of what he does to a weed bed: he does not nibble,
+          he cuts a piece off. Shown only while the beak is working. */}
+      <g className="sai-crit-jawridge">
+        <path d="M 99.6 69.8 L 109 68.4 L 108.6 71.6 L 100.2 72.6 Z" fill="#efe2ba" />
+        <path d="M 100.2 74 L 108.4 73.2 L 107.6 76.4 L 100.6 76.2 Z" fill="#cbb987" />
+        <path d="M 100 72.8 L 108.6 72 L 108.6 73 L 100.2 73.8 Z" fill={ink} opacity=".45" />
+      </g>
+      {/* ...and the piece itself, held in the beak on the way down */}
+      <g className="sai-crit-chunk">
+        <path d="M 110 68 q 8 -6 13 -2 q -4 6 -10 6 Z" fill={weed[0]} />
+        <path d="M 111 74 q 7 1 10 6 q -7 1 -11 -3 Z" fill={weed[1]} />
+        <path d="M 113 70.5 q 6 -1 9 1" stroke={weed[2]} strokeWidth="1.4" fill="none" strokeLinecap="round" />
+      </g>
+      {/* THE BACKWARD SWIM. He sculls the long front claws forward and the
+          water goes with them — the splash is off the CLAWS and ahead of
+          him, which is the only visible difference between a turtle backing
+          up and a turtle swimming very badly. */}
+      <g className="sai-crit-clawwash">
+        <path d="M 96 84 l 8 -3 M 98 88 l 9 -1 M 97 92 l 9 2" stroke={skin[2]} strokeWidth="2.6" strokeLinecap="round" fill="none" />
+        <ellipse cx="99" cy="88" rx="15" ry="7" fill="none" stroke="#cdf3ff" strokeWidth="1.8" opacity=".7" />
+        <ellipse cx="105" cy="84" rx="9" ry="4" fill="none" stroke="#eafcff" strokeWidth="1.5" opacity=".6" />
+        <path d="M 110 79 l 5 -4 M 114 84 l 6 -1 M 106 76 l 2 -5" stroke="#dff7ff" strokeWidth="1.9" strokeLinecap="round" fill="none" />
       </g>
     </g>
   );
@@ -2886,10 +2925,35 @@ function RaccoonDraw({ uid }) {
 }
 
 // ---------------- FROG — squat, dome eyes on top, wide mouth, hop ----------------
+// ---- THE FROG'S TONGUE, AS A NUMBER THE REST OF THE WORLD CAN READ ----
+// Geometry-as-physics: the strike may only land where the drawing actually
+// goes. `FROG_G` is the wrapper every part of FrogDraw is scaled by, so the
+// tip below is the drawn tip in the sprite's own 120-unit viewBox — not a
+// reach invented in the ethogram and then illustrated. SocialAnimalIcons
+// turns it into stage px (it is r * 2.7 / 120 px per unit) and the ambush
+// only fires on an insect inside `pad` of that point.
+const FROG_G = { cx: 60, cy: 106, k: 0.92 };
+const FROG_TIP_LOCAL = [150, 66];    // the sticky pad's centre, before the wrapper
+const FROG_PAD_LOCAL = 7;            // ...and its radius
+const FROG_ROOT_LOCAL = [86, 79.5];  // ...and where the band leaves his mouth
+const FROG_MOUND_LOCAL = [60, 100];  // ...and the centre of the mud he sinks into
+const frogU = (p) => ({ x: FROG_G.cx + FROG_G.k * (p[0] - FROG_G.cx),
+                        y: FROG_G.cy + FROG_G.k * (p[1] - FROG_G.cy) });
+export const FROG_TONGUE = { ...frogU(FROG_TIP_LOCAL), root: frogU(FROG_ROOT_LOCAL),
+                             pad: FROG_PAD_LOCAL * FROG_G.k };
+/**
+ * ...and where the BURIED pose puts its mound, for the same reason. The
+ * sprite is centred on its anchor and this pose paints at the ground line,
+ * so a hollow in the bank drawn on the anchor is a hollow the frog sits
+ * below. The lake solves the bed's position against this number.
+ */
+export const FROG_BURIED = frogU(FROG_MOUND_LOCAL);
+
 function FrogDraw({ uid }) {
   const F = ["#9fe07a", "#5cae54", "#37773f"], belly = "#e9f7c8", ink = "#1f3315";
+  const mud = ["#5d4425", "#4c371e", "#3b2a17"];
   return (
-    <g transform="translate(60 106) scale(.92) translate(-60 -106)">
+    <g transform={`translate(${FROG_G.cx} ${FROG_G.cy}) scale(${FROG_G.k}) translate(${-FROG_G.cx} ${-FROG_G.cy})`}>
       <defs><Fur id={`${uid}f`} c={F} /></defs>
       <Leg x={70} top={88} len={15} w={5.5} color={F[2]} cls="bl" />
       <Leg x={80} top={88} len={15} w={5.5} color={F[1]} cls="fr" />
@@ -2981,6 +3045,98 @@ function FrogDraw({ uid }) {
         <circle cx="99.3" cy="62.6" r="2.6" fill={ink} />
         <circle cx="99.8" cy="61.7" r=".9" fill="#fff" />
         <path d="M 82 74 q 10 6 19 -2" stroke={ink} strokeWidth="2.6" fill="none" strokeLinecap="round" />
+      </g>
+
+      {/* ================= THE LAKE FROG =================================
+          Six groups, all display:none until a state asks for one. Every
+          number in them is drawn where it is used: the tongue's tip IS the
+          reach, the mound over the buried frog IS what hides him, and the
+          waterline in the float pose IS where the lake sits on his back. */}
+
+      {/* ---- THE STRIKE (frogtongue) ----
+          Drawn EXTENDED and fired by CSS scaling it out of the mouth, so the
+          pad at FROG_TIP_LOCAL is the furthest the animal can ever reach.
+          Nothing else about him moves during a strike — a sit-and-wait
+          predator whose body also lunges is just a predator. */}
+      <g className="sai-crit-tonguepose">
+        <path d="M 86 74 C 106 70 128 65 146 61 L 150 71 C 130 76 108 81 88 85 Z" fill="#c4536d" />
+        <path d="M 88 75.5 C 106 71.5 126 67 144 63 L 145.5 66.5 C 126 71 106 76 89 79.5 Z" fill="#f096ab" opacity=".7" />
+        <ellipse cx={FROG_TIP_LOCAL[0]} cy={FROG_TIP_LOCAL[1]} rx={FROG_PAD_LOCAL} ry={FROG_PAD_LOCAL * 0.8} fill="#d8657f" />
+        <ellipse cx={FROG_TIP_LOCAL[0] - 1.4} cy={FROG_TIP_LOCAL[1] - 1.6} rx="3.2" ry="2.2" fill="#f9c3ce" opacity=".85" />
+      </g>
+
+      {/* ---- THE SQUEAK (frogleap) ----
+          Deliberately NOT the chorus. The chorus is three long rolling arcs
+          off the throat sac; this is one short spike out of the top of his
+          head, over in a fifth of a second. */}
+      <g className="sai-crit-squeak">
+        <path d="M 104 48 q 5 5 0 10" stroke="#fff6c9" strokeWidth="3.2" fill="none" strokeLinecap="round" />
+        <path d="M 112 43 q 8 10 0 20" stroke="#fff6c9" strokeWidth="2.4" fill="none" strokeLinecap="round" />
+        <path d="M 98 38 l 3 -8 M 108 33 l 1 -8 M 119 34 l 6 -6" stroke="#fff6c9" strokeWidth="2.4" strokeLinecap="round" fill="none" />
+      </g>
+
+      {/* ---- THE ENTRY (frogdive) ---- the water closing where he went in */}
+      <g className="sai-crit-plunge">
+        <ellipse className="plunge-ring" cx="60" cy="99" rx="17" ry="6.4" fill="none" stroke="#cdf3ff" strokeWidth="2.8" />
+        <ellipse className="plunge-ring" cx="60" cy="99" rx="17" ry="6.4" fill="none" stroke="#9fdcef" strokeWidth="2.2" />
+        <g className="plunge-spray">
+          <path d="M 47 95 l -6 -10 M 60 92 l 0 -12 M 73 95 l 7 -10" stroke="#e6fbff" strokeWidth="2.8" strokeLinecap="round" fill="none" />
+        </g>
+      </g>
+
+      {/* ---- BURIED (frogmud on the bottom, frogsunk in the shoreline) ----
+          A mound with two eye domes on it. `buried-open` is the frog gone to
+          ground with a predator on the bank and watching; `buried-shut` is
+          the same animal asleep in it. The two share one drawing because
+          they are one posture. */}
+      <g className="sai-crit-buriedpose">
+        <ellipse cx={FROG_MOUND_LOCAL[0]} cy={FROG_MOUND_LOCAL[1]} rx="29" ry="9.5" fill={mud[2]} />
+        <ellipse cx="59" cy="97" rx="25" ry="7.4" fill={mud[1]} />
+        <ellipse cx="56" cy="95.4" rx="15" ry="4" fill={mud[0]} opacity=".7" />
+        <path d="M 86 95.4 q 8 1.2 11 4.4 q -7 1.8 -12 .4 Z" fill={F[1]} />
+        <circle cx="68" cy="91.6" r="6.4" fill={F[1]} />
+        <circle cx="80.5" cy="93" r="5.8" fill={F[1]} />
+        <g className="buried-open">
+          <circle cx="68.8" cy="90.4" r="3.5" fill="#fdfef4" /><circle cx="69.8" cy="90.4" r="2" fill={ink} />
+          <circle cx="81.2" cy="91.8" r="3.1" fill="#fdfef4" /><circle cx="82.1" cy="91.8" r="1.8" fill={ink} />
+        </g>
+        <g className="buried-shut">
+          <path d="M 64.6 91.2 q 3.6 2.6 7.2 0" stroke={F[2]} strokeWidth="2.2" fill="none" strokeLinecap="round" />
+          <path d="M 77.6 92.6 q 3.4 2.4 6.8 0" stroke={F[2]} strokeWidth="2" fill="none" strokeLinecap="round" />
+        </g>
+      </g>
+
+      {/* ---- THE DIG (frogdig) ---- wet clods thrown out behind the rump */}
+      <g className="sai-crit-mudspray">
+        <circle cx="33" cy="93" r="4.4" fill={mud[1]} />
+        <circle cx="24" cy="86" r="3.2" fill={mud[0]} />
+        <circle cx="41" cy="84" r="2.6" fill={mud[2]} />
+        <circle cx="18" cy="94" r="2.4" fill={mud[2]} />
+      </g>
+
+      {/* ---- ASLEEP AT THE SURFACE (frogdoze) ----
+          The one posture in this file that is drawn ACROSS a waterline: the
+          limbs hang below it dulled, the back and the eye domes sit on it,
+          and the lily that hides him is painted over the top of the whole
+          sprite by the lake's canopy pass — not by this drawing, which is
+          the mistake this project has made three times. */}
+      <g className="sai-crit-floatpose">
+        <g className="float-under">
+          <path d="M 36 96 C 25 100 16 104 11 109" stroke={F[2]} strokeWidth="5.6" fill="none" strokeLinecap="round" />
+          <path d="M 84 96 C 95 99 104 103 109 108" stroke={F[2]} strokeWidth="5" fill="none" strokeLinecap="round" />
+          <ellipse cx="60" cy="97" rx="26" ry="9" fill={F[2]} />
+        </g>
+        <ellipse cx="60" cy="91" rx="31" ry="7.6" fill="#0e5364" opacity=".5" />
+        <path d="M 33 91 C 35 81 45 75 60 75 C 75 75 85 81 87 91 Z" fill={`url(#${uid}f)`} />
+        <circle cx="50" cy="80" r="2" fill={F[2]} opacity=".7" />
+        <circle cx="64" cy="78" r="1.7" fill={F[2]} opacity=".7" />
+        <circle cx="76" cy="82.5" r="6.8" fill={F[1]} />
+        <circle cx="88" cy="84.5" r="6" fill={F[1]} />
+        <path d="M 70.4 82.6 q 5.6 3.4 11.2 0" stroke={F[2]} strokeWidth="2.6" fill="none" strokeLinecap="round" />
+        <path d="M 83 84.6 q 5 3 10 0" stroke={F[2]} strokeWidth="2.4" fill="none" strokeLinecap="round" />
+        <g className="float-ring">
+          <ellipse cx="60" cy="91" rx="35" ry="9.4" fill="none" stroke="#bfeef7" strokeWidth="1.7" opacity=".45" />
+        </g>
       </g>
     </g>
   );
