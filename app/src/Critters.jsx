@@ -2,10 +2,32 @@ import React from "react";
 import { Leg, Quad, Under, BackShade, BellyShade, FaceKit, Fur } from "./CritterRig.jsx";
 import { RESERVED_SPECIES } from "./CrittersVault.jsx";
 import { PET_SPECIES } from "./CrittersPets.jsx";
+// leaf module, imported by art / behaviour / world alike — see its header.
+// Used ONLY by the dev sprite gallery at the bottom of this file, so the
+// true-size row can measure itself against the table instead of guessing.
+import { speciesApparent } from "./SpeciesProfile.js";
 
 /**
- * Critters — bespoke, hand-drawn, rigged animal sprites (v0.10)
+ * Critters — bespoke, hand-drawn, rigged animal sprites (v0.43)
  * ------------------------------------------------------------------
+ * v0.43 "the prey": thirteen animals join the fourteen below them —
+ * woodmouse, vole, rat, hare, gopher, grouse, gartersnake, boar, goat,
+ * crayfish, grub, beetle, earthworm. They sit in their own block at the
+ * bottom of the file with their own preamble; the rig, the class contract
+ * and the size rule are the same for them as for everything above.
+ *
+ * They are exported as PREY_SPECIES, deliberately NOT merged into SPECIES:
+ * SPECIES is the forest world's wander roster and __seedCast() opens a
+ * world with one agent per key in it. See the note on PREY_SPECIES.
+ *
+ * TWO THINGS TO KNOW BEFORE ADDING A FOURTEENTH:
+ *  • CSS SELECTORS ARE GLOBAL. Every class in here reaches every sprite.
+ *    Grep index.css AND all three Critters* files for a name before you
+ *    use it, or one animal quietly inherits another's animation.
+ *  • Species may now carry a `variants` list (see rat). Critter() pins the
+ *    caller's choice and otherwise derives a stable one from the sprite's
+ *    uid, then hands it to the draw function as a `variant` prop.
+ *
  * v0.10 "native forest cast": the roster is now all temperate-forest
  * natives. The exotic & domestic species (tiger, panda, koala, penguin,
  * cat, rabbit, pig) moved to CrittersVault.jsx, intact, for their future
@@ -358,6 +380,141 @@ function WolfDraw({ uid }) {
         </g>
         <FaceKit lid={F[1]} e1={[79, 41]} e2={[95, 39]} er={3.4} drawEyes={false} mouth={[97, 58]} />
       </g>
+
+      {/* ================= THE HOWL =================
+          Muzzle straight up, throat open, and the whole animal behind it.
+          Forty-odd degrees of muzzle elevation is not something a head
+          pasted onto a pair of shoulders with no neck between them can be
+          rotated into — the same wall the fox's scream hit — so the howl is
+          drawn whole, neck and all, and swapped in.
+
+          He is FILL 1.0108, the only species whose art overflows its
+          120-unit box, so the neck is kept inside the wrapper's own scale
+          rather than reaching past the top of it. */}
+      <g className="sai-crit-wfhowlpose">
+        {/* the standing frame: four legs, planted, doing nothing at all */}
+        <path d="M 44 74 L 42 103 L 50 103 L 51 74 Z" fill={sockF} />
+        <path d="M 76 74 L 75 103 L 83 103 L 83 74 Z" fill={sockF} />
+        <path d="M 38 76 L 35 103 L 44 103 L 46 76 Z" fill={sock} />
+        <path d="M 70 76 L 69 103 L 78 103 L 79 76 Z" fill={sock} />
+        {/* the low bushy tail, hanging straight down off the croup */}
+        <path d="M 34 72 C 24 76 17 86 15 97 C 20 98 25 95 28 91 C 30 86 32 79 36 74 Z" fill={`url(#${uid}f)`} />
+        <g className="wfh-body">
+          <path d="M 30 80 C 29 66 40 55 58 54 C 74 54 84 62 87 72 C 89 80 87 88 81 93 C 71 100 51 100 40 94 C 32 90 30 85 30 80 Z" fill={`url(#${uid}f)`} />
+          <path d="M 31 74 C 38 60 58 54 76 60 C 79 62 82 65 84 69 C 72 64 52 66 40 76 C 36 78 33 77 31 74 Z" fill={saddle} opacity=".6" />
+          <Under cx={58} cy={80} rx={26} ry={19} color={chest} k={.54} opacity={.92} />
+          {/* THE NECK, thrown up and back, which is the pose. The throat is
+              its own group because a howl is a thing a throat does. */}
+          <g className="wfh-neck">
+            <path d="M 62 62 C 62 46 66 32 74 22 L 92 30 C 86 40 82 52 80 66 Z" fill={`url(#${uid}f)`} />
+            <g className="wfh-throat">
+              <path d="M 78 62 C 78 48 82 36 90 27 L 97 33 C 90 42 87 52 86 64 Z" fill={chest} />
+            </g>
+            <g className="wfh-head">
+              {/* ears laid BACK along the skull: a howling wolf's are flat */}
+              <path d="M 68 24 L 58 12 L 72 12 Z" fill={F[1]} />
+              <path d="M 76 18 L 66 6 L 80 8 Z" fill={F[1]} />
+              <circle cx="84" cy="22" r="16" fill={`url(#${uid}f)`} />
+              <path d="M 70 16 C 78 8 92 10 98 18 C 90 20 76 20 70 16 Z" fill={saddle} opacity=".55" />
+              {/* the muzzle, pointing at the sky, mouth open at the end */}
+              <path d="M 92 12 C 100 2 110 -4 117 -4 C 118 4 113 14 104 22 Z" fill={chest} />
+              <path d="M 92 12 C 99 4 107 -1 114 -2 L 100 12 Z" fill={F[1]} opacity=".55" />
+              <ellipse cx="115" cy="-3" rx="3.8" ry="3.2" fill={ink} transform="rotate(-40 115 -3)" />
+              <path d="M 100 20 C 106 16 112 8 116 2" stroke={ink} strokeWidth="2.4" fill="none" strokeLinecap="round" />
+              {/* eye, half shut — everything about him is aimed upward */}
+              <path d="M 80 20 q 4 -2.6 7.6 -.6" stroke={ink} strokeWidth="2" fill="none" strokeLinecap="round" />
+            </g>
+          </g>
+        </g>
+      </g>
+      {/* THE SOUND, kept OUTSIDE the pose group so the pose's fill-box
+          origin is the animal and not the noise he is making. Three rings
+          off the end of the muzzle, bigger and slower than the fox's wail:
+          the drawing is the only "long range" this world has. */}
+      <g className="sai-crit-wfrings">
+        <path className="wfring wfring-a" d="M 122 -6 q 11 9 4 22" stroke="#e8f1ff" strokeWidth="2.8" fill="none" strokeLinecap="round" />
+        <path className="wfring wfring-b" d="M 130 -13 q 17 14 6 33" stroke="#e8f1ff" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+        <path className="wfring wfring-c" d="M 138 -20 q 23 19 8 44" stroke="#dbe7fa" strokeWidth="2.2" fill="none" strokeLinecap="round" />
+      </g>
+
+      {/* ================= THE RAISED LEG =================
+          The four-legged rig cannot lift a hind leg — the Quad draws two
+          pairs and nothing in it comes off the ground — so the whole
+          three-legged balance is drawn. Facing right, the leg goes up on
+          the WEST side; the sprite is flipped whole when he faces the other
+          way, which is why WF_POST_DX is the one offset in this phase that
+          IS mirrored. */}
+      <g className="sai-crit-wfmarkpose">
+        {/* the standing three: two fore, one hind */}
+        <path d="M 76 74 L 75 103 L 83 103 L 83 74 Z" fill={sockF} />
+        <path d="M 70 76 L 69 103 L 78 103 L 79 76 Z" fill={sock} />
+        <path d="M 48 78 L 46 103 L 55 103 L 56 78 Z" fill={sock} />
+        {/* the tail, out level and a little stiff: he is announcing
+            something. Kept BELOW the spine, because drawn any higher it
+            reads as a second raised leg, which is one too many. */}
+        <path d="M 34 74 C 24 73 15 71 7 67 C 10 63 17 62 24 65 C 29 68 33 72 37 74 Z" fill={`url(#${uid}f)`} />
+        <path d="M 30 70 C 24 69 18 68 13 66" stroke={saddle} strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".6" />
+        <g className="wfm-body">
+          <path d="M 30 78 C 29 64 40 53 58 52 C 74 52 84 60 87 70 C 89 78 87 86 81 91 C 71 98 51 98 40 92 C 32 88 30 83 30 78 Z" fill={`url(#${uid}f)`} />
+          <path d="M 31 72 C 38 58 58 52 76 58 C 79 60 82 63 84 67 C 72 62 52 64 40 74 C 36 76 33 75 31 72 Z" fill={saddle} opacity=".6" />
+          <Under cx={58} cy={78} rx={26} ry={19} color={chest} k={.54} opacity={.92} />
+          <g className="wfm-head">
+            <path d="M 68 36 L 70 9 L 84 28 Z" fill={F[1]} />
+            <path d="M 86 28 L 92 5 L 102 29 Z" fill={F[1]} />
+            <circle cx="86" cy="45" r="19.5" fill={`url(#${uid}f)`} />
+            <path d="M 89 46 C 100 43 110 46 115 53 C 110 60 99 62 89 58 Z" fill={chest} />
+            <ellipse cx="113.5" cy="52.5" rx="4.2" ry="3.5" fill={ink} />
+            <circle cx="79" cy="43" r="3.4" fill={ink} /><circle cx="79.4" cy="43.2" r="1.8" fill={iris} />
+            <circle cx="95" cy="41" r="3.4" fill={ink} /><circle cx="95.4" cy="41.2" r="1.8" fill={iris} />
+          </g>
+        </g>
+        {/* THE LEG ITSELF, cocked up and out over the spot */}
+        <g className="wfm-leg">
+          <path d="M 46 80 C 39 76 31 72 23 70 C 20 76 23 83 30 86 C 36 88 42 86 47 85 Z" fill={sock} />
+          <ellipse cx="23" cy="71" rx="6.8" ry="5" fill={sockF} />
+          <path d="M 30 79 C 35 80 40 81 44 82" stroke={sockF} strokeWidth="1.5" fill="none" strokeLinecap="round" opacity=".7" />
+        </g>
+        {/* WHAT HE LEAVES. `.wfm-wet` is centred at (26,101) and the
+            ethogram's WF_POST_DX/DY are measured off exactly that. */}
+        <g className="wfm-wet">
+          <ellipse cx="26" cy="101" rx="11" ry="4" fill="#5b4a2a" opacity=".8" />
+          <ellipse cx="24" cy="100" rx="6.4" ry="2.4" fill="#7a6438" opacity=".85" />
+          <path d="M 27 86 l -1.4 6 M 29 92 l -1 4.4" stroke="#cfd6c2" strokeWidth="1.8" fill="none" strokeLinecap="round" opacity=".75" />
+        </g>
+      </g>
+
+      {/* ================= THE BED =================
+          Curled, nose to the flank, brush over the paws — one round mass
+          with a wolf's outline on it. Two states share it: wfsleep
+          breathes, wfrouse lifts the head and stretches, and nothing is
+          redrawn between them. */}
+      <g className="sai-crit-wfbedpose">
+        <g className="wfb-flank">
+          <ellipse cx="58" cy="84" rx="31" ry="20" fill={`url(#${uid}f)`} />
+          <path d="M 28 80 C 34 64 58 60 78 70 C 84 74 88 80 89 86 C 74 74 48 74 34 88 C 31 88 29 85 28 80 Z" fill={saddle} opacity=".55" />
+          <Under cx={58} cy={88} rx={29} ry={15} color={chest} k={.5} opacity={.9} />
+        </g>
+        {/* the brush, curled right round the front over the forepaws */}
+        <g className="wfb-tail">
+          <path d="M 30 92 C 22 96 22 104 32 105 C 46 106 62 105 74 102 C 80 100 80 94 74 93 C 60 96 44 97 30 92 Z" fill={`url(#${uid}f)`} />
+          <path d="M 34 96 C 48 100 62 99 74 96" stroke={saddle} strokeWidth="2" fill="none" strokeLinecap="round" opacity=".6" />
+        </g>
+        <g className="wfb-head">
+          <g className="wfb-ear">
+            <path d="M 74 72 L 72 58 L 84 68 Z" fill={F[1]} />
+            <path d="M 86 68 L 90 55 L 96 70 Z" fill={F[1]} />
+          </g>
+          <circle cx="84" cy="82" r="15" fill={`url(#${uid}f)`} />
+          <path d="M 72 72 C 80 66 94 68 99 76 C 92 78 78 77 72 72 Z" fill={saddle} opacity=".5" />
+          {/* the muzzle laid back INTO the flank, which is the whole pose */}
+          <path d="M 80 88 C 70 92 62 94 56 94 C 58 100 68 101 78 97 Z" fill={chest} />
+          <ellipse cx="57" cy="94" rx="4" ry="3.2" fill={ink} />
+          {/* shut. Two lines, and they are the difference between lying
+              down and being asleep */}
+          <path d="M 76 80 q 3.6 2.4 7.4 .4" stroke={ink} strokeWidth="1.8" fill="none" strokeLinecap="round" />
+          <path d="M 88 78 q 3.4 2.2 6.6 .2" stroke={ink} strokeWidth="1.6" fill="none" strokeLinecap="round" />
+        </g>
+      </g>
     </g>
   );
 }
@@ -391,6 +548,135 @@ function CougarDraw({ uid }) {
           <circle cx="95" cy="39" r="3.4" fill={ink} /><circle cx="95.4" cy="39.2" r="1.85" fill={iris} /><circle cx="95.7" cy="39.4" r=".9" fill={ink} /><circle cx="96.1" cy="38" r=".9" fill="#fff" opacity=".95" />
         </g>
         <FaceKit lid={F[1]} e1={[79, 41]} e2={[95, 39]} er={3.4} drawEyes={false} mouth={[93, 60]} />
+      </g>
+
+      {/* ================= THE SCRAPE POSE =================
+          Hindquarters up, forequarters down, both hind paws mid-rake. The
+          walking rig cannot get there: it is a level ellipse with four legs
+          hung off it, and a scrape is a DIAGONAL animal — the whole read is
+          the line from the raised haunches down to the nose. Drawn whole
+          and swapped in, the bear's and the beaver's argument.
+
+          ONE POSTURE, TWO STATES. cgscrape rakes; cgscrapesniff stands over
+          what he raked with his nose down in it. What separates them is
+          entirely in the animation, the way bvgnaw and bvfell are one
+          drawing — so the heap he made does not jump when he stops making
+          it. He holds _faceDir 1 throughout, which is why the heap in
+          `.cgs-litter` can be a fixed offset in the ethogram. */}
+      <g className="sai-crit-cgscrapepose">
+        {/* the far hind leg, in the darker shade, already through its rake */}
+        <g className="cgs-hindfar">
+          <path d="M 44 66 C 39 76 34 85 29 93 C 33 97 39 96 43 91 C 46 82 50 73 54 67 Z" fill={F[2]} />
+          <ellipse cx="32" cy="94" rx="8" ry="4.4" fill="#7a521f" />
+        </g>
+        {/* the rope tail, thrown UP off the raised end — the one line that
+            says the back half of him is in the air and the front half is not */}
+        <path d="M 26 56 C 12 50 4 58 3 70" stroke={F[1]} strokeWidth="7" fill="none" strokeLinecap="round" />
+        <path d="M 3.4 64 C 3 66.6 3 68.4 3 70" stroke={tip} strokeWidth="7.4" fill="none" strokeLinecap="round" />
+        <g className="cgs-body">
+          {/* THE DIAGONAL. Haunches up at the west end, shoulders and head
+              driven down at the east, and forty units of drop between them
+              — the whole difference between this and an animal lying down. */}
+          <ellipse cx="42" cy="64" rx="21" ry="19" fill={`url(#${uid}f)`} />
+          <path d="M 22 60 C 24 44 46 40 62 54 C 72 63 80 76 92 86 L 84 98 C 70 92 56 86 42 86 C 27 86 21 74 22 60 Z" fill={`url(#${uid}f)`} />
+          <ellipse cx="79" cy="88" rx="17" ry="12.5" fill={`url(#${uid}f)`} />
+          <BackShade cx={44} cy={60} rx={23} ry={18} color="#6e4a1e" op={.22} />
+          <Under cx={62} cy={82} rx={22} ry={12} color={cream} k={.55} opacity={.88} />
+          {/* the head, driven down at the ground, muzzle almost in it */}
+          <g className="cgs-head">
+            <g className="sai-crit-ear"><circle cx="88" cy="79" r="6.4" fill={F[2]} /><circle cx="88" cy="79.5" r="3.1" fill={cream} /></g>
+            <circle cx="98" cy="92" r="13.5" fill={`url(#${uid}f)`} />
+            <ellipse cx="106" cy="98" rx="8" ry="6" fill={cream} />
+            <path d="M 106 94.6 l 3.2 2.6 -3.2 2.6 -3.2 -2.6 Z" fill={nose} />
+            {/* one open eye, looking back along his own flank at the work */}
+            <circle cx="93" cy="86" r="3" fill={ink} />
+            <circle cx="93.3" cy="86.2" r="1.6" fill={iris} />
+            <circle cx="93.6" cy="86.4" r=".8" fill={ink} />
+          </g>
+        </g>
+        {/* the near hind leg, mid-stroke, driving the litter back */}
+        <g className="cgs-hindnear">
+          <path d="M 52 70 C 47 81 41 90 35 97 C 40 102 47 100 51 94 C 54 84 58 75 62 70 Z" fill={F[1]} />
+          <ellipse cx="30" cy="98" rx="8.4" ry="4.8" fill={cream} />
+        </g>
+        {/* the two forepaws, planted, taking the weight of the front end */}
+        <ellipse cx="78" cy="101" rx="7.6" ry="4.2" fill={F[1]} />
+        <ellipse cx="89" cy="102" rx="7" ry="4" fill={cream} />
+        {/* THE HEAP AND WHAT IS STILL IN THE AIR. `.cgs-litter` is centred
+            at (22,100) and the ethogram's CG_SCRAPE_DX/DY are measured off
+            exactly that — the mark the ground layer keeps is the heap he
+            was seen to make, in the place he was seen to make it. */}
+        <g className="cgs-litter">
+          <ellipse cx="22" cy="100" rx="14" ry="5" fill="#54391d" />
+          <ellipse cx="19" cy="97.6" rx="9.6" ry="3.8" fill="#6b4a26" />
+          <path d="M 12 94 l 5.4 -1.6 M 15 89.6 l 5.6 -2.2 M 9 88 l 5 -2.8" stroke="#4a3520" strokeWidth="2.2" strokeLinecap="round" fill="none" />
+          <path d="M 6 83 l 4.6 -3.2 M 3 89 l 4.2 -2.2" stroke="#7d6a52" strokeWidth="1.9" strokeLinecap="round" fill="none" />
+        </g>
+      </g>
+
+      {/* ================= THE SLEEP POSE =================
+          Flat on his side, all four legs out, the rope tail extended. This
+          is the one posture in his repertoire with no legs under him at
+          all, so nothing about the rig survives it. Three states share it —
+          cgsettle folds down into it, cgsleep breathes, cgstir lifts the
+          head and turns an ear — and again the difference is the animation,
+          because an animal that redraws itself between "asleep" and "half
+          awake" reads as two animals. */}
+      <g className="sai-crit-cgsleeppose">
+        {/* the tail, laid out west along the ground */}
+        <g className="cgsl-tail">
+          <path d="M 32 95 C 20 97 11 100 5 102" stroke={F[1]} strokeWidth="6.6" fill="none" strokeLinecap="round" />
+          <path d="M 10 101 C 8 101.6 6.4 102 5 102.4" stroke={tip} strokeWidth="7" fill="none" strokeLinecap="round" />
+        </g>
+        {/* the two legs on the far side, stretched out and darker */}
+        <path d="M 46 96 C 38 98 32 100 27 101 C 29 104 34 105 40 104 C 44 103 47 101 49 99 Z" fill={F[2]} />
+        <path d="M 78 96 C 86 98 93 100 99 101 C 97 104 91 105 85 104 C 81 103 78 101 76 99 Z" fill={F[2]} />
+        <g className="cgsl-flank">
+          <ellipse cx="60" cy="90" rx="32" ry="13.5" fill={`url(#${uid}f)`} />
+          <BackShade cx={60} cy={88} rx={31} ry={12} color="#6e4a1e" op={.2} />
+          <Under cx={60} cy={94} rx={29} ry={9} color={cream} k={.5} opacity={.85} />
+        </g>
+        {/* the near pair, forepaws crossed out in front of the chest */}
+        <path d="M 50 94 C 42 97 35 100 30 103 C 33 106 39 106 45 104 C 49 102 52 99 54 97 Z" fill={F[1]} />
+        <ellipse cx="33" cy="104" rx="7.4" ry="3.6" fill={cream} />
+        <path d="M 74 94 C 82 97 89 100 94 103 C 91 106 85 106 79 104 C 75 102 72 99 70 97 Z" fill={F[1]} />
+        <ellipse cx="92" cy="104" rx="7.2" ry="3.6" fill={cream} />
+        <g className="cgsl-head">
+          <g className="cgsl-ear"><circle cx="89" cy="76" r="6.6" fill={F[2]} /><circle cx="89" cy="76.5" r="3.2" fill={cream} /></g>
+          <circle cx="97" cy="87" r="14.5" fill={`url(#${uid}f)`} />
+          <ellipse cx="105" cy="93" rx="8.2" ry="6.2" fill={cream} />
+          <path d="M 105 89.4 l 3.3 2.6 -3.3 2.6 -3.3 -2.6 Z" fill={nose} />
+          {/* SHUT. Two lines and a lash: the whole difference between an
+              animal lying down and an animal asleep, at this size. */}
+          <path d="M 88 84 q 3.6 2.2 7 0" stroke={ink} strokeWidth="1.7" fill="none" strokeLinecap="round" />
+          <path d="M 98 86.4 q 3.4 2 6.4 0" stroke={ink} strokeWidth="1.5" fill="none" strokeLinecap="round" />
+          <path d="M 92 76 q 3 -2.4 7 -2" stroke={F[2]} strokeWidth="1.3" fill="none" strokeLinecap="round" opacity=".8" />
+        </g>
+      </g>
+
+      {/* ================= THE KILL IN HIS JAWS =================
+          Not a posture: the ordinary walking rig carries this one, with the
+          head dropped by CSS and a hundred kilos of mountain goat swinging
+          under the muzzle. Shown by [data-carry="kill"] alone, so it works
+          for any carry — the wolf's, if he is ever given one — and it is
+          scoped to the cougar in the stylesheet so it never appears under
+          somebody else's chin. Nothing red: this world's carcass palette is
+          hide, bone and stain. */}
+      <g className="sai-crit-cgcarrypose">
+        {/* the mass, gripped at the withers and hanging UNDER the jaw: the
+            muzzle is at (93,54) and the mouth line at (93,60), so the load
+            starts where his teeth are and everything else swings off it */}
+        <ellipse cx="99" cy="72" rx="17" ry="10" fill="#8d8a82" transform="rotate(-11 99 72)" />
+        <ellipse cx="97" cy="70" rx="13.5" ry="7" fill="#d9d4cb" transform="rotate(-11 97 70)" />
+        {/* the goat's own head, hanging at the far end, and the horn, which
+            is the one line that says GOAT rather than anything else here */}
+        <ellipse cx="117" cy="79" rx="6.6" ry="5.2" fill="#c9c3b8" />
+        <path d="M 121 76 q 5.4 -2.4 6.6 -7.4" stroke="#4a4038" strokeWidth="2.2" fill="none" strokeLinecap="round" />
+        <path d="M 120 83 l 4.4 4.6" stroke="#8d8a82" strokeWidth="2.2" strokeLinecap="round" fill="none" />
+        {/* two legs trailing off the near end, which is what makes it read
+            as a body rather than as a rock */}
+        <path d="M 88 76 l -6.6 8.4 M 94 78 l -3.4 9.4" stroke="#8d8a82" strokeWidth="2.8" strokeLinecap="round" fill="none" />
+        <path d="M 81.4 84.4 l -3.4 1.6 M 90.6 87.4 l -2 3.2" stroke="#6f6a62" strokeWidth="2.4" strokeLinecap="round" fill="none" />
       </g>
     </g>
   );
@@ -1097,6 +1383,106 @@ function BeaverDraw({ uid }) {
         <path d="M 140 64 q 4.4 5 0 10" stroke="#dff3fb" strokeWidth="2" fill="none" strokeLinecap="round" opacity=".7" />
         <path d="M 134 78.5 q 6 1.6 10 -.6" stroke="#dff3fb" strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".45" />
       </g>
+
+      {/* ================= THE FORESTRY POSES =================
+          UP ON HIS HIND LEGS, which the four-legged rig cannot reach — the
+          same argument the raccoon's three poses and the bear's tree poses
+          make, and drawn the same way: whole, swapped in by CSS, with the
+          walking rig switched off underneath it.
+
+          One pose serves three states because it is one posture:
+            bvgnaw  incisors into the standing bole, jaws chattering
+            bvfell  chewing stopped, head UP, watching it go
+            bvbark  a strip of bark held in both forepaws, rasped side to
+                    side — a beaver eats the living layer on the INSIDE of
+                    the bark, and that is what this pose is for
+          What separates them is entirely in the animation, plus the strip,
+          which only bvbark draws.
+
+          He sits back on the tail, which is a prop and not decoration: a
+          beaver's tail is the third leg of the tripod he cuts from, and
+          drawing it flat on the ground under him is the one line that says
+          "sitting up" rather than "rearing". */}
+      <g className="sai-crit-bvsitpose">
+        {/* the paddle, flat behind him, taking his weight */}
+        <ellipse cx="24" cy="99" rx="21" ry="7.5" fill={tailC} transform="rotate(-5 24 99)" />
+        <ellipse cx="24" cy="99" rx="21" ry="7.5" fill="none" stroke={tailD} strokeWidth="1.3" transform="rotate(-5 24 99)" />
+        <path d="M 10 96.5 l 26 3 M 11 101 l 25 -1" stroke={tailD} strokeWidth="1" opacity=".5" />
+        {/* hind foot, webbed, planted forward of the haunch */}
+        <path d="M 58 92 q 9 2 14 8 q -6 3.4 -14 2 Z" fill={F[2]} />
+        <path d="M 60 96 l 8 3.4 M 62 93.6 l 8 4.6" stroke="#3f2812" strokeWidth="1" opacity=".5" />
+        {/* haunch and the upright trunk of him, leaning in at the tree */}
+        <ellipse cx="47" cy="80" rx="20" ry="19" fill={`url(#${uid}f)`} />
+        <g className="bvsit-body">
+          <ellipse cx="55" cy="60" rx="18.5" ry="22" fill={`url(#${uid}f)`} transform="rotate(9 55 60)" />
+          <BackShade cx={51} cy={56} rx={17} ry={20} color="#3f2812" op={.22} />
+          <Under cx={62} cy={64} rx={16} ry={19} color={belly} k={.5} opacity={.9} />
+          {/* the head rides the body, so the whole animal rocks as one */}
+          <g className="bvsit-head">
+            <g className="sai-crit-ear"><circle cx="58" cy="27" r="4.4" fill={F[1]} /><circle cx="58" cy="27.5" r="2.1" fill={F[2]} /></g>
+            <circle cx="72" cy="38" r="17" fill={`url(#${uid}f)`} />
+            <ellipse cx="85" cy="41" rx="9" ry="7" fill={belly} transform="rotate(-14 85 41)" />
+            <path d="M 86 36.6 q 4.2 0 4.2 3 q 0 2.6 -4.2 2.6 q -4.2 0 -4.2 -2.6 q 0 -3 4.2 -3 Z" fill={ink} />
+            {/* THE CHISELS. Four teeth, orange-faced the way a beaver's
+                actually are, and drawn long: they are the tool the whole
+                errand runs on and at this size they have to be legible. */}
+            <g className="bvsit-jaw">
+              <rect x="81.6" y="43.4" width="4.2" height="9.4" rx="1.3" fill="#ffeecb" stroke="#c08a3a" strokeWidth=".6" />
+              <rect x="86.2" y="43.2" width="4.2" height="9.8" rx="1.3" fill="#fff6de" stroke="#c08a3a" strokeWidth=".6" />
+              <path d="M 82 44.6 h 8.2" stroke="#d79c47" strokeWidth="1.2" opacity=".8" />
+              {/* the lower pair, shorter, working against them */}
+              <rect x="82.6" y="51.6" width="3.6" height="5.4" rx="1.1" fill="#f4e3bd" stroke="#c08a3a" strokeWidth=".5" />
+              <rect x="86.4" y="51.4" width="3.6" height="5.6" rx="1.1" fill="#f9ecc9" stroke="#c08a3a" strokeWidth=".5" />
+            </g>
+            <FaceKit lid={F[1]} e1={[68, 33]} e2={[80, 31]} er={2.9} iris={ink} mouths={false} />
+          </g>
+          {/* both forepaws up in front of the chest, which is where a
+              beaver's are whenever he is not walking on them */}
+          <g className="bvsit-paws">
+            <ellipse cx="72" cy="62" rx="6.4" ry="5" fill={F[1]} transform="rotate(-24 72 62)" />
+            <path d="M 76 58.6 l 3.4 -2 M 77 61.4 l 3.6 -1.2 M 76.6 64.4 l 3.4 .4" stroke={F[2]} strokeWidth="1.3" strokeLinecap="round" fill="none" />
+            <ellipse cx="66" cy="68" rx="6" ry="4.6" fill={F[2]} transform="rotate(-18 66 68)" />
+            {/* WHAT IS IN THEM, and only while he is eating: a strip of bark
+                turned over and over, pale side up. The pale side is the
+                cambium — the part he is actually after. */}
+            <g className="bvsit-strip">
+              <path d="M 62 72 C 70 66 79 60 88 56 L 90.4 60.6 C 81 65 72 71 64.6 76.6 Z" fill="#8a5f34" />
+              <path d="M 62.6 73.4 C 70 68 79 62 87.6 58 L 88.8 60.4 C 80.4 64.4 71.4 70.4 64 75.8 Z" fill="#e8d3a4" />
+              <path d="M 88 56 l 2.4 4.6" stroke="#6b4a2a" strokeWidth="1.1" strokeLinecap="round" />
+            </g>
+          </g>
+        </g>
+      </g>
+
+      {/* CHIPS. Not part of the pose — the limbing runs on the ordinary
+          four-legged rig with his head down, and chips come off both. They
+          fly from the muzzle in both, which is why they are anchored here
+          and not inside either drawing. */}
+      <g className="sai-crit-bvchips">
+        <path className="bvchip bvchip-a" d="M 88 50 l 6 -2.2 l 1.2 3 l -6 2.2 Z" fill="#f0dcae" />
+        <path className="bvchip bvchip-b" d="M 92 56 l 5.4 -1.4 l 1 2.6 l -5.4 1.4 Z" fill="#dcc189" />
+        <path className="bvchip bvchip-c" d="M 86 59 l 4.6 -2.6 l 1.4 2.4 l -4.6 2.6 Z" fill="#fbeecb" />
+        <path className="bvchip bvchip-d" d="M 94 47 l 5 -1 l .8 2.8 l -5 1 Z" fill="#e6cf9c" />
+      </g>
+
+      {/* THE SLAP. The tail itself is the rig's own `.sai-crit-tail` swung
+          by CSS — one drawing, not two — so what is here is only the water
+          it throws: a sheet off the blade, a ring going out from where it
+          landed, and half a dozen drops. All of it behind him, because the
+          tail is behind him. */}
+      <g className="sai-crit-bvslap">
+        <ellipse className="bvslap-ring" cx="22" cy="100" rx="20" ry="6" fill="none" stroke="#dff3fb" strokeWidth="2.4" opacity=".75" />
+        <ellipse className="bvslap-ring2" cx="22" cy="100" rx="12" ry="4" fill="none" stroke="#eaf7fd" strokeWidth="1.8" opacity=".6" />
+        <g className="bvslap-sheet">
+          <path d="M 6 98 C 2 88 4 79 12 72" stroke="#e8f7fd" strokeWidth="3.4" fill="none" strokeLinecap="round" opacity=".8" />
+          <path d="M 36 97 C 42 89 42 80 36 73" stroke="#e8f7fd" strokeWidth="3" fill="none" strokeLinecap="round" opacity=".7" />
+          <path d="M 20 95 C 19 84 20 76 24 69" stroke="#f4fbff" strokeWidth="2.4" fill="none" strokeLinecap="round" opacity=".65" />
+          <circle cx="9" cy="66" r="2.6" fill="#eaf7fd" opacity=".85" />
+          <circle cx="27" cy="61" r="2.2" fill="#f4fbff" opacity=".8" />
+          <circle cx="40" cy="70" r="1.9" fill="#eaf7fd" opacity=".7" />
+          <circle cx="17" cy="57" r="1.6" fill="#f4fbff" opacity=".7" />
+        </g>
+      </g>
     </g>
   );
 }
@@ -1797,6 +2183,101 @@ function SkunkDraw({ uid }) {
           <ellipse cx="34" cy="94" rx="2.2" ry="1.7" fill="#54391d" />
         </g>
       </g>
+
+      {/* ---- HALF IN THE GROUND (skdenin, skdensleep, skdenout,
+               skpileunder, skpilesleep) ----
+          The one thing no rig in this file can do. Every other pose here is
+          an animal in an unusual attitude; this one is an animal that is
+          MOSTLY NOT THERE — the front half of him is inside something and
+          what is left on screen is a rump, two braced hocks and the plume.
+          There is no occluder available to cut him: the sprite paints at
+          zIndex 10 and the pits at 1, so a hole in the ground can never be
+          in front of the animal standing in it. So the thing that hides him
+          is drawn INSIDE him, last, over his own front end — the same
+          answer the hedgehog's poses used to give before ForageCanopyLayer
+          existed, and the right one here because a den mouth is his own and
+          not a site's.
+
+          Five states share it and the difference between them is entirely
+          in CSS: pushing in, asleep, and backing out are three tempos of
+          one drawing. It serves the woodpile as well as the dug den — under
+          a sound log the same bank reads as heaped litter against the
+          timber, which is what he actually pushes into.
+
+          HIS FLANK ENTERS THE BANK AT (86, 86), and that number is
+          load-bearing: the pile den's arrival offset in Ethogram.js is
+          solved backwards from it so that what he pushes under is the lip
+          of the log he actually walked to. Move this and move that. */}
+      <g className="sai-crit-skdenpose">
+        {/* spoil, thrown back out past his own hocks and left lying */}
+        <g className="den-spoil">
+          <ellipse cx="18" cy="101" rx="16" ry="5" fill="#4a3520" />
+          <ellipse cx="11" cy="99.2" rx="9" ry="3.4" fill="#5d4327" />
+          <ellipse cx="27" cy="100.6" rx="7" ry="2.8" fill="#3f2c17" />
+          <ellipse cx="4" cy="101.6" rx="4.6" ry="2.1" fill="#54391d" />
+        </g>
+        {/* THE HEAP, laid down FIRST and whole. Big on purpose: at world
+            scale this animal is 54px across and a mound that only just
+            covers his shoulders reads as a stone he is lying next to. This
+            one takes the right-hand third of the box and stands as tall as
+            he does, which is the only way "he is IN something" survives the
+            shrink. Under a woodpile the same shape reads as banked litter
+            heaped against the timber. */}
+        <g className="den-bank">
+          <path d="M 40 103 C 44 78 58 44 82 38 C 102 33 122 43 127 62 L 130 103 Z" fill="#4a3520" />
+          <path d="M 56 100 C 60 74 74 48 90 44 C 104 40 115 45 119 54 C 106 51 92 60 82 78 C 74 89 70 96 68 103 Z"
+            fill="#5d4327" opacity=".9" />
+          <path d="M 92 40 C 104 36 116 40 122 49" stroke="#6d5030" strokeWidth="3"
+            fill="none" strokeLinecap="round" opacity=".8" />
+          {/* tufts of turf and litter that came up with the earth */}
+          <path d="M 76 42 l -2 -8 M 84 39 l 2 -8 M 118 56 l 4 -6"
+            stroke="#3f7c4a" strokeWidth="2.1" fill="none" strokeLinecap="round" opacity=".9" />
+        </g>
+        {/* THE MOUTH, cut into the heap and drawn before him so that what
+            his front half goes into is a hole and not a shadow. Its rim
+            catches the light on top the way a real cut in soil does. */}
+        <g className="den-mouth">
+          <ellipse cx="84" cy="84" rx="27" ry="17" fill="#130d07" />
+          <path d="M 58 80 C 62 70 71 64 84 64 C 97 64 107 70 111 81 C 105 73 96 69 84 69 C 72 69 62 73 58 80 Z"
+            fill="#6d5030" opacity=".85" />
+        </g>
+        {/* The plume, carried high and clear of the heap. It is the only
+            part of a half-buried skunk that reads at world scale — two
+            black and white bars over a brown mound — so it is drawn
+            standing rather than trailing. Inner static transform re-aims
+            the tail he already has; the animated group carries none. */}
+        <g className="den-tail"><g transform="translate(-4 -8) rotate(-36 44 78)">
+          <path d="M 44 80 C 24 84 8 72 10 52 C 12 34 26 24 40 28 C 36 40 38 54 46 64 C 50 70 50 76 44 80 Z" fill={K[1]} />
+          <path d="M 12 56 C 11 41 21 29 35 29.5 C 32 38 32.5 48 37 57 C 28 62 17 62 12 56 Z" fill={white} />
+        </g></g>
+        {/* hocks braced under the raised rump: the shove that gets the rest
+            of him under comes from these, and they are the last thing to go
+            in — which is why they are still out here */}
+        <g className="den-hind">
+          <rect x="33" y="86" width="9" height="17" rx="4.5" fill={K[2]} />
+          <ellipse cx="37.5" cy="101.6" rx="5.6" ry="3" fill="#101015" />
+          <rect x="46" y="88" width="9" height="15" rx="4.5" fill={K[1]} />
+          <ellipse cx="50.5" cy="101.8" rx="5.8" ry="3.2" fill={K[2]} />
+        </g>
+        {/* The rump, tipped nose-down into the mouth and ENDING there —
+            there is no head in this pose and no shoulders either, because
+            the drawing stops where he does. The white runs the whole length
+            of what is showing: a rump with no stripe on it is a rock. */}
+        <g className="den-rump">
+          <path d="M 26 89 C 26 74 38 68 55 69 C 68 70 78 76 86 86 C 80 95 60 99 45 97 C 33 96 26 94 26 89 Z"
+            fill={`url(#${uid}f)`} />
+          <path d="M 31 83 C 35 73 45 71 56 73 C 67 75 75 80 82 88 L 77 90 C 71 84 64 80 55 79 C 46 78 39 80 36 86 Z" fill={white} />
+          <Under cx={55} cy={88} rx={23} ry={11} color="#4d4d59" k={.5} opacity={.85} />
+          <BellyShade cx={52} cy={96} rx={16} />
+        </g>
+        {/* the near lip of the hole, painted LAST and over his flank, so the
+            mouth is a slot he is down in rather than a disc behind him */}
+        <g className="den-lip">
+          <path d="M 48 103 C 56 90 70 82 88 81 C 106 80 121 88 130 103 Z" fill="#54391d" />
+          <path d="M 62 98 C 72 90 84 87 96 87.6" stroke="#6d5030" strokeWidth="2.4"
+            fill="none" strokeLinecap="round" opacity=".75" />
+        </g>
+      </g>
     </g>
   );
 }
@@ -2104,10 +2585,22 @@ function SquirrelDraw({ uid }) {
 }
 
 // ---------------- TURTLE — scute-tiled shell dome, stubby legs, sage skin ----------------
+// ---- WHERE THE TURTLE'S BEAK IS, for the same reason FROG_TONGUE exists.
+// He crops submerged weed, and "he is at the plant" has to mean his JAWS are
+// in it and not that his shell is somewhere near it. This is the shearing
+// edge of the beak in the sprite's 120-unit viewBox, after TURTLE_G.
+const TURTLE_G = { cx: 60, cy: 106, k: 0.98 };
+const TURTLE_BEAK_LOCAL = [108, 72];
+export const TURTLE_BEAK = {
+  x: TURTLE_G.cx + TURTLE_G.k * (TURTLE_BEAK_LOCAL[0] - TURTLE_G.cx),
+  y: TURTLE_G.cy + TURTLE_G.k * (TURTLE_BEAK_LOCAL[1] - TURTLE_G.cy),
+};
+
 function TurtleDraw({ uid }) {
   const S = ["#a8804a", "#7d5c30", "#54401e"], scute = "#c9a86a", skin = ["#a9c97e", "#7da257", "#527238"], ink = "#26330f";
+  const weed = ["#4e9c5f", "#3d7d4a", "#79c98a"];
   return (
-    <g transform="translate(60 106) scale(.98) translate(-60 -106)">
+    <g transform={`translate(${TURTLE_G.cx} ${TURTLE_G.cy}) scale(${TURTLE_G.k}) translate(${-TURTLE_G.cx} ${-TURTLE_G.cy})`}>
       <defs>
         <Fur id={`${uid}s`} c={S} />
         <Fur id={`${uid}k`} c={skin} />
@@ -2129,6 +2622,33 @@ function TurtleDraw({ uid }) {
         <ellipse cx="104" cy="68.5" rx="4.6" ry="3.8" fill={skin[1]} />
         <circle cx="105.4" cy="67.2" r=".9" fill={ink} />
         <FaceKit lid={skin[1]} e1={[91, 63]} e2={[99.5, 61.5]} er={2.6} iris={ink} mouth={[101, 73]} blushCol="#e8a48e" />
+      </g>
+
+      {/* ================= THE POND TURTLE, FEEDING =======================
+          He has no teeth. The beak is a shearing edge with two horn-like
+          ridges on it, and the reason to draw them is that they are the
+          whole mechanism of what he does to a weed bed: he does not nibble,
+          he cuts a piece off. Shown only while the beak is working. */}
+      <g className="sai-crit-jawridge">
+        <path d="M 99.6 69.8 L 109 68.4 L 108.6 71.6 L 100.2 72.6 Z" fill="#efe2ba" />
+        <path d="M 100.2 74 L 108.4 73.2 L 107.6 76.4 L 100.6 76.2 Z" fill="#cbb987" />
+        <path d="M 100 72.8 L 108.6 72 L 108.6 73 L 100.2 73.8 Z" fill={ink} opacity=".45" />
+      </g>
+      {/* ...and the piece itself, held in the beak on the way down */}
+      <g className="sai-crit-chunk">
+        <path d="M 110 68 q 8 -6 13 -2 q -4 6 -10 6 Z" fill={weed[0]} />
+        <path d="M 111 74 q 7 1 10 6 q -7 1 -11 -3 Z" fill={weed[1]} />
+        <path d="M 113 70.5 q 6 -1 9 1" stroke={weed[2]} strokeWidth="1.4" fill="none" strokeLinecap="round" />
+      </g>
+      {/* THE BACKWARD SWIM. He sculls the long front claws forward and the
+          water goes with them — the splash is off the CLAWS and ahead of
+          him, which is the only visible difference between a turtle backing
+          up and a turtle swimming very badly. */}
+      <g className="sai-crit-clawwash">
+        <path d="M 96 84 l 8 -3 M 98 88 l 9 -1 M 97 92 l 9 2" stroke={skin[2]} strokeWidth="2.6" strokeLinecap="round" fill="none" />
+        <ellipse cx="99" cy="88" rx="15" ry="7" fill="none" stroke="#cdf3ff" strokeWidth="1.8" opacity=".7" />
+        <ellipse cx="105" cy="84" rx="9" ry="4" fill="none" stroke="#eafcff" strokeWidth="1.5" opacity=".6" />
+        <path d="M 110 79 l 5 -4 M 114 84 l 6 -1 M 106 76 l 2 -5" stroke="#dff7ff" strokeWidth="1.9" strokeLinecap="round" fill="none" />
       </g>
     </g>
   );
@@ -2559,6 +3079,17 @@ function RaccoonDraw({ uid }) {
             <circle cx="86.5" cy="61" r="1.5" fill="#d46b95" opacity=".75" />
             <path d="M 88 58.2 q 1.6 -2 3.4 -2.2" stroke="#4d7a3a" strokeWidth="1.4" fill="none" strokeLinecap="round" />
           </g>
+          {/* ...and the other thing that ends up in this hunch. The hands and
+              the posture are identical whether he is turning a berry over or
+              working through a mouse, so racmunch borrows the whole pose and
+              swaps only this: the same 4.4-unit spot the berry occupies, in
+              fur, with a tail. Hidden unless the state asks for it. */}
+          <g className="sai-crit-racmorsel">
+            <ellipse cx="88" cy="62.5" rx="5" ry="3.6" fill="#6f6257" />
+            <ellipse cx="86.4" cy="61.4" rx="2" ry="1.4" fill="#8d7f72" opacity=".8" />
+            <path d="M 92.4 63.4 C 95.4 64.6 97.2 66.6 97.6 68.8"
+              stroke="#5c5049" strokeWidth="1.4" fill="none" strokeLinecap="round" />
+          </g>
         </g>
       </g>
 
@@ -2659,7 +3190,31 @@ function RaccoonDraw({ uid }) {
               stroke="#efeaf2" strokeWidth="1.3" fill="none" strokeLinecap="round" opacity=".8" />
             <ellipse cx="78.5" cy="98.2" rx="3.4" ry="1.7" fill="#fdffff" opacity=".7" />
           </g>
-          <g className="wash-food"><circle cx="79" cy="99" r="4" fill="#8e1f46" opacity=".92" /></g>
+          {/* WHAT IS IN HIS HANDS, and it is not always a berry. The group
+              keeps its name and its transform origin — index.css turns the
+              whole of it on sai-rac-fingerturn — and the two things he can
+              be holding sit inside it, one shown at a time. */}
+          <g className="wash-food">
+            <circle className="wash-berry" cx="79" cy="99" r="4" fill="#8e1f46" opacity=".92" />
+            {/* ...and his favourite food in the world, belly-up in both
+                pads the way he turns one over. Small on purpose: the box is
+                120 units and Critter draws it at r * 2.7, so at his 21.2px
+                radius one unit is 0.47 stage px and this whole animal is
+                thirteen of them across. The read is the SHAPE — a red-brown
+                body with two claws out over his fingers and a fan tail —
+                and anything finer than that is ink nobody can see. */}
+            <g className="sai-crit-raccray">
+              <path d="M 74.6 97.6 C 71.4 96 68.8 95.4 66.6 95.8" stroke="#a8402c" strokeWidth="1.7" fill="none" strokeLinecap="round" />
+              <path d="M 66.8 95.4 l -2.6 -1.4 M 66.8 96.2 l -2.8 1" stroke="#a8402c" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+              <path d="M 74.8 100.4 C 71.8 101.8 69.4 102.6 67.4 102.6" stroke="#8f3524" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+              <path d="M 67.6 102.2 l -2.6 -1.2 M 67.6 103 l -2.6 1.2" stroke="#8f3524" strokeWidth="1.4" fill="none" strokeLinecap="round" />
+              <ellipse cx="79.4" cy="99" rx="6.2" ry="3.6" fill="#a8402c" />
+              <ellipse cx="79.4" cy="99" rx="4.4" ry="2.2" fill="#dc9070" opacity=".85" />
+              <path d="M 77 97.2 l 0 3.6 M 79.2 97 l 0 4 M 81.4 97.2 l 0 3.6" stroke="#7d2a1c" strokeWidth=".8" fill="none" opacity=".75" />
+              <path d="M 85.4 99 l 4.6 -2.4 l -.8 2.4 l .8 2.4 Z" fill="#8f3524" />
+              <path d="M 74.4 96.4 C 77.4 93.4 80.6 91.8 83 91.4" stroke="#7d2a1c" strokeWidth=".9" fill="none" strokeLinecap="round" opacity=".85" />
+            </g>
+          </g>
           {/* one soft sheet of shallow water, laid over the lot */}
           <ellipse cx="74" cy="99" rx="43" ry="11" fill="#8fd0ee" opacity=".42" />
           <ellipse cx="74" cy="99" rx="43" ry="11" fill="none" stroke="#dff3fb" strokeWidth="1.5" opacity=".45" />
@@ -2864,10 +3419,35 @@ function RaccoonDraw({ uid }) {
 }
 
 // ---------------- FROG — squat, dome eyes on top, wide mouth, hop ----------------
+// ---- THE FROG'S TONGUE, AS A NUMBER THE REST OF THE WORLD CAN READ ----
+// Geometry-as-physics: the strike may only land where the drawing actually
+// goes. `FROG_G` is the wrapper every part of FrogDraw is scaled by, so the
+// tip below is the drawn tip in the sprite's own 120-unit viewBox — not a
+// reach invented in the ethogram and then illustrated. SocialAnimalIcons
+// turns it into stage px (it is r * 2.7 / 120 px per unit) and the ambush
+// only fires on an insect inside `pad` of that point.
+const FROG_G = { cx: 60, cy: 106, k: 0.92 };
+const FROG_TIP_LOCAL = [150, 66];    // the sticky pad's centre, before the wrapper
+const FROG_PAD_LOCAL = 7;            // ...and its radius
+const FROG_ROOT_LOCAL = [86, 79.5];  // ...and where the band leaves his mouth
+const FROG_MOUND_LOCAL = [60, 100];  // ...and the centre of the mud he sinks into
+const frogU = (p) => ({ x: FROG_G.cx + FROG_G.k * (p[0] - FROG_G.cx),
+                        y: FROG_G.cy + FROG_G.k * (p[1] - FROG_G.cy) });
+export const FROG_TONGUE = { ...frogU(FROG_TIP_LOCAL), root: frogU(FROG_ROOT_LOCAL),
+                             pad: FROG_PAD_LOCAL * FROG_G.k };
+/**
+ * ...and where the BURIED pose puts its mound, for the same reason. The
+ * sprite is centred on its anchor and this pose paints at the ground line,
+ * so a hollow in the bank drawn on the anchor is a hollow the frog sits
+ * below. The lake solves the bed's position against this number.
+ */
+export const FROG_BURIED = frogU(FROG_MOUND_LOCAL);
+
 function FrogDraw({ uid }) {
   const F = ["#9fe07a", "#5cae54", "#37773f"], belly = "#e9f7c8", ink = "#1f3315";
+  const mud = ["#5d4425", "#4c371e", "#3b2a17"];
   return (
-    <g transform="translate(60 106) scale(.92) translate(-60 -106)">
+    <g transform={`translate(${FROG_G.cx} ${FROG_G.cy}) scale(${FROG_G.k}) translate(${-FROG_G.cx} ${-FROG_G.cy})`}>
       <defs><Fur id={`${uid}f`} c={F} /></defs>
       <Leg x={70} top={88} len={15} w={5.5} color={F[2]} cls="bl" />
       <Leg x={80} top={88} len={15} w={5.5} color={F[1]} cls="fr" />
@@ -2959,6 +3539,98 @@ function FrogDraw({ uid }) {
         <circle cx="99.3" cy="62.6" r="2.6" fill={ink} />
         <circle cx="99.8" cy="61.7" r=".9" fill="#fff" />
         <path d="M 82 74 q 10 6 19 -2" stroke={ink} strokeWidth="2.6" fill="none" strokeLinecap="round" />
+      </g>
+
+      {/* ================= THE LAKE FROG =================================
+          Six groups, all display:none until a state asks for one. Every
+          number in them is drawn where it is used: the tongue's tip IS the
+          reach, the mound over the buried frog IS what hides him, and the
+          waterline in the float pose IS where the lake sits on his back. */}
+
+      {/* ---- THE STRIKE (frogtongue) ----
+          Drawn EXTENDED and fired by CSS scaling it out of the mouth, so the
+          pad at FROG_TIP_LOCAL is the furthest the animal can ever reach.
+          Nothing else about him moves during a strike — a sit-and-wait
+          predator whose body also lunges is just a predator. */}
+      <g className="sai-crit-tonguepose">
+        <path d="M 86 74 C 106 70 128 65 146 61 L 150 71 C 130 76 108 81 88 85 Z" fill="#c4536d" />
+        <path d="M 88 75.5 C 106 71.5 126 67 144 63 L 145.5 66.5 C 126 71 106 76 89 79.5 Z" fill="#f096ab" opacity=".7" />
+        <ellipse cx={FROG_TIP_LOCAL[0]} cy={FROG_TIP_LOCAL[1]} rx={FROG_PAD_LOCAL} ry={FROG_PAD_LOCAL * 0.8} fill="#d8657f" />
+        <ellipse cx={FROG_TIP_LOCAL[0] - 1.4} cy={FROG_TIP_LOCAL[1] - 1.6} rx="3.2" ry="2.2" fill="#f9c3ce" opacity=".85" />
+      </g>
+
+      {/* ---- THE SQUEAK (frogleap) ----
+          Deliberately NOT the chorus. The chorus is three long rolling arcs
+          off the throat sac; this is one short spike out of the top of his
+          head, over in a fifth of a second. */}
+      <g className="sai-crit-squeak">
+        <path d="M 104 48 q 5 5 0 10" stroke="#fff6c9" strokeWidth="3.2" fill="none" strokeLinecap="round" />
+        <path d="M 112 43 q 8 10 0 20" stroke="#fff6c9" strokeWidth="2.4" fill="none" strokeLinecap="round" />
+        <path d="M 98 38 l 3 -8 M 108 33 l 1 -8 M 119 34 l 6 -6" stroke="#fff6c9" strokeWidth="2.4" strokeLinecap="round" fill="none" />
+      </g>
+
+      {/* ---- THE ENTRY (frogdive) ---- the water closing where he went in */}
+      <g className="sai-crit-plunge">
+        <ellipse className="plunge-ring" cx="60" cy="99" rx="17" ry="6.4" fill="none" stroke="#cdf3ff" strokeWidth="2.8" />
+        <ellipse className="plunge-ring" cx="60" cy="99" rx="17" ry="6.4" fill="none" stroke="#9fdcef" strokeWidth="2.2" />
+        <g className="plunge-spray">
+          <path d="M 47 95 l -6 -10 M 60 92 l 0 -12 M 73 95 l 7 -10" stroke="#e6fbff" strokeWidth="2.8" strokeLinecap="round" fill="none" />
+        </g>
+      </g>
+
+      {/* ---- BURIED (frogmud on the bottom, frogsunk in the shoreline) ----
+          A mound with two eye domes on it. `buried-open` is the frog gone to
+          ground with a predator on the bank and watching; `buried-shut` is
+          the same animal asleep in it. The two share one drawing because
+          they are one posture. */}
+      <g className="sai-crit-buriedpose">
+        <ellipse cx={FROG_MOUND_LOCAL[0]} cy={FROG_MOUND_LOCAL[1]} rx="29" ry="9.5" fill={mud[2]} />
+        <ellipse cx="59" cy="97" rx="25" ry="7.4" fill={mud[1]} />
+        <ellipse cx="56" cy="95.4" rx="15" ry="4" fill={mud[0]} opacity=".7" />
+        <path d="M 86 95.4 q 8 1.2 11 4.4 q -7 1.8 -12 .4 Z" fill={F[1]} />
+        <circle cx="68" cy="91.6" r="6.4" fill={F[1]} />
+        <circle cx="80.5" cy="93" r="5.8" fill={F[1]} />
+        <g className="buried-open">
+          <circle cx="68.8" cy="90.4" r="3.5" fill="#fdfef4" /><circle cx="69.8" cy="90.4" r="2" fill={ink} />
+          <circle cx="81.2" cy="91.8" r="3.1" fill="#fdfef4" /><circle cx="82.1" cy="91.8" r="1.8" fill={ink} />
+        </g>
+        <g className="buried-shut">
+          <path d="M 64.6 91.2 q 3.6 2.6 7.2 0" stroke={F[2]} strokeWidth="2.2" fill="none" strokeLinecap="round" />
+          <path d="M 77.6 92.6 q 3.4 2.4 6.8 0" stroke={F[2]} strokeWidth="2" fill="none" strokeLinecap="round" />
+        </g>
+      </g>
+
+      {/* ---- THE DIG (frogdig) ---- wet clods thrown out behind the rump */}
+      <g className="sai-crit-mudspray">
+        <circle cx="33" cy="93" r="4.4" fill={mud[1]} />
+        <circle cx="24" cy="86" r="3.2" fill={mud[0]} />
+        <circle cx="41" cy="84" r="2.6" fill={mud[2]} />
+        <circle cx="18" cy="94" r="2.4" fill={mud[2]} />
+      </g>
+
+      {/* ---- ASLEEP AT THE SURFACE (frogdoze) ----
+          The one posture in this file that is drawn ACROSS a waterline: the
+          limbs hang below it dulled, the back and the eye domes sit on it,
+          and the lily that hides him is painted over the top of the whole
+          sprite by the lake's canopy pass — not by this drawing, which is
+          the mistake this project has made three times. */}
+      <g className="sai-crit-floatpose">
+        <g className="float-under">
+          <path d="M 36 96 C 25 100 16 104 11 109" stroke={F[2]} strokeWidth="5.6" fill="none" strokeLinecap="round" />
+          <path d="M 84 96 C 95 99 104 103 109 108" stroke={F[2]} strokeWidth="5" fill="none" strokeLinecap="round" />
+          <ellipse cx="60" cy="97" rx="26" ry="9" fill={F[2]} />
+        </g>
+        <ellipse cx="60" cy="91" rx="31" ry="7.6" fill="#0e5364" opacity=".5" />
+        <path d="M 33 91 C 35 81 45 75 60 75 C 75 75 85 81 87 91 Z" fill={`url(#${uid}f)`} />
+        <circle cx="50" cy="80" r="2" fill={F[2]} opacity=".7" />
+        <circle cx="64" cy="78" r="1.7" fill={F[2]} opacity=".7" />
+        <circle cx="76" cy="82.5" r="6.8" fill={F[1]} />
+        <circle cx="88" cy="84.5" r="6" fill={F[1]} />
+        <path d="M 70.4 82.6 q 5.6 3.4 11.2 0" stroke={F[2]} strokeWidth="2.6" fill="none" strokeLinecap="round" />
+        <path d="M 83 84.6 q 5 3 10 0" stroke={F[2]} strokeWidth="2.4" fill="none" strokeLinecap="round" />
+        <g className="float-ring">
+          <ellipse cx="60" cy="91" rx="35" ry="9.4" fill="none" stroke="#bfeef7" strokeWidth="1.7" opacity=".45" />
+        </g>
       </g>
     </g>
   );
@@ -3212,6 +3884,857 @@ function OwlDraw({ uid }) {
           <path d="M 26 4 C 36 14 44 28 51 44 C 42 32 33 18 26 4 Z" fill="#c9a271" opacity=".45" />
         </g>
       </g>
+
+      {/* ---- MANTLING (owlmantle) ----
+          The one pose here the rig genuinely cannot reach and `flappose`
+          cannot be bent into. Mantling is a raptor hiding a kill: both
+          wings thrown FORWARD and DOWN into a tent over it, the head
+          dropped into the gap between them, the whole bird two thirds of
+          its standing height. flappose is the opposite shape — wings up
+          and back, body stretched, head thrust out — so rotating it would
+          read as a crash landing.
+
+          Drawn to the same ground line as the rest of him: the rig's
+          talons sit at y 103 and the wrapper above is scale(.94) about
+          (60,106), so everything that touches the floor here is at y 102-104
+          and the pose stands where the ordinary owl stands. Facing right,
+          like flappose, so a mirrored sprite mantles the way it flies.
+
+          The order is the read: far wing, body, the kill, talons, head,
+          then the near wing over the lot. Nothing of the prey shows except
+          a tail and one foot out from under him, which is the whole idea. */}
+      <g className="sai-crit-owlmantlepose">
+        {/* tail spread flat behind, a counterweight to a head that far down */}
+        <g className="mantle-tail">
+          <path d="M 42 84 C 30 91 19 98 13 103 L 29 102 C 39 98 47 92 51 87 Z" fill={F[2]} />
+          <path d="M 18 101 C 27 97 36 92 44 86 M 23 102 C 32 98 40 93 47 88"
+            stroke={F[1]} strokeWidth="1.2" fill="none" opacity=".55" />
+        </g>
+        {/* far wing: forward and down, its tip just clear of the ground */}
+        <g className="mantle-wing-far">
+          <path d="M 56 63 C 68 61 84 68 95 80 C 101 87 100 95 93 96 C 81 97 64 88 55 76 C 50 69 51 64 56 63 Z"
+            fill={F[2]} />
+          <path d="M 59 67 C 70 71 83 80 92 91 M 55 72 C 65 78 76 86 85 95"
+            stroke="#4a3520" strokeWidth="1.4" fill="none" opacity=".6" />
+        </g>
+        {/* the body, dropped almost flat over what he has */}
+        <g className="mantle-body">
+          <path d="M 33 93 C 29 79 39 66 57 63 C 75 60 90 67 94 79 C 97 89 89 99 73 102 C 55 105 39 103 33 93 Z"
+            fill={`url(#${uid}f)`} />
+          <ellipse cx="70" cy="90" rx="16" ry="9" fill={cream} opacity=".82" />
+          <path d="M 50 74 q 4 3.2 8 0 M 58 74 q 4 3.2 8 0 M 46 82 q 4 3.2 8 0 M 54 82 q 4 3.2 8 0 M 62 82 q 4 3.2 8 0"
+            stroke={F[1]} strokeWidth="1.4" fill="none" strokeLinecap="round" opacity=".6" />
+        </g>
+        {/* all that is left showing of it: a tail and one hind foot */}
+        <g className="mantle-kill">
+          <path d="M 97 102.6 C 102 101.6 107 102.4 110 104.4"
+            stroke="#8a7256" strokeWidth="2.4" fill="none" strokeLinecap="round" />
+          <ellipse cx="95" cy="102.6" rx="6.4" ry="3.2" fill="#7d6449" />
+          <path d="M 92 104.4 l -2.6 2 M 96 105 l -.6 2.2"
+            stroke="#6a543c" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+        </g>
+        {/* talons planted on it, which is what the wings are hiding */}
+        <g className="mantle-feet">
+          <path d="M 84 95 C 86 99 88 101.6 90 102.8 M 90 102.8 l 4.2 1.2 M 90 102.8 l .8 3.2"
+            stroke={orange} strokeWidth="2.4" fill="none" strokeLinecap="round" />
+        </g>
+        {/* head DOWN into the gap between the two wings, tufts flat */}
+        <g className="mantle-head">
+          <circle cx="86" cy="79" r="14.5" fill={`url(#${uid}f)`} />
+          <circle cx="81" cy="75.5" r="6.6" fill={cream} />
+          <circle cx="93" cy="77.5" r="6.6" fill={cream} />
+          <circle cx="81.4" cy="76.4" r="2.9" fill={gold} />
+          <circle cx="81.8" cy="76.8" r="1.6" fill={ink} />
+          <circle cx="93.4" cy="78.4" r="2.9" fill={gold} />
+          <circle cx="93.8" cy="78.8" r="1.6" fill={ink} />
+          <path d="M 87 83 L 91.6 87 L 86.6 92 Q 84.6 87 87 83 Z" fill={orange} />
+        </g>
+        {/* ...and the near wing over the top of the lot. This is the pose. */}
+        <g className="mantle-wing-near">
+          <path d="M 52 68 C 65 63 84 71 97 87 C 104 96 102 105 93 105 C 79 105 60 95 51 82 C 46 74 47 70 52 68 Z"
+            fill={F[1]} />
+          <path d="M 56 72 C 69 77 84 88 95 101 M 51 78 C 63 85 76 94 86 104 M 51 86 C 61 92 71 98 79 104"
+            stroke={F[2]} strokeWidth="1.6" fill="none" opacity=".75" />
+          <path d="M 52 68 C 65 63 81 69 92 80 C 79 71 65 67 52 68 Z" fill="#c9a271" opacity=".4" />
+        </g>
+      </g>
+    </g>
+  );
+}
+
+// ================================================================
+//         THE 13 PREY SPECIES — v0.43 "the things that get eaten"
+// ================================================================
+// Same rig as the cast above and nothing else in common with it. viewBox
+// 0 0 120 120, ground at y≈103, FACING RIGHT, and no `transform` attribute
+// on any group the CSS animates.
+//
+// THE THREE RODENTS are the whole craft problem in here. mouse / vole / rat
+// are one animal to a careless eye at 40px, so they are separated by SHAPE
+// and never by colour alone:
+//
+//   mouse — dainty. Saucer ears, a needle snout, and a naked tail LONGER
+//           than the body carried in a high loose curve. Reads as ears+tail.
+//   vole  — a furry potato. Ears buried in the coat, blunt face, a stub of
+//           a tail, dark chestnut. Reads as mass with a nose on it.
+//   rat   — long and rangy. Heavier muzzle, mid-sized ears set wide, and a
+//           thick RINGED tail carried LOW along the ground. Reads as length.
+//
+// Colour comes second, and on the rat it is a variant rather than a fact —
+// see RatDraw and the `variants` list on its SPECIES row.
+
+// ---------------- MOUSE — saucer ears, needle snout, long whip tail ----------------
+function MouseDraw({ uid }) {
+  const F = ["#c9a279", "#a87c54", "#7b5636"], belly = "#f6e8d2", inner = "#e0a79d",
+    tailC = "#d7b3a2", ink = "#2a1c10", noseC = "#c9767f";
+  return (
+    <g transform="translate(60 106) scale(.8) translate(-60 -106)">
+      <defs><Fur id={`${uid}f`} c={F} /></defs>
+      {/* The tail is half this animal's read: longer than the body, thin as
+          wire, and carried in a loose high curve rather than trailed. Drawn
+          with its ROOT at the right of its own bbox so the rig's 88%/60%
+          pivot lands on the rump and not out in the air. */}
+      <g className="sai-crit-tail">
+        <path d="M 40 86 C 22 90 8 82 5 64 C 3 52 9 42 18 39"
+          stroke={tailC} strokeWidth="3.4" fill="none" strokeLinecap="round" />
+        <path d="M 40 86 C 26 89 15 84 10 72"
+          stroke="#e8cbbb" strokeWidth="1.3" fill="none" strokeLinecap="round" opacity=".7" />
+      </g>
+      <Quad near={F[1]} far={F[2]} paw={inner} top={84} len={17} w={5.6} fx={72} bx={46} spread={6} />
+      <g className="sai-crit-body">
+        <ellipse cx="57" cy="82" rx="24" ry="16.5" fill={`url(#${uid}f)`} />
+        <BackShade cx={57} cy={82} rx={24} ry={16.5} color="#5b3a1e" op={.16} />
+        <Under cx={60} cy={82} rx={21} ry={16.5} color={belly} k={.54} opacity={.95} />
+        <BellyShade cx={57} cy={96} rx={17} />
+      </g>
+      <g className="sai-crit-head">
+        {/* saucers. Outlined, because a thin warm disc washes out on grass */}
+        <g className="sai-crit-ear sai-crit-ear-l">
+          <circle cx="73" cy="38" r="10.5" fill={F[2]} stroke="#5f4126" strokeWidth="1.1" />
+          <circle cx="73.4" cy="39" r="6.6" fill={inner} opacity=".85" />
+        </g>
+        <g className="sai-crit-ear sai-crit-ear-r">
+          <circle cx="95" cy="35" r="11" fill={F[1]} stroke="#6b4a2b" strokeWidth="1.1" />
+          <circle cx="94.6" cy="36" r="7" fill={inner} />
+        </g>
+        {/* needle snout: the skull is a wedge that runs out to a point, not
+            a ball with a nose stuck on the front of it */}
+        <path d="M 66 48 C 72 40 86 39 95 45 C 104 50 110 58 108 63 C 98 68 78 68 70 62 C 64 58 63 52 66 48 Z" fill={`url(#${uid}f)`} />
+        <path d="M 72 60 C 82 65 96 65 106 62 C 100 66 80 67 72 60 Z" fill={belly} opacity=".8" />
+        <circle cx="108.6" cy="61.4" r="2.5" fill={noseC} />
+        <path d="M 102 57 l 12 -5 M 103 60 l 12 -.6 M 102 63.4 l 11 4" stroke="#efe0cd" strokeWidth="1.05" strokeLinecap="round" opacity=".9" />
+        <path d="M 98 57 l -12 -4 M 97 60 l -12 .4 M 98 63.4 l -11 3.6" stroke="#efe0cd" strokeWidth="1.05" strokeLinecap="round" opacity=".65" />
+        <FaceKit lid={F[1]} e1={[80, 52]} e2={[93, 50]} er={3.1} iris={ink} mouths={false} blushCol="#f0a3a8" />
+      </g>
+    </g>
+  );
+}
+
+// ---------------- VOLE — a furry potato: buried ears, blunt face, stub tail ----------------
+function VoleDraw({ uid }) {
+  const F = ["#8f6f49", "#6d5334", "#453220"], belly = "#b39a74", ink = "#22170c",
+    inner = "#7d5f45", noseC = "#40312a";
+  return (
+    <g transform="translate(60 106) scale(.78) translate(-60 -106)">
+      <defs><Fur id={`${uid}f`} c={F} /></defs>
+      {/* A stub. Furred, blunt, a quarter of the body — the single cheapest
+          line between this animal and the mouse standing next to it. */}
+      <g className="sai-crit-tail">
+        <path d="M 40 86 C 30 90 22 92 15 90 C 20 86 28 84 38 82 Z" fill={F[2]} />
+        <path d="M 38 84 C 30 86 24 88 18 89" stroke="#31220f" strokeWidth="1" fill="none" opacity=".5" />
+      </g>
+      <Quad near={F[1]} far={F[2]} paw="#6b5137" top={87} len={14} w={6.4} fx={72} bx={48} spread={6} />
+      <g className="sai-crit-body">
+        {/* One mass. Head and body are nearly the same circle, which is what
+            a vole actually looks like and what separates it from both others. */}
+        <ellipse cx="56" cy="79" rx="27" ry="21" fill={`url(#${uid}f)`} />
+        <BackShade cx={56} cy={79} rx={27} ry={21} color="#2c1e0d" op={.22} />
+        <Under cx={58} cy={79} rx={24} ry={21} color={belly} k={.52} opacity={.9} />
+        {/* coarse guard hairs — a vole's coat is shaggy, not sleek */}
+        <path d="M 36 66 q 7 -4 13 -2 M 44 60 q 7 -4 13 -2 M 56 57 q 7 -3 12 -1 M 32 76 q 6 -4 12 -3"
+          stroke="#3c2a15" strokeWidth="1.3" fill="none" strokeLinecap="round" opacity=".4" />
+        <BellyShade cx={56} cy={98} rx={20} />
+      </g>
+      <g className="sai-crit-head">
+        {/* The ears are IN the fur: a small dark crescent with a tuft drawn
+            back over it, so the silhouette stays unbroken. */}
+        <g className="sai-crit-ear sai-crit-ear-l">
+          <circle cx="76" cy="49" r="5.4" fill={inner} />
+          <path d="M 70 51 C 72 44 80 43 83 47 C 79 45 73 46 70 51 Z" fill={F[1]} />
+        </g>
+        <g className="sai-crit-ear sai-crit-ear-r">
+          <circle cx="92" cy="47" r="5.6" fill={inner} />
+          <path d="M 86 49 C 88 41 97 41 99 46 C 95 43 89 44 86 49 Z" fill={F[0]} />
+        </g>
+        <circle cx="84" cy="63" r="18" fill={`url(#${uid}f)`} />
+        {/* blunt muzzle. It stops; it does not taper */}
+        <path d="M 92 60 C 102 58 108 62 108 68 C 108 74 100 77 92 74 Z" fill={F[1]} />
+        <ellipse cx="97" cy="71" rx="8" ry="5.4" fill={belly} opacity=".8" />
+        <ellipse cx="107.4" cy="66.6" rx="2.8" ry="2.3" fill={noseC} />
+        <path d="M 102 64 l 9 -3.4 M 103 68.6 l 9 2.6" stroke="#c9b493" strokeWidth="1" strokeLinecap="round" opacity=".7" />
+        <FaceKit lid={F[1]} e1={[85, 59]} e2={[97, 58]} er={2.5} iris={ink} mouths={false} blushCol="#c98c86" />
+      </g>
+    </g>
+  );
+}
+
+// ---------------- RAT — long, rangy, thick ringed tail dragged low ----------------
+// "Rats (different colors)" is ONE species with coats, not three species.
+// The coat is chosen per INSTANCE: Critter() pins whatever the caller passes
+// and otherwise derives a stable one from the sprite's own uid, so a colony
+// comes out mixed and no individual rat changes colour while you watch it.
+export const RAT_COATS = {
+  brown: { F: ["#b39572", "#8d7050", "#5f4a33"], belly: "#e9dcc2", tail: "#cdae95", inner: "#c39c86", ink: "#2b2015" },
+  black: { F: ["#63605c", "#484440", "#2b2926"], belly: "#b8b2a8", tail: "#8b847d", inner: "#6d655e", ink: "#141312" },
+  hooded: { F: ["#f4efe4", "#e6ded0", "#c6bcaa"], belly: "#fdfaf2", tail: "#ddc4b1", inner: "#d7bfae", ink: "#2b2015", hood: ["#8a6a49", "#5f4730"] },
+};
+function RatDraw({ uid, variant }) {
+  const C = RAT_COATS[variant] || RAT_COATS.brown;
+  const F = C.F, belly = C.belly, tailC = C.tail, inner = C.inner, ink = C.ink;
+  const hood = C.hood ? C.hood[0] : null, hoodD = C.hood ? C.hood[1] : null;
+  return (
+    <g transform="translate(60 106) scale(.98) translate(-60 -106)">
+      <defs>
+        <Fur id={`${uid}f`} c={F} />
+        {hood && <Fur id={`${uid}h`} c={[hood, hood, hoodD]} />}
+      </defs>
+      {/* Thick at the root, tapering, RINGED, and lying along the floor — a
+          rat's tail is a fifth limb and it never leaves the ground. */}
+      <g className="sai-crit-tail">
+        <path d="M 34 88 C 23 98 13 102 5 100" stroke={tailC} strokeWidth="6.5" fill="none" strokeLinecap="round" />
+        <path d="M 18 97 C 11 100 5 101 1 98 C -1 96 0 93 2 92" stroke={tailC} strokeWidth="4" fill="none" strokeLinecap="round" />
+        <path d="M 30 91 l 1.6 3.4 M 25 94 l 1.4 3.2 M 20 96.4 l 1.1 3 M 15 98.4 l .8 2.8 M 10 99.6 l .5 2.6 M 5 99.6 l .1 2.6"
+          stroke="#8c7261" strokeWidth="1" strokeLinecap="round" opacity=".55" />
+      </g>
+      <Quad near={F[1]} far={F[2]} paw={inner} top={82} len={21} w={7.4} fx={74} bx={40} spread={7} />
+      <g className="sai-crit-body">
+        {/* Long. The rump sits well left of centre and the shoulder well
+            right of it, so the box reads as a horizontal animal. */}
+        <path d="M 14 80 C 14 66 26 58 44 57 C 66 56 84 61 92 71 C 98 79 93 91 76 94 C 50 98 18 94 14 80 Z" fill={`url(#${uid}f)`} />
+        <BackShade cx={52} cy={72} rx={36} ry={16} color="#3a2c1c" op={.18} />
+        <Under cx={54} cy={80} rx={34} ry={15} color={belly} k={.6} opacity={.9} />
+        <BellyShade cx={52} cy={95} rx={30} />
+      </g>
+      <g className="sai-crit-head">
+        {/* The hood: dark over head, throat and shoulder. It is the only coat
+            that changes the DRAWING and not just the swatch. */}
+        {hood && <path d="M 62 62 C 58 54 62 46 72 43 C 66 52 66 60 70 66 Z" fill={hoodD} opacity=".9" />}
+        <g className="sai-crit-ear sai-crit-ear-l">
+          <circle cx="74" cy="36" r="7.4" fill={hood ? hoodD : F[2]} stroke="#000" strokeOpacity=".18" strokeWidth="1" />
+          <circle cx="74.4" cy="37" r="4.4" fill={inner} opacity=".85" />
+        </g>
+        <g className="sai-crit-ear sai-crit-ear-r">
+          <circle cx="94" cy="33" r="7.8" fill={hood ? hood : F[1]} stroke="#000" strokeOpacity=".15" strokeWidth="1" />
+          <circle cx="93.6" cy="34" r="4.6" fill={inner} />
+        </g>
+        {/* A heavier head than the mouse's and a longer, blunter muzzle — a
+            rat's face is a brick with a nose, not a needle. */}
+        <circle cx="84" cy="52" r="17" fill={hood ? `url(#${uid}h)` : `url(#${uid}f)`} />
+        <path d="M 92 45 C 104 44 113 50 114 57 C 114 64 104 68 93 65 C 88 60 87 50 92 45 Z" fill={hood ? hood : F[1]} />
+        <path d="M 95 60 C 103 64 110 63 114 59 C 110 65 99 67 93 64 Z" fill={belly} opacity=".7" />
+        <ellipse cx="114" cy="56.4" rx="3.1" ry="2.6" fill="#c9767f" />
+        <path d="M 106 52 l 12 -5 M 107 56 l 12 -1 M 106 60.4 l 11 4" stroke="#e5d8c4" strokeWidth="1.1" strokeLinecap="round" opacity=".8" />
+        <FaceKit lid={hood ? hood : F[1]} e1={[82, 48]} e2={[95, 47]} er={3.1} iris={ink} mouths={false} blushCol="#e29aa0" />
+      </g>
+    </g>
+  );
+}
+
+// ---------------- HARE — black-tipped ears, deep haunch, cotton scut ----------------
+function HareDraw({ uid }) {
+  const F = ["#caae83", "#a2875c", "#6f5a3a"], belly = "#f2e6cd", inner = "#d9a89c",
+    tip = "#33291b", ink = "#261d0f", scut = "#f7f1e2";
+  return (
+    <g transform="translate(60 106) scale(1) translate(-60 -106)">
+      <defs><Fur id={`${uid}f`} c={F} /></defs>
+      {/* The scut: a cotton ball, pale side out. Small, but the only white on
+          the animal and therefore the thing you track when it bolts. */}
+      {/* placed to clear the haunch, which is painted over the torso and
+          swallowed the scut whole in the first pass */}
+      <g className="sai-crit-tail">
+        <circle cx="19" cy="61" r="7.5" fill={scut} />
+        <path d="M 14 65 C 16 58 22 55 26 57" stroke="#ddd2bc" strokeWidth="1.6" fill="none" opacity=".8" />
+      </g>
+      <Leg x={72} top={72} len={31} w={7.5} color={F[2]} paw="#5a4830" cls="fl" />
+      <Leg x={41} top={78} len={25} w={9} color={F[2]} paw="#5a4830" cls="bl" />
+      <g className="sai-crit-body">
+        {/* lean, high at the hip, dropping away to a narrow chest */}
+        <path d="M 22 76 C 20 60 34 48 56 47 C 76 46 90 54 93 68 C 96 82 84 93 62 95 C 38 97 24 90 22 76 Z" fill={`url(#${uid}f)`} />
+        <BackShade cx={56} cy={64} rx={34} ry={17} color="#4a3a22" op={.2} />
+        <Under cx={60} cy={78} rx={30} ry={16} color={belly} k={.56} opacity={.92} />
+        <path d="M 34 62 q 8 -4 15 -2 M 44 55 q 8 -3 14 -1 M 60 52 q 8 -2 13 0"
+          stroke="#5f4c2e" strokeWidth="1.3" fill="none" strokeLinecap="round" opacity=".32" />
+        <BellyShade cx={58} cy={96} rx={26} />
+      </g>
+      {/* The hind leg: a real haunch with a long hock, drawn as one folded
+          shape and painted OVER the torso — behind it, the biggest single
+          shape on the animal was invisible and the hare came out a rabbit.
+          A hare's back end is twice its front and that is the read. */}
+      <g className="sai-crit-leg sai-crit-leg-br">
+        <path d="M 24 62 C 40 58 52 67 52 79 C 52 90 44 97 33 97 C 22 97 16 89 16 79 C 16 71 19 64 24 62 Z" fill={F[0]} />
+        <path d="M 22 66 C 34 62 44 68 46 78 C 40 70 31 66 22 66 Z" fill="#dcc49a" opacity=".6" />
+        <path d="M 26 66 C 42 62 52 70 52 80 C 52 89 45 96 34 96 C 24 96 18 89 18 80" fill="none" stroke="#8a7048" strokeWidth="1.2" opacity=".45" />
+        <path d="M 30 90 C 28 96 31 101 38 101 L 60 101 C 62 97 60 93 55 92 Z" fill={F[1]} />
+        <ellipse cx="58" cy="101" rx="7.5" ry="3.6" fill={F[2]} />
+      </g>
+      <g className="sai-crit-leg sai-crit-leg-fr">
+        <rect x="76" y="72" width="8" height="30" rx="4" fill={F[1]} />
+        <ellipse cx="81" cy="101" rx="5.6" ry="3.2" fill={F[2]} />
+      </g>
+      <g className="sai-crit-head">
+        {/* The ears. Longer than the head is tall, black at the tip, and one
+            angled off the other so they never read as a single slab. */}
+        <g className="sai-crit-ear sai-crit-ear-l">
+          <path d="M 71 34 C 66 22 65 10 69 3 C 74 2 79 12 80 24 C 80.6 30 79 35 76 37 Z" fill={F[2]} />
+          <path d="M 71 30 C 68 21 68 13 70.6 8 C 73.6 9 76.6 17 77 26 Z" fill="#8f7550" opacity=".8" />
+          <path d="M 68.8 4.4 C 72 3.6 75.4 8 77 15 C 74 10 71 6 68.8 4.4 Z" fill={tip} />
+        </g>
+        <g className="sai-crit-ear sai-crit-ear-r">
+          <path d="M 88 32 C 86 18 89 6 95 1 C 100 3 101 15 98 26 C 96 31 92 34 89 35 Z" fill={F[1]} />
+          <path d="M 89 28 C 88 17 90.6 8 94.4 5 C 97.4 7 98 16 96 24 Z" fill={inner} opacity=".7" />
+          <path d="M 94.6 1.6 C 98.6 3.2 99.6 10 98.6 17 C 98 10 96.4 4.6 94.6 1.6 Z" fill={tip} />
+        </g>
+        <ellipse cx="89" cy="52" rx="17.5" ry="15.5" fill={`url(#${uid}f)`} />
+        <path d="M 98 50 C 108 49 114 54 113 60 C 112 66 103 69 95 66 C 92 60 93 52 98 50 Z" fill={F[0]} />
+        <ellipse cx="103" cy="63" rx="8" ry="4.6" fill={belly} opacity=".85" />
+        {/* the split lip, which no other animal in the forest has */}
+        <path d="M 111 60 l 0 5.6" stroke="#7a6242" strokeWidth="1.3" strokeLinecap="round" opacity=".8" />
+        <ellipse cx="112.4" cy="57.4" rx="3" ry="2.4" fill="#b9767c" />
+        <path d="M 104 54 l 12 -5 M 105 58 l 12 -.6" stroke="#efe4cd" strokeWidth="1.1" strokeLinecap="round" opacity=".75" />
+        <FaceKit lid={F[1]} e1={[85, 47]} e2={[98, 45]} er={3.6} iris={ink} mouths={false} blushCol="#eda3a5" />
+      </g>
+    </g>
+  );
+}
+
+// ---------------- GOPHER — cheek pouches, buck teeth, digging claws ----------------
+// "do not make it look like the beaver, make it look like a gopher."
+// The beaver, four hundred lines up, is a DARK animal (#b07a4a → #5d3a1c)
+// with a broad scaly paddle, a round skull, big stalked ears and a drag
+// furrow behind it. Every one of those is deliberately absent here:
+//
+//   • sandy, not dark. The lightest coat in the forest roster.
+//   • a short THIN NAKED tail — a piece of string, not a plank.
+//   • cheek pouches, loaded, bulging past the line of the jaw. No other
+//     animal in this file has a face wider than its skull.
+//   • the incisors live OUTSIDE the lips. Permanently. A gopher's mouth
+//     shuts BEHIND its teeth so it can chew through a root with its mouth
+//     closed, and that is the single most gopher thing about a gopher.
+//   • small round ears flat against the head — nearly buttons.
+//   • a flat wedge of a head carried low on a thick neck, and forepaws with
+//     pale claws longer than the toes, in a scatter of the dirt they made.
+function GopherDraw({ uid }) {
+  const F = ["#e0bd88", "#c69d63", "#96723f"], belly = "#f2e2c1", pouch = "#e8caa0",
+    ink = "#2c1f0e", tooth = "#f7dd94", toothE = "#c19b48", claw = "#f4ead1",
+    tailC = "#d6a892", noseC = "#8a5f4a", soil = "#6b5334";
+  return (
+    <g transform="translate(60 106) scale(.88) translate(-60 -106)">
+      <defs><Fur id={`${uid}f`} c={F} /></defs>
+      {/* string, not plank. Short, naked, pink-tan, and it does not touch
+          the ground behind him the way the beaver's paddle does. */}
+      <g className="sai-crit-tail">
+        <path d="M 30 88 C 22 84 15 82 9 83" stroke={tailC} strokeWidth="3.6" fill="none" strokeLinecap="round" />
+        <path d="M 30 88 C 24 85.6 19 84.4 14 84.2" stroke="#e8c2b0" strokeWidth="1.2" fill="none" strokeLinecap="round" opacity=".7" />
+      </g>
+      {/* far pair, behind the torso */}
+      <Leg x={40} top={84} len={19} w={7.5} color={F[2]} paw="#7c5c30" cls="bl" />
+      <g className="sai-crit-leg sai-crit-leg-fl">
+        <rect x="70" y="84" width="7.5" height="17" rx="3.7" fill={F[2]} />
+        <path d="M 71 100 l -2.6 3.4 M 74 100.6 l -.4 3.6 M 77 100 l 2.4 3.4" stroke="#e0d3b4" strokeWidth="1.5" strokeLinecap="round" fill="none" />
+      </g>
+      <g className="sai-crit-body">
+        {/* a low cylinder. Gophers are tube-shaped because they live in a
+            tube; the back is nearly straight and the belly nearly flat. */}
+        <path d="M 22 82 C 22 70 32 63 52 62 C 72 61 86 67 90 77 C 94 87 84 96 62 97 C 36 98 22 92 22 82 Z" fill={`url(#${uid}f)`} />
+        <BackShade cx={54} cy={74} rx={32} ry={14} color="#6d4f26" op={.18} />
+        <Under cx={56} cy={82} rx={30} ry={14} color={belly} k={.58} opacity={.9} />
+        <BellyShade cx={54} cy={97} rx={26} />
+      </g>
+      <g className="sai-crit-head">
+        {/* Buttons, set close and low — but they have to CLEAR the skull or
+            they are not ears, they are freckles. Compare the beaver's 4.6r
+            stalks standing well proud on their own necks of fur. */}
+        <g className="sai-crit-ear sai-crit-ear-l">
+          <circle cx="76" cy="46" r="3.7" fill={F[2]} /><circle cx="76" cy="46.6" r="1.8" fill="#75551f" />
+        </g>
+        <g className="sai-crit-ear sai-crit-ear-r">
+          <circle cx="93" cy="44" r="3.9" fill={F[1]} /><circle cx="93" cy="44.6" r="1.9" fill="#80602c" />
+        </g>
+        {/* the far pouch, loaded, showing past the far side of the jaw */}
+        <ellipse cx="72" cy="73" rx="8.5" ry="7" fill={F[2]} />
+        {/* flat wedge of a skull, wider than it is tall */}
+        <ellipse cx="86" cy="62" rx="19" ry="15.5" fill={`url(#${uid}f)`} />
+        {/* the near pouch: it bulges PAST the jaw line, which is the whole
+            point of it, with a seam where the loaded cheek creases. Outlined
+            — an untraced pale lens on pale fur is just a highlight. */}
+        <ellipse cx="88" cy="75" rx="14" ry="10.5" fill={pouch} stroke="#b58c50" strokeWidth="1.2" />
+        <path d="M 78 70 C 84 78 94 81 101 78" stroke="#b58c50" strokeWidth="1.3" fill="none" strokeLinecap="round" opacity=".8" />
+        <path d="M 82 79 q 5 3.4 10 1 M 90 82 q 5 2.6 9 -.6" stroke="#c9a570" strokeWidth="1" fill="none" strokeLinecap="round" opacity=".6" />
+        {/* muzzle + nose */}
+        <path d="M 96 58 C 106 57 112 61 112 66 C 112 71 105 74 97 72 Z" fill={F[0]} />
+        <ellipse cx="111.6" cy="64.6" rx="2.9" ry="2.4" fill={noseC} />
+        <path d="M 105 61 l 9 -3.6 M 106 68 l 9 2.4" stroke="#efe0c4" strokeWidth="1" strokeLinecap="round" opacity=".75" />
+        {/* THE TEETH. Outside the lip, always, grooved down the face. The
+            dark wedge behind them is the shut mouth they are shut OUTSIDE
+            of — without it two yellow tabs read as pasted on the cheek. */}
+        <path d="M 98 67 C 104 65.6 110 66 112 68.4 C 110 73 104 74.4 98.6 72.6 Z" fill="#5f4020" opacity=".55" />
+        <g className="sai-crit-incisor">
+          <path d="M 100 68 h 4.6 v 9.4 q 0 2.2 -2.3 2.2 q -2.3 0 -2.3 -2.2 Z" fill={tooth} stroke={toothE} strokeWidth=".7" />
+          <path d="M 105 67.4 h 4.4 v 9 q 0 2.1 -2.2 2.1 q -2.2 0 -2.2 -2.1 Z" fill="#fdeab4" stroke={toothE} strokeWidth=".7" />
+          <path d="M 102.3 69.4 v 7.4 M 107.2 68.8 v 7" stroke={toothE} strokeWidth=".6" opacity=".7" />
+        </g>
+        <FaceKit lid={F[1]} e1={[87, 58]} e2={[99, 56]} er={2.4} iris={ink} mouths={false} blushCol="#dd9a86" />
+      </g>
+      {/* near hind + the digging forefoot, drawn over the body so the claws
+          are never buried by it */}
+      <Leg x={47} top={85} len={19} w={8} color={F[1]} paw="#9a7742" cls="br" />
+      <g className="sai-crit-leg sai-crit-leg-fr">
+        <rect x="76" y="85" width="8.5" height="16" rx="4.2" fill={F[1]} />
+        <ellipse cx="80.4" cy="100" rx="5.6" ry="3.4" fill={F[2]} />
+        {/* claws longer than the toes that carry them */}
+        <path d="M 76 100.6 C 74 102.6 72.6 104.4 72 106 M 80 101.6 C 79.4 104 79 105.8 79 107 M 84 101 C 85.6 103 86.8 104.8 87.4 106.2"
+          stroke={claw} strokeWidth="2.2" fill="none" strokeLinecap="round" />
+      </g>
+      {/* the spoil he pushed out. Static, not .sai-crit-dust — this is dirt
+          that has been moved, not dirt being kicked up. */}
+      <g className="gopher-spoil">
+        <ellipse cx="95" cy="104" rx="9" ry="3" fill={soil} opacity=".5" />
+        <circle cx="90" cy="102.4" r="2" fill="#7d6340" opacity=".65" />
+        <circle cx="99" cy="103" r="1.6" fill="#8a6e48" opacity=".6" />
+        <circle cx="103" cy="101.4" r="1.2" fill="#7d6340" opacity=".5" />
+      </g>
+    </g>
+  );
+}
+
+// ---------------- RUFFED GROUSE — football body, neck ruff, banded fan tail ----------------
+function GrouseDraw({ uid }) {
+  const F = ["#c2a172", "#9d7e55", "#6a5335"], buff = "#e9d8b4", ruff = "#3a2c1c",
+    band = "#3d2f1d", bill = "#5f4c33", ink = "#221809", shank = "#a08a68";
+  return (
+    <g transform="translate(60 106) scale(.96) translate(-60 -106)">
+      <defs><Fur id={`${uid}f`} c={F} /></defs>
+      {/* THE FAN. A ruffed grouse is a brown lump with a fan on the back of
+          it; take the fan away and it is a chicken. Radiating rachises, a
+          dark subterminal band, a pale tip — that band is the field mark. */}
+      {/* FIRST DRAFT WAS A SQUIRREL. A tall narrow plume rising off the rump
+          is a squirrel's tail no matter what you fill it with, and one was
+          already standing three species away. What separates them is that a
+          grouse's tail is a FAN: it is wider at the far edge than at the
+          root, it is blunt across that edge rather than tipped, and it is
+          held BACK, level with the bird, not up over it. */}
+      <g className="sai-crit-tail">
+        <path d="M 34 74 C 26 62 14 52 2 46 C -2 58 -2 76 2 90 C 14 88 26 82 34 74 Z" fill={F[1]} />
+        <path d="M 33 73 C 24 62 13 53 3 48 M 34 75 C 25 67 14 60 2 56 M 34 77 C 25 72 14 68 1 66 M 34 79 C 25 78 14 77 1 76 M 33 81 C 25 83 14 85 2 87"
+          stroke={F[2]} strokeWidth="1.3" fill="none" opacity=".6" />
+        {/* the subterminal band — the field mark, and the only reason this
+            reads as a species and not as a generic bird's arse */}
+        <path d="M 8 50 C 4 62 4 76 8 88 C 11.6 87.4 15 86.4 18 85 C 14.6 74 14.6 62 18 52.6 C 15 51.4 11.6 50.4 8 50 Z" fill={band} opacity=".92" />
+        <path d="M 2 46 C -2 58 -2 76 2 90 C 4 89.6 6 89.2 8 88.6 C 4.6 76 4.6 61 8 49.4 C 6 48.6 4 47.2 2 46 Z" fill={buff} opacity=".7" />
+      </g>
+      <g className="sai-crit-leg sai-crit-leg-fl">
+        <rect x="54" y="90" width="5.5" height="12" rx="2.7" fill={shank} />
+        <path d="M 52 101.6 l -3 2.6 M 57 101.8 l 0 3 M 61 101.6 l 3 2.6" stroke={shank} strokeWidth="2.1" strokeLinecap="round" fill="none" />
+      </g>
+      <g className="sai-crit-leg sai-crit-leg-fr">
+        <rect x="68" y="90" width="5.5" height="12" rx="2.7" fill="#b89c76" />
+        <path d="M 66 101.6 l -3 2.6 M 71 101.8 l 0 3 M 75 101.6 l 3 2.6" stroke="#b89c76" strokeWidth="2.1" strokeLinecap="round" fill="none" />
+      </g>
+      <g className="sai-crit-body">
+        {/* a football, pitched nose-up, with the neck growing out of the top
+            right of it. No gap between body and head — a grouse has almost
+            no neck and the drawing must not invent one. */}
+        <path d="M 30 76 C 28 62 40 52 58 51 C 76 50 88 58 90 70 C 92 84 78 96 58 97 C 40 98 32 90 30 76 Z" fill={`url(#${uid}f)`} />
+        <BackShade cx={58} cy={68} rx={30} ry={16} color="#4b3a22" op={.24} />
+        {/* barring. A grouse is a bird made entirely of dead-leaf pattern */}
+        <path d="M 42 64 q 6 4.4 12 0 M 54 61 q 6 4.4 12 0 M 66 63 q 6 4.4 11 0 M 38 74 q 6 4.4 12 0 M 50 72 q 6 4.4 12 0 M 62 74 q 6 4.4 12 0 M 42 86 q 6 4.4 12 0 M 54 85 q 6 4.4 12 0 M 66 86 q 6 4.4 11 0"
+          stroke={F[2]} strokeWidth="1.5" fill="none" strokeLinecap="round" opacity=".55" />
+        <Under cx={62} cy={78} rx={26} ry={19} color={buff} k={.5} opacity={.82} />
+        <BellyShade cx={58} cy={96} rx={24} />
+      </g>
+      <g className="sai-crit-wing">
+        <ellipse cx="54" cy="74" rx="12.5" ry="16" fill={F[1]} transform="rotate(16 54 74)" />
+        <path d="M 48 64 q -3 9 -1 19 M 56 63 q -3 10 -.6 20" stroke={F[2]} strokeWidth="1.5" fill="none" opacity=".7" />
+        <path d="M 46 82 C 39 87 33 90 28 90 C 32 93 39 93 46 90 Z" fill="#5b4830" />
+      </g>
+      <g className="sai-crit-head">
+        {/* the ruff: a black collar sitting IN the shoulder, not floating
+            above it, so head and body stay one animal */}
+        <path d="M 72 66 C 68 56 74 46 85 44 C 92 43 98 46 100 51 C 93 50 86 53 82 59 C 79 63 78 66 78 69 Z" fill={ruff} opacity=".9" />
+        <ellipse cx="89" cy="52" rx="11.5" ry="11" fill={`url(#${uid}f)`} />
+        {/* The crest. Two attempts at this were a pair of rabbit ears — the
+            second time this bird tried to turn into a mammal. It is a low
+            peak LYING ON the crown and raked back, never a pair of spikes
+            standing clear of it. */}
+        <path d="M 96 44 C 90 36 82 32 74 33 C 79 37 83 42 85 48 C 89 45 93 44 96 44 Z" fill={F[2]} />
+        <path d="M 92 43.6 C 87 38 81 35 76 34.6 C 80 38 83 42 85 46.4 Z" fill="#4f3d26" opacity=".55" />
+        <ellipse cx="85" cy="56" rx="7.5" ry="5" fill={buff} opacity=".6" />
+        <path d="M 99 50.6 L 108 53.4 L 99 56.6 Q 97.4 53.6 99 50.6 Z" fill={bill} />
+        <path d="M 100.6 52.6 l 3 .8" stroke="#3f3222" strokeWidth=".9" strokeLinecap="round" />
+        {/* mouths={false}: the bill IS the mouth, and the shared smile drawn
+            under it came out as a second, softer beak */}
+        <FaceKit lid={F[1]} e1={[89, 49]} e2={[97, 50]} er={2.7} iris={ink} mouths={false} blushCol="#cf8f80" />
+      </g>
+    </g>
+  );
+}
+
+// ---------------- GARTER SNAKE — one travelling S, three stripes, no legs ----------------
+// No legs, so the walk cycle has nothing to swing and the whole of "moving"
+// has to come out of the body. The spine is drawn ONCE and stroked four
+// times — pale belly rim, dark back, the yellow dorsal stripe, a lateral
+// line — so the stripe can never drift off the animal it belongs to. The
+// tail is a separate group that overlaps the body end generously: the
+// slither skews the body, and a butt joint would tear open.
+function GarterSnakeDraw({ uid }) {
+  const SPINE = "M 20 96 C 34 88 42 102 60 97 C 76 92 80 83 94 82";
+  const dark = "#31402a", darkD = "#1f2a1a", stripe = "#ead571", side = "#c7cf90",
+    pale = "#cbd7a4", ink = "#161c11", tongue = "#cf4a63";
+  return (
+    <g>
+      <defs><Fur id={`${uid}f`} c={[dark, dark, darkD]} /></defs>
+      <g className="sai-crit-tail">
+        <path d="M 34 92 C 24 98 14 100.6 4 100" stroke={dark} strokeWidth="8.5" fill="none" strokeLinecap="round" />
+        <path d="M 22 98 C 15 100.4 9 101.4 4 100.6" stroke={darkD} strokeWidth="4.6" fill="none" strokeLinecap="round" />
+        <path d="M 34 90.4 C 24 96 15 98.6 5 98.2" stroke={stripe} strokeWidth="2.2" fill="none" strokeLinecap="round" opacity=".9" />
+      </g>
+      <g className="sai-crit-body">
+        <path d={SPINE} stroke={pale} strokeWidth="15" fill="none" strokeLinecap="round" transform="translate(0 2.8)" />
+        <path d={SPINE} stroke={`url(#${uid}f)`} strokeWidth="14.5" fill="none" strokeLinecap="round" />
+        {/* the checker rows a garter snake carries between its stripes */}
+        <path d="M 30 91.4 l 0 6 M 40 92.6 l 0 6.4 M 50 96.6 l 0 6 M 60 91.6 l 0 6.6 M 70 89 l 0 6.4 M 80 86 l 0 6.4 M 90 83.4 l 0 6.2"
+          stroke={darkD} strokeWidth="2.2" strokeLinecap="round" opacity=".55" />
+        <path d={SPINE} stroke={side} strokeWidth="1.8" fill="none" strokeLinecap="round" opacity=".7" transform="translate(0 3.8)" />
+        <path d={SPINE} stroke={stripe} strokeWidth="3.2" fill="none" strokeLinecap="round" />
+      </g>
+      <g className="sai-crit-head">
+        {/* A spade — but only just wider than the neck. Drawn big it turned
+            into an eel: on a real snake the head barely interrupts the line,
+            and that near-continuity IS the animal. */}
+        <path d="M 91 79 C 91 74.4 95 71.4 100.6 71.4 C 107 71.4 111.6 74 112.6 77.4 C 113.4 80 111.4 82.6 107.4 83.8 C 101 85.4 94.6 84.6 92.4 82 C 91.4 81 91 80 91 79 Z" fill={`url(#${uid}f)`} />
+        <path d="M 94 74.4 C 100 72.4 107 73.4 111 76" stroke={stripe} strokeWidth="2.2" fill="none" strokeLinecap="round" opacity=".85" />
+        <path d="M 94 83.4 C 100 85 107.4 84 112 80.6" stroke={pale} strokeWidth="1.8" fill="none" strokeLinecap="round" opacity=".75" />
+        <g className="sai-crit-flick">
+          <path d="M 113 79.6 C 118 79 122 77.6 125 75.4 M 125 75.4 l 3.4 -.4 M 125 75.4 l 1.6 2.6"
+            stroke={tongue} strokeWidth="1.7" fill="none" strokeLinecap="round" />
+        </g>
+        <g className="sai-crit-eyes-normal">
+          <circle cx="100" cy="76.4" r="2.5" fill="#e9d06a" /><circle cx="100.4" cy="76.6" r="1.5" fill={ink} />
+          <circle cx="100.9" cy="75.7" r=".6" fill="#fff" opacity=".9" />
+        </g>
+        <FaceKit lid={dark} e1={[100, 76.4]} e2={[107, 77]} er={2.5} drawEyes={false} mouths={false} browCol={ink} blushCol="#c98b7a" />
+        <g className="sai-crit-mouth-open">
+          <path d="M 104 81 C 110 81 114 79 116 76 C 116 83 110 88 103 87 Z" fill="#5c1f2a" />
+          <ellipse cx="108" cy="83" rx="3.4" ry="1.5" fill="#e0728a" opacity=".85" />
+        </g>
+      </g>
+    </g>
+  );
+}
+
+// ---------------- WILD BOAR — shoulder hump, bristle mane, low head, tusks ----------------
+function BoarDraw({ uid }) {
+  const F = ["#655445", "#463a30", "#241d17"], bristle = "#8c7461", belly = "#7a6857",
+    tusk = "#f4ecd6", snout = "#7f6455", hoof = "#1c1712", ink = "#120e0a";
+  return (
+    <g transform="translate(60 106) scale(1.06) translate(-60 -106)">
+      <defs><Fur id={`${uid}f`} c={F} /></defs>
+      {/* a whip with a tuft. Everything else about this animal is mass */}
+      <g className="sai-crit-tail">
+        <path d="M 26 70 C 18 74 13 82 12 90" stroke={F[2]} strokeWidth="3.2" fill="none" strokeLinecap="round" />
+        <path d="M 12 90 C 8 93 8 98 11 101 C 15 99 16 94 14 90 Z" fill={bristle} />
+      </g>
+      <Quad near={F[1]} far={F[2]} hoof={hoof} top={78} len={25} w={9.5} fx={74} bx={34} spread={8} />
+      <g className="sai-crit-body">
+        {/* THE WEDGE. First draft came out a loaf: the hump has to be an
+            actual high point on the SILHOUETTE, over the shoulder and well
+            right of centre, with the back falling away to a rump lower than
+            it. A boar is a battering ram carried on short legs, and all of
+            that lives in the top edge. */}
+        <path d="M 16 84 C 14 72 22 60 40 54 C 58 48 78 48 90 57 C 100 65 102 82 90 91 C 74 100 32 99 16 84 Z" fill={`url(#${uid}f)`} />
+        <BackShade cx={58} cy={64} rx={38} ry={16} color="#150f0a" op={.28} />
+        <Under cx={56} cy={84} rx={34} ry={14} color={belly} k={.55} opacity={.5} />
+        {/* THE BRISTLE RIDGE, as spikes standing off the back rather than a
+            zigzag drawn on it. Painted as one filled comb whose lower edge
+            follows the spine, so it breaks the outline instead of decorating
+            the inside of it — that is the difference between a mane and a
+            pattern, and the first draft was a pattern. */}
+        <path d="M 28 70 L 32 60 L 36 67 L 41 56 L 46 64 L 51 53 L 56 62 L 61 50 L 66 59 L 71 49 L 75 58 L 78 64 C 68 57 46 60 28 70 Z"
+          fill={bristle} opacity=".9" />
+        <path d="M 28 78 q 8 -5 15 -3 M 38 70 q 8 -4 14 -2 M 54 63 q 8 -3 14 -1"
+          stroke="#2b231b" strokeWidth="1.4" fill="none" strokeLinecap="round" opacity=".45" />
+        <BellyShade cx={56} cy={98} rx={32} />
+      </g>
+      <g className="sai-crit-head">
+        {/* LOW. The skull hangs off the FRONT of the hump, its crown below
+            the line of the shoulder and the snout finishing below the belly.
+            That drop is most of what says "boar" rather than "bear" at 40px,
+            and it only works if the shoulder is genuinely higher. */}
+        <g className="sai-crit-ear sai-crit-ear-l">
+          <path d="M 86 68 L 82 56 L 94 62 Z" fill={F[2]} />
+        </g>
+        <g className="sai-crit-ear sai-crit-ear-r">
+          <path d="M 96 63 L 95 49 L 106 58 Z" fill={F[1]} />
+          <path d="M 97.4 60.4 L 96.6 53.6 L 102.6 58 Z" fill="#3a2f26" />
+        </g>
+        <path d="M 74 72 C 84 64 98 66 106 78 C 112 87 110 96 101 98 C 88 100 77 92 73 80 Z" fill={`url(#${uid}f)`} />
+        <path d="M 96 80 C 104 78 111 82 113 88 C 115 94 110 99 103 98 C 97 97 94 91 95 85 Z" fill={snout} />
+        <ellipse cx="111" cy="90" rx="5" ry="5.8" fill="#4c3d33" />
+        <circle cx="110" cy="87.6" r="1.3" fill={ink} /><circle cx="110.6" cy="92.4" r="1.3" fill={ink} />
+        {/* tusks, up and out of the lower jaw */}
+        <g className="sai-crit-tusk">
+          <path d="M 100 96 C 105 94 108 88 107 82 C 110 86 110 94 105 98 C 103 99 101 98 100 96 Z" fill={tusk} />
+          <path d="M 93 97 C 97 95.6 99 91.4 98.6 87 C 100.6 90 100.4 96 97 98.4 C 95.4 99 94 98.4 93 97 Z" fill="#ddd2b8" />
+        </g>
+        <FaceKit lid={F[1]} e1={[85, 76]} e2={[96, 78]} er={2.6} iris={ink} mouths={false} blushCol="#b5837a" />
+      </g>
+    </g>
+  );
+}
+
+// ---------------- MOUNTAIN GOAT — white, blocky, black dagger horns, beard ----------------
+// FIRST DRAFT WAS A SHEEP. White on white on white: the legs vanished into
+// the body, the horns were hairlines and the whole animal came out as a
+// loaf. A pale animal on a dark ground needs its shapes cut apart by EDGE
+// rather than by tone, so everything below is outlined in warm grey, the
+// legs are longer than they look like they should be, and the horns are
+// heavy enough to survive being 6px tall.
+function GoatDraw({ uid }) {
+  const F = ["#fdfbf4", "#f0ebdd", "#d6ceba"], shag = "#e6ddc9", line = "#a99f8a",
+    horn = "#282520", hornL = "#403b33", hoof = "#1e1a15", ink = "#1d1a15", nose = "#332e27";
+  return (
+    <g transform="translate(60 106) scale(1) translate(-60 -106)">
+      <defs><Fur id={`${uid}f`} c={F} /></defs>
+      <g className="sai-crit-tail">
+        <path d="M 30 56 C 24 50 19 47 14 47 C 16 54 21 60 28 63 Z" fill={F[1]} stroke={line} strokeWidth="1.2" />
+      </g>
+      {/* posts. Long, straight and separated by an outline, because a
+          mountain goat's legs are the half of it that stands on a cliff. */}
+      <Quad near={F[1]} far={F[2]} hoof={hoof} top={68} len={35} w={10} fx={80} bx={34} spread={9} />
+      <g className="sai-crit-body">
+        {/* blocky: a rectangle of wool, humped over the shoulder and
+            squared off at both ends */}
+        <path d="M 21 59 C 21 48 29 41 43 40 L 76 39 C 88 39 95 46 96 58 L 96 74 C 96 83 89 88 75 88 L 39 89 C 27 89 21 83 21 72 Z"
+          fill={`url(#${uid}f)`} stroke={line} strokeWidth="1.6" strokeLinejoin="round" />
+        {/* the shoulder hump, which is what a bighorn has not got */}
+        <path d="M 43 41 C 53 31 74 32 83 43 C 70 38 55 38 43 41 Z" fill={F[0]} stroke={line} strokeWidth="1.2" strokeLinejoin="round" />
+        {/* THE HEM. Regular scallops read as a sheep's fleece — that was the
+            single worst line in the first draft. A mountain goat's winter
+            coat hangs off it in uneven LOCKS of different lengths, and the
+            irregularity is the whole difference. Filled without a stroke,
+            then traced on its own: closing the shape across the top and
+            stroking it drew a hard belt round the animal. */}
+        <path d="M 21 72 q 4 14 8 1 q 5 18 10 2 q 4 13 8 0 q 6 19 11 2 q 4 14 8 0 q 5 17 10 2 q 4 13 8 1 q 5 15 9 1 L 96 71 L 21 71 Z"
+          fill={shag} />
+        <path d="M 21 72 q 4 14 8 1 q 5 18 10 2 q 4 13 8 0 q 6 19 11 2 q 4 14 8 0 q 5 17 10 2 q 4 13 8 1 q 5 15 9 1"
+          fill="none" stroke={line} strokeWidth="1.1" strokeLinejoin="round" strokeLinecap="round" />
+        <path d="M 29 52 q 4 9 0 17 M 41 48 q 4 10 0 19 M 53 47 q 4 10 0 19 M 65 47 q 4 10 0 19 M 78 50 q 4 9 0 17"
+          stroke="#cdc3ad" strokeWidth="1.4" fill="none" strokeLinecap="round" opacity=".8" />
+        {/* the shoulder the head sits in front of. Without it, white face on
+            white body is one shape and the goat has no neck at all. */}
+        <ellipse cx="91" cy="58" rx="8" ry="15" fill={line} opacity=".2" />
+        <BellyShade cx={58} cy={92} rx={32} />
+      </g>
+      <g className="sai-crit-head">
+        {/* horns: black daggers raked BACK over the neck. Not the curl of a
+            bighorn — a mountain goat's are stilettos, and they are the one
+            mark that has to survive at 12px, so they are drawn thick. */}
+        <path d="M 93 38 C 89 28 84 19 78 12 C 82 11 91 20 97 34 C 97 37 95 39 93 38 Z" fill={horn} />
+        <path d="M 102 36 C 99 25 95 17 90 10 C 95 9.6 103 19 106 32 C 106 35 104 37 102 36 Z" fill={hornL} />
+        <g className="sai-crit-ear sai-crit-ear-l"><path d="M 89 44 L 77 40 L 86 51 Z" fill={F[2]} stroke={line} strokeWidth="1" /></g>
+        <g className="sai-crit-ear sai-crit-ear-r"><path d="M 100 41 L 109 34 L 105 48 Z" fill={F[1]} stroke={line} strokeWidth="1" /></g>
+        {/* The long narrow face. Length is the read, not width — a round
+            head on this body is a lamb, and the first draft was one. */}
+        <path d="M 82 44 C 90 35 102 38 109 47 C 116 55 119 64 116 69 C 111 74 100 72 93 65 C 86 58 79 51 82 44 Z"
+          fill={`url(#${uid}f)`} stroke={line} strokeWidth="1.7" strokeLinejoin="round" />
+        <ellipse cx="115" cy="65.6" rx="4.2" ry="3.6" fill={nose} />
+        {/* the beard, which no sheep has */}
+        <path d="M 97.5 66 C 95.5 76 96.5 87 100 93 C 103.5 87 104.5 76 103 64 Z" fill={shag} stroke={line} strokeWidth="1.2" strokeLinejoin="round" />
+        <path d="M 99 71 C 98.4 79 99 86 100 90" stroke="#c2b8a2" strokeWidth="1.1" fill="none" opacity=".85" />
+        <FaceKit lid={F[1]} e1={[92, 50]} e2={[103, 53]} er={2.9} iris={ink} mouth={[110, 68]} mouthCol="#5a5248" blushCol="#d7a596" />
+      </g>
+    </g>
+  );
+}
+
+// ---------------- CRAYFISH — seen from above, claws forward, fan tail ----------------
+// The only animal in the file drawn from a bird's eye, because it is the
+// only one you meet through water: from the bank you see the plan view of a
+// crayfish and nothing else. Symmetric about y=74 and still facing right —
+// claws and antennae lead, the fan trails.
+function CrayfishDraw({ uid }) {
+  const F = ["#c06a45", "#9a4830", "#66301f"], pale = "#e0a882", edge = "#4d2415",
+    ink = "#160b06", claw = "#a84f31", clawT = "#d4795220";
+  const seg = (x, ry, w, fill) => <ellipse key={x} cx={x} cy="74" rx={w} ry={ry} fill={fill} />;
+  return (
+    <g transform="translate(60 106) scale(.94) translate(-60 -106)">
+      <defs><Fur id={`${uid}f`} c={F} /></defs>
+      {/* the fan: telson between two pairs of uropods, held flat */}
+      <g className="sai-crit-tail">
+        <path d="M 22 74 C 14 62 8 56 2 54 C 2 62 6 70 12 74 C 6 78 2 86 2 94 C 8 92 14 86 22 74 Z" fill={F[1]} />
+        <path d="M 20 74 C 14 66 8 60 3 57 M 20 74 C 14 82 8 88 3 91 M 20 74 C 12 70 6 66 2.6 62 M 20 74 C 12 78 6 82 2.6 86"
+          stroke={edge} strokeWidth="1.1" fill="none" opacity=".5" />
+        <ellipse cx="19" cy="74" rx="7" ry="7.5" fill={F[0]} />
+      </g>
+      {/* eight walking legs, four of them on the rig so the scuttle reads */}
+      <g className="sai-crit-leg sai-crit-leg-bl"><path d="M 52 64 C 48 56 42 50 34 47" stroke={F[2]} strokeWidth="3" fill="none" strokeLinecap="round" /></g>
+      <g className="sai-crit-leg sai-crit-leg-fl"><path d="M 68 63 C 66 55 62 48 55 44" stroke={F[2]} strokeWidth="3" fill="none" strokeLinecap="round" /></g>
+      <path d="M 58 64 C 55 56 50 50 43 46" stroke={F[2]} strokeWidth="2.7" fill="none" strokeLinecap="round" />
+      <path d="M 74 65 C 74 57 72 50 66 45" stroke={F[2]} strokeWidth="2.7" fill="none" strokeLinecap="round" />
+      <g className="sai-crit-leg sai-crit-leg-br"><path d="M 52 84 C 48 92 42 98 34 101" stroke={F[1]} strokeWidth="3" fill="none" strokeLinecap="round" /></g>
+      <g className="sai-crit-leg sai-crit-leg-fr"><path d="M 68 85 C 66 93 62 100 55 104" stroke={F[1]} strokeWidth="3" fill="none" strokeLinecap="round" /></g>
+      <path d="M 58 84 C 55 92 50 98 43 102" stroke={F[1]} strokeWidth="2.7" fill="none" strokeLinecap="round" />
+      <path d="M 74 83 C 74 91 72 98 66 103" stroke={F[1]} strokeWidth="2.7" fill="none" strokeLinecap="round" />
+      <g className="sai-crit-body">
+        {/* abdomen: overlapping plates, tapering to the fan */}
+        {[[26, 10.5, 6], [34, 12, 6.5], [42, 13.5, 7], [50, 15, 7]].map(([x, ry, w]) => seg(x, ry, w, F[1]))}
+        {[[26, 10.5, 6], [34, 12, 6.5], [42, 13.5, 7], [50, 15, 7]].map(([x, ry, w]) => (
+          <path key={`e${x}`} d={`M ${x - w} 74 A ${w} ${ry} 0 0 0 ${x + w} 74`} fill="none" stroke={edge} strokeWidth="1" opacity=".45" />
+        ))}
+        {/* carapace: one shield, keeled down the middle, rostrum at the nose */}
+        <path d="M 52 74 C 52 62 60 55 72 55 C 82 55 89 62 90 70 L 96 74 L 90 78 C 89 86 82 93 72 93 C 60 93 52 86 52 74 Z" fill={`url(#${uid}f)`} />
+        <path d="M 56 74 C 58 66 64 61 72 60 C 80 60 86 65 88 72" stroke={pale} strokeWidth="2" fill="none" opacity=".45" />
+        <path d="M 60 74 L 90 74" stroke={edge} strokeWidth="1.2" opacity=".4" />
+        <ellipse cx="70" cy="74" rx="12" ry="7" fill={pale} opacity=".18" />
+        {/* eyes on short stalks either side of the rostrum */}
+        <circle cx="92" cy="68" r="2.6" fill={ink} /><circle cx="92" cy="80" r="2.6" fill={ink} />
+        <circle cx="92.7" cy="67.2" r=".9" fill="#fff" opacity=".8" />
+        {/* antennae — long, and the first thing a crayfish leads with */}
+        <path d="M 94 69 C 104 62 112 54 118 44" stroke={F[2]} strokeWidth="1.7" fill="none" strokeLinecap="round" />
+        <path d="M 94 79 C 104 86 112 94 118 104" stroke={F[2]} strokeWidth="1.7" fill="none" strokeLinecap="round" />
+        <path d="M 95 72 C 103 70 110 68 116 64 M 95 76 C 103 78 110 80 116 84" stroke={F[2]} strokeWidth="1.2" fill="none" strokeLinecap="round" opacity=".8" />
+      </g>
+      {/* THE CLAWS. Half the animal, and the reason it reads at all from
+          above — a crayfish silhouette is a pair of pincers with a body
+          apologising behind them. Their own class so they can wave. */}
+      <g className="sai-crit-claw sai-crit-claw-u">
+        <path d="M 78 64 C 84 58 90 52 96 48" stroke={F[1]} strokeWidth="6" fill="none" strokeLinecap="round" />
+        <path d="M 96 48 C 100 42 108 38 114 39 C 116 43 112 49 105 52 C 100 54 97 52 96 48 Z" fill={claw} />
+        <path d="M 100 50.6 C 104 44 111 40 116 40.6 C 114 44 108 48.6 102 51.4 Z" fill={F[0]} />
+        <path d="M 105 52 C 110 50 114 46 116 42" stroke={edge} strokeWidth="1.1" fill="none" opacity=".5" />
+      </g>
+      <g className="sai-crit-claw sai-crit-claw-d">
+        <path d="M 78 84 C 84 90 90 96 96 100" stroke={F[1]} strokeWidth="6" fill="none" strokeLinecap="round" />
+        <path d="M 96 100 C 100 106 108 110 114 109 C 116 105 112 99 105 96 C 100 94 97 96 96 100 Z" fill={F[1]} />
+        <path d="M 100 97.4 C 104 104 111 108 116 107.4 C 114 104 108 99.4 102 96.6 Z" fill={F[0]} />
+        <path d="M 105 96 C 110 98 114 102 116 106" stroke={edge} strokeWidth="1.1" fill="none" opacity=".5" />
+      </g>
+      {/* no .sai-crit-head: an arthropod's head is welded to its thorax, and
+          an empty animated group is a bbox of zero for the rig to divide by */}
+    </g>
+  );
+}
+
+// ---------------- GRUB — a fat pale C with a tan head. Nothing else. ----------------
+// Lives in rotten logs, will be four pixels of a bird's mouthful, and gets
+// exactly the detail that survives that: shape and colour. The C-curve is
+// the whole species — no beetle larva ever lies straight.
+function GrubDraw({ uid }) {
+  const SPINE = "M 44 94 C 27 90 25 69 44 61 C 61 54 79 61 85 74";
+  const cream = "#f3e3c1", shade = "#dcc49a", gut = "#c3a476", head = "#c9873f",
+    headD = "#9d6427", ink = "#3a2410";
+  return (
+    <g transform="translate(60 106) scale(.82) translate(-60 -106)">
+      <defs><Fur id={`${uid}f`} c={[cream, cream, shade]} /></defs>
+      <g className="sai-crit-tail">
+        <ellipse cx="45" cy="94" rx="12" ry="11" fill={shade} />
+        <ellipse cx="45" cy="95" rx="7.5" ry="6.5" fill={gut} opacity=".7" />
+      </g>
+      <g className="sai-crit-body">
+        <path d={SPINE} stroke={shade} strokeWidth="23" fill="none" strokeLinecap="round" transform="translate(0 2.2)" />
+        <path d={SPINE} stroke={`url(#${uid}f)`} strokeWidth="22" fill="none" strokeLinecap="round" />
+        {/* the segment creases. A grub is a stack of rings */}
+        <path d="M 34 86 l 10 -4 M 29 76 l 11 -1.6 M 31 66.6 l 10 3.6 M 40 60.4 l 6 9 M 51 57.4 l 3 10.4 M 62 57.6 l 0 10.6 M 73 61 l -3 10.2"
+          stroke={shade} strokeWidth="1.9" fill="none" strokeLinecap="round" opacity=".85" />
+        <path d="M 36 66 C 46 58 62 58 74 65" stroke="#fbf1da" strokeWidth="3.4" fill="none" strokeLinecap="round" opacity=".5" />
+      </g>
+      {/* three token legs, which is all a grub has and all it needs */}
+      <path d="M 74 84 C 72 90 70 94 67 97 M 82 82 C 82 88 81 92 79 96 M 66 86 C 63 91 61 94 58 96"
+        stroke={headD} strokeWidth="2.4" fill="none" strokeLinecap="round" />
+      <g className="sai-crit-head">
+        <circle cx="88" cy="78" r="9.5" fill={head} />
+        <path d="M 88 70 C 94 70 98 73 99 78 C 94 76 90 75 86 76 Z" fill="#dda058" opacity=".8" />
+        <path d="M 95 74 C 99 74 101 76 101 79 M 95 83 C 99 83 101 81.6 101.6 79.6"
+          stroke={headD} strokeWidth="2.4" fill="none" strokeLinecap="round" />
+        <circle cx="91" cy="75" r="1.6" fill={ink} /><circle cx="91.6" cy="81.6" r="1.4" fill={ink} />
+      </g>
+    </g>
+  );
+}
+
+// ---------------- BEETLE — a dark oval with a bronze rim, six legs ----------------
+// A dark animal on a dark forest floor is an animal nobody can see, so the
+// elytra carry a warm rim light all the way round. It is not realism; it is
+// the only reason this thing exists on screen at 18px.
+function BeetleDraw({ uid }) {
+  const E = ["#565265", "#3b3848", "#211f2b"], rim = "#c0a468", sheen = "#a3aec6",
+    leg = "#231f2c", ink = "#0d0c10";
+  return (
+    <g transform="translate(60 106) scale(.86) translate(-60 -106)">
+      <defs><Fur id={`${uid}f`} c={E} /></defs>
+      {/* legs, behind the shell, splayed and bent */}
+      <g className="sai-crit-leg sai-crit-leg-bl"><path d="M 40 62 C 34 54 26 48 16 46" stroke={leg} strokeWidth="3.2" fill="none" strokeLinecap="round" /></g>
+      <path d="M 56 58 C 52 49 46 42 38 38" stroke={leg} strokeWidth="3.2" fill="none" strokeLinecap="round" />
+      <g className="sai-crit-leg sai-crit-leg-fl"><path d="M 74 58 C 74 49 70 41 62 36" stroke={leg} strokeWidth="3.2" fill="none" strokeLinecap="round" /></g>
+      <g className="sai-crit-leg sai-crit-leg-br"><path d="M 40 90 C 34 98 26 104 16 106" stroke={leg} strokeWidth="3.2" fill="none" strokeLinecap="round" /></g>
+      <path d="M 56 94 C 52 103 46 108 38 112" stroke={leg} strokeWidth="3.2" fill="none" strokeLinecap="round" />
+      <g className="sai-crit-leg sai-crit-leg-fr"><path d="M 74 94 C 74 103 70 110 62 114" stroke={leg} strokeWidth="3.2" fill="none" strokeLinecap="round" /></g>
+      <g className="sai-crit-body">
+        <ellipse cx="52" cy="76" rx="30" ry="21" fill={`url(#${uid}f)`} stroke={rim} strokeWidth="2.6" />
+        {/* the seam, and the punctate rows either side of it */}
+        <path d="M 24 76 L 80 76" stroke={ink} strokeWidth="1.8" opacity=".85" />
+        <path d="M 30 68 L 76 69 M 30 62 L 72 64 M 30 84 L 76 83 M 30 90 L 72 88"
+          stroke="#5b5768" strokeWidth="1.1" opacity=".55" />
+        <path d="M 34 62 C 44 57 58 57 68 61" stroke={sheen} strokeWidth="3.6" fill="none" strokeLinecap="round" opacity=".28" />
+        <path d="M 34 90 C 44 95 58 95 68 91" stroke={rim} strokeWidth="2" fill="none" strokeLinecap="round" opacity=".35" />
+      </g>
+      <g className="sai-crit-head">
+        {/* pronotum — the shield between shell and head */}
+        <path d="M 78 62 C 88 62 94 67 94 76 C 94 85 88 90 78 90 C 74 84 74 68 78 62 Z" fill={E[1]} stroke={rim} strokeWidth="1.5" />
+        <path d="M 82 66 C 88 67 91 70 92 74" stroke={sheen} strokeWidth="1.8" fill="none" opacity=".3" />
+        <ellipse cx="100" cy="76" rx="8" ry="8.5" fill={E[2]} stroke={rim} strokeWidth="1.3" />
+        {/* mandibles */}
+        <path d="M 106 71.4 C 110 71 112 73 112.6 75.4 M 106 80.6 C 110 81 112 79 112.6 76.6"
+          stroke="#6d5e33" strokeWidth="2.4" fill="none" strokeLinecap="round" />
+        {/* elbowed, clubbed antennae */}
+        <path d="M 103 69 C 108 63 114 60 119 60" stroke={leg} strokeWidth="2" fill="none" strokeLinecap="round" />
+        <path d="M 103 83 C 108 89 114 92 119 92" stroke={leg} strokeWidth="2" fill="none" strokeLinecap="round" />
+        <ellipse cx="119" cy="59" rx="3.4" ry="2.2" fill={rim} />
+        <ellipse cx="119" cy="93" rx="3.4" ry="2.2" fill={rim} />
+        <circle cx="99" cy="71.6" r="1.7" fill="#c9bb8a" /><circle cx="99" cy="80.4" r="1.7" fill="#c9bb8a" />
+      </g>
+    </g>
+  );
+}
+
+// ---------------- EARTHWORM — a pink tube with a saddle, and that is all ----------------
+function EarthwormDraw({ uid }) {
+  const SPINE = "M 14 92 C 24 79 43 79 53 90 C 63 101 81 96 91 83";
+  const skin = "#c2867f", deep = "#95605c", lite = "#dcaa9d", saddle = "#e6b8a3",
+    tip = "#a56b66";
+  return (
+    <g transform="translate(60 106) scale(.82) translate(-60 -106)">
+      <defs><Fur id={`${uid}f`} c={[lite, skin, deep]} /></defs>
+      <g className="sai-crit-tail">
+        <path d="M 30 84 C 22 84 15 88 12 94" stroke={skin} strokeWidth="12" fill="none" strokeLinecap="round" />
+        <path d="M 22 86 C 17 87.6 13.6 90.6 12 94.4" stroke={deep} strokeWidth="5" fill="none" strokeLinecap="round" opacity=".6" />
+      </g>
+      <g className="sai-crit-body">
+        <path d={SPINE} stroke={deep} strokeWidth="15" fill="none" strokeLinecap="round" transform="translate(0 2.4)" />
+        <path d={SPINE} stroke={`url(#${uid}f)`} strokeWidth="14.5" fill="none" strokeLinecap="round" />
+        <path d={SPINE} stroke={lite} strokeWidth="4" fill="none" strokeLinecap="round" transform="translate(0 -3.4)" opacity=".45" />
+        {/* the annuli — the only texture a worm has */}
+        <path d="M 20 88 l 3 -5.6 M 27 84 l 2 -6 M 34 81.6 l 1.2 -6.2 M 41 81 l .4 -6.2 M 48 83.4 l -1.4 -6 M 54 88 l -3.4 -5.2 M 60 92.6 l -4 -4.6 M 67 95 l -4.6 -4 M 74 95.4 l -5 -3.8 M 81 92.6 l -4.4 -4.4 M 87 88 l -3.6 -5"
+          stroke={deep} strokeWidth="1.5" fill="none" strokeLinecap="round" opacity=".5" />
+        {/* THE SADDLE. A worm with a clitellum is an earthworm; a worm
+            without one is a piece of string. */}
+        <ellipse cx="76" cy="94" rx="6.4" ry="8.6" fill={saddle} transform="rotate(-38 76 94)" />
+        <ellipse cx="76" cy="93" rx="4" ry="8.4" fill="#f0c9b6" transform="rotate(-38 76 93)" opacity=".7" />
+      </g>
+      <g className="sai-crit-head">
+        <ellipse cx="92" cy="82" rx="6.6" ry="7.4" fill={tip} transform="rotate(-38 92 82)" />
+        <path d="M 89 78 C 92 76 95 76 97 78" stroke="#c9908a" strokeWidth="2" fill="none" strokeLinecap="round" opacity=".7" />
+      </g>
     </g>
   );
 }
@@ -3235,18 +4758,63 @@ export const SPECIES = {
   owl:      { key: "owl",      name: "Owl",           badge: "🦉", draw: OwlDraw },
 };
 
-// every drawable species across all worlds + the vault (for lookups/gallery)
-export const ALL_SPECIES = { ...RESERVED_SPECIES, ...PET_SPECIES, ...SPECIES };
+/**
+ * THE THIRTEEN PREY — a roster of their own, NOT folded into SPECIES.
+ *
+ * WHY THEY ARE NOT IN `SPECIES`. That map is the forest world's roster:
+ * `FOREST.roster` points straight at it, and `__seedCast()` opens a world
+ * with one agent per key in it. Adding thirteen rows turned a fourteen-
+ * animal forest into a twenty-seven-animal one — tests/sizes.mjs went red
+ * inside a minute, with seven of the original cast never reaching a
+ * measurable idle because the place was too crowded to stand still in.
+ *
+ * Prey are not wandering cast. They are a POPULATION, spawned, counted and
+ * eaten by the system in SocialAnimalIcons.jsx / Ethogram.js, and that
+ * system keeps its own roster. What it needs from here is the art: look a
+ * species up in PREY_SPECIES, or in ALL_SPECIES with everything else.
+ */
+export const PREY_SPECIES = {
+  // WOODMOUSE, not `mouse`. The neighborhood already has a pet of that key,
+  // and ALL_SPECIES is one flat map — one key is one drawing everywhere, so
+  // adding a forest mouse under `mouse` silently repainted the pet in the
+  // other world. Two animals, two keys.
+  woodmouse:   { key: "woodmouse",   name: "Wood Mouse",    badge: "🐭", prey: true, draw: MouseDraw },
+  vole:        { key: "vole",        name: "Vole",          badge: "🐁", prey: true, draw: VoleDraw },
+  rat:         { key: "rat",         name: "Rat",           badge: "🐀", prey: true, draw: RatDraw, variants: ["brown", "black", "hooded"] },
+  hare:        { key: "hare",        name: "Hare",          badge: "🐇", prey: true, draw: HareDraw },
+  gopher:      { key: "gopher",      name: "Gopher",        badge: "🦫", prey: true, draw: GopherDraw },
+  grouse:      { key: "grouse",      name: "Ruffed Grouse", badge: "🐦", prey: true, draw: GrouseDraw },
+  gartersnake: { key: "gartersnake", name: "Garter Snake",  badge: "🐍", prey: true, draw: GarterSnakeDraw },
+  boar:        { key: "boar",        name: "Wild Boar",     badge: "🐗", prey: true, draw: BoarDraw },
+  goat:        { key: "goat",        name: "Mountain Goat", badge: "🐐", prey: true, draw: GoatDraw },
+  crayfish:    { key: "crayfish",    name: "Crayfish",      badge: "🦞", prey: true, draw: CrayfishDraw },
+  grub:        { key: "grub",        name: "Grub",          badge: "🐛", prey: true, draw: GrubDraw },
+  beetle:      { key: "beetle",      name: "Beetle",        badge: "🪲", prey: true, draw: BeetleDraw },
+  earthworm:   { key: "earthworm",   name: "Earthworm",     badge: "🪱", prey: true, draw: EarthwormDraw },
+};
 
-export function Critter({ speciesKey, r }) {
+// every drawable species across all worlds + the vault (for lookups/gallery).
+// key of its own.
+export const ALL_SPECIES = { ...RESERVED_SPECIES, ...PET_SPECIES, ...PREY_SPECIES, ...SPECIES };
+
+// a stable small hash, so a variant picked from a uid is picked once
+const uidHash = (s) => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return Math.abs(h); };
+
+export function Critter({ speciesKey, r, variant }) {
   const S = ALL_SPECIES[speciesKey] || SPECIES.fox;
   const uid = React.useMemo(() => "c" + Math.random().toString(36).slice(2, 9), []);
   const Draw = S.draw;
   const size = r * 2.7;
+  // COLOUR VARIANTS (rats, for now). The caller may pin one — pass
+  // `variant="black"` and you get that rat every time. If it does not, the
+  // instance keeps one of its own, derived from its uid, which is memoised
+  // for the life of the sprite: a colony comes out mixed and no individual
+  // changes colour while you are looking at it.
+  const v = S.variants ? (S.variants.includes(variant) ? variant : S.variants[uidHash(uid) % S.variants.length]) : variant;
   return (
-    <svg className={`sai-crit-root sai-crit--${S.key}`} width={size} height={size} viewBox="0 0 120 120" style={{ overflow: "visible", display: "block" }}>
+    <svg className={`sai-crit-root sai-crit--${S.key}${v ? ` sai-crit--${S.key}-${v}` : ""}`} width={size} height={size} viewBox="0 0 120 120" style={{ overflow: "visible", display: "block" }}>
       <ellipse className="sai-crit-shadow" cx="60" cy="105" rx="29" ry="6" fill="rgba(8,14,8,.4)" />
-      <Draw uid={uid} />
+      <Draw uid={uid} variant={v} />
       <g className="sai-crit-dust">
         <circle cx="32" cy="99" r="4" fill="#dccdb2" opacity=".8" />
         <circle cx="88" cy="101" r="3.2" fill="#dccdb2" opacity=".7" />
@@ -3259,12 +4827,208 @@ export function Critter({ speciesKey, r }) {
   );
 }
 
-// ---------------- Dev gallery: /?gallery=1 (add &vault=1 for reserved species) ----------------
+// ================================================================
+//   Dev gallery: /?gallery=1
+// ================================================================
+//   &vault=1     also show the species reserved for future worlds
+//   &row=prey    the thirteen v0.43 newcomers, large, in one row
+//   &row=scale   everyone at their TRUE on-screen size, measured live
+//   &row=gopher  the gopher beside the beaver, at size, because the owner
+//                asked for that comparison by name
+//
+// WHY `row=scale` MEASURES INSTEAD OF READING A TABLE. What you see is the
+// sprite box multiplied by how much of it the art covers, and the coverage
+// lives in the drawing rather than in any column — see the long note at the
+// top of SpeciesProfile.js, and tests/sizes.mjs, which exists because those
+// two got out of step twice. So this row does what the suite does: it
+// renders once at a nominal radius with the animations off, measures the
+// drawn silhouette in the browser, and re-renders at
+//
+//     r = apparent / (fill * 2.7)
+//
+// which is the same arithmetic the table uses, done live. Redraw an animal
+// and this row is right again without anybody editing a number.
+
+const MEASURE_SKIP = /sai-crit-(shadow|dust|streaks|ripple|wake)/;
+/** union bounding box of everything actually painted, in screen px */
+function drawnBox(svg) {
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9, n = 0;
+  const walk = (el) => {
+    for (const k of el.children) {
+      const kc = k.getAttribute("class") || "";
+      if (MEASURE_SKIP.test(kc) || k.tagName === "defs") continue;
+      const cs = getComputedStyle(k);
+      if (cs.display === "none" || cs.visibility === "hidden" || +cs.opacity === 0) continue;
+      if (k.tagName === "g") { walk(k); continue; }
+      const rc = k.getBoundingClientRect();
+      if (!rc.width && !rc.height) continue;
+      x0 = Math.min(x0, rc.left); y0 = Math.min(y0, rc.top);
+      x1 = Math.max(x1, rc.right); y1 = Math.max(y1, rc.bottom); n++;
+    }
+  };
+  walk(svg);
+  return n ? { w: x1 - x0, h: y1 - y0 } : null;
+}
+
+// Provisional `apparent` for the thirteen, run through SpeciesProfile.js's
+// OWN bulk index — B = m^(1/6) * L^(1/4) * H^(1/4), apparent = 70*(B/B_bear)^0.45
+// — from mid-range real mass, head-and-body length and standing height. The
+// index reproduces the existing table to within 0.5px on bear/deer/wolf/
+// cougar/beaver, so these are the numbers that curve gives, not numbers
+// anybody liked the look of. THE POPULATION AGENT OWNS THE REAL COLUMN:
+// this table exists so the scale row has something to draw today, and a
+// floor is applied below because a 5px beetle is not draggable.
+const PREY_APPARENT = {
+  woodmouse: 18.0, vole: 19.5, rat: 27.0, hare: 40.6, gopher: 24.6, grouse: 33.3,
+  gartersnake: 25.5, boar: 65.5, goat: 67.4, crayfish: 17.9, grub: 11.9,
+  beetle: 11.0, earthworm: 13.5,
+};
+
+function ScaleRow({ items }) {
+  const [meas, setMeas] = React.useState(null);
+  const ref = React.useRef(null);
+  React.useLayoutEffect(() => {
+    if (meas || !ref.current) return;
+    const id = requestAnimationFrame(() => {
+      const out = {};
+      for (const svg of ref.current.querySelectorAll("svg.sai-crit-root")) {
+        const k = ((svg.getAttribute("class") || "").match(/sai-crit--([a-z]+)/) || [])[1];
+        const b = drawnBox(svg), w = svg.getBoundingClientRect().width;
+        if (!k || !b || !w) continue;
+        out[k] = Math.sqrt(b.w * b.h) / w;   // fill
+      }
+      setMeas(out);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [meas]);
+  return (
+    <div ref={ref} className="sai-gal-still" style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", gap: "4px 10px" }}>
+      {items.map(({ key, apparent, tag }) => {
+        const fill = meas ? meas[key] : null;
+        const r = fill ? apparent / (fill * 2.7) : 40;
+        return (
+          <div key={key} style={{ textAlign: "center", width: Math.max(58, r * 3.1) }}>
+            <div className="sai-sprite" data-state="idle" style={{ display: "flex", justifyContent: "center", alignItems: "flex-end", height: 200 }}>
+              <Critter speciesKey={key} r={r} />
+            </div>
+            <div style={{ color: tag === "new" ? "#ffe08a" : "#9fd4ac", fontSize: 10.5, marginTop: 2, lineHeight: 1.25 }}>
+              {key}<br />
+              <span style={{ opacity: .75 }}>a{apparent.toFixed(0)} f{fill ? fill.toFixed(2) : "…"} r{r.toFixed(1)}</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function SpriteGallery() {
-  const showVault = typeof window !== "undefined" && new URLSearchParams(window.location.search).has("vault");
+  const q = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams();
+  const showVault = q.has("vault"), row = q.get("row");
+  const preyKeys = Object.keys(PREY_SPECIES);
+  const still = <style>{".sai-gal-still *,.sai-gal-still *::before,.sai-gal-still *::after{animation:none!important;transition:none!important}"}</style>;
+  const wrap = (kids) => (
+    <div style={{ minHeight: "100vh", overflow: "auto", background: "linear-gradient(165deg,#1e4a37,#0f2a1f)", padding: "18px 22px 40px", fontFamily: "ui-sans-serif, system-ui" }}>
+      {still}{kids}
+    </div>
+  );
+
+  // ---- one big row of the newcomers, plus the rat's three coats ----
+  if (row === "prey") return wrap(
+    <>
+      <h2 style={{ color: "#e8f4d8", margin: "0 0 10px", fontSize: 18 }}>v0.43 prey — thirteen new sprites, r=46 (idle)</h2>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: "6px 8px" }}>
+        {preyKeys.map((k) => (
+          <div key={k} style={{ textAlign: "center", width: 152 }}>
+            <div className="sai-sprite" data-state="idle" style={{ display: "flex", justifyContent: "center" }}>
+              <Critter speciesKey={k} r={46} />
+            </div>
+            <div style={{ color: "#ffe08a", fontSize: 12, marginTop: -6 }}>{k}</div>
+          </div>
+        ))}
+      </div>
+      <h2 style={{ color: "#e8f4d8", margin: "18px 0 8px", fontSize: 16 }}>rat — one species, three coats (Critter picks per instance)</h2>
+      <div style={{ display: "flex", gap: 10 }}>
+        {["brown", "black", "hooded"].map((v) => (
+          <div key={v} style={{ textAlign: "center", width: 152 }}>
+            <div className="sai-sprite" data-state="idle" style={{ display: "flex", justifyContent: "center" }}>
+              <Critter speciesKey="rat" r={46} variant={v} />
+            </div>
+            <div style={{ color: "#ffe08a", fontSize: 12, marginTop: -6 }}>rat · {v}</div>
+          </div>
+        ))}
+      </div>
+      <h2 style={{ color: "#e8f4d8", margin: "18px 0 8px", fontSize: 16 }}>the three rodents, side by side — the hard read</h2>
+      <div style={{ display: "flex", gap: 10 }}>
+        {["woodmouse", "vole", "rat"].map((k) => (
+          <div key={k} style={{ textAlign: "center", width: 180 }}>
+            <div className="sai-sprite" data-state="idle" style={{ display: "flex", justifyContent: "center" }}>
+              <Critter speciesKey={k} r={56} />
+            </div>
+            <div style={{ color: "#ffe08a", fontSize: 13, marginTop: -6 }}>{k}</div>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+
+  // ---- everyone at true on-screen size ----
+  if (row === "scale") {
+    const cast = ["bear", "fox", "beaver", "squirrel", "hedgehog", "frog"];
+    const items = [
+      ...cast.map((k) => ({ key: k, apparent: speciesApparent(k) ?? 40, tag: "cast" })),
+      ...preyKeys.map((k) => ({ key: k, apparent: Math.max(14, PREY_APPARENT[k]), tag: "new" })),
+    ].sort((a, b) => b.apparent - a.apparent);
+    return wrap(
+      <>
+        <h2 style={{ color: "#e8f4d8", margin: "0 0 2px", fontSize: 18 }}>true in-world size — prey (amber) against the existing cast (green)</h2>
+        <div style={{ color: "#9fd4ac", fontSize: 11.5, margin: "0 0 12px" }}>
+          a = target apparent px · f = measured art coverage of the 120-unit box · r = sprite radius that follows.
+          Prey values are provisional (SpeciesProfile.js&apos;s own bulk index, floored at 14px so the smallest stay draggable).
+        </div>
+        <ScaleRow items={items} />
+      </>
+    );
+  }
+
+  // ---- the comparison the owner asked for by name ----
+  if (row === "gopher") return wrap(
+    <>
+      <h2 style={{ color: "#e8f4d8", margin: "0 0 2px", fontSize: 18 }}>gopher ≠ beaver</h2>
+      <div style={{ color: "#9fd4ac", fontSize: 12, margin: "0 0 10px", maxWidth: 760, lineHeight: 1.5 }}>
+        Sandy vs dark · a string tail vs a scaly paddle · loaded cheek pouches wider than the skull ·
+        incisors permanently outside the lip · button ears flat to the head vs stalked ones ·
+        pale digging claws in the spoil they made.
+      </div>
+      <div className="sai-gal-still" style={{ display: "flex", gap: 24, alignItems: "flex-end" }}>
+        {["gopher", "beaver"].map((k) => (
+          <div key={k} style={{ textAlign: "center" }}>
+            <div className="sai-sprite" data-state="idle" style={{ display: "flex", justifyContent: "center" }}>
+              <Critter speciesKey={k} r={82} />
+            </div>
+            <div style={{ color: "#ffe08a", fontSize: 15 }}>{k}</div>
+          </div>
+        ))}
+      </div>
+      <div className="sai-gal-still" style={{ display: "flex", gap: 24, alignItems: "flex-end", marginTop: 8 }}>
+        {["gopher", "beaver"].map((k) => (
+          <div key={`s${k}`} style={{ textAlign: "center", width: 120 }}>
+            <div className="sai-sprite" data-state="idle" style={{ display: "flex", justifyContent: "center" }}>
+              {/* 14.8 is the gopher's provisional radius out of the scale
+                  row, 25.5 the beaver's real one from SpeciesProfile.js */}
+              <Critter speciesKey={k} r={k === "gopher" ? 14.8 : 25.5} />
+            </div>
+            <div style={{ color: "#9fd4ac", fontSize: 11 }}>{k} · at size</div>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+
   const sections = [
     { title: "Forest natives", keys: Object.keys(SPECIES) },
-    { title: "Neighborhood pets", keys: Object.keys(PET_SPECIES) },
+    { title: "Forest prey (v0.43)", keys: preyKeys },
+    { title: "Neighborhood pets", keys: Object.keys(PET_SPECIES).filter((k) => !PREY_SPECIES[k]) },
     ...(showVault ? [{ title: "Vault — reserved for future worlds", keys: Object.keys(RESERVED_SPECIES).filter((k) => !PET_SPECIES[k]) }] : []),
   ];
   const modes = [

@@ -115,6 +115,13 @@
  * is `c.rand(a,b)` in the event's own begin/drive, so the mean is (a+b)/2.
  *
  * ---- SKUNK ----------------------------------------------------------
+ * THE TWO NEW ROWS ARE HUNTS, and a hunt's walk leg is bounded by its own
+ * SENSE rather than by the map: makeHunt only picks a target inside `sense`
+ * and the goto ends at `pounce`, so the leg is a chord of a disc and not a
+ * trip to a fixed site. The mean radius of a uniform hit in a disc of R is
+ * (2/3)R, less the goto's own tolerance. That is the one derivation in this
+ * file that does not use the distance table above, and it is why.
+ *
  * windfall  walk (184-30)/50.0                                  3.1
  *           _snuffUntil rand(9000,13000)                       11.0
  *           overrun: the bout can only end on a floorsnuff frame,
@@ -126,6 +133,27 @@
  * scrape    walk (215-20)/50.0                                   3.9
  *           clawscrape rand(3400,4800)                           4.1
  *                                                        TOTAL    8.0
+ * grubs     walk (2/3 x 190 - 34)/48.0                           1.9
+ *           skcast rand(1600,2600)                               2.1
+ *           skgrub: pounce 34 - reach 12 = 22px at gait(.20),
+ *             which is his own cruise floor 48 x the sitter's
+ *             (1 - .10x(1-.20)) = 44px/s                         0.5
+ *           tail: catchChance .85 -> skgrubeat rand(2600,3800)
+ *             3.2, else skdry rand(900,1600) 1.25                2.9
+ *                                                        TOTAL    7.4
+ * mousing   walk (2/3 x 170 - 60)/48.0                           1.1
+ *           skfix rand(700,1300)                                 1.0
+ *           sksnap: 60-28 = 32px on a mouse and 60-52 = 8px on
+ *             a crayfish, at gait(.70) = 52px/s; two of the
+ *             three prey are mice                                0.5
+ *           tail: catch .42 on a mouse and .62 on a crayfish,
+ *             mean .49 -> skchew rand(2800,4200) 3.5, else
+ *             skmiss rand(900,1600) 1.25                         2.4
+ *                                                        TOTAL    5.0
+ *
+ * `den` is NOT here and must not be: he sleeps in it. Nor is `dig`, which
+ * was already excluded and for the same reason it always was â€” cone pits in
+ * open ground, and nothing comes up.
  *
  * ---- DEER -----------------------------------------------------------
  * browse    walk (332-24)/64.3                                   4.8
@@ -208,6 +236,16 @@
  *           logdive rand(4400,6200) 5.3 + logchew rand(2600,3600)
  *             3.1                                                 8.4
  *                                                        TOTAL   16.4
+ * grubs     the skunk's dig at his own size and pace. Sense 120 is
+ *           the shortest in the world, so the leg is the shortest
+ *           in this table.
+ *           walk (2/3 x 120 - 30)/42.9                            1.2
+ *           hhcast rand(1400,2400)                                1.9
+ *           hhgrub: 30 - 10 = 20px at gait(.20) = his cruise
+ *             floor 40 x (1 - .04x(1-.20)) = 38.7px/s             0.5
+ *           tail: catchChance .88 -> hhgrubeat rand(2800,4000)
+ *             3.4, else hhdry rand(900,1600) 1.25                 3.1
+ *                                                        TOTAL    6.7
  *
  * ---- GOOSE ----------------------------------------------------------
  * graze     walk (289-20)/54.5                                   4.9
@@ -259,8 +297,9 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
 // are not: deer `rut` (velvet off a trunk, nothing eaten) and `bed` (cud is
 // the second pass over food browse and graze already counted â€” adding it
 // would double the same meal), squirrel `drey` (twigs and moss, for
-// building), skunk `dig` (cone pits, and nothing comes up), raccoon `roost`
-// and `paws`, fox `matecall`, owl `hoot` and `roost`.
+// building), skunk `dig` (cone pits, and nothing comes up) and skunk `den`
+// (he sleeps in it), raccoon `roost` and `paws`, fox `matecall`, owl `hoot`
+// and `roost`.
 //
 // And the deliberate NON-entries: raccoon `ractree` and fox `foxpluck` /
 // `foxfallen` / `foxgrass` are VARIANTS of `berry` and `scrump`, not events
@@ -269,13 +308,13 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
 // length of the event they belong to, and the two weighted means above are
 // where that lands.
 const FEEDING = {
-  skunk:    { windfall: 14.8, scrape: 8.0 },
+  skunk:    { windfall: 14.8, scrape: 8.0, grubs: 7.4, mousing: 5.0 },
   deer:     { browse: 14.5, graze: 5.0 },
   bear:     { strip: 34.0 },     // a floor: he also fishes â€” see the note above
   squirrel: { cache: 17.1, raid: 12.1 },
   raccoon:  { berry: 24.1 },
   fox:      { scrump: 7.4 },
-  hedgehog: { roots: 12.7, logs: 16.4 },
+  hedgehog: { roots: 12.7, logs: 16.4, grubs: 6.7 },
   goose:    { graze: 20.3, dabble: 12.6 },
 };
 
