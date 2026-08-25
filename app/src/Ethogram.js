@@ -2438,6 +2438,118 @@ function driveRoost(a, c, S) {
 const RAC_TOBERRY = { within: 24, giveUp: 20000, urgency: 0.45, none: 9000, lost: 9000,
   pick: (a, c) => nearestForage(a, c, "berry") };
 
+/* ---------------------------------------------------------------------
+ * THE TWO HUNTS — mice on the floor, crayfish under the stones.
+ *
+ * He is an omnivore and the berry bout was only ever half of him. What goes
+ * in below is the other half, and the two halves are not the same animal:
+ *
+ *   `ratting` is the WEAKEST hunt on the forest floor and that is the
+ *   design. SpeciesProfile gives him base .66 against the fox's .76 and
+ *   top 1.75 against 2.00, so burst 0.80 and catchChance 0.48 make him an
+ *   opportunist taking a chance on something quicker than he is. The
+ *   misses are the point of him; a raccoon that reliably caught rats would
+ *   be a fox in a mask.
+ *
+ *   `crayfish` is the opposite: his ABSOLUTE FAVOURITE FOOD, taken by feel
+ *   rather than by speed. The whole behaviour lives in the fix beat — 1.8
+ *   to 3.2 seconds of both hands under the water turning a stone over —
+ *   and the strike is a snatch off the end of it at catchChance 0.72. It
+ *   is the one event in this file declared `domain: "water"`, because it
+ *   is the one errand he does standing in the lake.
+ */
+
+/**
+ * HOW FAR OUT HE WILL GO FOR ONE.
+ *
+ * He IS in this world's swim table (SWIM_P.raccoon = 0.1), so keepAshore
+ * never holds him and nothing physical stops him paddling to the middle of
+ * the lake after a crayfish. What stops him is that a raccoon does not do
+ * that: he works the margin, hands under the stones, feet on the bottom.
+ * rho 0.80 is where that line is drawn, and it is drawn HERE rather than
+ * left to nearestPrey, which knows the map but not the animal.
+ *
+ * For scale: the lake is about 156px per 1.00 rho on the south shore and
+ * 370 on the east, and Prey.js keeps a settled lake animal inside rho 0.92
+ * — so the window this opens is 19px of water at the bottom of the lake
+ * and 44 at its side. A creek's width, which is exactly the picture.
+ */
+const RAC_CRAY_RHO = 0.80;
+const racCrayReach = (a, c, p) => c.lakeRho(p.x, p.y) > RAC_CRAY_RHO;
+
+/**
+ * WHERE HIS FEET GO WHILE HIS HANDS ARE UNDER THE STONE.
+ *
+ * The walk-there leg ends at `pounce`, 34px from the crayfish, and 34px on
+ * the south shore is 0.22 rho — which, from a crayfish sitting at 0.85, is
+ * dry grass. A raccoon reaching for a crayfish from the bank is the one
+ * picture this event exists to avoid, so the gather takes the last step IN.
+ *
+ * RADIALLY, and not along his approach line: the shallows are a RING, and a
+ * step of the same length in any other direction leaves the water. He goes
+ * onto the crayfish's own lake ray, a little shoreward of it, at a rho the
+ * sim's own predicate still calls wet (inWater is rho < 0.97, and the cap
+ * here is 0.94). Lerped rather than snapped, at the rate racwet and racwash
+ * already hold their spot with, so what you see is a wade.
+ */
+const RAC_STONE_OUT = 0.06;                   // shoreward of the stone, in rho
+const RAC_STONE_MIN = 0.84, RAC_STONE_MAX = 0.94;
+function racStoneStand(a, c, p) {
+  if (!c.def.hasWater || !c.LAKE) return;
+  const rp = c.lakeRho(p.x, p.y);
+  if (rp > 0.97) return;        // still walking overland: take it on the grass
+  const B = c.bounds, L = c.LAKE;
+  // the crayfish's bearing from the lake's centre, in the lake's own squashed
+  // frame — the frame lakeRho and lakePoint both already work in
+  const t = Math.atan2((p.y - L.cy * B.h) / (L.ry * B.h),
+                       (p.x - L.cx * B.w) / (L.rx * B.w));
+  const g = c.lakePoint(B, t, Math.min(RAC_STONE_MAX,
+                                       Math.max(RAC_STONE_MIN, rp + RAC_STONE_OUT)));
+  const k = Math.min(1, c.dt * 4);
+  a.x += (g.x - a.x) * k; a.y += (g.y - a.y) * k;
+  a._faceDir = p.x >= a.x ? 1 : -1;           // re-read after the step in
+}
+
+/**
+ * ALL FIVE CRAYFISH STATES DRAW THEIR OWN PRESENCE IN THE WATER, so the
+ * generic swim rig — tucked legs, ripple ring, bob — must stay off them,
+ * exactly as it does for racdouse / racwet / racwash / racpaws / raceat.
+ *
+ * defineEthogram reads `ownsWater` off a variant and applies it to that
+ * variant's `states`, and a goto state is claimed separately and is NOT in
+ * that list — but the wade IS a goto. So the set is written directly here,
+ * the same way makeHunt writes ETHO_Z_STATES for a flown approach.
+ */
+for (const s of ["racwade", "racflip", "racsnatch", "raccray", "racempty"]) {
+  ETHO_OWNWATER_STATES.add(s);
+}
+
+/**
+ * THE ONE THING damVia EXISTS TO STOP. makeHunt's only waypoint option is
+ * `cover`, the cougar's and the wolf's silhouette dogleg; what the raccoon
+ * needs is the beaver's timber ROUNDED, which is what his douse already
+ * does. The descriptor is a plain object and `goto.via` is read once when
+ * the walk starts, so it is set here rather than by forking the core.
+ */
+const racCrayHunt = makeHunt({
+  id: "crayfish", domain: "water",
+  prey: ["crayfish"], habitat: "lake",
+  sense: 210,                          // 210 and not 200 only because the lake is wide
+  pounce: 34, reach: 40,
+  creep: 0.30,
+  fixMs: [1800, 3200],                 // THE ROCK-FLIPPING IS THE FIX BEAT
+  burst: 0.35, dash: 60,               // a snatch, inside a band 19px wide
+  catchChance: 0.72,                   // backed into the shallows, it has nowhere
+  feedMs: [3600, 5200],
+  every: [52000, 84000], chance: 0.60, cool: 26000, missCool: 14000,
+  reachable: racCrayReach,
+  onFix: racStoneStand,
+  st: { stalk: "racwade", fix: "racflip", strike: "racsnatch",
+        feed: "raccray", miss: "racempty" },
+});
+racCrayHunt.goto.via = douseVia;
+racCrayHunt.goto.viaWithin = 22;
+
 /**
  * THE RACCOON — hands first.
  *
@@ -2467,6 +2579,11 @@ defineEthogram("raccoon", {
   // budget he never spent goes on being spent. tick() only runs on frames
   // when NO ethogram state owns him, so it can never fire mid-bout.
   tick(a, c, S) {
+    // ...and the prey claim goes back FIRST, before anything else on this
+    // list, because it is the one thing that costs somebody OTHER than him:
+    // a claim left standing hides that mouse from every other hunter for
+    // six seconds and pins it on stage where it cannot leave.
+    huntRelease(a);
     if (S.claim) releaseClaim(a, S);
     if (a._faceDir) a._faceDir = 0;
     if (a._carry) a._carry = null;
@@ -2641,6 +2758,51 @@ defineEthogram("raccoon", {
         },
       ],
     },
+
+    // ---- LAND: what is living in the leaf litter ------------------------
+    // 74-118s between the urges at 45% is a hunt about every 3.6 minutes,
+    // and one runs 10-14s door to door. Every number in it is under the
+    // fox's: he senses 200 against 300, commits from 70px against 96,
+    // bursts at 0.80 against 1.00 and connects a bit under half the time
+    // against the fox's 55%. A mouse hunt he loses is the commonest thing
+    // he does with one, and that is the animal.
+    makeHunt({
+      id: "ratting", domain: "land",
+      prey: ["woodmouse", "vole", "rat", "gartersnake"],
+      sense: 200, pounce: 70, reach: 22,
+      creep: 0.30,                      // an ordinary cruise: he is not stalking
+      fixMs: [400, 800],                // both hands up, mask forward, a beat
+      // 180 AND NOT THE 110 THIS WAS FIRST WRITTEN WITH, and the difference
+      // is the whole event. Measured under the virtual clock: his strike
+      // pace is 70.6 px/s and a fleeing wood mouse's is 47.8, so he closes
+      // at 22.8 and the 48px from `pounce` to `reach` costs him 149px of
+      // ground. At 110 the burst ran out at 42px short EVERY time, which
+      // does not make him a poor hunter — it means `catchChance` was never
+      // rolled at all and every bout ended in racmiss by exhaustion. 180 is
+      // that 149 plus a fifth for the wobble in both animals' pace, and it
+      // buys the roll. He is still the weakest hunter on this floor; now he
+      // is weak because he misses rather than because he cannot arrive.
+      burst: 0.80, dash: 180,
+      catchChance: 0.48,
+      feedMs: [3000, 4600],
+      every: [74000, 118000], chance: 0.45, cool: 30000, missCool: 16000,
+      // DRY GROUND ONLY. Everything on this list is a forest-floor animal
+      // and the crayfish event is where the water work lives; a mouse hunt
+      // that walked him into the lake would take the two apart.
+      reachable: (a, c, p) => c.lakeRho(p.x, p.y) > 1.02,
+      st: { stalk: "racstalk", fix: "racfix", strike: "racgrab",
+            feed: "racmunch", miss: "racmiss" },
+    }),
+
+    // ---- WATER: the stones in the shallows ------------------------------
+    // Built above, because its walk-there leg needs `damVia` and makeHunt
+    // only offers the cover dogleg. `domain: "water"` is load-bearing twice
+    // over: it is what puts the errand into planDomain's `committed` test,
+    // so the haul-out enforcement cannot turn him round on the bank halfway
+    // to a crayfish — and it is why the appetite is only ever OFFERED once
+    // he is already standing in the lake, which is where a raccoon turning
+    // stones over would have to start from anyway.
+    racCrayHunt,
   ],
 });
 
@@ -5520,20 +5682,22 @@ export function hogCurl(a, now, rnd) {
 }
 
 // ---------------------------------------------------------------------
-//  THE OWL — a voice, and a place to stop being one.
+//  THE OWL — a voice, a place to stop being one, and a swoop.
 //
-//  Two behaviors, and they are opposites on purpose. The call is the only
-//  thing in this world that is *entirely* animation: it produces no
-//  displacement, claims nothing, eats nothing, and if the drawing does not
-//  sell it then nothing happened. The roost produces no animation at all —
-//  he goes up a trunk, sits in a nest and stops, and the stillness IS the
-//  event, the same way the hedgehog's ball is.
+//  The first two are opposites on purpose. The call is the only thing in
+//  this world that is *entirely* animation: it produces no displacement,
+//  claims nothing, eats nothing, and if the drawing does not sell it then
+//  nothing happened. The roost produces no animation at all — he goes up a
+//  trunk, sits in a nest and stops, and the stillness IS the event, the
+//  same way the hedgehog's ball is.
 //
-//  He adds NO feeding event, so the forage cadence ladder is untouched:
-//  skunk 1.41 > deer 1.15 > goose 0.88 > hedgehog 0.83 > bear 0.70 >
-//  squirrel 0.60 >> raccoon 0.27 >>> fox 0.21, exactly as before. An owl
-//  hunts mice and there are none drawn; inventing a feeding bout for him
-//  would have to be paid for out of somebody else's rate.
+//  v0.36 said here, in this block, that "an owl hunts mice and there are
+//  none drawn; inventing a feeding bout for him would have to be paid for
+//  out of somebody else's rate." THAT PREMISE IS DEAD. PREY_PROFILE
+//  (Prey.js) puts wood mice, voles, rats, gophers, hares, grouse and garter
+//  snakes on the forest floor as real, claimable, eatable animals, and
+//  every one of them is his. He no longer has to be paid for out of
+//  anybody's rate: he eats what is there.
 // ---------------------------------------------------------------------
 
 /**
@@ -5665,6 +5829,99 @@ function owlLanding(a, c) {
   return { x: tx + dx * OWL_GLIDE_OUT, y: ty + dy * OWL_GLIDE_OUT };
 }
 
+/* ---------------------------------------------------------------------
+ * THE SWOOP — silent flight, exceptional hearing, and one stoop.
+ *
+ * Three things make his hunt his, and only one of them is a number.
+ *
+ *   HEARING. `sense: 340` is the widest radius in the world — wider than
+ *   the wolf's nose at 320 and the fox's ears at 300 — because he is the
+ *   only one who listens from a height, and because a facial disc is a
+ *   parabolic dish. It is also the reason `giveUp` is 30s and not the
+ *   24s everybody else gets: he starts further off than anybody else.
+ *
+ *   SILENT FLIGHT, which is the ABSENCE of things and is therefore drawn
+ *   rather than declared: no wingbeat on the glide (`owlflydown`'s set-wing
+ *   flex, not `owlflyup`'s stroke), no leg cycle — the ordinary rig is
+ *   swapped out for `flappose` — and a ground shadow shrunk to match the
+ *   altitude. index.css owns all of that; see "v0.43 THE OWL'S SWOOP".
+ *
+ *   THE APPROACH IS FLOWN, not walked. `zGoto: true` keeps `owlglide` out
+ *   of the sim's z decay (SocialAnimalIcons.jsx, the grounded block: an
+ *   unexempted state loses its height at exp(-5*dt) and lands inside a
+ *   seventh of a second) and the three hooks below own his altitude — up
+ *   on departure, held across the glide and the hover, and the whole of it
+ *   traded for distance down the dive.
+ */
+const OWL_HUNT_Z = 46;         // how high the approach rides, in stage px
+/**
+ * How long the climb-out takes. This is a CURVE, not a budget, and that is
+ * why it is allowed to be in milliseconds: nothing about WHERE he gets to
+ * depends on it — `dash` is in px like every other strike in the file —
+ * only the shape of the rise. The roost's own OWL_UP_MS / OWL_DOWN_MS are
+ * wall clock for exactly the same reason and have been since v0.36.
+ */
+const OWL_LIFT_MS = 900;
+/** the dive: `pounce` 130 in to `reach` 26 is the stretch he spends coming
+ *  down, so height and distance run out together */
+const OWL_STOOP_PX = 130 - 26;
+/**
+ * How much GROUND the stoop may cover. 1.9x `pounce`, which is the ratio the
+ * fox's shipped 190-over-96 already uses, and it is set as a named constant
+ * because owlDive below has to divide by it.
+ *
+ * IT IS NOT ENOUGH FOR A WOOD MOUSE AND NOTHING IN THIS FILE CAN MAKE IT SO.
+ * Measured in a browser under the virtual clock: the owl's strike pace is
+ * 57.9 px/s and a fleeing wood mouse's is 51.8, so he closes at six pixels a
+ * second and the 104px from `pounce` to `reach` would cost him nine hundred
+ * and eighty px of ground. SPEED.owl.top is 1.55 — the third slowest in the
+ * cast — and a predator in this world can only take prey it is substantially
+ * faster than: the fox catches mice at 120.8 px/s against their 48, a ratio
+ * of 2.5, and the owl's ratio is 1.1. The two real fixes both live outside
+ * this file (raise his top, or teach Prey.js not to flee from something
+ * forty-six px in the air, which is what silent flight ought to buy him) and
+ * both are somebody's decision rather than mine. What 250 does buy is the
+ * slow end of his list — a garter snake needs about 200px of it — so the
+ * kill, the mantle and the feed are reachable rather than theoretical.
+ */
+const OWL_DASH = 250;
+
+/** the glide: up off the floor, level across, and never touching it again */
+function owlAloft(a, c) {
+  const up = Math.min(1, (c.now - (a._swoopT0 || (a._swoopT0 = c.now))) / OWL_LIFT_MS);
+  a.z = OWL_HUNT_Z * up;
+}
+/** the hover: he stops over the spot and the head does the work */
+function owlHover(a) { a.z = OWL_HUNT_Z; }
+/**
+ * ...and the stoop: height traded for ground across the last stretch.
+ *
+ * Against the GAP and against the BURST — the smaller of the two — and the
+ * second one is load-bearing. A stoop that ran out of burst still 106px
+ * short — which is what happens every time he picks something quick — left
+ * him hanging thirty-five px in the air at the moment the miss fired, and
+ * `owlveer` is a bird beating away from the GROUND. The sim's own z decay
+ * would then drop him through that pose in a seventh of a second, so what
+ * you saw was an owl stalling in mid-air and falling. He commits to the
+ * floor when he commits to the dive: whichever runs out first, he is down.
+ */
+function owlDive(a, c, p, d) {
+  const byGap = (d - 26) / OWL_STOOP_PX;
+  const byBurst = (a._huntGo || 0) / OWL_DASH;
+  a.z = OWL_HUNT_Z * Math.max(0, Math.min(1, Math.min(byGap, byBurst)));
+}
+
+/**
+ * The hover and the stoop DRIVE their own height, so the sim must not decay
+ * it out from under them. `holdsZ` on an event descriptor is all-or-nothing
+ * across that descriptor's `states`, and two of these four must NOT have it:
+ * `owlmantle` and `owlveer` are an owl on the ground, and letting the decay
+ * finish the last half-pixel is what reads as a settle. So the two that need
+ * it are named here, the same way makeHunt names the glide for `zGoto`.
+ */
+ETHO_Z_STATES.add("owlhear");
+ETHO_Z_STATES.add("owlswoop");
+
 defineEthogram("owl", {
   // He is not in this world's swim table — the shoreline is a wall to him —
   // so tier 1 has one answer and the dwell window is only there to pace the
@@ -5677,7 +5934,18 @@ defineEthogram("owl", {
   // perch he was holding both have to be handed back here. His HEIGHT needs
   // no help — the sim decays z for any state an ethogram is not holding, and
   // this only runs when none is.
-  tick(a) { if (a._faceDir) a._faceDir = 0; if (a._perch) a._perch = null; },
+  //
+  // ...and the mouse goes back FIRST. A drag, a fight or a forceFlee can
+  // take him out of his own stoop, and a claim left standing hides that
+  // animal from every other hunter for six seconds and pins it on stage.
+  // NOT `_nestI`: which tree he committed to belongs to the roost, and a
+  // hunt that reset it would take off from one tree and land in another.
+  tick(a) {
+    huntRelease(a);
+    a._swoopT0 = 0;                  // the climb-out starts from the floor again
+    if (a._faceDir) a._faceDir = 0;
+    if (a._perch) a._perch = null;
+  },
 
   events: [
     // ---- THE CALL ------------------------------------------------------
@@ -5800,5 +6068,44 @@ defineEthogram("owl", {
         endEvent(a, c, { reroll: true, quiet: 1400, stop: true });
       },
     },
+
+    // ---- THE SWOOP -----------------------------------------------------
+    // The only feeding event he has, and the only hunt in the world whose
+    // approach leaves the ground. 34-58s between the urges at 58% is a hunt
+    // about every 78s; door to door one runs 12-20s, most of it the glide.
+    //
+    // He is deliberately the LONGEST-SIGHTED and the SLOWEST-CLOSING hunter
+    // on the map: creep 0.34 is below an ordinary cruise, so the whole
+    // approach is a drift rather than a chase, and everything violent about
+    // him happens inside the last 130px. That is the animal — a bird that
+    // arrives before you have heard it and is on you in one movement.
+    //
+    // The five states are drawn in index.css off `flappose` (the roost's
+    // own flight drawing) plus one new pose for the mantle. Nothing here
+    // touches the roost: separate appetites, separate `every`s, and the
+    // nest tree he committed to survives a hunt untouched.
+    makeHunt({
+      id: "swoop", domain: "land",
+      prey: ["woodmouse", "vole", "rat", "gopher", "hare", "grouse", "gartersnake"],
+      sense: 340,                       // the widest in the world: he HEARS them
+      pounce: 130, reach: 26,
+      creep: 0.34,                      // a glide is not a hurry
+      fixMs: [900, 1500],               // the hover, and the head turning on it
+      burst: 0.90, dash: OWL_DASH,      // the stoop, budgeted in ground covered
+      catchChance: 0.62,
+      feedMs: [3400, 5200],
+      every: [34000, 58000], chance: 0.58, cool: 26000, missCool: 15000,
+      giveUp: 30000,                    // he starts further off than anybody
+      zGoto: true,                      // the approach is a GLIDE, not a walk
+      onApproach: owlAloft, onFix: owlHover, onStrike: owlDive,
+      // HE CANNOT TAKE ONE OFF THE WATER. Every animal on his list is a
+      // forest-floor animal, but one arriving from an edge crosses the lake
+      // on its way in, and a stoop that ends at rho 0.6 puts an owl in the
+      // middle of it — he is not in this world's swim table, so keepAshore
+      // would then shove him out sideways with a mouse he cannot reach.
+      reachable: (a, c, p) => c.lakeRho(p.x, p.y) > 1.02,
+      st: { stalk: "owlglide", fix: "owlhear", strike: "owlswoop",
+            feed: "owlmantle", miss: "owlveer" },
+    }),
   ],
 });

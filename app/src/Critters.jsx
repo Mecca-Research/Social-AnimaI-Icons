@@ -2720,6 +2720,17 @@ function RaccoonDraw({ uid }) {
             <circle cx="86.5" cy="61" r="1.5" fill="#d46b95" opacity=".75" />
             <path d="M 88 58.2 q 1.6 -2 3.4 -2.2" stroke="#4d7a3a" strokeWidth="1.4" fill="none" strokeLinecap="round" />
           </g>
+          {/* ...and the other thing that ends up in this hunch. The hands and
+              the posture are identical whether he is turning a berry over or
+              working through a mouse, so racmunch borrows the whole pose and
+              swaps only this: the same 4.4-unit spot the berry occupies, in
+              fur, with a tail. Hidden unless the state asks for it. */}
+          <g className="sai-crit-racmorsel">
+            <ellipse cx="88" cy="62.5" rx="5" ry="3.6" fill="#6f6257" />
+            <ellipse cx="86.4" cy="61.4" rx="2" ry="1.4" fill="#8d7f72" opacity=".8" />
+            <path d="M 92.4 63.4 C 95.4 64.6 97.2 66.6 97.6 68.8"
+              stroke="#5c5049" strokeWidth="1.4" fill="none" strokeLinecap="round" />
+          </g>
         </g>
       </g>
 
@@ -2820,7 +2831,31 @@ function RaccoonDraw({ uid }) {
               stroke="#efeaf2" strokeWidth="1.3" fill="none" strokeLinecap="round" opacity=".8" />
             <ellipse cx="78.5" cy="98.2" rx="3.4" ry="1.7" fill="#fdffff" opacity=".7" />
           </g>
-          <g className="wash-food"><circle cx="79" cy="99" r="4" fill="#8e1f46" opacity=".92" /></g>
+          {/* WHAT IS IN HIS HANDS, and it is not always a berry. The group
+              keeps its name and its transform origin — index.css turns the
+              whole of it on sai-rac-fingerturn — and the two things he can
+              be holding sit inside it, one shown at a time. */}
+          <g className="wash-food">
+            <circle className="wash-berry" cx="79" cy="99" r="4" fill="#8e1f46" opacity=".92" />
+            {/* ...and his favourite food in the world, belly-up in both
+                pads the way he turns one over. Small on purpose: the box is
+                120 units and Critter draws it at r * 2.7, so at his 21.2px
+                radius one unit is 0.47 stage px and this whole animal is
+                thirteen of them across. The read is the SHAPE — a red-brown
+                body with two claws out over his fingers and a fan tail —
+                and anything finer than that is ink nobody can see. */}
+            <g className="sai-crit-raccray">
+              <path d="M 74.6 97.6 C 71.4 96 68.8 95.4 66.6 95.8" stroke="#a8402c" strokeWidth="1.7" fill="none" strokeLinecap="round" />
+              <path d="M 66.8 95.4 l -2.6 -1.4 M 66.8 96.2 l -2.8 1" stroke="#a8402c" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+              <path d="M 74.8 100.4 C 71.8 101.8 69.4 102.6 67.4 102.6" stroke="#8f3524" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+              <path d="M 67.6 102.2 l -2.6 -1.2 M 67.6 103 l -2.6 1.2" stroke="#8f3524" strokeWidth="1.4" fill="none" strokeLinecap="round" />
+              <ellipse cx="79.4" cy="99" rx="6.2" ry="3.6" fill="#a8402c" />
+              <ellipse cx="79.4" cy="99" rx="4.4" ry="2.2" fill="#dc9070" opacity=".85" />
+              <path d="M 77 97.2 l 0 3.6 M 79.2 97 l 0 4 M 81.4 97.2 l 0 3.6" stroke="#7d2a1c" strokeWidth=".8" fill="none" opacity=".75" />
+              <path d="M 85.4 99 l 4.6 -2.4 l -.8 2.4 l .8 2.4 Z" fill="#8f3524" />
+              <path d="M 74.4 96.4 C 77.4 93.4 80.6 91.8 83 91.4" stroke="#7d2a1c" strokeWidth=".9" fill="none" strokeLinecap="round" opacity=".85" />
+            </g>
+          </g>
           {/* one soft sheet of shallow water, laid over the lot */}
           <ellipse cx="74" cy="99" rx="43" ry="11" fill="#8fd0ee" opacity=".42" />
           <ellipse cx="74" cy="99" rx="43" ry="11" fill="none" stroke="#dff3fb" strokeWidth="1.5" opacity=".45" />
@@ -3488,6 +3523,80 @@ function OwlDraw({ uid }) {
           <path d="M 26 4 C 38 26 48 50 56 70 M 22 16 C 32 38 42 60 50 76 M 22 32 C 30 50 38 66 45 78"
             stroke={F[2]} strokeWidth="1.6" fill="none" opacity=".8" />
           <path d="M 26 4 C 36 14 44 28 51 44 C 42 32 33 18 26 4 Z" fill="#c9a271" opacity=".45" />
+        </g>
+      </g>
+
+      {/* ---- MANTLING (owlmantle) ----
+          The one pose here the rig genuinely cannot reach and `flappose`
+          cannot be bent into. Mantling is a raptor hiding a kill: both
+          wings thrown FORWARD and DOWN into a tent over it, the head
+          dropped into the gap between them, the whole bird two thirds of
+          its standing height. flappose is the opposite shape — wings up
+          and back, body stretched, head thrust out — so rotating it would
+          read as a crash landing.
+
+          Drawn to the same ground line as the rest of him: the rig's
+          talons sit at y 103 and the wrapper above is scale(.94) about
+          (60,106), so everything that touches the floor here is at y 102-104
+          and the pose stands where the ordinary owl stands. Facing right,
+          like flappose, so a mirrored sprite mantles the way it flies.
+
+          The order is the read: far wing, body, the kill, talons, head,
+          then the near wing over the lot. Nothing of the prey shows except
+          a tail and one foot out from under him, which is the whole idea. */}
+      <g className="sai-crit-owlmantlepose">
+        {/* tail spread flat behind, a counterweight to a head that far down */}
+        <g className="mantle-tail">
+          <path d="M 42 84 C 30 91 19 98 13 103 L 29 102 C 39 98 47 92 51 87 Z" fill={F[2]} />
+          <path d="M 18 101 C 27 97 36 92 44 86 M 23 102 C 32 98 40 93 47 88"
+            stroke={F[1]} strokeWidth="1.2" fill="none" opacity=".55" />
+        </g>
+        {/* far wing: forward and down, its tip just clear of the ground */}
+        <g className="mantle-wing-far">
+          <path d="M 56 63 C 68 61 84 68 95 80 C 101 87 100 95 93 96 C 81 97 64 88 55 76 C 50 69 51 64 56 63 Z"
+            fill={F[2]} />
+          <path d="M 59 67 C 70 71 83 80 92 91 M 55 72 C 65 78 76 86 85 95"
+            stroke="#4a3520" strokeWidth="1.4" fill="none" opacity=".6" />
+        </g>
+        {/* the body, dropped almost flat over what he has */}
+        <g className="mantle-body">
+          <path d="M 33 93 C 29 79 39 66 57 63 C 75 60 90 67 94 79 C 97 89 89 99 73 102 C 55 105 39 103 33 93 Z"
+            fill={`url(#${uid}f)`} />
+          <ellipse cx="70" cy="90" rx="16" ry="9" fill={cream} opacity=".82" />
+          <path d="M 50 74 q 4 3.2 8 0 M 58 74 q 4 3.2 8 0 M 46 82 q 4 3.2 8 0 M 54 82 q 4 3.2 8 0 M 62 82 q 4 3.2 8 0"
+            stroke={F[1]} strokeWidth="1.4" fill="none" strokeLinecap="round" opacity=".6" />
+        </g>
+        {/* all that is left showing of it: a tail and one hind foot */}
+        <g className="mantle-kill">
+          <path d="M 97 102.6 C 102 101.6 107 102.4 110 104.4"
+            stroke="#8a7256" strokeWidth="2.4" fill="none" strokeLinecap="round" />
+          <ellipse cx="95" cy="102.6" rx="6.4" ry="3.2" fill="#7d6449" />
+          <path d="M 92 104.4 l -2.6 2 M 96 105 l -.6 2.2"
+            stroke="#6a543c" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+        </g>
+        {/* talons planted on it, which is what the wings are hiding */}
+        <g className="mantle-feet">
+          <path d="M 84 95 C 86 99 88 101.6 90 102.8 M 90 102.8 l 4.2 1.2 M 90 102.8 l .8 3.2"
+            stroke={orange} strokeWidth="2.4" fill="none" strokeLinecap="round" />
+        </g>
+        {/* head DOWN into the gap between the two wings, tufts flat */}
+        <g className="mantle-head">
+          <circle cx="86" cy="79" r="14.5" fill={`url(#${uid}f)`} />
+          <circle cx="81" cy="75.5" r="6.6" fill={cream} />
+          <circle cx="93" cy="77.5" r="6.6" fill={cream} />
+          <circle cx="81.4" cy="76.4" r="2.9" fill={gold} />
+          <circle cx="81.8" cy="76.8" r="1.6" fill={ink} />
+          <circle cx="93.4" cy="78.4" r="2.9" fill={gold} />
+          <circle cx="93.8" cy="78.8" r="1.6" fill={ink} />
+          <path d="M 87 83 L 91.6 87 L 86.6 92 Q 84.6 87 87 83 Z" fill={orange} />
+        </g>
+        {/* ...and the near wing over the top of the lot. This is the pose. */}
+        <g className="mantle-wing-near">
+          <path d="M 52 68 C 65 63 84 71 97 87 C 104 96 102 105 93 105 C 79 105 60 95 51 82 C 46 74 47 70 52 68 Z"
+            fill={F[1]} />
+          <path d="M 56 72 C 69 77 84 88 95 101 M 51 78 C 63 85 76 94 86 104 M 51 86 C 61 92 71 98 79 104"
+            stroke={F[2]} strokeWidth="1.6" fill="none" opacity=".75" />
+          <path d="M 52 68 C 65 63 81 69 92 80 C 79 71 65 67 52 68 Z" fill="#c9a271" opacity=".4" />
         </g>
       </g>
     </g>

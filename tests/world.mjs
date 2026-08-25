@@ -3242,6 +3242,489 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
     'notBy filtered his own out; a lapsed mark was swept');
 }
 
+
+// ============ THE OWL'S SWOOP AND THE RACCOON'S TWO HUNTS ============
+/**
+ * A THIRD PAGE, ON ITS OWN VIRTUAL CLOCK, for the same reason the lake
+ * block above needs one: every check here is about a BOUT, and a bout is
+ * seconds of simulated time that headless rAF pays out at about four frames
+ * a second. The raccoon's rock-flipping alone is 1.8 to 3.2 seconds — a
+ * hundred and eighty frames of sim and eleven of real ones — so a check
+ * written against the wall clock would be measuring the frame rate.
+ *
+ * Everything below is therefore budgeted in FRAMES and in PIXELS. Where a
+ * check is about a drawing rather than about a behaviour it is asked of the
+ * stylesheet directly on the first page, synchronously, with no frames at
+ * all — a computed `display` needs none, and the pump cannot advance a CSS
+ * timeline anyway.
+ *
+ * The subjects are seeded at `pounce` plus a stride, per the standing rule:
+ * the walk-there leg is covered five times over elsewhere and what is
+ * interesting here starts when he arrives. Budgets are ceilings with an
+ * early exit, and an exhausted budget reports that it never got to ask.
+ */
+{
+  const page3 = await browser.newPage({ viewport: { width: 1500, height: 940 } });
+  page3.on('pageerror', (e) => errs.push('hunt page: ' + e.message));
+  await page3.addInitScript(() => {
+    let t = 1000; const cbs = [];
+    performance.now = () => t;
+    window.requestAnimationFrame = (cb) => { cbs.push(cb); return cbs.length; };
+    window.cancelAnimationFrame = () => {};
+    window.__pump = (n) => { for (let i = 0; i < n; i++) { t += 16.667;
+      const list = cbs.splice(0); for (const c of list) { try { c(t); } catch (e) { window.__perr = String(e); } } } };
+  });
+  await page3.goto(process.env.SAI_URL || 'http://localhost:5173/', { waitUntil: 'networkidle' });
+  await page3.waitForTimeout(1800);
+  await page3.evaluate('window.__pump(30)');
+  await page3.evaluate('window.__saiWorld.__seedCast && window.__saiWorld.__seedCast()');
+  await page3.waitForTimeout(600);
+  await page3.evaluate('window.__pump(20)');
+
+  // ---- the fixture ----------------------------------------------------
+  // Park the cast, put one prey where the WORLD says that prey may stand,
+  // put the hunter a stride outside his own pounce range, muzzle his other
+  // appetites, and then re-offer the one under test every frame until it
+  // takes. Muzzling is not optional: an appetite held permanently due is
+  // still only offered after the events above it in the list have had their
+  // turn, and the raccoon has three of those.
+  await page3.evaluate(`(() => {
+    const w = window.__saiWorld;
+    w.__park = () => { for (const o of w.agents) {
+      o.x = -900; o.y = -900; o.state = 'idle'; o.vx = o.vy = 0; o.z = 0;
+      o.dragging = false; o._plat = null; o._huntP = null;
+      o.idleUntil = 9e9; o.intentUntil = 9e9; o.noEventUntil = 9e9; o._eth = null; } };
+    // WHERE MAY A FLOOR ANIMAL STAND — asked of Prey.js's own habitatOk
+    // through __prey.okAt, so this suite carries no copy of the shoreline,
+    // the bluff or the map margin and cannot go stale when any of them move.
+    w.__floorSpot = (cx, cy, lo, hi) => {
+      const B = w.bounds;
+      for (let i = 0; i < 8000; i++) {
+        const x = 60 + Math.random() * (B.w - 120), y = 60 + Math.random() * (B.h - 120);
+        if (!w.__prey.okAt('woodmouse', x, y)) continue;
+        if (cx != null) { const d = Math.hypot(x - cx, y - cy); if (d < lo || d > hi) continue; }
+        return { x: x, y: y };
+      }
+      return null;
+    };
+    // ...and the same question of the water, by rho and by the lake's own
+    // bearing. 90 degrees is due south in lakeAngleAt's convention, which is
+    // the shore the raccoon's douse already works and is clear of the dam.
+    w.__shoreSpot = (rlo, rhi, cx, cy, lo, hi) => {
+      const B = w.bounds;
+      for (let i = 0; i < 20000; i++) {
+        const x = 60 + Math.random() * (B.w - 120), y = 60 + Math.random() * (B.h - 120);
+        const r = w.lakeRhoAt(x, y);
+        if (r < rlo || r > rhi) continue;
+        const ang = w.lakeAngleAt(x, y);
+        if (ang < 55 || ang > 125) continue;
+        if (w.onDamAt(x, y)) continue;
+        if (cx != null) { const d = Math.hypot(x - cx, y - cy); if (d < lo || d > hi) continue; }
+        return { x: x, y: y, rho: r };
+      }
+      return null;
+    };
+    w.__putPrey = (key, at) => {
+      w.__prey.clear(); w.__prey.ready(key);
+      const p = w.__prey.spawn(key, true);
+      if (!p) return null;
+      p.x = at.x; p.y = at.y; p._in = true; p._settled = true;
+      p._goal = null; p._hold = 0; p._threat = null; p._fleeUntil = 0;
+      p.leaveAt = performance.now() + 9e6;
+      return p;
+    };
+    w.__putHunter = (species, at, dom) => {
+      const a = w.agents.find((o) => o.species === species);
+      if (!a) return null;
+      a.dragging = false; a.z = 0; a.x = at.x; a.y = at.y; a.vx = 0; a.vy = 0;
+      a.state = 'wander'; a.intent = 'wander'; a.intentUntil = 0;
+      a.noEventUntil = 0; a.idleUntil = 0; a._eth = null; a._huntP = null;
+      a._faceDir = 0; a._carry = null; a._swoopT0 = 0;
+      window.__pump(1);
+      const S = a._eth;
+      if (S) { S.domain = dom; S.left = 9e6; S.tripUntil = performance.now() + 9e6; }
+      return a;
+    };
+    // one frame of the event under test, with every sibling appetite held off
+    w.__offer = (a, id, sibs) => {
+      const S = a._eth;
+      if (S) { S.cd[id] = 0; S.seekAt[id] = 0; S.near[id] = false; S.dwelt = {};
+        for (let i = 0; i < sibs.length; i++) {
+          S.cd[sibs[i]] = performance.now() + 9e6; S.armed[sibs[i]] = 0; } }
+      a.noEventUntil = 0;
+    };
+  })()`);
+
+  // ---- 1. THE OWL COMES IN OFF THE GROUND ------------------------------
+  // Seeded at pounce + 50 rather than pounce + 30: the climb-out is a 900ms
+  // curve and a shorter run-in would measure the middle of it rather than
+  // the height he actually holds.
+  const O = await page3.evaluate(`(() => {
+    const w = window.__saiWorld;
+    w.__park();
+    const g = w.__floorSpot(null, null, 0, 0);
+    if (!g) return { none: 'no forest floor on this stage' };
+    const p = w.__putPrey('woodmouse', g);
+    if (!p) return { none: 'no wood mouse' };
+    const h = w.__floorSpot(g.x, g.y, 172, 188);
+    if (!h) return { none: 'nowhere to stand 180px off it' };
+    const a = w.__putHunter('owl', h, 'land');
+    if (!a) return { none: 'no owl' };
+    a._nestI = 3;
+    const seen = {}; let maxGlideZ = 0, started = -1;
+    let lastStoopZ = -1, lastStoopD = -1, air = 0;
+    for (let i = 0; i < 1400; i++) {
+      w.__offer(a, 'swoop', ['hoot', 'roost']);
+      window.__pump(1);
+      seen[a.state] = (seen[a.state] | 0) + 1;
+      if (a.state === 'owlglide') {
+        if (started < 0) started = i;
+        if (a.z > maxGlideZ) maxGlideZ = a.z;
+      }
+      if (a.z > 3) air++;
+      if (a.state === 'owlswoop') {
+        lastStoopZ = a.z; lastStoopD = Math.hypot(p.x - a.x, p.y - a.y);
+      }
+      if (seen['owlmantle'] || seen['owlveer']) break;
+    }
+    return { none: null, seen: seen, started: started,
+             glideFrames: seen['owlglide'] | 0, fixFrames: seen['owlhear'] | 0,
+             maxGlideZ: maxGlideZ, airFrames: air,
+             zAtStrike: lastStoopZ, dAtStrike: lastStoopD,
+             landed: (seen['owlmantle'] | 0) + (seen['owlveer'] | 0) > 0,
+             fed: (seen['owlmantle'] | 0) > 0,
+             nestI: a._nestI, zAfter: a.z };
+  })()`);
+  chk(!O.none && O.glideFrames > 6 && O.maxGlideZ > 30,
+    'the owl comes in off the ground: the approach is a glide, not a march',
+    O.none || `held ${O.maxGlideZ.toFixed(0)}px up for ${O.glideFrames} frames of glide ` +
+      `and ${O.fixFrames} of hover, ${O.airFrames} frames airborne in all`);
+  chk(!O.none && O.landed && O.zAtStrike >= 0 && O.zAtStrike < 6,
+    'and he is down on it by the time the stoop is spent',
+    O.none || (O.landed
+      ? `z ${O.zAtStrike.toFixed(2)}px at ${O.dAtStrike.toFixed(0)}px out, and the bout ended ` +
+        (O.fed ? 'over a kill' : 'in a veer')
+      : 'never got to ask: 1400 frames and the stoop had not resolved'));
+  chk(!O.none && O.nestI === 3,
+    'and a hunt does not make him forget which tree he was roosting in',
+    O.none || `_nestI 3 -> ${O.nestI}, untouched across a whole swoop`);
+
+  // ---- 2. NOTHING ABOUT HIM WALKS WHILE HE IS FLYING -------------------
+  // Asked of the STYLESHEET and not of an animal. data-walking is written
+  // from on-screen displacement and a gliding owl displaces, so the two-step
+  // hop is still armed the whole way in; what makes the claim true is that
+  // the walking rig is not drawn. That is a computed display and it needs no
+  // frames, so it is taken on the first page, synchronously, with the state
+  // written straight onto the sprite.
+  const D = await page.evaluate(`(function (w) {
+    const all = Array.prototype.slice.call(document.querySelectorAll('.sai-sprite'));
+    const spriteOf = function (sp) {
+      return all.find(function (e) { return e.querySelector('.sai-crit--' + sp); }) || null;
+    };
+    const look = function (sp, state, sel) {
+      const el = spriteOf(sp); if (!el) return null;
+      const was = el.dataset.state;
+      el.dataset.state = state;
+      const out = {};
+      for (const k of Object.keys(sel)) {
+        const n = el.querySelector(sel[k]);
+        out[k] = n ? getComputedStyle(n).display : 'absent';
+      }
+      if (was === undefined) delete el.dataset.state; else el.dataset.state = was;
+      return out;
+    };
+    const owlSel = { body: '.sai-crit-body', leg: '.sai-crit-leg',
+                     flap: '.sai-crit-flappose', mantle: '.sai-crit-owlmantlepose' };
+    const racSel = { body: '.sai-crit-body', leg: '.sai-crit-leg',
+                     wash: '.sai-crit-washpose', hunch: '.sai-crit-handpose',
+                     cray: '.sai-crit-raccray', mouse: '.sai-crit-racmorsel' };
+    const R = {};
+    for (const s of ['owlglide', 'owlhear', 'owlswoop', 'owlveer', 'owlmantle']) R[s] = look('owl', s, owlSel);
+    for (const s of ['racwade', 'racflip', 'racsnatch', 'raccray', 'racempty', 'racmunch', 'racstalk']) R[s] = look('raccoon', s, racSel);
+    const ow = window.__saiEtho.ownWater;
+    return { R: R,
+      ownWater: ['racwade', 'racflip', 'racsnatch', 'raccray', 'racempty'].filter(function (s) { return !ow.has(s); }),
+      dryStates: ['racstalk', 'racfix', 'racgrab', 'racmunch', 'racmiss'].filter(function (s) { return ow.has(s); }) };
+  })(window.__saiWorld)`);
+  const flying = ['owlglide', 'owlhear', 'owlswoop', 'owlveer'];
+  const walked = flying.filter((s) => !D.R[s] || D.R[s].body !== 'none' || D.R[s].leg !== 'none');
+  const noWings = flying.filter((s) => !D.R[s] || D.R[s].flap === 'none' || D.R[s].flap === 'absent');
+  chk(walked.length === 0 && noWings.length === 0,
+    'nothing about him walks while he is flying: the legs are not drawn at all',
+    walked.length || noWings.length
+      ? `still walking: ${walked.join(', ') || 'none'}; no wings: ${noWings.join(', ') || 'none'}`
+      : 'four flying states, four with the rig swapped out for the flight pose');
+  chk(D.R.owlmantle && D.R.owlmantle.mantle === 'inline' && D.R.owlmantle.flap === 'none'
+      && D.R.owlglide.mantle === 'none',
+    'and the mantle is its own drawing, shown only over a kill',
+    D.R.owlmantle ? `owlmantle ${D.R.owlmantle.mantle}, owlglide ${D.R.owlglide.mantle}` : 'no owl sprite');
+
+  // ---- 3. HE FINDS PREY FURTHER OFF THAN ANYTHING ELSE -----------------
+  // The sense radius is not on the event descriptor — makeHunt keeps it in
+  // its closure — so it is checked the only way that is worth checking
+  // anyway: put a mouse 320px away, which is inside the owl's 340 and
+  // outside the fox's 300, and see which of them sets off.
+  const S = await page3.evaluate(`(() => {
+    const w = window.__saiWorld;
+    const tryAt = (species, ev, sibs, gap, want) => {
+      w.__park();
+      const g = w.__floorSpot(null, null, 0, 0); if (!g) return null;
+      const p = w.__putPrey('woodmouse', g); if (!p) return null;
+      const h = w.__floorSpot(g.x, g.y, gap - 3, gap + 3); if (!h) return null;
+      const a = w.__putHunter(species, h, 'land'); if (!a) return null;
+      const d0 = Math.hypot(p.x - a.x, p.y - a.y);
+      // BOTH of them are held still. This check is about a RADIUS and
+      // nothing else, and a wanderer drifts a pixel a frame — sixty frames
+      // of that is twenty px, which is a fifth of the gap between the two
+      // senses being compared and quite enough to decide the answer.
+      for (let i = 0; i < 60; i++) {
+        w.__offer(a, ev, sibs);
+        p.x = g.x; p.y = g.y; p.vx = 0; p.vy = 0;
+        a.x = h.x; a.y = h.y; a.vx = 0; a.vy = 0;
+        window.__pump(1);
+        if (a.state === want) return { took: i, d0: d0 };
+      }
+      return { took: -1, d0: d0 };
+    };
+    return { owl: tryAt('owl', 'swoop', ['hoot', 'roost'], 320, 'owlglide'),
+             fox: tryAt('fox', 'mousing', ['scrump', 'matecall'], 320, 'foxstalk') };
+  })()`);
+  chk(S.owl && S.fox && S.owl.took >= 0 && S.fox.took < 0,
+    'he finds prey further off than anything else in the world',
+    S.owl && S.fox
+      ? `a wood mouse at ${S.owl.d0.toFixed(0)}px: the owl set off on frame ${S.owl.took}, ` +
+        `the fox at ${S.fox.d0.toFixed(0)}px ` +
+        (S.fox.took < 0 ? 'never did in sixty' : 'set off on frame ' + S.fox.took) +
+        ' — 340 against his 300'
+      : 'never got to ask: no floor pair at 320px');
+
+  // ---- 4. THE RACCOON WORKS THE CRAYFISH IN THE SHALLOWS ---------------
+  // The crayfish is held on its spot for the run. That is not tidying the
+  // result: a lake animal's own wander goal is rho 0.25 to 0.85 and it can
+  // simply swim out of the 0.80 he is allowed to follow it to, at which
+  // point the walk stops updating and the check is measuring Prey.js's
+  // wander rather than his wade.
+  const X = await page3.evaluate(`(() => {
+    const w = window.__saiWorld;
+    if (!w.def.hasWater) return { none: 'no lake in this world' };
+    w.__park();
+    const g = w.__shoreSpot(0.84, 0.89, null, null, 0, 0);
+    if (!g) return { none: 'no south shore at rho 0.84-0.89' };
+    const p = w.__putPrey('crayfish', g);
+    if (!p) return { none: 'no crayfish' };
+    const h = w.__shoreSpot(0.90, 0.96, g.x, g.y, 52, 76);
+    if (!h) return { none: 'nowhere wet to stand 60px off it' };
+    const a = w.__putHunter('raccoon', h, 'water');
+    if (!a) return { none: 'no raccoon' };
+    const seen = {}; let onDam = 0, dry = 0;
+    let rhoAtFix = -1, wetAtFix = false, deepest = 0;
+    for (let i = 0; i < 1200; i++) {
+      w.__offer(a, 'crayfish', ['berry', 'paws', 'roost', 'ratting']);
+      p.x = g.x; p.y = g.y; p.vx = 0; p.vy = 0;
+      window.__pump(1);
+      seen[a.state] = (seen[a.state] | 0) + 1;
+      if (w.onDamAt(a.x, a.y)) onDam++;
+      const r = w.lakeRhoAt(a.x, a.y);
+      if (a.state === 'racwade' || a.state === 'racflip' || a.state === 'racsnatch') {
+        if (r >= 0.97) dry++;
+        if (r < deepest || deepest === 0) deepest = r;
+      }
+      if (a.state === 'racflip') {
+        rhoAtFix = r; wetAtFix = r < 0.97 && !w.onDamAt(a.x, a.y);
+      }
+      if (seen['raccray'] || seen['racempty']) break;
+    }
+    return { none: null, seen: seen,
+             wadeFrames: seen['racwade'] | 0, fixFrames: seen['racflip'] | 0,
+             rhoAtFix: rhoAtFix, wetAtFix: wetAtFix,
+             crossedDam: onDam, dryWorkFrames: dry, deepest: deepest,
+             finished: (seen['raccray'] | 0) + (seen['racempty'] | 0) > 0,
+             preyRho: w.lakeRhoAt(g.x, g.y) };
+  })()`);
+  chk(!X.none && X.wetAtFix && X.rhoAtFix > 0.80 && X.rhoAtFix < 1.00,
+    'the raccoon works the crayfish in the shallows, not out in the lake',
+    X.none || (X.rhoAtFix > 0
+      ? `standing at rho ${X.rhoAtFix.toFixed(3)} and reaching out to a stone at ` +
+        `${X.preyRho.toFixed(3)} — inside the water by the sim's own predicate, and ` +
+        `${(X.rhoAtFix - X.preyRho).toFixed(3)} rho shoreward of what he is turning over`
+      : 'never got to ask: he never reached the stone'));
+  chk(!X.none && X.fixFrames >= 100,
+    'and turning stones over takes him a while, which is the whole behaviour',
+    X.none || `${X.fixFrames} frames of flipping, ${(X.fixFrames / 60).toFixed(1)}s of sim ` +
+      `against a walk-in of ${X.wadeFrames}`);
+  chk(!X.none && X.finished && X.crossedDam === 0 && X.dryWorkFrames === 0,
+    'he goes round the beaver’s timber rather than over it, and never works it dry',
+    X.none || (X.finished
+      ? `${X.crossedDam} frames standing on a log, ${X.dryWorkFrames} working out of the water, ` +
+        `deepest rho ${X.deepest.toFixed(3)}`
+      : 'never got to ask: 1200 frames and the bout had not resolved'));
+
+  // ---- 5. THE MOUSE HUNT KEEPS HIM OUT OF THE WATER --------------------
+  const Y = await page3.evaluate(`(() => {
+    const w = window.__saiWorld;
+    w.__park();
+    const g = w.__floorSpot(null, null, 0, 0); if (!g) return { none: 'no forest floor' };
+    const p = w.__putPrey('woodmouse', g); if (!p) return { none: 'no wood mouse' };
+    const h = w.__floorSpot(g.x, g.y, 94, 106); if (!h) return { none: 'nowhere to stand 100px off it' };
+    const a = w.__putHunter('raccoon', h, 'land'); if (!a) return { none: 'no raccoon' };
+    const seen = {}; let wet = 0, frames = 0;
+    for (let i = 0; i < 1000; i++) {
+      w.__offer(a, 'ratting', ['berry', 'paws', 'roost', 'crayfish']);
+      window.__pump(1);
+      seen[a.state] = (seen[a.state] | 0) + 1;
+      frames++;
+      if (w.def.hasWater && w.lakeRhoAt(a.x, a.y) < 0.97) wet++;
+      if (seen['racmunch'] || seen['racmiss']) break;
+    }
+    return { none: null, seen: seen, wetFrames: wet, frames: frames,
+             fixFrames: seen['racfix'] | 0, grabFrames: seen['racgrab'] | 0,
+             finished: (seen['racmunch'] | 0) + (seen['racmiss'] | 0) > 0 };
+  })()`);
+  chk(!Y.none && Y.finished && Y.wetFrames === 0,
+    'the mouse hunt keeps him out of the water entirely',
+    Y.none || (Y.finished
+      ? `${Y.wetFrames} of ${Y.frames} frames wet, and the bout ran ` +
+        `stalk -> fix ${Y.fixFrames} -> grab ${Y.grabFrames} -> ` +
+        ((Y.seen['racmunch'] | 0) ? 'munch' : 'miss')
+      : 'never got to ask: 1000 frames and the bout had not resolved'));
+
+  // ---- 6. THE STRIKE CAN ACTUALLY LAND ---------------------------------
+  // The one thing a hunt has to be able to do, and the one this branch
+  // nearly shipped unable to do: `dash` is a budget in ground covered, and
+  // a budget smaller than the ground the closing speed needs means the
+  // catchChance roll is never reached at all. Held still, both of them must
+  // arrive inside `reach` with burst to spare.
+  const K = await page3.evaluate(`(() => {
+    const w = window.__saiWorld;
+    const land = (species, ev, sibs, preyKey, gap, hit, budget) => {
+      w.__park();
+      const g = w.__floorSpot(null, null, 0, 0); if (!g) return null;
+      const p = w.__putPrey(preyKey, g); if (!p) return null;
+      const h = w.__floorSpot(g.x, g.y, gap - 8, gap + 8); if (!h) return null;
+      const a = w.__putHunter(species, h, 'land'); if (!a) return null;
+      // minD is measured from the moment he commits and on EVERY frame
+      // after it, not only on the frames he is still in the strike state:
+      // the frame the strike resolves on has already flipped him to the
+      // feed or the miss inside drive(), and it is that frame — the one
+      // where stepTowardAt zeroed his velocity because d had come inside
+      // reach — that carries the distance this check is about.
+      let started = false, minD = 9999, goLeft = -1, top = 0, ended = '';
+      for (let i = 0; i < budget; i++) {
+        w.__offer(a, ev, sibs);
+        p.x = g.x; p.y = g.y; p.vx = 0; p.vy = 0;
+        window.__pump(1);
+        const sp = Math.hypot(a.vx, a.vy); if (sp > top) top = sp;
+        if (a.state === hit) { started = true; goLeft = a._huntGo; }
+        // against the PINNED point and not against the live instance: the
+        // prey is put back on that point at the top of every frame, so it is
+        // the position drive() measured its own reach against, and the sim
+        // walks the instance a third of a px off it before this line runs
+        if (started) { const d = Math.hypot(g.x - a.x, g.y - a.y); if (d < minD) minD = d; }
+        if (started && a.state !== hit) {
+          ended = p.alive ? 'a failed roll' : 'a kill';
+          return { caught: !p.alive, minD: minD, goLeft: goLeft, top: top, ended: ended };
+        }
+      }
+      return { caught: false, minD: minD, goLeft: goLeft, top: top,
+               ended: 'nothing: the budget ran out first', ranOut: true };
+    };
+    return { rac: land('raccoon', 'ratting', ['berry', 'paws', 'roost', 'crayfish'], 'woodmouse', 100, 'racgrab', 900),
+             owl: land('owl', 'swoop', ['hoot', 'roost'], 'gartersnake', 180, 'owlswoop', 1400) };
+  })()`);
+  chk(K.rac && !K.rac.ranOut && K.rac.minD <= 22 && K.rac.goLeft > 0,
+    'the raccoon’s grab reaches what it is aimed at, with burst still in hand',
+    K.rac ? `closed to ${K.rac.minD.toFixed(1)}px against a reach of 22 and ended in ${K.rac.ended}, ` +
+            `${K.rac.goLeft.toFixed(0)}px of the 180 unspent (top ${K.rac.top.toFixed(0)}px/s)`
+          : 'never got to ask: no floor pair');
+  chk(K.owl && !K.owl.ranOut && K.owl.minD <= 26 && K.owl.goLeft > 0,
+    'and so does the owl’s stoop, on the slow end of his list',
+    K.owl ? `closed to ${K.owl.minD.toFixed(1)}px on a garter snake against a reach of 26 and ` +
+            `ended in ${K.owl.ended}, ${K.owl.goLeft.toFixed(0)}px of the 250 unspent ` +
+            `(top ${K.owl.top.toFixed(0)}px/s)`
+          : 'never got to ask: no floor pair');
+
+  // ---- 7. A HUNTER TAKEN OUT OF HIS OWN STRIKE HANDS THE PREY BACK -----
+  // huntRelease as the first line of both ticks. A drag, a fight or a
+  // forceFlee writes a.state from outside the ethogram, and a claim left
+  // standing hides that animal from every other hunter for six seconds and
+  // pins it on stage where it cannot leave.
+  const H = await page3.evaluate(`(() => {
+    const w = window.__saiWorld;
+    const yank = (species, ev, sibs, gap) => {
+      w.__park();
+      const g = w.__floorSpot(null, null, 0, 0); if (!g) return null;
+      const p = w.__putPrey('woodmouse', g); if (!p) return null;
+      const h = w.__floorSpot(g.x, g.y, gap - 8, gap + 8); if (!h) return null;
+      const a = w.__putHunter(species, h, 'land'); if (!a) return null;
+      let held = false;
+      for (let i = 0; i < 400 && !held; i++) {
+        w.__offer(a, ev, sibs);
+        p.x = g.x; p.y = g.y; p.vx = 0; p.vy = 0;
+        window.__pump(1);
+        held = a._huntP === p && p.claimedBy === a.id;
+      }
+      if (!held) return { held: false };
+      // exactly what forceFlee writes (SocialAnimalIcons: state, fleeEnd,
+      // targetId and a bearing), which is also the shape of a drag release
+      a.state = 'flee'; a.fleeEnd = performance.now() + 2000; a.targetId = null;
+      a.vx = 0; a.vy = 0;
+      window.__pump(2);
+      return { held: true, huntP: a._huntP, claimedBy: p.claimedBy,
+               hunted: p.hunted, go: a._huntGo };
+    };
+    return { owl: yank('owl', 'swoop', ['hoot', 'roost'], 180),
+             rac: yank('raccoon', 'ratting', ['berry', 'paws', 'roost', 'crayfish'], 100) };
+  })()`);
+  const yanked = ['owl', 'rac'].filter((k) => {
+    const r = H[k];
+    return !r || !r.held || r.huntP !== null || r.claimedBy !== null || r.hunted;
+  });
+  chk(yanked.length === 0,
+    'and a hunter dragged out of his own strike hands the prey straight back',
+    yanked.length ? `still holding: ${yanked.join(', ')}`
+      : 'both ticks call huntRelease first: _huntP null, claimedBy null, hunted false');
+
+  // ---- 8. AND NONE OF IT COST HIM THE BERRIES OR THE DEN ---------------
+  // Two new feeding events on an animal who is on the cadence ladder. The
+  // appetite windows of what he already had are the thing that must not have
+  // moved, and they are read off the live ethogram rather than trusted.
+  const Z = await page3.evaluate(`(() => {
+    const E = window.__saiEtho.ETHOGRAM, ids = {};
+    const of = (sp, id) => (E[sp] ? E[sp].events.find((e) => e.id === id) : null);
+    for (const sp of ['raccoon', 'owl']) ids[sp] = E[sp] ? E[sp].events.map((e) => e.id) : [];
+    const b = of('raccoon', 'berry'), r = of('raccoon', 'roost');
+    const p = of('raccoon', 'paws'), ho = of('owl', 'hoot'), ro = of('owl', 'roost');
+    const win = (e) => (e && e.every ? e.every.join('-') + ' @ ' + e.chance : 'MISSING');
+    return { ids: ids, berry: win(b), roost: win(r), paws: win(p),
+             hoot: win(ho), owlroost: win(ro),
+             ok: win(b) === '146000-222000 @ 0.45' && win(r) === '150000-240000 @ 0.6'
+                 && win(p) === '70000-120000 @ 0.5'
+                 && win(ho) === '38000-66000 @ 0.62' && win(ro) === '104000-172000 @ 0.7' };
+  })()`);
+  chk(Z.ok && Z.ids.raccoon.length === 5 && Z.ids.owl.length === 3,
+    'and none of this cost him the berries, the rub, the den or the owl’s call',
+    `raccoon ${Z.ids.raccoon.join('/')} — berry ${Z.berry}, paws ${Z.paws}, roost ${Z.roost}; ` +
+    `owl ${Z.ids.owl.join('/')} — hoot ${Z.hoot}, roost ${Z.owlroost}`);
+
+  // ---- 9. the wet states own their own water --------------------------
+  chk(D.ownWater.length === 0 && D.dryStates.length === 0,
+    'the crayfish five draw their own presence in the water; the mouse five do not',
+    D.ownWater.length || D.dryStates.length
+      ? `missing ownWater: ${D.ownWater.join(', ') || 'none'}; wrongly wet: ${D.dryStates.join(', ') || 'none'}`
+      : 'five in ETHO_OWNWATER_STATES, five out, so the generic swim rig stays off exactly one hunt');
+  const crayShown = D.R.raccray && D.R.raccray.cray === 'inline' && D.R.raccray.wash === 'inline';
+  const crayHidden = ['racwade', 'racflip', 'racsnatch', 'racempty']
+    .filter((s) => D.R[s] && D.R[s].cray !== 'none');
+  chk(crayShown && crayHidden.length === 0 && D.R.racmunch && D.R.racmunch.mouse === 'inline'
+      && D.R.racmunch.hunch === 'inline',
+    'and the crayfish itself is drawn in the one state where he has actually got one',
+    crayShown
+      ? `raccray shows it inside the wash pose; ${crayHidden.join(', ') || 'no other state'} does — ` +
+        `and racmunch swaps the berry for a mouse in the two-paw hunch`
+      : `raccray: cray ${D.R.raccray ? D.R.raccray.cray : 'no sprite'}`);
+
+  await page3.close();
+}
 chk(errs.length === 0, 'no JS errors', errs.length ? errs[0] : 'clean');
 console.log(`\n${fail.length ? 'FAIL ' + fail.length : 'ALL PASS'} (${pass.length} passed)`);
 await browser.close();
