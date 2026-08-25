@@ -919,6 +919,49 @@ function makeHunt(o) {
   };
 }
 
+/**
+ * A DIG IS A HUNT WITH THE RUNNING TAKEN OUT.
+ *
+ * The three litter animals — grub, beetle, earthworm — do not flee. Prey.js
+ * says so in as many words at driveFlee: a threat turns them straight into
+ * `preyburrow` with zero velocity and leaves them claimable, "and that
+ * withdrawal IS what the skunk and the hedgehog are digging past". So all
+ * five beats of makeHunt still apply and only the numbers change: the stalk
+ * is a walk to a log, the fix is casting for the scent, the "strike" is the
+ * digging, and the burst is nearly nothing because nothing is getting away.
+ *
+ * That is also why this is a FACTORY and not two events. Two species share
+ * the behaviour and differ only in size and pace — the skunk works timber
+ * with both forepaws and the hedgehog turns leaf litter over with his snout
+ * — so the shape is written once here in the hunt core and each of them
+ * supplies his own numbers and his own five state names.
+ *
+ * The tension in a dig is in the SEARCH, not in the strike: a hunter who
+ * cannot find any litter prey at all is the common case (there is at most
+ * one of each of the three alive at a time), so `none` is the longest in
+ * the world at 16s rather than the usual 11.
+ */
+function makeDig(o) {
+  return makeHunt({
+    ...o,
+    prey: ["grub", "beetle", "earthworm"],
+    habitat: "litter",
+    domain: "land",
+    // Nothing is running, so nothing is chased. 0.20 is below the gait
+    // ladder's "pottering" — the digging animal is not travelling at all,
+    // he is working a spot that is already under his nose.
+    burst: 0.20,
+    catchChance: o.catchChance ?? 0.86,
+    none: 16000,
+    // He may dig anything in the timber. `_site` is the litter animal's own
+    // anchor — the log, root or soil patch it surfaced in and is leashed to
+    // — and a litter prey without one is one that has come adrift of the
+    // wood, which is not a thing to dig for. Anything already spoken for is
+    // filtered out by nearestPrey's own `free`, before this ever runs.
+    reachable: (a, c, p) => !!p._site,
+  });
+}
+
 /* ---------------------------------------------------------------------
  * REMAINS
  *
@@ -3325,6 +3368,171 @@ function dropPit(a, c) {
   while (pits.length > ((SQ && SQ.pitMax) || 6)) pits.shift();
 }
 
+/* ---------------------------------------------------------------------
+ *  THE SKUNK'S THREE NEW APPETITES — the dig, the mouse, and a bed.
+ *
+ *  Everything above this line is surface work: fruit off the floor, a claw
+ *  scrape on likely soil, a line of cone pits in the open. None of it has
+ *  an animal in it, and a striped skunk is not a fruit bat — the grubs and
+ *  beetles under a fallen log are most of his living, and a wood mouse or a
+ *  crayfish is the rest of it. So he gets the dig (shared with the hedgehog,
+ *  see makeDig in the hunt core), a short-range hunt, and somewhere to sleep
+ *  it off, which is the first bed anybody on the forest floor has had.
+ * ------------------------------------------------------------------- */
+
+/**
+ * HE CANNOT SWIM. The skunk is not in this world's swim table, so keepAshore
+ * holds his anchor at rho 1.05 and the water is a wall — which is exactly
+ * what makes "forages for them in the muddy shallows" a real behaviour and
+ * not a euphemism for wading. A crayfish is his only if it has come up to
+ * the lip, or has not reached the water at all yet: they walk in overland,
+ * and `_settled` does not latch until rho drops under 0.92.
+ *
+ * The mice and voles are the other half of the same rule read the other way
+ * round — a floor animal standing in the shallows is one he would have to
+ * get his feet wet for, so he leaves it.
+ */
+function skunkCanTake(a, c, p) {
+  if (p.species !== "crayfish") return c.lakeRho(p.x, p.y) > 1.02;
+  if (!p._settled) return true;                 // still crossing the floor
+  return c.lakeRho(p.x, p.y) >= 0.88;
+}
+
+/**
+ * WHERE A DEN GOES. openGround already answers most of it — off the crop,
+ * off the caches, in from the edge, out of the water — because a den mouth
+ * and a cone pit are the same hole and want the same clearances. The one
+ * thing it does not know about is the bluff, which nothing in this file knew
+ * about until this phase: the rock's talus band reads as ordinary ground to
+ * openSpot, and a skunk who beds down on a rock PLATFORM is evicted by
+ * keepOnPlatform after nine seconds whatever state he is in. So the bluff is
+ * refused outright rather than fenced off by level — there is a whole forest
+ * floor to dig in and no reason at all for him to be up there.
+ */
+function denGround(a, c) {
+  const p = openGround(a, c);
+  if (!p) return null;
+  return c.rockZone && c.rockZone(p.x, p.y).on ? null : p;
+}
+
+/** the same deep-sleep window the raccoon's roost uses, and for the same
+ *  reason: long enough to read as sleep, short enough to be worth watching */
+const SK_DEN_WIN = [15000, 24000];
+
+/**
+ * THE ONE HE DIGS HIMSELF. He takes the spot the picker cleared rather than
+ * wherever the walk happened to stop — `within` is a radius of 22 and the
+ * pit's own offset has already spent 24px of the margin, which is the exact
+ * fault the cone dig's begin() records.
+ */
+function beginDugDen(a, c, S, g) {
+  a.vx = 0; a.vy = 0;
+  if (g) { a.x = g.x; a.y = g.y; }
+  a._faceDir = 1;                     // he works the mouth in front of him
+  a._denAt = { x: a.x, y: a.y };
+  // THE SLEEP BUDGET RESETS HERE AND IN THE TICK, AND NOWHERE ELSE. A skunk
+  // who surfaced and settled again inside one bout would otherwise buy a
+  // second thirty seconds, and thirty seconds of a headless run is a hundred
+  // frames against eighteen hundred at 60fps — the ceiling is spent in frame
+  // time precisely so the same animal comes out of both.
+  a._sleepSpent = 0;
+  a.state = "skdigden"; a.stateUntil = c.now + c.rand(3600, 5200);
+}
+
+/**
+ * ...AND THE ONE HE DOES NOT. Under the near lip of a sound log, where the
+ * litter banks up: no digging, he simply pushes in and is half out of sight.
+ *
+ * The aim is the hedgehog's, because the problem is the hedgehog's — a site
+ * has a scale and a mirror flag and an offset that ignores either lands the
+ * animal thirteen pixels along a log's own axis. hogAim solves that once and
+ * takes the offsets as arguments, so it serves both of them.
+ *
+ * THE OFFSETS ARE THE SKUNK'S OWN and they are measured — and the first
+ * pair of them, solved to put his shoulder inside the lip the way the
+ * hedgehog's logunder does, was WRONG ON SCREEN. Photographed at the
+ * bottom-left mossy log: an animal standing level with that timber is
+ * painted behind it. The site body is at zIndex 2 and the sprite at 10, so
+ * that should not happen and it does; the hedgehog's own shipped logunder
+ * is hidden at the same spot in the same way, so it is a fact about this
+ * world's stacking and not about this branch. It is also not a fact this
+ * den can afford: the whole thing the owner asked for is a skunk you can
+ * see half of, under a woodpile.
+ *
+ * So he stands just in FRONT of the near edge instead of level with it, and
+ * what hides his front half is his OWN bank rather than the log — which the
+ * pose is built to do anyway, being the only drawing here that carries its
+ * own occluder. The log's near-edge sliver, drawn again at zIndex 12 over
+ * everything, still cuts the crest of his heap, so the two do meet.
+ *
+ * The arithmetic. ForageLayer maps a site's local (x, y) to
+ * (px + x*s*dir, py + (y - 16)*s), so the mossy log's body — drawn local
+ * y -23..+10 — has its underside at py - 6*s. SkunkDraw's den pose crests
+ * its bank at art y 38 and grounds him at art y 103; his anchor is the box
+ * centre (art 60,60) and the box is 120 art units at r*2.7, which at his
+ * radius of 20.1 is 0.4523 stage px per unit — so his heap stands 10.0px
+ * above his anchor and his hocks land 19.4px below it.
+ *
+ * Putting the crest six px INSIDE the underside gives an anchor at
+ * py - 6*s + 4: py - 0.8 at the 0.80 log and py - 1.7 at the 0.95 one, so
+ * -2 site units serves both. -26 along is the hedgehog's
+ * third-of-the-way-along, kept because it is the same timber and the site
+ * is claimed either way, so the two of them are never at one log at once.
+ */
+function skunkPile(a, c) {
+  return hogAim(a, c, "log", -26, -2, "mossy");
+}
+
+function beginPileDen(a, c, S, g) {
+  a.vx = 0; a.vy = 0;
+  if (g) { a.x = g.x; a.y = g.y; }
+  a._faceDir = 1;                     // he backs in facing along the timber
+  a._denAt = { x: a.x, y: a.y };
+  a._sleepSpent = 0;
+  a.state = "skpileunder"; a.stateUntil = c.now + c.rand(1600, 2400);
+}
+
+/**
+ * Both dens run this. `skdenout` is declared by the dug variant and reached
+ * by name from the pile one — legal and precedented: the hedgehog's
+ * `logchew` is declared by `logdive` and reached from `logunder`, and the
+ * engine's own throw on a doubly-claimed state is how that was caught rather
+ * than shipped. Dispatch is by state name, so this sees both.
+ */
+function driveSkunkDen(a, c) {
+  // held, not merely arrived at: a sleep is half a minute of frames and the
+  // crowd separation would otherwise walk him clean off his own doorway.
+  // The fallback is cheap insurance and not a hypothetical: a den state
+  // written from outside this event — a suite forcing a pose, a future
+  // rescue path — would otherwise dereference nothing inside the rAF
+  // callback and take the whole frame down for every animal in the world.
+  if (!a._denAt) a._denAt = { x: a.x, y: a.y };
+  holdSpot(a, c, a._denAt);
+  if (a.state === "skdigden") {
+    if (c.now < a.stateUntil) return;
+    // THIS dig leaves a hole, unlike the grub dig, and the hole is the mouth
+    // of the den — the whole point of the variant. dropPit puts it where he
+    // was seen to make it, off PIT_DX/PIT_DY.
+    dropPit(a, c);
+    a.state = "skdenin"; a.stateUntil = c.now + c.rand(1400, 2000);
+    return;
+  }
+  if (a.state === "skdenin" || a.state === "skpileunder") {
+    if (c.now < a.stateUntil) return;
+    sleepEnter(a, c, a.state === "skdenin" ? "skdensleep" : "skpilesleep", SK_DEN_WIN);
+    return;
+  }
+  if (a.state === "skdensleep" || a.state === "skpilesleep") {
+    if (!sleepSpent(a, c)) return;
+    a.state = "skdenout"; a.stateUntil = c.now + c.rand(2200, 3000);
+    return;
+  }
+  // skdenout — nose, then head, then shoulders back into the light
+  if (c.now < a.stateUntil) return;
+  a._faceDir = 0;
+  endEvent(a, c, { reroll: true, quiet: 1600, stop: true });
+}
+
 defineEthogram("skunk", {
   // The shoreline is a wall to him, so tier 1 has only one answer. The
   // dwell window still earns its keep — it is what paces the quiet
@@ -3336,6 +3544,16 @@ defineEthogram("skunk", {
   // a bush still booked in his name. Both have to be handed back here, or
   // that site stays reserved against him for the rest of the session.
   tick(a, c, S) {
+    // The prey claim goes back FIRST. A drag, a fight or the musk break-up
+    // can take him out of his own strike, and a claim left standing hides
+    // the mouse from every other hunter for six seconds and pins it on
+    // stage. tick() only runs on frames when no ethogram state owns him, so
+    // this can never fire mid-bout.
+    huntRelease(a);
+    // ...and the sleep budget he never spent, the way the raccoon's roost
+    // hands its own back: a den bout that was interrupted should not still
+    // be being paid for the next time he lies down.
+    if (a._sleepSpent) a._sleepSpent = 0;
     if (S.claim || a._carry) { releaseClaim(a, S); a._carry = null; }
     // ...and the facing he forces while working a hole, but ONLY once he
     // is free again. The world also holds his facing — the musk aims him
@@ -3351,9 +3569,19 @@ defineEthogram("skunk", {
     // already has five foragers in it: he competes with none of them. The
     // walk-in claims the site only so two floor-workers cannot end up nose
     // to nose; the moment he arrives he gives it back.
+    //
+    // 40-64s, HAVING BEEN 30-51, and the reason is two rows below this one.
+    // This animal was already the hungriest in the world at 28.8% of his
+    // clock inside a feeding bout against a ceiling of a third, and the dig
+    // and the mouse hunt at the bottom of this block are six points more. Something had to come out of the staple, and the staple
+    // is the right place to take it from: a skunk who now gets grubs out of
+    // the timber and the odd vole off the floor is a skunk with less of his
+    // day to spend nosing fallen fruit. He keeps the top rung — 30.2%
+    // against the deer's 21.5 — and the most bouts per minute of anyone
+    // here. The arithmetic is written out in tests/cadence.mjs.
     {
       id: "windfall", domain: "land", trigger: "seek",
-      every: [30000, 51000], chance: 0.60, miss: 12000, cool: 14000,
+      every: [40000, 64000], chance: 0.60, miss: 12000, cool: 14000,
       states: ["floorsnuff", "windfalleat"],
       goto: {
         // 30 stops him at the drip line rather than at the stem: fallen
@@ -3491,6 +3719,1012 @@ defineEthogram("skunk", {
           a.vx = 0; a.vy = 0; a._faceDir = 1;
           a.state = "conedig"; a.stateUntil = c.now + c.rand(4200, 6400);
         }
+      },
+    },
+
+    /* ---- GRUBS: the dig, with an animal at the end of it ---------------
+     * The cone dig above is a skunk who has decided to go and have a dig,
+     * and nothing comes up. This one is the same animal working the timber,
+     * where the grubs, beetles and earthworms actually are — and they do not
+     * flee. Prey.js turns them into `preyburrow` with zero velocity and
+     * leaves them claimable, so the tension in this bout is entirely in the
+     * SEARCH: 190px of nose in the litter, a long cast about, and then a
+     * strike that is really just digging (burst 0.20, 50px of it) against a
+     * target that was never going anywhere. Hence catchChance 0.85 — the
+     * highest in the world bar the hedgehog's, and honest.
+     *
+     * IT LEAVES NO CONE. world.pits is his OTHER behaviour, out on open
+     * ground, and openSpot refuses forage sites outright — a pit 79px along
+     * a log is painted over by the timber at zIndex 2. What this dig leaves
+     * is scattered litter, drawn on the sprite for the length of the bout
+     * and gone with it.
+     */
+    makeDig({
+      id: "grubs",
+      // REACH IS INSIDE POUNCE, AND FOR A DIG IT HAS TO BE. `pounce` is where
+      // the walk hands over and `reach` is where the strike connects, and the
+      // strike is tested on the frame it starts — so a reach WIDER than the
+      // pounce is a dig that succeeds before a single frame of digging has
+      // been drawn. Measured: at the contract's 26/34 the skgrub state lasted
+      // ONE FRAME and the pose never appeared on screen at all. Twelve is his
+      // snout on the grub rather than his shoulder near it, and the pounce is
+      // opened to 34 so there are twenty-two px between the two — which is
+      // what the digging is. Measured again: fifty-odd frames of it.
+      sense: 190, pounce: 34, reach: 12,
+      creep: 0.30, fixMs: [1600, 2600],
+      dash: 50, catchChance: 0.85,
+      feedMs: [2600, 3800],
+      every: [66000, 104000], chance: 0.50, cool: 30000, missCool: 15000,
+      st: { stalk: "sktodig", fix: "skcast", strike: "skgrub",
+            feed: "skgrubeat", miss: "skdry" },
+    }),
+
+    /* ---- MOUSING: mice and voles on the floor, crayfish at the lip -----
+     * One event over prey of two shapes, which is what `reach` and
+     * `catchChance` being allowed to be FUNCTIONS is for. A vole is taken
+     * with a pounce of the forepaws at 28px; a crayfish is picked out of
+     * two inches of muddy water at 52, which is the reach of a foreleg and
+     * a snout and not a lie about the drawing — he is standing on the mud
+     * liner the lake paints between rho 1.00 and 1.08, dry, and isWet (rho
+     * < 0.97) will correctly say so.
+     *
+     * 170px of sense is the second shortest in the world after the
+     * hedgehog's: he finds a mouse by nose at ground level, not by ear
+     * across a clearing like the fox. And 0.42 on a mouse is the lowest
+     * catch rate here — a skunk is not built for this and mostly fails,
+     * which is why the grubs above are his staple and this is the aside.
+     */
+    makeHunt({
+      id: "mousing", domain: "land",
+      prey: ["woodmouse", "vole", "crayfish"],
+      // 60 and not 52: the stalk has to end OUTSIDE the reach or the lunge
+      // resolves on the frame it starts and sksnap is never drawn. It also
+      // buys the crayfish hunt something real — he can commit from the dry
+      // sand a little further back, which is the only way a shore he cannot
+      // walk into is worth walking to at all.
+      sense: 170, pounce: 60,
+      reach: (a, c, p) => (p.species === "crayfish" ? 52 : 28),
+      creep: 0.30, fixMs: [700, 1300],
+      burst: 0.70, dash: 90,
+      catchChance: (a, c, p) => (p.species === "crayfish" ? 0.62 : 0.42),
+      feedMs: [2800, 4200],
+      every: [82000, 128000], chance: 0.40, cool: 34000, missCool: 18000,
+      reachable: skunkCanTake,
+      st: { stalk: "sktohunt", fix: "skfix", strike: "sksnap",
+            feed: "skchew", miss: "skmiss" },
+    }),
+
+    /* ---- THE DEN: a hole he dug, or somebody else's timber -------------
+     * The first bed on the forest floor, and the owner asked for both kinds
+     * in one sentence — "sleeps underground dens dug by themselves or under
+     * woodpiles" — so they are two variants of one appetite rather than two
+     * appetites, weighted 2:1 towards the one he makes himself.
+     *
+     * The rarest thing he does by a distance: an urge every three to four
+     * and a half minutes taken a bit over half the time, on an eighty-second
+     * cooldown afterwards. A bout is thirty to forty seconds door to door,
+     * most of it asleep, and the sleep has a ceiling billed in FRAME time
+     * (sleepEnter/sleepSpent) because a sleeping animal is a hole in the
+     * world and a hole in the world has to cost the same headless as it does
+     * at sixty frames a second.
+     */
+    {
+      id: "den", domain: "land", trigger: "seek",
+      every: [175000, 275000], chance: 0.55, miss: 22000, cool: 80000,
+      variants: [
+        {
+          // DUG. Out on open ground, off the crop and off the bluff, and it
+          // leaves the one mark of himself that outlives the bout.
+          id: "dendug", w: 2,
+          states: ["skdigden", "skdenin", "skdensleep", "skdenout"],
+          goto: { state: "sktoden", within: 22, giveUp: 30000, none: 22000,
+                  lost: 18000, urgency: 0.32, pick: (a, c) => denGround(a, c) },
+          begin: beginDugDen, drive: driveSkunkDen,
+        },
+        {
+          // UNDER THE PILE. No digging at all — he pushes in under the lip
+          // of a sound log and is half out of sight. `skdenout` is the dug
+          // variant's and is reached by name; see driveSkunkDen.
+          id: "denpile", w: 1,
+          states: ["skpileunder", "skpilesleep"],
+          goto: { state: "sktopile", within: 18, giveUp: 26000, none: 20000,
+                  lost: 16000, urgency: 0.32, pick: (a, c) => skunkPile(a, c) },
+          begin: beginPileDen, drive: driveSkunkDen,
+        },
+      ],
+    },
+  ],
+});
+
+/* ======================================================================
+ * THE COUGAR — the vantage, the scrape, the pounce, and the den
+ * ======================================================================
+ *
+ * The most terrain-privileged animal in this world, and until this block
+ * existed not one line of that was used. He is the only land animal who may
+ * take the cliff (ROCK_CLIMBERS), the only one who comes off the cave's
+ * terrace at the edge (ROCK_SHELF_DROP), one of two who may simply BE up
+ * there without having climbed (ROCK_HIGH_ENTRY), and the cave is a room
+ * the world drew because the owner asked for it to be occupied. Four
+ * events, and the bluff is in three of them.
+ *
+ * ONE RULE OF THE WORLD'S SHAPES ALL OF IT: AN ANIMAL DOES NOT CHANGE LEVEL
+ * BY WALKING (rule 2 of the bluff, SocialAnimalIcons.jsx:3437). The way up
+ * is tryRockHop, and the sim offers that only on a FREE frame — wander,
+ * idle or cooldown — while every state in this block is a busy one. So no
+ * goto here may aim at a terrace he is not already standing on: it would
+ * walk him into the riser and hold him there for the whole give-up, which
+ * is the exact failure `reachable` exists to prevent on the hunting side.
+ * Every pick below asks his own level first, and the climbing is left to
+ * the world, where it already lives.
+ */
+
+/**
+ * WHICH TERRACE AN ANIMAL IS STANDING ON. rockLevel is null inside a face,
+ * and _lvl is what the physics is actually holding him to, so the terrain's
+ * answer comes first and his own is the fallback. Shared with the wolf
+ * below: both of them live on this bluff and both have to ask.
+ */
+const standLevel = (a, c) => c.rockLevel(a.x, a.y) ?? a._lvl ?? 0;
+
+/**
+ * Could he stand here at all. The rock picks get a much smaller west margin
+ * than the forest ones do, because the bluff IS the west edge of the stage
+ * — the cave's own outer wall is x = 0 — and holding a vantage 90px in from
+ * the frame would rule out most of the thing he is meant to be standing on.
+ */
+function cgStandable(p, c, a, onRock) {
+  const b = c.bounds;
+  if (p.x < (onRock ? 28 : 90) || p.x > b.w - 90) return false;
+  if (p.y < 110 || p.y > b.h - 100) return false;
+  if (c.isWet(p.x, p.y)) return false;
+  if (c.onDam && c.onDam(p.x, p.y)) return false;
+  if (!onRock) {
+    const z = c.rockZone(p.x, p.y);
+    if (z.on && (z.wall || z.level !== 0)) return false;
+  }
+  return true;
+}
+
+/**
+ * ONE CANDIDATE VANTAGE, of the kind asked for. The three the owner named,
+ * under the names this codebase actually uses:
+ *
+ *   ridge   the cliff TOP, which is the plateau's lip: just above L1.
+ *           "Ridge" is not a thing in this file — grep returns roof colours
+ *           and a jaw — so it is L1, and the comments call it the cliff top.
+ *   cliff   the shelf terrace BENEATH the cliff, between B1 and L2. He
+ *           walks under the face, never into it: a wall cannot be stood on.
+ *   talus   the same errand for a cougar who is on the forest floor. The
+ *           talus is the bluff's own foot and it is level 0, so it is the
+ *           half of "moving along the cliffs" he can reach without the
+ *           world's ladder — and it leaves him within one hop of the shelf.
+ *   bush    a berry or a shrub, stood on the side AWAY from the open
+ *           ground, so the thing he is watching is not the thing he is
+ *           standing in.
+ */
+function cougarSpot(a, c, kind) {
+  const b = c.bounds;
+  if (kind === "bush") {
+    const sites = (c.world.forage || []).filter((f) => f.kind === "berry" || f.kind === "shrub");
+    if (!sites.length) return null;
+    const f = sites[(Math.random() * sites.length) | 0];
+    const half = ((SQ && SQ.siteHalf && SQ.siteHalf[f.kind]) || 32) * (f.s || 1);
+    // the clearing's middle is the open ground, so the far side of the bush
+    // from it is the side with the bush between him and everything
+    const dx = f.px - b.w * 0.5, dy = f.py - b.h * 0.5;
+    const d = Math.hypot(dx, dy) || 1;
+    const p = { x: f.px + (dx / d) * (half + a.r * 0.9),
+                y: f.py + (dy / d) * (half + a.r * 0.9) };
+    return cgStandable(p, c, a, 0) ? p : null;
+  }
+  // the bluff runs down the west edge; these are its own per-mille bands
+  const x = (c.rand(kind === "talus" ? 20 : 34, kind === "talus" ? 90 : 88) / 1000) * b.w;
+  let y = null;
+  if (kind === "ridge") {
+    const l1 = c.breakY("L1", x); if (l1 == null) return null;
+    y = l1 - c.rand(22, 46);                       // up onto the lip, back from the edge
+  } else if (kind === "cliff") {
+    const b1 = c.breakY("B1", x), l2 = c.breakY("L2", x);
+    if (b1 == null || l2 == null) return null;
+    y = (b1 + l2) / 2 + c.rand(-12, 12);           // the middle of the terrace
+  } else {
+    const t1 = c.breakY("T1", x); if (t1 == null) return null;
+    y = t1 + c.rand(22, 60);                       // under the riser, on the scree
+  }
+  const z = c.rockZone(x, y);
+  const want = kind === "ridge" ? "plateau" : kind === "cliff" ? "shelf" : "talus";
+  if (!z.on || z.wall || z.band !== want) return null;
+  if (c.inCave(x, y)) return null;                 // the den is a bed, not a lookout
+  return cgStandable({ x, y }, c, a, 1) ? { x, y } : null;
+}
+
+/**
+ * Weighted 2 : 1 : 2 — the cliff top, the faces, the bushes — and then cut
+ * down to what his own terrace allows. On the plateau there is only the
+ * lip; on the shelf only the terrace under the cliff; on the floor the
+ * talus and the bushes, which is where he spends most of his life.
+ */
+const CG_VANTAGE_TRIES = 7;
+function cougarVantage(a, c) {
+  const lvl = standLevel(a, c);
+  const bag = lvl === 2 ? ["ridge", "ridge"]
+            : lvl === 1 ? ["cliff"]
+            : ["talus", "bush", "bush"];
+  let best = null, bd = Infinity;
+  for (let i = 0; i < CG_VANTAGE_TRIES; i++) {
+    const p = cougarSpot(a, c, bag[(Math.random() * bag.length) | 0]);
+    if (!p) continue;
+    const d = Math.hypot(p.x - a.x, p.y - a.y);
+    if (d < bd) { bd = d; best = p; }
+  }
+  return best;
+}
+
+/**
+ * WHERE THE SCRAPE LANDS, measured off the drawing the way PIT_DX was and
+ * not guessed. `.cgs-litter`, the raked heap in the scrape pose, is centred
+ * at (22, 100) in the 120-unit box; CougarDraw's `translate(60 106)
+ * scale(1.12) translate(-60 -106)` wrapper puts that at
+ *   x = 60  + 1.12 * (22  - 60)  = 17.44
+ *   y = 106 + 1.12 * (100 - 106) = 99.28
+ * — 42.56 units LEFT of the sprite's centre and 39.28 below it. He holds
+ * _faceDir 1 through the whole bout, exactly as the skunk holds it through
+ * his dig and for the same reason, so the offset is never mirrored and the
+ * heap is always behind him.
+ */
+const CG_SCRAPE_DX = -42.56 / 120, CG_SCRAPE_DY = 39.28 / 120;
+const cgScrapeAt = (a, p) => {
+  const box = a.r * boxPx();
+  return { x: p.x + box * CG_SCRAPE_DX, y: p.y + box * CG_SCRAPE_DY };
+};
+
+/**
+ * openGround is the skunk's and it is reused unchanged — fourteen guesses,
+ * each vetted at his feet AND at the hole he would dig in front of himself.
+ * The cougar rakes the other way, so the point that has to be clear is a
+ * different one; it is asked of the same predicate rather than of a second
+ * copy of it, because a scrape painted over by a berry bush is the same bug
+ * as a pit painted over by one.
+ */
+function cougarScrapeGround(a, c) {
+  // ...and only from the forest floor. openGround answers with a point on
+  // it, and a scrape begun from the shelf is twenty-two seconds of a cat
+  // walking at a riser he cannot climb while an errand owns him.
+  if (standLevel(a, c) !== 0) return null;
+  for (let i = 0; i < 4; i++) {
+    const p = openGround(a, c);
+    if (!p) return null;
+    if (openSpot(cgScrapeAt(a, p), c)) return p;
+  }
+  return null;
+}
+
+/**
+ * WHAT HE CAN ACTUALLY GET TO. The goat lives on the bluff and nowhere else
+ * (Prey.js habitatOk, case "rock"); everything else is forest floor, which
+ * means off the water and off the terraces, because that is where habitatOk
+ * keeps it anyway.
+ *
+ * The level test is EQUALITY rather than "within one terrace", which is the
+ * one place this departs from the brief. One terrace apart is not walkable:
+ * rule 2 again, and a stalk is a busy state, so a cougar who set off after
+ * a goat on the shelf from the talus would spend twenty-four seconds with
+ * his nose against the riser and then give up. He takes the goat he is
+ * level with, and gets level with it the way everything else here does.
+ *
+ * ...and the 300px sense is what he has FROM A VANTAGE. Down among the
+ * trunks he sees 210, which is the last line: `sense` cannot be asked of
+ * the hunter, so the narrowing rides on the legality filter, which IS asked
+ * at the pick and on every frame of the stalk.
+ */
+function cougarCanTake(a, c, p) {
+  const mine = standLevel(a, c);
+  if (p.species === "goat") {
+    const lp = c.rockLevel(p.x, p.y);
+    if (lp == null || lp !== mine) return false;
+  } else {
+    if (c.lakeRho(p.x, p.y) <= 1.02) return false;
+    const z = c.rockZone(p.x, p.y);
+    if (z.on && (z.wall || z.level !== 0)) return false;
+    if (mine !== 0) return false;                   // ...and he is down there with it
+  }
+  if (mine === 0 && Math.hypot(p.x - a.x, p.y - a.y) > 210) return false;
+  return true;
+}
+
+/**
+ * THE KILL. The boar stays where it fell — a hundred kilos is not carried
+ * anywhere — and the goat comes home, which is the owner's sentence: deep
+ * lazy sleep inside the cave, LEAVING MOUNTAIN GOAT REMAINS. So a goat
+ * drops no carcass here at all: it sets a debt he pays at the den, and
+ * pulls the den's own appetite forward so that he pays it soon.
+ */
+function cougarKill(a, c, p) {
+  if (p.species === "boar") {
+    leaveRemains(c.world, p.x, p.y, "boar", a.id, c.now);
+    return;
+  }
+  if (p.species !== "goat") return;
+  a._cgKill = "goat";
+  const S = a._eth;
+  if (S) S.seekAt.den = c.now + c.rand(3000, 8000);
+}
+
+/**
+ * HOME, AND THE WALK UP TO IT. Two legs, because the physics has two:
+ *
+ *   already on the cave's terrace  ->  the room itself, a body's width in
+ *                                      from the drawn mouth
+ *   anywhere else                  ->  the talus directly under it, inside
+ *                                      ROCK_HOP_NEAR (26px) of the riser's
+ *                                      own break line, where the world's
+ *                                      ladder takes over the moment he is
+ *                                      free again
+ *
+ * The second leg is not a fudge; it is the only shape rule 2 leaves. An
+ * ethogram may put an animal WHERE a transition is available and may not
+ * make the transition. `begin` ends the errand on arrival there, which
+ * hands him back to wander at the foot of his own front door.
+ */
+function cougarDen(a, c) {
+  const m = c.caveMouth();
+  if (!m) return null;                       // a world with no rock in it
+  if (standLevel(a, c) === m.lvl) {
+    // THE CARRY IS RE-TAKEN HERE and not at the kill, because endEvent
+    // clears _carry on every path out of an event and the feed ends in one.
+    // A goto's pick is the only hook the engine offers at the START of a
+    // walk, which is exactly when the kill has to be back in his jaws.
+    if (a._cgKill) a._carry = "kill";
+    return { x: m.x - a.r * 0.4, y: m.y, mouth: m, den: true };
+  }
+  const x = m.x + a.r;                       // clear of the west frame
+  const t1 = c.breakY("T1", x);
+  if (t1 == null) return null;
+  const p = { x, y: t1 + 16 };
+  if (Math.hypot(p.x - a.x, p.y - a.y) < 130) return null;   // he is already there
+  const z = c.rockZone(p.x, p.y);
+  if (!z.on || z.wall || z.level !== 0) return null;
+  return { x: p.x, y: p.y, mouth: m, den: false };
+}
+
+defineEthogram("cougar", {
+  // He is in this world's swim table at 0.1 and in DIP_TIMED, so the water
+  // is a place he passes through rather than a place he works: the plan has
+  // one answer and the shape is the fox's.
+  domainOf: () => "land",
+  domains: { land: { share: 1, dwell: [24000, 44000] } },
+
+  // A drag, a fight, a rescue or a forced flee can take him out of any of
+  // this from outside, and every one of them writes a.state directly. The
+  // prey claim goes back FIRST: six seconds of a hare nobody else can see,
+  // and that cannot walk off the map, is what forgetting costs.
+  tick(a, c, S) {
+    huntRelease(a);
+    if (S.claim) releaseClaim(a, S);
+    if (a._faceDir) a._faceDir = 0;
+    if (a._carry) a._carry = null;
+    a._sleepSpent = 0;
+    a._cgLvl = null;              // the den's held terrace, only its own
+  },
+
+  events: [
+    /* ---- PROWL: ridges, cliffs and bushes ------------------------------
+     * The owner's first sentence, and the only event here with no food and
+     * no sleep in it. He walks to somewhere with a view and looks at the
+     * ground below for four or five seconds. That is the whole behaviour,
+     * and it is what makes the other three read as one animal's day rather
+     * than as three unrelated errands.
+     */
+    {
+      id: "prowl", domain: "land", trigger: "seek",
+      every: [44000, 74000], chance: 0.55, miss: 14000, cool: 26000,
+      states: ["cgsurvey"],
+      goto: { state: "cgtoledge", within: 24, giveUp: 26000, none: 13000,
+              lost: 11000, urgency: 0.28, pick: cougarVantage },
+      begin(a, c, S, g) {
+        a.vx = 0; a.vy = 0;
+        a._cgAt = { x: g ? g.x : a.x, y: g ? g.y : a.y };
+        // he looks OUT: at the widest open ground there is from where he is
+        a._faceDir = a.x < c.bounds.w * 0.5 ? 1 : -1;
+        a.state = "cgsurvey"; a.stateUntil = c.now + c.rand(3400, 5600);
+      },
+      drive(a, c) {
+        holdSpot(a, c, a._cgAt || { x: a.x, y: a.y });
+        if (c.now < a.stateUntil) return;
+        a._faceDir = 0;
+        endEvent(a, c, { reroll: true, quiet: 1100, stop: true });
+      },
+    },
+
+    /* ---- SCRAPE: dirt and leaves raked together with the hind paws -----
+     * A cougar's scrape is a territorial notice, and this one is too: it is
+     * a `mark`, the same record the wolf's post is, so the ground keeps it
+     * for four minutes and the next animal past can find it.
+     */
+    {
+      id: "scrape", domain: "land", trigger: "seek",
+      every: [58000, 96000], chance: 0.45, miss: 16000, cool: 34000,
+      states: ["cgscrape", "cgscrapesniff"],
+      goto: { state: "cgtoscrape", within: 20, giveUp: 22000, none: 14000,
+              lost: 12000, urgency: 0.32, pick: cougarScrapeGround },
+      begin(a, c, S, g) {
+        a.vx = 0; a.vy = 0;
+        if (g) { a.x = g.x; a.y = g.y; }           // the vetted point, exactly
+        a._faceDir = 1;                            // the rake offset is not mirrored
+        a._cgAt = { x: a.x, y: a.y };
+        a.state = "cgscrape"; a.stateUntil = c.now + c.rand(3600, 5400);
+      },
+      drive(a, c) {
+        // held, not merely arrived at: five seconds is long enough for the
+        // crowd separation to walk him clean off his own heap
+        holdSpot(a, c, a._cgAt);
+        if (c.now < a.stateUntil) return;
+        if (a.state === "cgscrape") {
+          const m = cgScrapeAt(a, a._cgAt);
+          leaveMark(c.world, m.x, m.y, "scrape", a.id, c.now);
+          a.state = "cgscrapesniff"; a.stateUntil = c.now + c.rand(1600, 2400);
+          return;
+        }
+        a._faceDir = 0;
+        endEvent(a, c, { reroll: true, quiet: 1200, stop: true });
+      },
+    },
+
+    /* ---- AMBUSH: stalks silently, then pounces from a short distance ---
+     * The slowest approach in the world — 0.18, below a potter — and the
+     * shortest committed burst after it. `pounce` is 118 because the last
+     * 150px of every cougar stalk happens against an animal that has
+     * already seen him: a hare notices him at 156px, and no amount of
+     * creeping changes that number.
+     */
+    makeHunt({
+      id: "ambush", domain: "land",
+      prey: ["grouse", "hare", "boar", "goat"],
+      sense: 300, pounce: 118, reach: 30,
+      creep: 0.18,                       // slower than anything else here
+      fixMs: [1100, 2000],
+      burst: 1.0, dash: 260,             // top 2.65 at drain 0.55: short and violent
+      catchChance: (a, c, p) =>
+        (p.species === "goat" || p.species === "boar") ? 0.42 : 0.62,
+      feedMs: [6000, 9000],
+      every: [70000, 110000], chance: 0.55, cool: 48000, missCool: 22000,
+      cover: true,
+      reachable: cougarCanTake,
+      onKill: cougarKill,
+      st: { stalk: "cgstalk", fix: "cgfix", strike: "cgpounce",
+            feed: "cgeat", miss: "cgmiss" },
+    }),
+
+    /* ---- DEN: deep, lazy sleep inside the cave -------------------------
+     * The one place in this world drawn as a room, and the only animal it
+     * was drawn for. Nothing evicts him: he is not on a platform, so
+     * keepOnPlatform's nine-second clock never starts, and cgsleep is not a
+     * free state, so tryRockHop — and with it the shelf's own way-out steer
+     * — is never offered. Getting OUT afterwards is his alone: he is the
+     * whole of ROCK_SHELF_DROP.
+     */
+    {
+      id: "den", domain: "land", trigger: "seek",
+      every: [150000, 250000], chance: 0.60, miss: 22000, cool: 70000,
+      states: ["cgsettle", "cgsleep", "cgstir"],
+      goto: { state: "cgtoden", within: 22, giveUp: 40000, none: 22000,
+              lost: 18000, urgency: 0.30, pick: cougarDen },
+      begin(a, c, S, g) {
+        a.vx = 0; a.vy = 0;
+        // THE FIRST LEG ENDS HERE. He is at the foot of his own riser and
+        // free again the next frame, which is all the world needs to take
+        // him up it.
+        if (!g || !g.den) {
+          endEvent(a, c, { cool: 16000, reroll: true, quiet: 900, stop: true });
+          return;
+        }
+        // ...and on the bluff a level is mandatory. keepOffRock reads _lvl,
+        // and without it he is on the talus as far as the physics is
+        // concerned and gets shoved out of a wall on the very next frame.
+        a._lvl = g.mouth.lvl;
+        a._cgLvl = g.mouth.lvl;
+        a._cgAt = { x: a.x, y: a.y };
+        a._sleepSpent = 0;
+        if (a._cgKill) {
+          // the goat, finally: dropped at the mouth where the wolf can find
+          // it, which is the whole reason the wolf has a scavenge event
+          leaveRemains(c.world, g.mouth.x + 26, g.mouth.y + 10, "goat", a.id, c.now);
+          a._cgKill = null;
+        }
+        a._carry = null;
+        a.state = "cgsettle"; a.stateUntil = c.now + c.rand(1400, 2200);
+      },
+      drive(a, c) {
+        // BEGIN MAY HAVE HANDED THE ERRAND STRAIGHT BACK. driveGoto calls
+        // begin() and then drive() on the same frame, unconditionally
+        // (Ethogram.js:239) — so a drive that did not ask whose state this
+        // is would run on top of an event that has already ended and put
+        // him to sleep in the state it just left. Measured: a cougar who
+        // refused the den at the foot of the riser lay down on the talus.
+        if (a.state !== "cgsettle" && a.state !== "cgsleep" && a.state !== "cgstir") return;
+        holdSpot(a, c, a._cgAt || { x: a.x, y: a.y });
+        // ...and the level is re-asserted rather than set once. An arc that
+        // was already in the air when the errand started lands during it and
+        // writes _lvl on the way down (tryRockHop:4028, leavePlatform:3987),
+        // which would leave him asleep in the cave owing the rock a terrace
+        // he never walked to.
+        if (a._cgLvl != null) a._lvl = a._cgLvl;
+        if (a.state === "cgsettle") {
+          if (c.now < a.stateUntil) return;
+          sleepEnter(a, c, "cgsleep", [15000, 24000]);
+          return;
+        }
+        if (a.state === "cgsleep") {
+          // spent in FRAME TIME: thirty seconds of a headless run is a
+          // hundred frames and thirty of a real one is eighteen hundred
+          if (!sleepSpent(a, c)) return;
+          a.state = "cgstir"; a.stateUntil = c.now + c.rand(2600, 3800);
+          return;
+        }
+        if (c.now < a.stateUntil) return;
+        if ((a._sleepSpent || 0) >= SLEEP_DEEP_MAX) {
+          endEvent(a, c, { reroll: true, quiet: 1600, stop: true });
+          return;
+        }
+        sleepEnter(a, c, "cgsleep", [15000, 24000]);
+      },
+    },
+  ],
+});
+
+/* ======================================================================
+ * THE WOLF — the howl, the boundary, the ambush, the carcass, the bed
+ * ======================================================================
+ *
+ * Five events, and the one that matters most is the one that is about the
+ * cougar. The owner's sentence is *the wolf waits for the Cougar to sleep
+ * or leave, then slips in to scavenge the remains of the mountain goat* —
+ * a behaviour that exists only because another animal has one, which is
+ * the first time anything in this world has been true of two species at
+ * once. It is one test in `wolfCarrion` and it is the whole point of him.
+ *
+ * What he is on this bluff: a LEAPER and nothing else. Not a climber, not
+ * a flyer, not a shelf-dropper, not a high entry. The plateau is closed to
+ * him — tryRockHop refuses a leaper the cliff — and the shelf and the cave
+ * are open. The same rule that shapes the cougar shapes him: no goto here
+ * aims at a terrace he is not already standing on.
+ */
+
+/** the nearest of anything, and the other wolf if there is one */
+function wolfAudience(a, c) {
+  let mate = null, md = Infinity, nd = Infinity;
+  for (const o of c.world.agents) {
+    if (o === a || o.dragging) continue;
+    const d = Math.hypot(o.x - a.x, o.y - a.y);
+    if (d < nd) nd = d;
+    if (o.species === "wolf" && d < md) { md = d; mate = o; }
+  }
+  return { mate, nd };
+}
+
+/**
+ * A JUNCTION, DEFINED. There is no path graph in this world — navigation is
+ * straight-line stepToward plus reactive containment — so a "trail
+ * junction" is built out of what the animals actually walk BETWEEN: the six
+ * trunks and the two food trees. The midpoint of every pair of them is
+ * where two lines of travel cross, and the ones that survive openSpot are
+ * the ones an animal could actually stand on.
+ *
+ * Solved once per stage shape and cached, never per frame: twenty-eight
+ * midpoints thinned so that no two survivors are within WF_POST_APART.
+ */
+const WF_POST_APART = 130;
+const WF_POSTS_MAX = 8;
+let WF_POSTS = null;
+function wolfJunctions(c) {
+  const key = c.bounds.w + "x" + c.bounds.h;
+  if (WF_POSTS && WF_POSTS.key === key) return WF_POSTS.pts;
+  const anchors = [];
+  for (const t of c.def.trees || []) anchors.push({ x: t.x * c.bounds.w, y: t.y * c.bounds.h });
+  for (const f of c.world.forage || []) if (f.kind === "foodtree") anchors.push({ x: f.px, y: f.py });
+  const pts = [];
+  outer:
+  for (let i = 0; i < anchors.length; i++) {
+    for (let j = i + 1; j < anchors.length; j++) {
+      const p = { x: (anchors[i].x + anchors[j].x) / 2, y: (anchors[i].y + anchors[j].y) / 2 };
+      if (!openSpot(p, c)) continue;
+      // openSpot knows the lake, the timber and the crop and not the bluff:
+      // a junction up on a terrace is one he could never walk to
+      const z = c.rockZone(p.x, p.y);
+      if (z.on && (z.wall || z.level !== 0)) continue;
+      if (pts.some((q) => Math.hypot(q.x - p.x, q.y - p.y) < WF_POST_APART)) continue;
+      pts.push(p);
+      if (pts.length >= WF_POSTS_MAX) break outer;
+    }
+  }
+  WF_POSTS = { key, pts };
+  return pts;
+}
+
+/** the nearest junction he has not marked lately. Two minutes is lately. */
+function wolfPost(a, c) {
+  if (standLevel(a, c) !== 0) return null;     // every junction is on the floor
+  const pts = wolfJunctions(c);
+  let best = null, bd = Infinity;
+  for (const p of pts) {
+    if (nearestMark(c.world, p.x, p.y, 70, { kind: "post", fresherThan: c.now - 120000 })) continue;
+    const d = Math.hypot(p.x - a.x, p.y - a.y);
+    if (d < bd) { bd = d; best = p; }
+  }
+  return best ? { x: best.x, y: best.y } : null;
+}
+
+/**
+ * WHERE THE POST LANDS, measured off the drawing. `.wfm-wet`, the darkened
+ * patch under the raised leg in the marking pose, is centred at (26, 101)
+ * in the 120-unit box; WolfDraw's `translate(60 106) scale(1.18)
+ * translate(-60 -106)` wrapper puts that at
+ *   x = 60  + 1.18 * (26  - 60)  = 19.88
+ *   y = 106 + 1.18 * (101 - 106) = 100.1
+ * — 40.12 units left of the sprite's centre and 40.1 below it. Unlike the
+ * skunk's pit and the cougar's scrape this one IS mirrored by _faceDir: a
+ * wolf marks on whichever side he raises, and the sprite is flipped whole.
+ */
+const WF_POST_DX = -40.12 / 120, WF_POST_DY = 40.1 / 120;
+const wfPostAt = (a) => {
+  const box = a.r * boxPx();
+  return { x: a.x + box * WF_POST_DX * (a._faceDir || 1), y: a.y + box * WF_POST_DY };
+};
+
+/**
+ * THE WIND, DEFINED. There is no weather in this world, so rather than
+ * invent one the wind is a slow rotation: one full turn every four minutes,
+ * the same for every animal, read off c.now. That makes it a shared,
+ * checkable fact rather than a per-wolf random number, and it means the
+ * side he comes in from changes over a session instead of being a fixed
+ * bias nobody can see.
+ */
+const WIND_PERIOD = 240000;
+const windDir = (now) => ((now % WIND_PERIOD) / WIND_PERIOD) * Math.PI * 2;
+/** downwind of the prey is where it cannot smell him; upwind he is halved */
+function wolfScents(a, c, p) {
+  const w = windDir(c.now);
+  const toHim = Math.atan2(a.y - p.y, a.x - p.x);
+  const d = Math.abs(((toHim - w + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+  return d > Math.PI * 0.6;                  // he is downwind: the full 320
+}
+
+/**
+ * WHAT A LONE WOLF WILL SET OFF AFTER. Forest floor only — he is a leaper,
+ * and a stalk is a busy state, so a terrace is somewhere he can be but not
+ * somewhere he can go — and then the wind, which is the owner's word and
+ * the one thing here that changes over a session.
+ */
+function wolfCanTake(a, c, p) {
+  if (standLevel(a, c) !== 0) return false;
+  if (c.lakeRho(p.x, p.y) <= 1.02) return false;
+  const z = c.rockZone(p.x, p.y);
+  if (z.on && (z.wall || z.level !== 0)) return false;
+  // UPWIND HE GETS HALF THE REACH. The prey has him long before he has it,
+  // and a wolf who set off anyway would only ever be seen failing at two
+  // hundred pixels.
+  return wolfScents(a, c, p) || Math.hypot(p.x - a.x, p.y - a.y) <= 200;
+}
+
+const WF_SCAV_SENSE = 420;      // a carcass is worth crossing the map for
+const WF_COUGAR_KEEP = 190;     // ...but not while its owner is awake beside it
+const COUGAR_ASLEEP = new Set(["cgsettle", "cgsleep", "cgstir"]);
+
+/**
+ * THE WHOLE SENTENCE, IN ONE TEST. A cougar standing over his own kill is a
+ * cougar; a cougar asleep beside it is furniture. Nothing else in this
+ * world reads another species' STATE, and this is the one place it is the
+ * behaviour rather than an implementation shortcut.
+ */
+function wolfCarrion(a, c) {
+  const hit = nearestRemains(c.world, a.x, a.y, WF_SCAV_SENSE, { free: true, byId: a.id });
+  if (!hit) return null;
+  const r = hit.r;
+  // ...and he has to be able to WALK to it. The goat carcass is at the cave
+  // mouth, which is a terrace up: rule 2 again, and a scavenge that set off
+  // from the talus would stand under the riser until the give-up ran out.
+  if (standLevel(a, c) !== (c.rockLevel(r.x, r.y) ?? 0)) return null;
+  for (const o of c.world.agents) {
+    if (o.species !== "cougar" || o.id === a.id) continue;
+    if (COUGAR_ASLEEP.has(o.state)) continue;
+    if (Math.hypot(o.x - r.x, o.y - r.y) < WF_COUGAR_KEEP) return null;
+  }
+  if (!claimRemains(r, a.id, c.now)) return null;
+  a._wfRem = r;
+  return { x: r.x, y: r.y, rem: r };
+}
+
+/**
+ * HIGH VANTAGE POINTS, RIDGES, OR OPEN FOREST FLOOR — in that order of
+ * preference and with two of the three refused outright:
+ *
+ *   the shelf terrace   taken when he is already on it, and only when no
+ *                       cougar is up there. B1 to L2 is 94-103px deep, so
+ *                       the midline is comfortably clear of both walls, and
+ *                       the cave itself is the cougar's: a wolf in it is a
+ *                       fight rather than a bed.
+ *   the slab platform   REFUSED. keepOnPlatform evicts unconditionally past
+ *                       ROCK_PLAT_STAY_MS in ANY state, sleep included, so
+ *                       a bed on it is a bed that ends after nine seconds.
+ *                       The terrace is the answer; do not exempt the stone.
+ *   open forest floor   openGround, unchanged, which is where he sleeps on
+ *                       every night he did not happen to be up the bluff.
+ */
+function wolfBed(a, c) {
+  if (standLevel(a, c) === 1 && c.breakY("B1", a.x) != null) {
+    // twelve along the terrace, and then the ground he is already standing
+    // on. The last one matters: this terrace is under two hundred pixels
+    // wide, so an animal near its east end can miss it a dozen times over —
+    // and a wolf who cannot find a bed up here does not get one at all,
+    // because the floor below is a terrace he cannot walk down to.
+    for (let i = 0; i <= 12; i++) {
+      const x = i === 12 ? a.x : a.x + c.rand(-140, 140);
+      const b1 = c.breakY("B1", x), l2 = c.breakY("L2", x);
+      if (b1 == null || l2 == null) continue;
+      const p = { x, y: i === 12 ? a.y : (b1 + l2) / 2 };
+      if (p.x < 30 || p.x > c.bounds.w - 90) continue;
+      const z = c.rockZone(p.x, p.y);
+      if (!z.on || z.wall || z.band !== "shelf") continue;
+      if (c.inCave(p.x, p.y)) continue;           // that room is taken
+      let cougar = false;
+      for (const o of c.world.agents) {
+        if (o.species !== "cougar") continue;
+        if ((c.rockLevel(o.x, o.y) ?? 0) === 1) { cougar = true; break; }
+        if (Math.hypot(o.x - p.x, o.y - p.y) < 240) { cougar = true; break; }
+      }
+      if (cougar) continue;
+      return { x: p.x, y: p.y, shelf: true };
+    }
+    // up here and the terrace is spoken for: the floor below is not an
+    // answer, because he cannot walk down to it while an errand owns him
+    return null;
+  }
+  const g = openGround(a, c);
+  return g ? { x: g.x, y: g.y, shelf: false } : null;
+}
+
+/** two or three phrases, and the pose draws a sound that carries */
+const WF_HOWL = 3400;
+
+defineEthogram("wolf", {
+  // SWIM_P.wolf is 0.2, so the lake is a thing he crosses rather than a
+  // place he works: one domain, and the tier-1 pick is a formality.
+  domainOf: () => "land",
+  domains: { land: { share: 1, dwell: [22000, 40000] } },
+
+  tick(a, c, S) {
+    huntRelease(a);
+    if (S.claim) releaseClaim(a, S);
+    // ...and the carcass with it, which is the prey claim's cousin: eight
+    // seconds of a carcass no other scavenger can see is the same bug in a
+    // different array.
+    if (a._wfRem) { releaseRemains(a._wfRem, a.id); a._wfRem = null; }
+    if (a._faceDir) a._faceDir = 0;
+    if (a._carry) a._carry = null;
+    a._sleepSpent = 0;
+    a._wfLvl = null;              // the bed's held terrace, only its own
+  },
+
+  events: [
+    /* ---- HOWL: long-range -----------------------------------------------
+     * "LONG-RANGE" IS DRAWN, NOT SIMULATED. There is no audio in this world
+     * and no propagation model, and building one would be building a system
+     * nobody can see. What carries is the picture: three rings leaving the
+     * muzzle, bigger and slower than the fox's wail, and a `hold` that
+     * throws the call away if anything is standing within 170px — because a
+     * howl delivered into a deer's ear is a conversation, not a call to
+     * something a long way off.
+     */
+    {
+      id: "howl", domain: "land", trigger: "seek",
+      every: [56000, 92000], chance: 0.80, miss: 14000, cool: 30000,
+      delay: [400, 1200],
+      hold: (a, c) => wolfAudience(a, c).nd > 170,
+      states: ["wfhowl", "wflisten"],
+      begin(a, c) {
+        a.vx = 0; a.vy = 0;
+        const { mate } = wolfAudience(a, c);
+        // at the other wolf if there is one — that is the whole point of it
+        // — and otherwise out of the clearing, where an unanswered one goes
+        a._faceDir = mate ? (mate.x >= a.x ? 1 : -1) : (a.x < c.bounds.w / 2 ? -1 : 1);
+        a._wfPhrases = Math.random() < 0.35 ? 3 : 2;
+        a.state = "wfhowl"; a.stateUntil = c.now + WF_HOWL;
+      },
+      drive(a, c) {
+        a.vx = 0; a.vy = 0;
+        if (c.now < a.stateUntil) return;
+        if (a.state === "wfhowl") {
+          if (--a._wfPhrases <= 0) {
+            a._faceDir = 0;
+            endEvent(a, c, { reroll: true, quiet: 1600, stop: true });
+            return;
+          }
+          // the listen is what makes it read as a call and not as a tic
+          a.state = "wflisten"; a.stateUntil = c.now + c.rand(2200, 3400);
+          return;
+        }
+        a.state = "wfhowl"; a.stateUntil = c.now + WF_HOWL;
+      },
+    },
+
+    /* ---- MARK: raised-leg urination at trail junctions -------------------
+     * The junctions are solved off the trees rather than placed, so six
+     * trunks at new coordinates cost this nothing — and the check asserts
+     * the DEFINITION rather than the eight coordinates it happened to give.
+     */
+    {
+      id: "mark", domain: "land", trigger: "seek",
+      every: [64000, 104000], chance: 0.55, miss: 15000, cool: 36000,
+      states: ["wfsniffpost", "wfmark", "wfscratch"],
+      goto: { state: "wftomark", within: 18, giveUp: 26000, none: 15000,
+              lost: 12000, urgency: 0.34, pick: wolfPost },
+      begin(a, c, S, g) {
+        a.vx = 0; a.vy = 0;
+        if (g) { a.x = g.x; a.y = g.y; }
+        a._wfAt = { x: a.x, y: a.y };
+        // whichever way he came in from is the side he raises
+        a._faceDir = a.x < c.bounds.w / 2 ? 1 : -1;
+        a.state = "wfsniffpost"; a.stateUntil = c.now + c.rand(1400, 2200);
+      },
+      drive(a, c) {
+        holdSpot(a, c, a._wfAt || { x: a.x, y: a.y });
+        if (c.now < a.stateUntil) return;
+        if (a.state === "wfsniffpost") {
+          a.state = "wfmark"; a.stateUntil = c.now + c.rand(1800, 2600);
+          return;
+        }
+        if (a.state === "wfmark") {
+          const m = wfPostAt(a);
+          leaveMark(c.world, m.x, m.y, "post", a.id, c.now);
+          a.state = "wfscratch"; a.stateUntil = c.now + c.rand(1600, 2400);
+          return;
+        }
+        a._faceDir = 0;
+        endEvent(a, c, { reroll: true, quiet: 1200, stop: true });
+      },
+    },
+
+    /* ---- RUSH: the lone wolf's feline ambush -----------------------------
+     * All four halves of the owner's sentence, and none of them invented:
+     * feline-like is `creep` 0.20 with a crouch before he goes; brush is
+     * `cover`, one dogleg through the nearest thing wide enough to break a
+     * silhouette; ridges are where he starts rather than where he hunts,
+     * because `reachable` refuses anything off the floor; and wind is a
+     * rule with a period, checked rather than felt.
+     *
+     * dash 300 against the cougar's 260 and burst 0.95 against 1.00: top
+     * 1.55 at drain 0.10 with a 1400ms burst window is an animal who covers
+     * more ground more slowly and never blows.
+     */
+    makeHunt({
+      id: "rush", domain: "land",
+      prey: ["gopher", "vole", "hare", "boar"],
+      sense: 320, pounce: 104, reach: 28,
+      creep: 0.20, fixMs: [800, 1600],
+      burst: 0.95, dash: 300,
+      catchChance: (a, c, p) => (p.species === "boar" ? 0.42 : 0.58),
+      feedMs: [5000, 8000],
+      every: [58000, 92000], chance: 0.60, cool: 40000, missCool: 18000,
+      cover: true,
+      reachable: wolfCanTake,
+      st: { stalk: "wfstalk", fix: "wfcrouch", strike: "wfrush",
+            feed: "wfeat", miss: "wfmiss" },
+    }),
+
+    /* ---- SCAVENGE: he waits for the cougar to sleep or leave -------------
+     * `chance` 0.85 and a short window because a carcass is rare and
+     * transient: the appetite has to be able to catch a three-and-a-half
+     * minute opening. 0.42 urgency is the only above-cruise approach in the
+     * phase, and it is the owner's "comes down off the ridge".
+     */
+    {
+      id: "scavenge", domain: "land", trigger: "seek",
+      every: [30000, 52000], chance: 0.85, miss: 9000, cool: 20000,
+      states: ["wfwary", "wfgnaw"],
+      goto: { state: "wftoremains", within: 30, giveUp: 40000, none: 12000,
+              lost: 10000, urgency: 0.42, pick: wolfCarrion,
+              track: (a, c, ref) => (ref && ref.rem && ref.rem.feeds > 0 ? ref.rem : null) },
+      begin(a, c, S, g) {
+        a.vx = 0; a.vy = 0;
+        const r = (g && g.rem) || a._wfRem;
+        if (!r || r.feeds <= 0) {
+          if (a._wfRem) { releaseRemains(a._wfRem, a.id); a._wfRem = null; }
+          endEvent(a, c, { cool: 9000, reroll: true, quiet: 900, stop: true });
+          return;
+        }
+        a._wfRem = r;
+        a._wfAt = { x: a.x, y: a.y };
+        a._faceDir = r.x >= a.x ? 1 : -1;
+        // THE BEAT THAT SAYS HE IS NOT SURE THE COUGAR HAS GONE. He stops
+        // short of it, head up, and does nothing at all for two seconds.
+        a.state = "wfwary"; a.stateUntil = c.now + c.rand(1600, 2600);
+      },
+      drive(a, c) {
+        // the same guard the den and the bed carry: begin() can hand a
+        // vanished carcass straight back, and drive() runs anyway
+        if (a.state !== "wfwary" && a.state !== "wfgnaw") return;
+        holdSpot(a, c, a._wfAt || { x: a.x, y: a.y });
+        const r = a._wfRem;
+        if (!r) { endEvent(a, c, { cool: 9000, reroll: true, quiet: 900, stop: true }); return; }
+        if (a.state === "wfwary") {
+          if (c.now < a.stateUntil) return;
+          // one meal out of three, taken on entry: the rest is left for
+          // whoever comes next, which is what a carcass with three feeds in
+          // it is FOR
+          eatRemains(r);
+          a.state = "wfgnaw"; a.stateUntil = c.now + c.rand(5000, 8000);
+          return;
+        }
+        claimRemains(r, a.id, c.now);        // the hold is eight seconds; this is longer
+        if (c.now < a.stateUntil) return;
+        releaseRemains(r, a.id); a._wfRem = null;
+        a._faceDir = 0;
+        endEvent(a, c, { reroll: true, quiet: 2200, stop: true });
+      },
+    },
+
+    /* ---- BED: high vantage points, ridges, or open forest floor ----------
+     * The shelf sleep works for the same reason the cougar's cave sleep
+     * does: wfsleep is not a free state, so tryRockHop and the shelf's own
+     * way-out steer are never offered and ROCK_SHELF_GRACE never runs. He
+     * gets off it afterwards the way every leaper does — the mid-riser step
+     * or a walk west off the stage — the frame he goes back to wander.
+     */
+    {
+      id: "bed", domain: "land", trigger: "seek",
+      every: [170000, 270000], chance: 0.55, miss: 22000, cool: 75000,
+      states: ["wfcircle", "wfsleep", "wfrouse"],
+      goto: { state: "wftobed", within: 22, giveUp: 44000, none: 24000,
+              lost: 18000, urgency: 0.30, pick: wolfBed },
+      begin(a, c, S, g) {
+        a.vx = 0; a.vy = 0;
+        // NOT ON THE STONE, WHATEVER ELSE. keepOnPlatform evicts past
+        // ROCK_PLAT_STAY_MS in ANY state — sleep included, because unlike
+        // tryRockHop it is not gated on a free frame — so a bed taken while
+        // he is up on the slab is a bed that ends after nine seconds with
+        // the animal thrown off a rock. The stone lets go of him on its own
+        // once he is free again, so this hands him back and asks later.
+        if (a._plat) {
+          endEvent(a, c, { cool: 12000, reroll: true, quiet: 900, stop: true });
+          return;
+        }
+        // on the bluff a level is mandatory: keepOffRock reads _lvl and
+        // would put him back on the talus on the very next frame
+        if (g && g.shelf) a._lvl = 1;
+        a._wfLvl = g && g.shelf ? 1 : null;
+        a._wfAt = { x: a.x, y: a.y };
+        a._sleepSpent = 0;
+        // the pose turns twice on the spot, so the circling costs him no
+        // ground — a bed that drifts is a bed somewhere else
+        a.state = "wfcircle"; a.stateUntil = c.now + c.rand(1800, 2600);
+      },
+      drive(a, c) {
+        // BEGIN MAY HAVE HANDED THE ERRAND STRAIGHT BACK. driveGoto calls
+        // begin() and then drive() on the same frame, unconditionally
+        // (Ethogram.js:239) — so a drive that did not ask whose state this
+        // is would run on top of an event that has already ended and put
+        // him to sleep in the state it just left. Measured: a cougar who
+        // refused the den at the foot of the riser lay down on the talus.
+        if (a.state !== "wfcircle" && a.state !== "wfsleep" && a.state !== "wfrouse") return;
+        holdSpot(a, c, a._wfAt || { x: a.x, y: a.y });
+        if (a._wfLvl != null) a._lvl = a._wfLvl;   // see the cougar's den
+        if (a.state === "wfcircle") {
+          if (c.now < a.stateUntil) return;
+          sleepEnter(a, c, "wfsleep", [15000, 24000]);
+          return;
+        }
+        if (a.state === "wfsleep") {
+          if (!sleepSpent(a, c)) return;
+          a.state = "wfrouse"; a.stateUntil = c.now + c.rand(2400, 3400);
+          return;
+        }
+        if (c.now < a.stateUntil) return;
+        if ((a._sleepSpent || 0) >= SLEEP_DEEP_MAX) {
+          endEvent(a, c, { reroll: true, quiet: 1600, stop: true });
+          return;
+        }
+        sleepEnter(a, c, "wfsleep", [15000, 24000]);
       },
     },
   ],
@@ -5311,15 +6545,22 @@ defineEthogram("beaver", {
 });
 
 // ---------------------------------------------------------------------
-//  THE HEDGEHOG — the only one here who eats animals.
+//  THE HEDGEHOG — the smallest insectivore, and no longer the only one
+//  here who eats animals.
 //
-//  Every other forager in this world is working a crop: the fruit, the
-//  mast, the browse, and the soft ground under them. He is after beetles,
-//  worms and snails, and none of those are in the clearing — they are in
-//  the wet rot of fallen timber and in the packed earth around a tree's
-//  surface roots. So he gets two site kinds of his own at the margin of
-//  the map and competes with nobody: the six foragers already here have
-//  no reason ever to look at a log.
+//  He used to be. That line stood at the top of this block for two
+//  versions and the predator phase retired it: the fox, the owl, the
+//  cougar, the wolf, the raccoon and the skunk all take live prey now, and
+//  the skunk digs the same three litter animals out of the same timber
+//  this hedgehog does. What is still true is the SHAPE of him — every
+//  other forager in this world is working a crop: the fruit, the mast, the
+//  browse, and the soft ground under them. He is after beetles, worms and
+//  snails, and none of those are in the clearing — they are in the wet rot
+//  of fallen timber and in the packed earth around a tree's surface roots.
+//  So he gets two site kinds of his own at the margin of the map and
+//  competes with almost nobody: the six foragers already here have no
+//  reason ever to look at a log, and the one animal who now does is a
+//  skunk at a fifth of his rate.
 //
 //  He hunts by nose and ear rather than by sight, and that is the whole
 //  shape of his behavior. Every bout opens standing still with his head
@@ -5440,6 +6681,12 @@ defineEthogram("hedgehog", {
   // all have to be handed back here or that log stays booked against him
   // and he spends the rest of the session unable to turn around.
   tick(a, c, S) {
+    // The grub goes back FIRST, before anything else is tidied. HOG_ALARM
+    // is 84px and wider than pairRange, so the curl pre-empts the encounter
+    // roll and will interrupt a dig mid-strike — which is correct, and is
+    // exactly why the claim has to be handed back here rather than left to
+    // lapse six seconds later with the grub invisible to everybody.
+    huntRelease(a);
     if (S.claim) releaseClaim(a, S);
     if (a._faceDir) a._faceDir = 0;
     if (a._carry) a._carry = null;
@@ -5577,6 +6824,44 @@ defineEthogram("hedgehog", {
         },
       ],
     },
+
+    /* ---- GRUBS: the version of his dig with an animal in it ------------
+     * His roots and his logs are MIMED. The comment on driveHogRoot says so
+     * outright — "the dig IS the meal; there is nothing to come out
+     * holding" — because when they were written there was nothing in the
+     * world to come out holding. There is now: the grub, the beetle and the
+     * earthworm live pinned to exactly the log, root and soil sites he
+     * already works, and they do not flee.
+     *
+     * All three bouts stay. They are different appetites at similar rates
+     * and they do not compete for the same seconds: roots [52-86s] x 0.55,
+     * logs [58-96s] x 0.45, and this at [60-96s] x 0.55 alongside them.
+     *
+     * TWO NUMBERS ARE THE WHOLE CHARACTER OF HIM. 120px of sense is the
+     * shortest reach in this world by a distance — the owl hears one at 340
+     * and the fox at 300, and this animal cannot find anything until he has
+     * nearly walked into it. And 0.88 is the highest catch rate anywhere
+     * here, because once he has, it does not get away: he is the slowest in
+     * the cast (speed 6.5) with the lowest burst ceiling (Gait top 1.30),
+     * and a hedgehog who chased would be the wrong animal. He does not
+     * chase. He arrives, and then he digs.
+     */
+    makeDig({
+      id: "grubs",
+      sense: 120,                       // the shortest reach in the world
+      // ...and 30/10, not 22/32, for the reason spelled out over the skunk's
+      // dig: a reach wider than the pounce is a strike that resolves on the
+      // frame it begins, and this animal's whole character is the digging.
+      pounce: 30, reach: 10,
+      // 0.34 rather than the skunk's 0.30: his three digs move at one pace,
+      // and HOG_TOROOT's own 0.38 is the one they are kept close to.
+      creep: 0.34, fixMs: [1400, 2400],
+      dash: 44, catchChance: 0.88,
+      feedMs: [2800, 4000],
+      every: [60000, 96000], chance: 0.55, cool: 28000, missCool: 14000,
+      st: { stalk: "hhtodig", fix: "hhcast", strike: "hhgrub",
+            feed: "hhgrubeat", miss: "hhdry" },
+    }),
     {
       id: "curl", domain: "land", trigger: "approach",
       // Not 1. A hedgehog that has spent a season next to the same deer
@@ -5674,6 +6959,15 @@ function hogThreat(a, c, r) {
  * than one arriving down the approach path — the same event, two lengths.
  */
 export function hogCurl(a, now, rnd) {
+  // THE GRUB GOES BACK HERE AND NOT IN tick(). A ball is an ethogram state,
+  // so the frame he curls is a frame the curl event owns outright and tick()
+  // — where every other species hands its claim back — never runs again
+  // until the ball is over. Both ways in go through this function (the
+  // approach trigger's begin, and the world's forceFlee), which is why the
+  // release belongs in it: HOG_ALARM is 84px and wider than pairRange, so
+  // the curl pre-empts the encounter roll and a scare arriving mid-dig is
+  // the ordinary case rather than the corner one.
+  huntRelease(a);
   a.state = "hogcurl";
   a.stateUntil = now + 380;                    // the tuck
   a._hogHold = now + rnd(2600, 4200);          // the minimum ball
@@ -5855,6 +7149,25 @@ function owlLanding(a, c) {
  */
 const OWL_HUNT_Z = 46;         // how high the approach rides, in stage px
 /**
+ * HOW CLOSE HE GETS BEFORE HE DROPS, and it is short on purpose.
+ *
+ * An owl locates by ear, hovers over the SPOT, and comes down on it. He is
+ * not a hawk making a long slanting stoop from three hundred pixels out —
+ * and the arithmetic says the same thing the biology does. He is the third
+ * slowest animal in the cast (SPEED.owl.top 1.55): against a wood mouse
+ * that has started running he closes at about ten pixels a second, so a
+ * hundred and four pixels of stoop is ten seconds of dive and he has four
+ * in him. From sixty-four he has twenty-four to cover once the mouse moves,
+ * and that he can do.
+ *
+ * Silent flight is the other half of it, and it lives in Prey.js: nothing on
+ * the ground counts a threat that is more than SILENT_Z off it, so he is
+ * unheard the whole way in and the mouse gets only the last of the drop.
+ * The two together are what make the seven animals the owner put on his
+ * list actually takeable. Neither alone is enough — measured.
+ */
+const OWL_POUNCE = 64;
+/**
  * How long the climb-out takes. This is a CURVE, not a budget, and that is
  * why it is allowed to be in milliseconds: nothing about WHERE he gets to
  * depends on it — `dash` is in px like every other strike in the file —
@@ -5864,7 +7177,7 @@ const OWL_HUNT_Z = 46;         // how high the approach rides, in stage px
 const OWL_LIFT_MS = 900;
 /** the dive: `pounce` 130 in to `reach` 26 is the stretch he spends coming
  *  down, so height and distance run out together */
-const OWL_STOOP_PX = 130 - 26;
+const OWL_STOOP_PX = OWL_POUNCE - 26;
 /**
  * How much GROUND the stoop may cover. 1.9x `pounce`, which is the ratio the
  * fox's shipped 190-over-96 already uses, and it is set as a named constant
@@ -6088,7 +7401,7 @@ defineEthogram("owl", {
       id: "swoop", domain: "land",
       prey: ["woodmouse", "vole", "rat", "gopher", "hare", "grouse", "gartersnake"],
       sense: 340,                       // the widest in the world: he HEARS them
-      pounce: 130, reach: 26,
+      pounce: OWL_POUNCE, reach: 26,
       creep: 0.34,                      // a glide is not a hurry
       fixMs: [900, 1500],               // the hover, and the head turning on it
       burst: 0.90, dash: OWL_DASH,      // the stoop, budgeted in ground covered

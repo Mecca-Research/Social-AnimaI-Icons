@@ -380,6 +380,141 @@ function WolfDraw({ uid }) {
         </g>
         <FaceKit lid={F[1]} e1={[79, 41]} e2={[95, 39]} er={3.4} drawEyes={false} mouth={[97, 58]} />
       </g>
+
+      {/* ================= THE HOWL =================
+          Muzzle straight up, throat open, and the whole animal behind it.
+          Forty-odd degrees of muzzle elevation is not something a head
+          pasted onto a pair of shoulders with no neck between them can be
+          rotated into — the same wall the fox's scream hit — so the howl is
+          drawn whole, neck and all, and swapped in.
+
+          He is FILL 1.0108, the only species whose art overflows its
+          120-unit box, so the neck is kept inside the wrapper's own scale
+          rather than reaching past the top of it. */}
+      <g className="sai-crit-wfhowlpose">
+        {/* the standing frame: four legs, planted, doing nothing at all */}
+        <path d="M 44 74 L 42 103 L 50 103 L 51 74 Z" fill={sockF} />
+        <path d="M 76 74 L 75 103 L 83 103 L 83 74 Z" fill={sockF} />
+        <path d="M 38 76 L 35 103 L 44 103 L 46 76 Z" fill={sock} />
+        <path d="M 70 76 L 69 103 L 78 103 L 79 76 Z" fill={sock} />
+        {/* the low bushy tail, hanging straight down off the croup */}
+        <path d="M 34 72 C 24 76 17 86 15 97 C 20 98 25 95 28 91 C 30 86 32 79 36 74 Z" fill={`url(#${uid}f)`} />
+        <g className="wfh-body">
+          <path d="M 30 80 C 29 66 40 55 58 54 C 74 54 84 62 87 72 C 89 80 87 88 81 93 C 71 100 51 100 40 94 C 32 90 30 85 30 80 Z" fill={`url(#${uid}f)`} />
+          <path d="M 31 74 C 38 60 58 54 76 60 C 79 62 82 65 84 69 C 72 64 52 66 40 76 C 36 78 33 77 31 74 Z" fill={saddle} opacity=".6" />
+          <Under cx={58} cy={80} rx={26} ry={19} color={chest} k={.54} opacity={.92} />
+          {/* THE NECK, thrown up and back, which is the pose. The throat is
+              its own group because a howl is a thing a throat does. */}
+          <g className="wfh-neck">
+            <path d="M 62 62 C 62 46 66 32 74 22 L 92 30 C 86 40 82 52 80 66 Z" fill={`url(#${uid}f)`} />
+            <g className="wfh-throat">
+              <path d="M 78 62 C 78 48 82 36 90 27 L 97 33 C 90 42 87 52 86 64 Z" fill={chest} />
+            </g>
+            <g className="wfh-head">
+              {/* ears laid BACK along the skull: a howling wolf's are flat */}
+              <path d="M 68 24 L 58 12 L 72 12 Z" fill={F[1]} />
+              <path d="M 76 18 L 66 6 L 80 8 Z" fill={F[1]} />
+              <circle cx="84" cy="22" r="16" fill={`url(#${uid}f)`} />
+              <path d="M 70 16 C 78 8 92 10 98 18 C 90 20 76 20 70 16 Z" fill={saddle} opacity=".55" />
+              {/* the muzzle, pointing at the sky, mouth open at the end */}
+              <path d="M 92 12 C 100 2 110 -4 117 -4 C 118 4 113 14 104 22 Z" fill={chest} />
+              <path d="M 92 12 C 99 4 107 -1 114 -2 L 100 12 Z" fill={F[1]} opacity=".55" />
+              <ellipse cx="115" cy="-3" rx="3.8" ry="3.2" fill={ink} transform="rotate(-40 115 -3)" />
+              <path d="M 100 20 C 106 16 112 8 116 2" stroke={ink} strokeWidth="2.4" fill="none" strokeLinecap="round" />
+              {/* eye, half shut — everything about him is aimed upward */}
+              <path d="M 80 20 q 4 -2.6 7.6 -.6" stroke={ink} strokeWidth="2" fill="none" strokeLinecap="round" />
+            </g>
+          </g>
+        </g>
+      </g>
+      {/* THE SOUND, kept OUTSIDE the pose group so the pose's fill-box
+          origin is the animal and not the noise he is making. Three rings
+          off the end of the muzzle, bigger and slower than the fox's wail:
+          the drawing is the only "long range" this world has. */}
+      <g className="sai-crit-wfrings">
+        <path className="wfring wfring-a" d="M 122 -6 q 11 9 4 22" stroke="#e8f1ff" strokeWidth="2.8" fill="none" strokeLinecap="round" />
+        <path className="wfring wfring-b" d="M 130 -13 q 17 14 6 33" stroke="#e8f1ff" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+        <path className="wfring wfring-c" d="M 138 -20 q 23 19 8 44" stroke="#dbe7fa" strokeWidth="2.2" fill="none" strokeLinecap="round" />
+      </g>
+
+      {/* ================= THE RAISED LEG =================
+          The four-legged rig cannot lift a hind leg — the Quad draws two
+          pairs and nothing in it comes off the ground — so the whole
+          three-legged balance is drawn. Facing right, the leg goes up on
+          the WEST side; the sprite is flipped whole when he faces the other
+          way, which is why WF_POST_DX is the one offset in this phase that
+          IS mirrored. */}
+      <g className="sai-crit-wfmarkpose">
+        {/* the standing three: two fore, one hind */}
+        <path d="M 76 74 L 75 103 L 83 103 L 83 74 Z" fill={sockF} />
+        <path d="M 70 76 L 69 103 L 78 103 L 79 76 Z" fill={sock} />
+        <path d="M 48 78 L 46 103 L 55 103 L 56 78 Z" fill={sock} />
+        {/* the tail, out level and a little stiff: he is announcing
+            something. Kept BELOW the spine, because drawn any higher it
+            reads as a second raised leg, which is one too many. */}
+        <path d="M 34 74 C 24 73 15 71 7 67 C 10 63 17 62 24 65 C 29 68 33 72 37 74 Z" fill={`url(#${uid}f)`} />
+        <path d="M 30 70 C 24 69 18 68 13 66" stroke={saddle} strokeWidth="1.6" fill="none" strokeLinecap="round" opacity=".6" />
+        <g className="wfm-body">
+          <path d="M 30 78 C 29 64 40 53 58 52 C 74 52 84 60 87 70 C 89 78 87 86 81 91 C 71 98 51 98 40 92 C 32 88 30 83 30 78 Z" fill={`url(#${uid}f)`} />
+          <path d="M 31 72 C 38 58 58 52 76 58 C 79 60 82 63 84 67 C 72 62 52 64 40 74 C 36 76 33 75 31 72 Z" fill={saddle} opacity=".6" />
+          <Under cx={58} cy={78} rx={26} ry={19} color={chest} k={.54} opacity={.92} />
+          <g className="wfm-head">
+            <path d="M 68 36 L 70 9 L 84 28 Z" fill={F[1]} />
+            <path d="M 86 28 L 92 5 L 102 29 Z" fill={F[1]} />
+            <circle cx="86" cy="45" r="19.5" fill={`url(#${uid}f)`} />
+            <path d="M 89 46 C 100 43 110 46 115 53 C 110 60 99 62 89 58 Z" fill={chest} />
+            <ellipse cx="113.5" cy="52.5" rx="4.2" ry="3.5" fill={ink} />
+            <circle cx="79" cy="43" r="3.4" fill={ink} /><circle cx="79.4" cy="43.2" r="1.8" fill={iris} />
+            <circle cx="95" cy="41" r="3.4" fill={ink} /><circle cx="95.4" cy="41.2" r="1.8" fill={iris} />
+          </g>
+        </g>
+        {/* THE LEG ITSELF, cocked up and out over the spot */}
+        <g className="wfm-leg">
+          <path d="M 46 80 C 39 76 31 72 23 70 C 20 76 23 83 30 86 C 36 88 42 86 47 85 Z" fill={sock} />
+          <ellipse cx="23" cy="71" rx="6.8" ry="5" fill={sockF} />
+          <path d="M 30 79 C 35 80 40 81 44 82" stroke={sockF} strokeWidth="1.5" fill="none" strokeLinecap="round" opacity=".7" />
+        </g>
+        {/* WHAT HE LEAVES. `.wfm-wet` is centred at (26,101) and the
+            ethogram's WF_POST_DX/DY are measured off exactly that. */}
+        <g className="wfm-wet">
+          <ellipse cx="26" cy="101" rx="11" ry="4" fill="#5b4a2a" opacity=".8" />
+          <ellipse cx="24" cy="100" rx="6.4" ry="2.4" fill="#7a6438" opacity=".85" />
+          <path d="M 27 86 l -1.4 6 M 29 92 l -1 4.4" stroke="#cfd6c2" strokeWidth="1.8" fill="none" strokeLinecap="round" opacity=".75" />
+        </g>
+      </g>
+
+      {/* ================= THE BED =================
+          Curled, nose to the flank, brush over the paws — one round mass
+          with a wolf's outline on it. Two states share it: wfsleep
+          breathes, wfrouse lifts the head and stretches, and nothing is
+          redrawn between them. */}
+      <g className="sai-crit-wfbedpose">
+        <g className="wfb-flank">
+          <ellipse cx="58" cy="84" rx="31" ry="20" fill={`url(#${uid}f)`} />
+          <path d="M 28 80 C 34 64 58 60 78 70 C 84 74 88 80 89 86 C 74 74 48 74 34 88 C 31 88 29 85 28 80 Z" fill={saddle} opacity=".55" />
+          <Under cx={58} cy={88} rx={29} ry={15} color={chest} k={.5} opacity={.9} />
+        </g>
+        {/* the brush, curled right round the front over the forepaws */}
+        <g className="wfb-tail">
+          <path d="M 30 92 C 22 96 22 104 32 105 C 46 106 62 105 74 102 C 80 100 80 94 74 93 C 60 96 44 97 30 92 Z" fill={`url(#${uid}f)`} />
+          <path d="M 34 96 C 48 100 62 99 74 96" stroke={saddle} strokeWidth="2" fill="none" strokeLinecap="round" opacity=".6" />
+        </g>
+        <g className="wfb-head">
+          <g className="wfb-ear">
+            <path d="M 74 72 L 72 58 L 84 68 Z" fill={F[1]} />
+            <path d="M 86 68 L 90 55 L 96 70 Z" fill={F[1]} />
+          </g>
+          <circle cx="84" cy="82" r="15" fill={`url(#${uid}f)`} />
+          <path d="M 72 72 C 80 66 94 68 99 76 C 92 78 78 77 72 72 Z" fill={saddle} opacity=".5" />
+          {/* the muzzle laid back INTO the flank, which is the whole pose */}
+          <path d="M 80 88 C 70 92 62 94 56 94 C 58 100 68 101 78 97 Z" fill={chest} />
+          <ellipse cx="57" cy="94" rx="4" ry="3.2" fill={ink} />
+          {/* shut. Two lines, and they are the difference between lying
+              down and being asleep */}
+          <path d="M 76 80 q 3.6 2.4 7.4 .4" stroke={ink} strokeWidth="1.8" fill="none" strokeLinecap="round" />
+          <path d="M 88 78 q 3.4 2.2 6.6 .2" stroke={ink} strokeWidth="1.6" fill="none" strokeLinecap="round" />
+        </g>
+      </g>
     </g>
   );
 }
@@ -413,6 +548,135 @@ function CougarDraw({ uid }) {
           <circle cx="95" cy="39" r="3.4" fill={ink} /><circle cx="95.4" cy="39.2" r="1.85" fill={iris} /><circle cx="95.7" cy="39.4" r=".9" fill={ink} /><circle cx="96.1" cy="38" r=".9" fill="#fff" opacity=".95" />
         </g>
         <FaceKit lid={F[1]} e1={[79, 41]} e2={[95, 39]} er={3.4} drawEyes={false} mouth={[93, 60]} />
+      </g>
+
+      {/* ================= THE SCRAPE POSE =================
+          Hindquarters up, forequarters down, both hind paws mid-rake. The
+          walking rig cannot get there: it is a level ellipse with four legs
+          hung off it, and a scrape is a DIAGONAL animal — the whole read is
+          the line from the raised haunches down to the nose. Drawn whole
+          and swapped in, the bear's and the beaver's argument.
+
+          ONE POSTURE, TWO STATES. cgscrape rakes; cgscrapesniff stands over
+          what he raked with his nose down in it. What separates them is
+          entirely in the animation, the way bvgnaw and bvfell are one
+          drawing — so the heap he made does not jump when he stops making
+          it. He holds _faceDir 1 throughout, which is why the heap in
+          `.cgs-litter` can be a fixed offset in the ethogram. */}
+      <g className="sai-crit-cgscrapepose">
+        {/* the far hind leg, in the darker shade, already through its rake */}
+        <g className="cgs-hindfar">
+          <path d="M 44 66 C 39 76 34 85 29 93 C 33 97 39 96 43 91 C 46 82 50 73 54 67 Z" fill={F[2]} />
+          <ellipse cx="32" cy="94" rx="8" ry="4.4" fill="#7a521f" />
+        </g>
+        {/* the rope tail, thrown UP off the raised end — the one line that
+            says the back half of him is in the air and the front half is not */}
+        <path d="M 26 56 C 12 50 4 58 3 70" stroke={F[1]} strokeWidth="7" fill="none" strokeLinecap="round" />
+        <path d="M 3.4 64 C 3 66.6 3 68.4 3 70" stroke={tip} strokeWidth="7.4" fill="none" strokeLinecap="round" />
+        <g className="cgs-body">
+          {/* THE DIAGONAL. Haunches up at the west end, shoulders and head
+              driven down at the east, and forty units of drop between them
+              — the whole difference between this and an animal lying down. */}
+          <ellipse cx="42" cy="64" rx="21" ry="19" fill={`url(#${uid}f)`} />
+          <path d="M 22 60 C 24 44 46 40 62 54 C 72 63 80 76 92 86 L 84 98 C 70 92 56 86 42 86 C 27 86 21 74 22 60 Z" fill={`url(#${uid}f)`} />
+          <ellipse cx="79" cy="88" rx="17" ry="12.5" fill={`url(#${uid}f)`} />
+          <BackShade cx={44} cy={60} rx={23} ry={18} color="#6e4a1e" op={.22} />
+          <Under cx={62} cy={82} rx={22} ry={12} color={cream} k={.55} opacity={.88} />
+          {/* the head, driven down at the ground, muzzle almost in it */}
+          <g className="cgs-head">
+            <g className="sai-crit-ear"><circle cx="88" cy="79" r="6.4" fill={F[2]} /><circle cx="88" cy="79.5" r="3.1" fill={cream} /></g>
+            <circle cx="98" cy="92" r="13.5" fill={`url(#${uid}f)`} />
+            <ellipse cx="106" cy="98" rx="8" ry="6" fill={cream} />
+            <path d="M 106 94.6 l 3.2 2.6 -3.2 2.6 -3.2 -2.6 Z" fill={nose} />
+            {/* one open eye, looking back along his own flank at the work */}
+            <circle cx="93" cy="86" r="3" fill={ink} />
+            <circle cx="93.3" cy="86.2" r="1.6" fill={iris} />
+            <circle cx="93.6" cy="86.4" r=".8" fill={ink} />
+          </g>
+        </g>
+        {/* the near hind leg, mid-stroke, driving the litter back */}
+        <g className="cgs-hindnear">
+          <path d="M 52 70 C 47 81 41 90 35 97 C 40 102 47 100 51 94 C 54 84 58 75 62 70 Z" fill={F[1]} />
+          <ellipse cx="30" cy="98" rx="8.4" ry="4.8" fill={cream} />
+        </g>
+        {/* the two forepaws, planted, taking the weight of the front end */}
+        <ellipse cx="78" cy="101" rx="7.6" ry="4.2" fill={F[1]} />
+        <ellipse cx="89" cy="102" rx="7" ry="4" fill={cream} />
+        {/* THE HEAP AND WHAT IS STILL IN THE AIR. `.cgs-litter` is centred
+            at (22,100) and the ethogram's CG_SCRAPE_DX/DY are measured off
+            exactly that — the mark the ground layer keeps is the heap he
+            was seen to make, in the place he was seen to make it. */}
+        <g className="cgs-litter">
+          <ellipse cx="22" cy="100" rx="14" ry="5" fill="#54391d" />
+          <ellipse cx="19" cy="97.6" rx="9.6" ry="3.8" fill="#6b4a26" />
+          <path d="M 12 94 l 5.4 -1.6 M 15 89.6 l 5.6 -2.2 M 9 88 l 5 -2.8" stroke="#4a3520" strokeWidth="2.2" strokeLinecap="round" fill="none" />
+          <path d="M 6 83 l 4.6 -3.2 M 3 89 l 4.2 -2.2" stroke="#7d6a52" strokeWidth="1.9" strokeLinecap="round" fill="none" />
+        </g>
+      </g>
+
+      {/* ================= THE SLEEP POSE =================
+          Flat on his side, all four legs out, the rope tail extended. This
+          is the one posture in his repertoire with no legs under him at
+          all, so nothing about the rig survives it. Three states share it —
+          cgsettle folds down into it, cgsleep breathes, cgstir lifts the
+          head and turns an ear — and again the difference is the animation,
+          because an animal that redraws itself between "asleep" and "half
+          awake" reads as two animals. */}
+      <g className="sai-crit-cgsleeppose">
+        {/* the tail, laid out west along the ground */}
+        <g className="cgsl-tail">
+          <path d="M 32 95 C 20 97 11 100 5 102" stroke={F[1]} strokeWidth="6.6" fill="none" strokeLinecap="round" />
+          <path d="M 10 101 C 8 101.6 6.4 102 5 102.4" stroke={tip} strokeWidth="7" fill="none" strokeLinecap="round" />
+        </g>
+        {/* the two legs on the far side, stretched out and darker */}
+        <path d="M 46 96 C 38 98 32 100 27 101 C 29 104 34 105 40 104 C 44 103 47 101 49 99 Z" fill={F[2]} />
+        <path d="M 78 96 C 86 98 93 100 99 101 C 97 104 91 105 85 104 C 81 103 78 101 76 99 Z" fill={F[2]} />
+        <g className="cgsl-flank">
+          <ellipse cx="60" cy="90" rx="32" ry="13.5" fill={`url(#${uid}f)`} />
+          <BackShade cx={60} cy={88} rx={31} ry={12} color="#6e4a1e" op={.2} />
+          <Under cx={60} cy={94} rx={29} ry={9} color={cream} k={.5} opacity={.85} />
+        </g>
+        {/* the near pair, forepaws crossed out in front of the chest */}
+        <path d="M 50 94 C 42 97 35 100 30 103 C 33 106 39 106 45 104 C 49 102 52 99 54 97 Z" fill={F[1]} />
+        <ellipse cx="33" cy="104" rx="7.4" ry="3.6" fill={cream} />
+        <path d="M 74 94 C 82 97 89 100 94 103 C 91 106 85 106 79 104 C 75 102 72 99 70 97 Z" fill={F[1]} />
+        <ellipse cx="92" cy="104" rx="7.2" ry="3.6" fill={cream} />
+        <g className="cgsl-head">
+          <g className="cgsl-ear"><circle cx="89" cy="76" r="6.6" fill={F[2]} /><circle cx="89" cy="76.5" r="3.2" fill={cream} /></g>
+          <circle cx="97" cy="87" r="14.5" fill={`url(#${uid}f)`} />
+          <ellipse cx="105" cy="93" rx="8.2" ry="6.2" fill={cream} />
+          <path d="M 105 89.4 l 3.3 2.6 -3.3 2.6 -3.3 -2.6 Z" fill={nose} />
+          {/* SHUT. Two lines and a lash: the whole difference between an
+              animal lying down and an animal asleep, at this size. */}
+          <path d="M 88 84 q 3.6 2.2 7 0" stroke={ink} strokeWidth="1.7" fill="none" strokeLinecap="round" />
+          <path d="M 98 86.4 q 3.4 2 6.4 0" stroke={ink} strokeWidth="1.5" fill="none" strokeLinecap="round" />
+          <path d="M 92 76 q 3 -2.4 7 -2" stroke={F[2]} strokeWidth="1.3" fill="none" strokeLinecap="round" opacity=".8" />
+        </g>
+      </g>
+
+      {/* ================= THE KILL IN HIS JAWS =================
+          Not a posture: the ordinary walking rig carries this one, with the
+          head dropped by CSS and a hundred kilos of mountain goat swinging
+          under the muzzle. Shown by [data-carry="kill"] alone, so it works
+          for any carry — the wolf's, if he is ever given one — and it is
+          scoped to the cougar in the stylesheet so it never appears under
+          somebody else's chin. Nothing red: this world's carcass palette is
+          hide, bone and stain. */}
+      <g className="sai-crit-cgcarrypose">
+        {/* the mass, gripped at the withers and hanging UNDER the jaw: the
+            muzzle is at (93,54) and the mouth line at (93,60), so the load
+            starts where his teeth are and everything else swings off it */}
+        <ellipse cx="99" cy="72" rx="17" ry="10" fill="#8d8a82" transform="rotate(-11 99 72)" />
+        <ellipse cx="97" cy="70" rx="13.5" ry="7" fill="#d9d4cb" transform="rotate(-11 97 70)" />
+        {/* the goat's own head, hanging at the far end, and the horn, which
+            is the one line that says GOAT rather than anything else here */}
+        <ellipse cx="117" cy="79" rx="6.6" ry="5.2" fill="#c9c3b8" />
+        <path d="M 121 76 q 5.4 -2.4 6.6 -7.4" stroke="#4a4038" strokeWidth="2.2" fill="none" strokeLinecap="round" />
+        <path d="M 120 83 l 4.4 4.6" stroke="#8d8a82" strokeWidth="2.2" strokeLinecap="round" fill="none" />
+        {/* two legs trailing off the near end, which is what makes it read
+            as a body rather than as a rock */}
+        <path d="M 88 76 l -6.6 8.4 M 94 78 l -3.4 9.4" stroke="#8d8a82" strokeWidth="2.8" strokeLinecap="round" fill="none" />
+        <path d="M 81.4 84.4 l -3.4 1.6 M 90.6 87.4 l -2 3.2" stroke="#6f6a62" strokeWidth="2.4" strokeLinecap="round" fill="none" />
       </g>
     </g>
   );
@@ -1917,6 +2181,101 @@ function SkunkDraw({ uid }) {
           <ellipse cx="112" cy="94" rx="2.2" ry="1.7" fill="#5d4327" />
           <ellipse cx="118" cy="88" rx="2" ry="1.6" fill="#4a3520" />
           <ellipse cx="34" cy="94" rx="2.2" ry="1.7" fill="#54391d" />
+        </g>
+      </g>
+
+      {/* ---- HALF IN THE GROUND (skdenin, skdensleep, skdenout,
+               skpileunder, skpilesleep) ----
+          The one thing no rig in this file can do. Every other pose here is
+          an animal in an unusual attitude; this one is an animal that is
+          MOSTLY NOT THERE — the front half of him is inside something and
+          what is left on screen is a rump, two braced hocks and the plume.
+          There is no occluder available to cut him: the sprite paints at
+          zIndex 10 and the pits at 1, so a hole in the ground can never be
+          in front of the animal standing in it. So the thing that hides him
+          is drawn INSIDE him, last, over his own front end — the same
+          answer the hedgehog's poses used to give before ForageCanopyLayer
+          existed, and the right one here because a den mouth is his own and
+          not a site's.
+
+          Five states share it and the difference between them is entirely
+          in CSS: pushing in, asleep, and backing out are three tempos of
+          one drawing. It serves the woodpile as well as the dug den — under
+          a sound log the same bank reads as heaped litter against the
+          timber, which is what he actually pushes into.
+
+          HIS FLANK ENTERS THE BANK AT (86, 86), and that number is
+          load-bearing: the pile den's arrival offset in Ethogram.js is
+          solved backwards from it so that what he pushes under is the lip
+          of the log he actually walked to. Move this and move that. */}
+      <g className="sai-crit-skdenpose">
+        {/* spoil, thrown back out past his own hocks and left lying */}
+        <g className="den-spoil">
+          <ellipse cx="18" cy="101" rx="16" ry="5" fill="#4a3520" />
+          <ellipse cx="11" cy="99.2" rx="9" ry="3.4" fill="#5d4327" />
+          <ellipse cx="27" cy="100.6" rx="7" ry="2.8" fill="#3f2c17" />
+          <ellipse cx="4" cy="101.6" rx="4.6" ry="2.1" fill="#54391d" />
+        </g>
+        {/* THE HEAP, laid down FIRST and whole. Big on purpose: at world
+            scale this animal is 54px across and a mound that only just
+            covers his shoulders reads as a stone he is lying next to. This
+            one takes the right-hand third of the box and stands as tall as
+            he does, which is the only way "he is IN something" survives the
+            shrink. Under a woodpile the same shape reads as banked litter
+            heaped against the timber. */}
+        <g className="den-bank">
+          <path d="M 40 103 C 44 78 58 44 82 38 C 102 33 122 43 127 62 L 130 103 Z" fill="#4a3520" />
+          <path d="M 56 100 C 60 74 74 48 90 44 C 104 40 115 45 119 54 C 106 51 92 60 82 78 C 74 89 70 96 68 103 Z"
+            fill="#5d4327" opacity=".9" />
+          <path d="M 92 40 C 104 36 116 40 122 49" stroke="#6d5030" strokeWidth="3"
+            fill="none" strokeLinecap="round" opacity=".8" />
+          {/* tufts of turf and litter that came up with the earth */}
+          <path d="M 76 42 l -2 -8 M 84 39 l 2 -8 M 118 56 l 4 -6"
+            stroke="#3f7c4a" strokeWidth="2.1" fill="none" strokeLinecap="round" opacity=".9" />
+        </g>
+        {/* THE MOUTH, cut into the heap and drawn before him so that what
+            his front half goes into is a hole and not a shadow. Its rim
+            catches the light on top the way a real cut in soil does. */}
+        <g className="den-mouth">
+          <ellipse cx="84" cy="84" rx="27" ry="17" fill="#130d07" />
+          <path d="M 58 80 C 62 70 71 64 84 64 C 97 64 107 70 111 81 C 105 73 96 69 84 69 C 72 69 62 73 58 80 Z"
+            fill="#6d5030" opacity=".85" />
+        </g>
+        {/* The plume, carried high and clear of the heap. It is the only
+            part of a half-buried skunk that reads at world scale — two
+            black and white bars over a brown mound — so it is drawn
+            standing rather than trailing. Inner static transform re-aims
+            the tail he already has; the animated group carries none. */}
+        <g className="den-tail"><g transform="translate(-4 -8) rotate(-36 44 78)">
+          <path d="M 44 80 C 24 84 8 72 10 52 C 12 34 26 24 40 28 C 36 40 38 54 46 64 C 50 70 50 76 44 80 Z" fill={K[1]} />
+          <path d="M 12 56 C 11 41 21 29 35 29.5 C 32 38 32.5 48 37 57 C 28 62 17 62 12 56 Z" fill={white} />
+        </g></g>
+        {/* hocks braced under the raised rump: the shove that gets the rest
+            of him under comes from these, and they are the last thing to go
+            in — which is why they are still out here */}
+        <g className="den-hind">
+          <rect x="33" y="86" width="9" height="17" rx="4.5" fill={K[2]} />
+          <ellipse cx="37.5" cy="101.6" rx="5.6" ry="3" fill="#101015" />
+          <rect x="46" y="88" width="9" height="15" rx="4.5" fill={K[1]} />
+          <ellipse cx="50.5" cy="101.8" rx="5.8" ry="3.2" fill={K[2]} />
+        </g>
+        {/* The rump, tipped nose-down into the mouth and ENDING there —
+            there is no head in this pose and no shoulders either, because
+            the drawing stops where he does. The white runs the whole length
+            of what is showing: a rump with no stripe on it is a rock. */}
+        <g className="den-rump">
+          <path d="M 26 89 C 26 74 38 68 55 69 C 68 70 78 76 86 86 C 80 95 60 99 45 97 C 33 96 26 94 26 89 Z"
+            fill={`url(#${uid}f)`} />
+          <path d="M 31 83 C 35 73 45 71 56 73 C 67 75 75 80 82 88 L 77 90 C 71 84 64 80 55 79 C 46 78 39 80 36 86 Z" fill={white} />
+          <Under cx={55} cy={88} rx={23} ry={11} color="#4d4d59" k={.5} opacity={.85} />
+          <BellyShade cx={52} cy={96} rx={16} />
+        </g>
+        {/* the near lip of the hole, painted LAST and over his flank, so the
+            mouth is a slot he is down in rather than a disc behind him */}
+        <g className="den-lip">
+          <path d="M 48 103 C 56 90 70 82 88 81 C 106 80 121 88 130 103 Z" fill="#54391d" />
+          <path d="M 62 98 C 72 90 84 87 96 87.6" stroke="#6d5030" strokeWidth="2.4"
+            fill="none" strokeLinecap="round" opacity=".75" />
         </g>
       </g>
     </g>

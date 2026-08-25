@@ -2422,7 +2422,21 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
     a.x = b0.perch.x; a.y = b0.perch.y;
     w.__free(a, 'water');
     const got = w.__drive(a, 'ambush', ['frogstill'], 300);
-    if (got < 0) return { none: 'never settled to wait; state ' + a.state };
+    if (got < 0) {
+      // SAY WHAT WAS IN THE WAY. "never settled" is true of an ethogram that
+      // is broken and of one that is merely busy, and the two want opposite
+      // fixes — this reports the ledger, the domain he is actually in, and
+      // whether there was anything within a tongue of him to wait for.
+      const S = a._eth, L = w.__lakeLife();
+      const near = L.bugs.filter(function (b) {
+        return Math.hypot(b.x - a.x, b.y - a.y) < 90; }).length;
+      return { none: 'never settled to wait; state ' + a.state
+        + ', domain ' + (S ? S.here : 'no ledger')
+        + ', rho ' + w.lakeRhoAt(a.x, a.y).toFixed(2)
+        + ', ' + near + ' insect(s) within 90px'
+        + ', cd ' + (S ? JSON.stringify(S.cd) : '-')
+        + ', seekAt ' + (S ? JSON.stringify(S.seekAt) : '-') };
+    }
     const x0 = a.x, y0 = a.y;
     let still = 0, moved = 0, strike = -1, hitDist = -1, ate = null;
     for (let i = 0; i < 2400 && strike < 0; i++) {
@@ -2639,7 +2653,8 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
   chk(!T3.none && T3.moved > 8 && T3.dx * T3.dir < 0 && T3.turned === 0,
     'the turtle sculls BACKWARDS without turning round',
     T3.none || `facing ${T3.dir > 0 ? 'east' : 'west'} the whole way and travelling ` +
-      `${Math.abs(T3.dx).toFixed(0)}px the other way (${T3.moved.toFixed(0)}px in all)`);
+      `${Math.abs(T3.dx).toFixed(0)}px ${T3.dx * T3.dir < 0 ? 'the other way' : 'FORWARD'} ` +
+      `(${T3.moved.toFixed(0)}px in all, ${T3.turned} frame(s) turned round)`);
 
   // ---- 14. ASLEEP ON A DRIFT LOG ---------------------------------------
   const T4 = await page2.evaluate(`(() => {
@@ -3675,13 +3690,19 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
     return { owl: yank('owl', 'swoop', ['hoot', 'roost'], 180),
              rac: yank('raccoon', 'ratting', ['berry', 'paws', 'roost', 'crayfish'], 100) };
   })()`);
-  const yanked = ['owl', 'rac'].filter((k) => {
+  // NEVER TOOK ONE and NEVER GAVE IT BACK are opposite faults with opposite
+  // fixes, and reporting both as "still holding" cost a whole cycle to tell
+  // apart. They are separate lines now.
+  const nohold = ['owl', 'rac'].filter((k) => !H[k] || !H[k].held);
+  const stuck = ['owl', 'rac'].filter((k) => {
     const r = H[k];
-    return !r || !r.held || r.huntP !== null || r.claimedBy !== null || r.hunted;
+    return r && r.held && (r.huntP !== null || r.claimedBy !== null || r.hunted);
   });
-  chk(yanked.length === 0,
+  chk(nohold.length === 0 && stuck.length === 0,
     'and a hunter dragged out of his own strike hands the prey straight back',
-    yanked.length ? `still holding: ${yanked.join(', ')}`
+    nohold.length
+      ? `never got a claim to hand back: ${nohold.join(', ')} — the fixture, not the tick`
+      : stuck.length ? `still holding after the yank: ${stuck.join(', ')}`
       : 'both ticks call huntRelease first: _huntP null, claimedBy null, hunted false');
 
   // ---- 8. AND NONE OF IT COST HIM THE BERRIES OR THE DEN ---------------
@@ -3725,6 +3746,1295 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
 
   await page3.close();
 }
+// ==================== THE COUGAR AND THE WOLF ====================
+/**
+ * A THIRD PAGE, ON THE SAME VIRTUAL CLOCK the lake block uses, and for the
+ * same two reasons. Every behaviour below is a bout — a stalk is three
+ * seconds, a sleep is thirty, a scrape is five — and headless rAF runs at
+ * about four frames a second with dt clamped to 50ms, so watching for one
+ * on the wall clock measures the frame rate and not the animal. And the
+ * clock has to be OURS for the wind: it is a rotation with a four-minute
+ * period read off performance.now, so a check that could not hold it still
+ * would be checking the weather rather than the rule.
+ *
+ * Nothing here is budgeted in milliseconds. Distances are in pixels, loops
+ * are in frames, and every budget is a ceiling with an early exit — a check
+ * that runs out reports that it never got to ask rather than asserting a
+ * false negative.
+ */
+{
+  const page4 = await browser.newPage({ viewport: { width: 1500, height: 940 } });
+  page4.on('pageerror', (e) => errs.push('predator page: ' + e.message));
+  await page4.addInitScript(() => {
+    let t = 1000; const cbs = [];
+    performance.now = () => t;
+    window.requestAnimationFrame = (cb) => { cbs.push(cb); return cbs.length; };
+    window.cancelAnimationFrame = () => {};
+    window.__pump = (n) => { for (let i = 0; i < n; i++) { t += 16.667;
+      const list = cbs.splice(0); for (const c of list) { try { c(t); } catch (e) { window.__perr = String(e); } } } };
+  });
+  await page4.goto(process.env.SAI_URL || 'http://localhost:5173/', { waitUntil: 'networkidle' });
+  await page4.waitForTimeout(1800);
+  await page4.evaluate('window.__pump(30)');
+  await page4.evaluate('window.__saiWorld.__seedCast && window.__saiWorld.__seedCast()');
+  await page4.waitForTimeout(800);
+  await page4.evaluate('window.__pump(20)');
+
+  // the fixture: park everyone but the subject, hand him a clean ledger,
+  // and re-offer ONE event every frame until it takes. Re-offering is how a
+  // 0.55 chance becomes a check that runs; muzzling the siblings is how an
+  // appetite that is always due does not lose every window to the one above
+  // it in the list.
+  await page4.evaluate(`(() => {
+    const w = window.__saiWorld;
+    w.__park = (keep) => { for (const o of w.agents) if (keep.indexOf(o.species) < 0) {
+      o.x = -900; o.y = -900; o.state = 'idle'; o.vx = o.vy = 0; o._eth = null;
+      o.idleUntil = 9e9; o.intentUntil = 9e9; o.noEventUntil = 9e9; } };
+    w.__free = (a, x, y, lvl) => {
+      a.dragging = false; a.z = 0; a.state = 'wander'; a.intent = 'wander';
+      a.intentUntil = 0; a.noEventUntil = 0; a.idleUntil = 0; a._carry = null;
+      a._faceDir = 0; a._eth = null; a._plat = null; a._shelfT0 = 0;
+      a._huntP = null; a._wfRem = null; a._cgKill = null; a._sleepSpent = 0;
+      window.__pump(1);
+      const S = a._eth;
+      if (S) { S.domain = 'land'; S.left = 9e6; S.tripUntil = performance.now() + 9e6; }
+      a.x = x; a.y = y; a._lvl = lvl || 0; a.vx = 0; a.vy = 0; a.state = 'wander';
+    };
+    w.__evs = { cougar: ['prowl', 'scrape', 'ambush', 'den'],
+                wolf: ['howl', 'mark', 'rush', 'scavenge', 'bed'] };
+    w.__only = (a, id) => {
+      const S = a._eth; if (!S) return;
+      S.cd[id] = 0; S.seekAt[id] = 0; S.near[id] = false;
+      for (const e of w.__evs[a.species]) if (e !== id) { S.cd[e] = performance.now() + 9e6; S.armed[e] = 0; }
+      a.noEventUntil = 0;
+    };
+    // run one event and stop at the first frame it reaches any of the
+    // wanted states.
+    // Returns the frame index, or -1 for "never got to ask".
+    w.__until = (a, id, want, frames) => {
+      for (let i = 0; i < frames; i++) {
+        if (want.indexOf(a.state) >= 0) return i;
+        w.__only(a, id);
+        window.__pump(1);
+      }
+      return want.indexOf(a.state) >= 0 ? frames : -1;
+    };
+    // the cave mouth, off the world's own per-mille box rather than a copy
+    w.__mouth = () => { const c = w.__rock.cave, B = w.bounds;
+      return { x: (c.x0 + c.x1) / 2000 * B.w, y: (c.y0 + c.y1) / 2000 * B.h }; };
+    w.__inCave = (x, y) => { const c = w.__rock.cave, B = w.bounds;
+      const px = x / B.w * 1000, py = y / B.h * 1000;
+      return px > c.x0 && px < c.x1 && py > c.y0 && py < c.y1; };
+    // a legal spot for a floor prey, asked of the world's own habitat rule
+    w.__floorSpot = (key, x0, y0, x1, y1) => {
+      for (let i = 0; i < 400; i++) {
+        const x = x0 + Math.random() * (x1 - x0), y = y0 + Math.random() * (y1 - y0);
+        if (w.__prey.okAt(key, x, y)) return { x: x, y: y };
+      }
+      return null;
+    };
+    // ...and one at a chosen RANGE from another, for seeding a hunter at
+    // pounce-plus rather than making the check about the walk there
+    w.__ringSpot = (key, cx, cy, lo, hi) => {
+      for (let i = 0; i < 600; i++) {
+        const a = Math.random() * Math.PI * 2, r = lo + Math.random() * (hi - lo);
+        const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+        if (w.__prey.okAt(key, x, y)) return { x: x, y: y };
+      }
+      return null;
+    };
+  })()`);
+
+  // ---- 1. THE SCRAPE, and the walk that gets him there -----------------
+  const S = await page4.evaluate(`(() => {
+    const w = window.__saiWorld, B = w.bounds;
+    const cg = w.agents.find((a) => a.species === 'cougar');
+    if (!cg) return { none: 'no cougar in the roster' };
+    w.__park(['cougar']);
+    w.marks = [];
+    // THE WALK LEG IS SAMPLED FOR ITS SPEED, and it is the reference the
+    // stalk below is measured against — so an empty sample is not a small
+    // problem, it is a comparison against zero that fails a stalk which is
+    // behaving perfectly. openGround can hand him a spot he is already
+    // standing on, in which case he enters cgscrape on the first frame and
+    // there is no walk at all. Take the bout again from somewhere else
+    // until there is one.
+    let walkPx = 0, walkN = 0, tries = 0;
+    for (; tries < 4 && walkN === 0; tries++) {
+      w.marks = [];
+      w.__free(cg, (0.42 + tries * 0.09) * B.w, (0.34 + tries * 0.11) * B.h, 0);
+      if (w.__until(cg, 'scrape', ['cgtoscrape', 'cgscrape'], 400) < 0) continue;
+      for (let i = 0; i < 900; i++) {
+        const px = cg.x, py = cg.y, st = cg.state;
+        window.__pump(1);
+        if (st === 'cgtoscrape') { walkPx += Math.hypot(cg.x - px, cg.y - py); walkN++; }
+        if (cg.state === 'cgscrape') break;
+      }
+      if (cg.state !== 'cgscrape') { walkN = 0; walkPx = 0; }
+    }
+    if (cg.state !== 'cgscrape') return { none: 'he never arrived at the ground' };
+    if (walkN === 0) return { none: 'four bouts and not one of them had a walk in it' };
+    const anchor = { x: cg.x, y: cg.y };
+    let markAt = null;
+    for (let i = 0; i < 900 && !markAt; i++) {
+      window.__pump(1);
+      if (w.marks.length) markAt = w.marks[0];
+    }
+    if (!markAt) return { none: 'he raked and left nothing' };
+    // BEHIND HIM is -x in his own frame: he holds _faceDir 1 for the whole
+    // bout, exactly as the skunk holds it through a dig
+    const behind = anchor.x - markAt.x;
+    return { none: false, marks: w.marks.length, behind: behind,
+             below: markAt.y - anchor.y, kind: markAt.kind,
+             lasts: markAt.until - markAt.t0, state: cg.state,
+             cruise: walkPx / (walkN * 0.016667), walkFrames: walkN, tries: tries };
+  })()`);
+  chk(!S.none && S.marks === 1 && S.kind === 'scrape' && S.behind > 0,
+    'a scrape is left BEHIND him, where his hind paws were',
+    S.none || `one mark, ${S.behind.toFixed(0)}px behind his anchor and ${S.below.toFixed(0)}px below it`);
+  chk(!S.none && S.lasts >= 200000,
+    'and the ground keeps it long enough to be worth coming back to',
+    S.none || `${Math.round(S.lasts / 1000)}s, against the 45s of a picked-over carcass`);
+
+  // ---- 2. THE STALK, THE GATHER AND THE POUNCE -------------------------
+  const P = await page4.evaluate(`(() => {
+    const w = window.__saiWorld, B = w.bounds;
+    const cg = w.agents.find((a) => a.species === 'cougar');
+    if (!cg) return { none: 'no cougar' };
+    w.__park(['cougar']);
+    w.__prey.clear();
+    const p = w.__prey.spawn('hare', true);
+    if (!p) return { none: 'no hare would spawn' };
+    const spot = w.__floorSpot('hare', 0.35 * B.w, 0.25 * B.h, 0.7 * B.w, 0.7 * B.h);
+    if (!spot) return { none: 'nowhere legal to put a hare' };
+    p._in = true; p.x = spot.x; p.y = spot.y;
+    // SEEDED AT POUNCE + 220px, deliberately: the walk-there leg is covered
+    // five times over elsewhere, and what is measured here is the three
+    // beats after it. Long enough that the creep has a real sample in it.
+    // INSIDE HIS OWN REACH, and not a pixel further: 300px is what he has
+    // from a vantage and 210 is what he has down among the trunks, which is
+    // the last line of cougarCanTake. Seeded at 190 the check is about the
+    // three beats after the walk, which is what it is for.
+    const from = w.__ringSpot('hare', spot.x, spot.y, 175, 200);
+    if (!from) return { none: 'nowhere legal to stand 190px off a hare' };
+    w.__free(cg, from.x, from.y, 0);
+    const got = w.__until(cg, 'ambush', ['cgstalk', 'cgfix'], 500);
+    if (got < 0) return { none: 'the ambush never started' };
+    const urg = window.__saiEtho.ETHOGRAM.cougar.events
+      .find((e) => e.id === 'ambush').goto.urgency;
+    let creepN = 0, creepPx = 0, fixN = 0, fx = cg.x, fy = cg.y, fixMoved = 0;
+    let dashPx = 0, dashN = 0, outcome = 'ran on';
+    for (let i = 0; i < 2000; i++) {
+      const st = cg.state, px = cg.x, py = cg.y;
+      window.__pump(1);
+      const moved = Math.hypot(cg.x - px, cg.y - py);
+      if (st === 'cgstalk') { creepN++; creepPx += moved; }
+      if (st === 'cgfix') { if (fixN === 0) { fx = px; fy = py; }
+                            fixN++; fixMoved = Math.max(fixMoved, Math.hypot(cg.x - fx, cg.y - fy)); }
+      if (st === 'cgpounce') { dashN++; dashPx += moved; }
+      if (cg.state === 'cgeat') { outcome = 'kill'; break; }
+      if (cg.state === 'cgmiss') { outcome = 'miss'; break; }
+      if (cg.state === 'wander' && i > 40) { outcome = 'let it go'; break; }
+    }
+    return { none: false, urg: urg, outcome: outcome,
+             creptFrames: creepN, creepSpeed: creepN ? creepPx / (creepN * 0.016667) : 0,
+             fixFrames: fixN, fixMoved: fixMoved, dashPx: dashPx, dashFrames: dashN };
+  })()`);
+  const cruise = S.none ? 0 : S.cruise;
+  chk(!P.none && cruise > 0 && P.creptFrames > 8 && P.urg < 0.30 && P.creepSpeed < cruise,
+    'he stalks in at less than his own walking pace',
+    P.none || (cruise > 0
+      ? `${P.creepSpeed.toFixed(0)}px/s over ${P.creptFrames} frames at urgency ${P.urg}, ` +
+        `against ${cruise.toFixed(0)}px/s on the walk to a scrape at 0.32`
+      : 'no walk sample to measure him against — ' + (S.none || 'the scrape bout had no travel in it')));
+  chk(!P.none && P.fixFrames > 0 && P.fixMoved < 2,
+    'and then stops dead before he goes',
+    P.none || `${P.fixFrames} frames gathered, ${P.fixMoved.toFixed(1)}px of drift`);
+  chk(!P.none && P.dashFrames > 0 && P.dashPx <= 300,
+    'a pounce is a fixed distance, not a chase',
+    P.none || `${P.dashPx.toFixed(0)}px of ground spent against a 260px budget, ` +
+      `over ${P.dashFrames} frames — ${P.outcome}`);
+
+  // ---- 2b. THE VANTAGE: ridges, cliffs and bushes ----------------------
+  // The owner's first sentence, and the only event of his with no food and
+  // no sleep in it. What it means depends on where he is standing, because
+  // he may only walk on the terrace he is on: up on the bluff it is the
+  // terrace itself, down in the trees it is the talus at the foot of the
+  // faces or the far side of a bush.
+  const VN = await page4.evaluate(`(() => {
+    const w = window.__saiWorld, B = w.bounds;
+    const cg = w.agents.find((a) => a.species === 'cougar');
+    if (!cg) return { none: 'no cougar' };
+    w.__park(['cougar']); w.__prey.clear();
+    const from = (x, y, lvl) => {
+      w.__free(cg, x, y, lvl);
+      for (let i = 0; i < 500; i++) {
+        // held on his own terrace: he is the one land animal who may take
+        // the cliff, and a free frame up there is a frame he may take it in
+        cg.x = x; cg.y = y; cg._lvl = lvl;
+        cg._rockHopEnd = 0; cg._rockHop = null; cg._plat = null; cg.z = 0;
+        if (cg.state === 'cgtoledge') {
+          const g = cg._eth && cg._eth.goal;
+          return g ? { x: g.x, y: g.y } : null;
+        }
+        w.__only(cg, 'prowl');
+        window.__pump(1);
+      }
+      return null;
+    };
+    const m = w.__mouth();
+    const shelf = from(m.x + 120, m.y + 90, 1);
+    const floor = from(0.55 * B.w, 0.5 * B.h, 0);
+    if (!shelf || !floor) return { none: 'the prowl never picked anywhere' };
+    // a goat may stand on a terrace and nowhere else, so the world's own
+    // habitat rule is the cheapest way to ask which band a point is in
+    const onShelf = w.__prey.okAt('goat', shelf.x, shelf.y, { lvl: 1 });
+    const onTalus = w.__prey.okAt('goat', floor.x, floor.y, { lvl: 0 });
+    let atBush = null;
+    for (const f of w.forage || []) {
+      if (f.kind !== 'berry' && f.kind !== 'shrub') continue;
+      const half = (w.__siteHalf[f.kind] || 32) * (f.s || 1);
+      const d = Math.hypot(f.px - floor.x, f.py - floor.y);
+      if (d < half + cg.r * 0.9 + 26) atBush = f.kind + ' at ' + d.toFixed(0) + 'px';
+    }
+    return { none: false, onShelf: onShelf, onTalus: onTalus, atBush: atBush,
+             floorOk: w.__prey.okAt('hare', floor.x, floor.y) };
+  })()`);
+  chk(!VN.none && VN.onShelf && (VN.onTalus || VN.atBush) && VN.floorOk,
+    'he prowls the ground he is on: the terrace up there, the talus or a bush down here',
+    VN.none || `from the shelf he picked a terrace; from the trees he picked ` +
+      `${VN.onTalus ? 'the talus at the foot of the faces' : 'the far side of a ' + VN.atBush}`);
+
+  // ---- 3. HE NEVER SETS OFF AT A GOAT ON ANOTHER TERRACE ---------------
+  // Rule 2 of the bluff: walking cannot change level, and a stalk is a busy
+  // state, so tryRockHop is never offered during one. A pick across a face
+  // is twenty-four seconds of a cat with his nose against a wall.
+  const T = await page4.evaluate(`(() => {
+    const w = window.__saiWorld, B = w.bounds;
+    const cg = w.agents.find((a) => a.species === 'cougar');
+    if (!cg) return { none: 'no cougar' };
+    w.__park(['cougar']);
+    const spotOn = (lvl) => {
+      for (let i = 0; i < 900; i++) {
+        const x = 0.005 * B.w + Math.random() * 0.1 * B.w;
+        const y = 0.1 * B.h + Math.random() * 0.65 * B.h;
+        if (w.__prey.okAt('goat', x, y, { lvl: lvl })) return { x: x, y: y };
+      }
+      return null;
+    };
+    const talus = spotOn(0), shelf = spotOn(1), plateau = spotOn(2);
+    if (!talus || !shelf || !plateau) {
+      return { none: 'the bluff has no room for a goat on all three terraces' };
+    }
+    // A SECOND SHELF SPOT, so the positive control is a goat he really can
+    // walk to rather than one 150px off the side of the terrace.
+    // The terrace is about 170px wide and 100 deep, so the second spot is
+    // searched ALONG it rather than anywhere on the bluff.
+    let shelf2 = null;
+    for (let i = 0; i < 1500 && !shelf2; i++) {
+      const x = 8 + Math.random() * (0.12 * B.w);
+      const y = shelf.y + (Math.random() - 0.5) * 60;
+      if (!w.__prey.okAt('goat', x, y, { lvl: 1 })) continue;
+      if (Math.abs(x - shelf.x) < 55) continue;
+      shelf2 = { x: x, y: y };
+    }
+    if (!shelf2) return { none: 'the shelf has no room for two goat spots' };
+    const trial = (goatAt, goatLvl, cgAt, cgLvl, frames) => {
+      w.__prey.clear();
+      let g = null;
+      for (let k = 0; k < 6 && !g; k++) g = w.__prey.spawn('goat', true);
+      if (!g) return 'nogoat';
+      g._in = true; g._settled = true; g._lvl = goatLvl; g.x = goatAt.x; g.y = goatAt.y;
+      w.__free(cg, cgAt.x, cgAt.y, cgLvl);
+      for (let i = 0; i < frames; i++) {
+        // ...AND THE COUGAR WHERE HE WAS PUT, on the terrace he was put on.
+        // He is the one land animal who may take the cliff, and every free
+        // frame is a frame the world may offer it to him — a trial that let
+        // him climb would half the time be asking about a face he had
+        // already crossed, which is the world working and not this rule.
+        cg.x = cgAt.x; cg.y = cgAt.y; cg._lvl = cgLvl;
+        cg._rockHopEnd = 0; cg._rockHop = null; cg._plat = null; cg.z = 0;
+        // NOTHING BUT THE GOAT ON THE MAP, AND THE GOAT WHERE IT WAS PUT.
+        // The population keeps arriving on its own, and a goat left to
+        // itself LEAPS between terraces — a third of its goals are on
+        // another one — so a trial that let it move would half the time be
+        // asking about a terrace it had already left.
+        if (w.prey.length > 1) w.prey = w.prey.filter((q) => q === g);
+        g.x = goatAt.x; g.y = goatAt.y; g.vx = 0; g.vy = 0;
+        g._lvl = goatLvl; g._goal = null; g._leap = null;
+        if (cg.state === 'cgstalk' || cg.state === 'cgfix') {
+          const ref = cg._eth && cg._eth.goal && cg._eth.goal.ref;
+          const tgt = (ref && ref.prey) || cg._huntP;
+          return 'set off (' + (tgt ? tgt.species : 'nothing') + ')';
+        }
+        w.__only(cg, 'ambush');
+        window.__pump(1);
+      }
+      return 'refused';
+    };
+    const across1 = trial(shelf, 1, talus, 0, 300);
+    const across2 = trial(plateau, 2, talus, 0, 300);
+    const same = trial(shelf, 1, shelf2, 1, 500);
+    const off = (r) => (r.indexOf('set off') === 0 ? 1 : 0);
+    return { none: false, across1: across1, across2: across2, same: same,
+             tried: 3, plateauStalks: off(across1) + off(across2), took: off(same) };
+  })()`);
+  chk(!T.none && T.plateauStalks === 0 && T.took === 1,
+    'he never sets off after a goat on a terrace he cannot walk to',
+    T.none || `one face up: ${T.across1}; two faces up: ${T.across2}; ` +
+      `and on his own terrace he ${T.same}`);
+
+  // ---- 4. THE DEN ------------------------------------------------------
+  const R = await page4.evaluate(`(() => {
+    const w = window.__saiWorld, B = w.bounds;
+    const cg = w.agents.find((a) => a.species === 'cougar');
+    if (!cg) return { none: 'no cougar' };
+    w.__park(['cougar']); w.__prey.clear();
+    const m = w.__mouth();
+    // ON THE CAVE'S OWN TERRACE to start with: getting UP there is the
+    // world's ladder (tryRockHop, free frames only) and not this event's
+    w.__free(cg, m.x + 120, m.y + 90, 1);
+    // HELD ON HIS OWN TERRACE while he decides. He is a CLIMBER, and every
+    // free frame on the shelf is a frame the world may offer him the cliff:
+    // a climb begun a frame before the errand lands during it and writes
+    // _lvl on the way down. That is the world working, and it is not what
+    // this check is about.
+    let got = -1;
+    for (let i = 0; i < 500 && got < 0; i++) {
+      cg._lvl = 1; cg._rockHopEnd = 0; cg._rockHop = null; cg._plat = null; cg.z = 0;
+      if (cg.state === 'cgtoden' || cg.state === 'cgsettle') got = i;
+      else { w.__only(cg, 'den'); window.__pump(1); }
+    }
+    if (got < 0) return { none: 'the den never started' };
+    let asleep = 0, settled = 0, deep = null;
+    for (let i = 0; i < 2600; i++) {
+      window.__pump(1);
+      if (cg.state === 'cgsleep') asleep++;
+      if (cg.state === 'cgsettle') settled++;
+      // SAMPLED WHILE HE IS DOWN, not after. The frame he wakes is the
+      // frame the world offers him the cliff again, and he is the only land
+      // animal who may take it — a level read at the end is a level he
+      // climbed to a moment after getting up.
+      if (asleep === 600) deep = { lvl: cg._lvl, plat: cg._plat || null,
+                                   inCave: w.__inCave(cg.x, cg.y),
+                                   d: Math.hypot(cg.x - m.x, cg.y - m.y) };
+      if (asleep > 0 && cg.state === 'wander') break;
+    }
+    if (!deep) return { none: 'he never got 600 frames into a sleep' };
+    return { none: false, frames: asleep, settled: settled,
+             spent: cg._sleepSpent || 0, lvl: deep.lvl, plat: deep.plat,
+             inCave: deep.inCave, state: cg.state, fromMouth: deep.d };
+  })()`);
+  chk(!R.none && R.lvl === 1 && R.inCave && !R.plat,
+    'the cougar sleeps in the cave, on the shelf’s own floor',
+    R.none || `asleep at level ${R.lvl}, ${R.inCave ? 'inside' : 'outside'} the drawn mouth ` +
+      `and ${R.fromMouth.toFixed(0)}px from its centre, on no platform`);
+  chk(!R.none && R.frames > 40 && R.spent <= 31000,
+    'and he stays down for a real sleep without dropping out of the world',
+    R.none || `${R.frames} frames asleep, ${Math.round(R.spent / 1000)}s of the 30s budget`);
+
+  // ---- 5. THE GOAT COMES HOME ------------------------------------------
+  // The owner's sentence, executed literally: deep lazy sleep inside the
+  // cave, LEAVING MOUNTAIN GOAT REMAINS. The kill sets a debt rather than
+  // dropping a carcass, and the den pays it.
+  const G = await page4.evaluate(`(() => {
+    const w = window.__saiWorld, B = w.bounds;
+    const cg = w.agents.find((a) => a.species === 'cougar');
+    if (!cg) return { none: 'no cougar' };
+    w.__park(['cougar']); w.__prey.clear(); w.remains = [];
+    const m = w.__mouth();
+    // ON the cave's terrace, the same spot the den check uses: 150px east
+    // of the mouth is past the bluff's own drawn outline and therefore
+    // level 0, which is a different check entirely.
+    const killAt = { x: m.x + 120, y: m.y + 90 };
+    w.__free(cg, killAt.x, killAt.y, 1);
+    cg._cgKill = 'goat';                       // as cougarKill leaves him
+    // ONE loop, from before the errand starts: the carry is taken in the
+    // pick and a wait that pumped the walk would count none of it.
+    let carried = 0, started = -1;
+    for (let i = 0; i < 2000; i++) {
+      cg._lvl = 1; cg._rockHopEnd = 0; cg._rockHop = null; cg._plat = null; cg.z = 0;
+      w.__only(cg, 'den');
+      window.__pump(1);
+      if (started < 0 && cg.state === 'cgtoden') started = i;
+      if (cg._carry === 'kill') carried++;
+      if (w.remains.length) break;
+    }
+    const got = started;
+    if (!w.remains.length) return { none: 'he never paid the debt', carried: carried };
+    const r = w.remains[0];
+    return { none: false, remains: w.remains.length, species: r.species,
+             carried: carried, debt: cg._cgKill,
+             atCave: Math.hypot(r.x - m.x, r.y - m.y),
+             fromKill: Math.hypot(r.x - killAt.x, r.y - killAt.y),
+             inCave: w.__inCave(r.x, r.y), feeds: r.feeds };
+  })()`);
+  chk(!G.none && G.remains === 1 && G.species === 'goat' && G.atCave < 90,
+    'a mountain goat ends up as remains at the cave mouth, not where it fell',
+    G.none || `carcass ${G.atCave.toFixed(0)}px from the mouth and ${G.fromKill.toFixed(0)}px ` +
+      `from the kill, ${G.feeds} feeds in it`);
+  chk(!G.none && G.carried > 0 && !G.debt,
+    'and he is carrying it the whole way there',
+    G.none || `${G.carried} frames with data-carry="kill", and the debt is cleared`);
+
+  // ---- 6. A HUNTER TAKEN OUT OF HIS OWN STALK HANDS THE PREY BACK ------
+  // forceFlee, a fight, a rescue and a drag all write a.state from outside
+  // the ethogram and bypass huntDrop. Without huntRelease in tick() the
+  // claim stands for PREY_CLAIM_MS: six seconds of an animal nobody else
+  // can see and that cannot walk off the map.
+  const X = await page4.evaluate(`(() => {
+    const w = window.__saiWorld, B = w.bounds;
+    const out = {};
+    for (const sp of ['cougar', 'wolf']) {
+      const a = w.agents.find((q) => q.species === sp);
+      if (!a) { out[sp] = 'absent'; continue; }
+      w.__park([sp]); w.__prey.clear();
+      const p = w.__prey.spawn('hare', true);
+      const spot = w.__floorSpot('hare', 0.35 * B.w, 0.25 * B.h, 0.7 * B.w, 0.7 * B.h);
+      if (!p || !spot) { out[sp] = 'no hare'; continue; }
+      p._in = true; p.x = spot.x; p.y = spot.y;
+      // INSIDE POUNCE RANGE, so the errand is the gather and the strike and
+      // not the walk: a stalk that has to cross a hundred and fifty pixels
+      // spends a 24s give-up doing it, which at sixty pumped frames a second
+      // is fourteen hundred frames of this budget on the wrong thing.
+      const from = w.__ringSpot('hare', spot.x, spot.y, 92, 112);
+      if (!from) { out[sp] = 'nowhere to stand'; continue; }
+      w.__free(a, from.x, from.y, 0);
+      const id = sp === 'cougar' ? 'ambush' : 'rush';
+      // WAITED ON THE REFERENCE, not on a named state. a._huntP is written
+      // by the hunt's begin() and held through the gather and the strike,
+      // and it IS the thing huntRelease has to hand back — so the check
+      // does not care which of the two beats the world interrupts.
+      // 3600 frames, because a stalk that is abandoned costs the whole
+      // 24s give-up — 1440 pumped frames — and the budget has to hold two
+      let got = -1;
+      for (let i = 0; i < 3600 && got < 0; i++) {
+        if (a._huntP) got = i;
+        else {
+          if (w.prey.length > 1) w.prey = w.prey.filter((q) => q === p);
+          // PINNED. This is a check about handing a claim back, not about
+          // catching anything: a hare left to wander out past his own
+          // narrowed reach turns it into a check about the walk.
+          p.x = spot.x; p.y = spot.y; p.vx = 0; p.vy = 0; p._fleeUntil = 0;
+          // ...and he is put back on his mark between attempts. A hunter
+          // left to wander for a minute of sim time drifts out past his own
+          // narrowed reach — 210px on the floor for the cougar — and the
+          // check then reports that he never took a target when what
+          // happened is that he walked away from one.
+          if (a.state === 'wander') { a.x = from.x; a.y = from.y; a.vx = 0; a.vy = 0; }
+          w.__only(a, id);
+          window.__pump(1);
+        }
+      }
+      if (got < 0) { out[sp] = 'never took a target (' + a.state + ')'; continue; }
+      // forceFlee's own state, which is the commonest way the world takes a
+      // hunter out of his own strike
+      a.state = 'flee'; a.fleeEnd = performance.now() + 9000;
+      window.__pump(1);
+      out[sp] = (!a._huntP && p.claimedBy !== a.id) ? 'handed back'
+              : 'still holding it (' + p.claimedBy + ')';
+      a.state = 'wander';
+    }
+    return out;
+  })()`);
+  chk(X.cougar === 'handed back' && X.wolf === 'handed back',
+    'a predator pulled out of his own stalk hands the prey straight back',
+    `cougar: ${X.cougar}; wolf: ${X.wolf}`);
+
+  // ---- 7. THE WOLF'S POSTS ARE SOLVED, NOT SCATTERED -------------------
+  const H = await page4.evaluate(`(() => {
+    const w = window.__saiWorld, B = w.bounds;
+    const wf = w.agents.find((a) => a.species === 'wolf');
+    if (!wf) return { none: 'no wolf in the roster' };
+    w.__park(['wolf']); w.marks = [];
+    w.__free(wf, 0.5 * B.w, 0.5 * B.h, 0);
+    // let him work his way round the set. Each bout is a walk plus six
+    // seconds of standing still, so this is a frame budget and not a wait.
+    for (let i = 0; i < 9000; i++) {
+      w.__only(wf, 'mark');
+      window.__pump(1);
+      if (w.marks.length >= 5) break;
+    }
+    const posts = w.marks.filter((m) => m.kind === 'post');
+    if (posts.length < 2) return { none: 'he left ' + posts.length + ' posts in 9000 frames' };
+    // THE DEFINITION, not the coordinates: every junction is the midpoint of
+    // two of the things the animals walk between — the six trunks and the
+    // two food trees — so the anchors are read back off the world.
+    const anchors = [];
+    for (const t of w.def.trees || []) anchors.push({ x: t.x * B.w, y: t.y * B.h });
+    for (const f of w.forage || []) if (f.kind === 'foodtree') anchors.push({ x: f.px, y: f.py });
+    let onMid = 0, onOpen = 0, minGap = Infinity;
+    for (const m of posts) {
+      let best = Infinity;
+      for (let i = 0; i < anchors.length; i++) for (let j = i + 1; j < anchors.length; j++) {
+        const d = Math.hypot((anchors[i].x + anchors[j].x) / 2 - m.x,
+                             (anchors[i].y + anchors[j].y) / 2 - m.y);
+        if (d < best) best = d;
+      }
+      // the post is dropped at the raised leg, not at his anchor, so the
+      // junction is a body's width away rather than under it
+      if (best < 40) onMid++;
+      if (w.__prey.okAt('hare', m.x, m.y)) onOpen++;
+    }
+    for (let i = 0; i < posts.length; i++) for (let j = i + 1; j < posts.length; j++) {
+      const d = Math.hypot(posts[i].x - posts[j].x, posts[i].y - posts[j].y);
+      if (d < minGap) minGap = d;
+    }
+    return { none: false, posts: posts.length, onMid: onMid, onOpen: onOpen,
+             minGap: minGap, anchors: anchors.length };
+  })()`);
+  chk(!H.none && H.posts >= 3 && H.onMid === H.posts && H.minGap >= 120,
+    'the wolf marks a set of junctions solved off the trees, not a random walk',
+    H.none || `${H.posts} posts off ${H.anchors} anchors, every one within 40px of a ` +
+      `tree-pair midpoint, closest pair ${H.minGap.toFixed(0)}px apart`);
+  chk(!H.none && H.onOpen === H.posts,
+    'and every one of them is on ground he could actually stand on',
+    H.none || `${H.onOpen}/${H.posts} pass the world’s own floor-habitat rule`);
+
+  // ---- 8. HE COCKS A LEG, AND THE MARK GOES TO THE SIDE HE RAISED ------
+  const M = await page4.evaluate(`(() => {
+    const w = window.__saiWorld, B = w.bounds;
+    const wf = w.agents.find((a) => a.species === 'wolf');
+    if (!wf) return { none: 'no wolf' };
+    const runs = [];
+    for (const west of [true, false]) {
+      w.__park(['wolf']); w.marks = [];
+      w.__free(wf, (west ? 0.3 : 0.7) * B.w, 0.5 * B.h, 0);
+      const got = w.__until(wf, 'mark', ['wfsniffpost', 'wfmark'], 2000);
+      if (got < 0) { runs.push({ err: 'never reached the post' }); continue; }
+      let anchor = null, face = 0;
+      for (let i = 0; i < 1200; i++) {
+        if (wf.state === 'wfmark') { anchor = { x: wf.x, y: wf.y }; face = wf._faceDir; }
+        window.__pump(1);
+        if (w.marks.length) break;
+      }
+      if (!w.marks.length || !anchor) { runs.push({ err: 'he cocked a leg and left nothing' }); continue; }
+      runs.push({ n: w.marks.length, face: face, kind: w.marks[0].kind,
+                  dx: w.marks[0].x - anchor.x, dy: w.marks[0].y - anchor.y });
+    }
+    return { none: false, runs: runs };
+  })()`);
+  const mOk = !M.none && M.runs.length === 2 && M.runs.every((r) =>
+    !r.err && r.n === 1 && r.kind === 'post' && Math.sign(r.dx) === -r.face && Math.abs(r.dx) > 8);
+  chk(mOk,
+    'he cocks a leg and leaves one mark, on the side he raised',
+    M.none || M.runs.map((r) => r.err ||
+      `facing ${r.face > 0 ? 'east' : 'west'}: one post ${Math.abs(r.dx).toFixed(0)}px to his ` +
+      `${r.dx > 0 ? 'east' : 'west'}, ${r.dy.toFixed(0)}px below him`).join('; '));
+
+  // ---- 9. THE CARCASS, AND THE COUGAR BESIDE IT ------------------------
+  // The whole of the owner's sentence in one fixture: the same wolf, the
+  // same carcass, the same distance, and the only thing that changes is
+  // whether the cougar standing over it is awake.
+  const V = await page4.evaluate(`(() => {
+    const w = window.__saiWorld, B = w.bounds;
+    const wf = w.agents.find((a) => a.species === 'wolf');
+    const cg = w.agents.find((a) => a.species === 'cougar');
+    if (!wf || !cg) return { none: 'no wolf or no cougar' };
+    w.__park(['wolf', 'cougar']); w.__prey.clear();
+    const spot = w.__floorSpot('hare', 0.4 * B.w, 0.3 * B.h, 0.7 * B.w, 0.65 * B.h);
+    if (!spot) return { none: 'nowhere legal to leave a carcass' };
+    w.remains = [];
+    const r = w.__remainsLeave(spot.x, spot.y, 'goat', 'cougarStub');
+    // the cougar, awake, standing over his own kill
+    cg.x = spot.x + 70; cg.y = spot.y; cg.state = 'wander'; cg._eth = null;
+    cg.idleUntil = 9e9; cg.intentUntil = 9e9; cg.noEventUntil = 9e9; cg.vx = cg.vy = 0;
+    w.__free(wf, spot.x - 170, spot.y, 0);
+    let awakeTook = -1;
+    for (let i = 0; i < 1400; i++) {
+      w.__only(wf, 'scavenge');
+      window.__pump(1);
+      cg.x = spot.x + 70; cg.y = spot.y;          // he does not wander off
+      if (wf.state === 'wftoremains' || wf.state === 'wfwary' || wf.state === 'wfgnaw') { awakeTook = i; break; }
+    }
+    const feedsAwake = r.feeds;
+    // ...and now he is furniture
+    cg.state = 'cgsleep';
+    w.__free(wf, spot.x - 170, spot.y, 0);
+    const asleepTook = w.__until(wf, 'scavenge', ['wftoremains', 'wfwary'], 1400);
+    let ate = -1, wary = 0;
+    for (let i = 0; i < 2400; i++) {
+      window.__pump(1);
+      cg.state = 'cgsleep';
+      if (wf.state === 'wfwary') wary++;
+      if (r.feeds < 3 && ate < 0) ate = i;
+      if (wf.state === 'wander' && ate >= 0) break;
+    }
+    return { none: false, awakeTook: awakeTook, feedsAwake: feedsAwake,
+             asleepTook: asleepTook, wary: wary, feeds: r.feeds,
+             stillThere: w.remains.indexOf(r) >= 0, held: r.userId,
+             d: Math.hypot(cg.x - r.x, cg.y - r.y) };
+  })()`);
+  chk(!V.none && V.awakeTook < 0 && V.feedsAwake === 3 && V.asleepTook >= 0 && V.feeds < 3,
+    'he will not touch a carcass with a waking cougar beside it, and takes it the moment the cougar sleeps',
+    V.none || `refused for 1400 frames at ${V.d.toFixed(0)}px awake; asleep he set off ` +
+      `after ${V.asleepTook} and stood off it for ${V.wary} frames first`);
+  chk(!V.none && V.feeds === 2 && V.stillThere && !V.held,
+    'and one wolf takes one meal out of three, leaving the rest',
+    V.none || `feeds went 3 -> ${V.feeds}, the carcass is still on the ground and unheld`);
+
+  // ---- 10. THE BED -----------------------------------------------------
+  const B2 = await page4.evaluate(`(() => {
+    const w = window.__saiWorld, B = w.bounds;
+    const wf = w.agents.find((a) => a.species === 'wolf');
+    const cg = w.agents.find((a) => a.species === 'cougar');
+    if (!wf) return { none: 'no wolf' };
+    w.__park(['wolf']); w.__prey.clear(); w.remains = [];
+    const m = w.__mouth();
+    w.__free(wf, m.x + 120, m.y + 90, 1);        // on the cave's terrace
+    // ...and off the stone while he decides. A free frame on the shelf is a
+    // frame the world may hop him up onto the slab, and the point of this
+    // check is the terrace.
+    let got = -1;
+    for (let i = 0; i < 500 && got < 0; i++) {
+      // HELD ON THE TERRACE while he decides, and off the stone. He is NOT
+      // a shelf-dropper, so every free frame up here is one the world spends
+      // steering him toward a way down (rockShelfWayOut) or hopping him onto
+      // the slab — both of which are the world working, and both of which
+      // would turn this into a check about the forest floor.
+      wf._plat = null; wf.z = 0; wf._lvl = 1; wf._shelfT0 = 0;
+      wf._rockHopEnd = 0; wf._rockHop = null;
+      wf.x = m.x + 120; wf.y = m.y + 90;
+      if (wf.state === 'wftobed' || wf.state === 'wfcircle') got = i;
+      else { w.__only(wf, 'bed'); window.__pump(1); }
+    }
+    if (got < 0) return { none: 'the bed never started' };
+    let down = 0, deep = null;
+    for (let i = 0; i < 3600; i++) {
+      window.__pump(1);
+      if (wf.state === 'wfsleep') down++;
+      // sampled WHILE he is down, for the reason the cougar's den is
+      if (down === 600) deep = { lvl: wf._lvl, onPlat: wf._plat || null,
+                                 inCave: w.__inCave(wf.x, wf.y) };
+      if (down > 0 && wf.state === 'wander') break;
+    }
+    if (!deep) return { none: 'he never got 600 frames into a sleep (' + down + ')' };
+    const bed = { lvl: deep.lvl, onPlat: deep.onPlat, frames: down,
+                  spent: wf._sleepSpent || 0, inCave: deep.inCave };
+    // ...and NOBODY BEDS ON A ROCK. keepOnPlatform lets go of an animal past
+    // nine seconds whatever he is doing, so a wolf who is up on the slab
+    // when the appetite comes round has to hand it back rather than lie
+    // down on something that will drop him.
+    let onStone = 'never got to ask';
+    w.__free(wf, m.x + 120, m.y + 90, 1);
+    for (let i = 0; i < 600; i++) {
+      wf._plat = 'slab'; wf._platT0 = performance.now();
+      w.__only(wf, 'bed');
+      window.__pump(1);
+      if (wf.state === 'wfcircle' || wf.state === 'wfsleep') { onStone = 'bedded on it'; break; }
+      if (i > 200) { onStone = 'refused'; break; }
+    }
+    // ...and the cougar's terrace is the cougar's. Asked twice, because a
+    // bed that never starts proves nothing on its own: eight tries with the
+    // cougar off the map, then eight with him standing on it.
+    const bout = (withCougar) => {
+      let shelf = 0;
+      for (let n = 0; n < 8; n++) {
+        w.__free(wf, m.x + 120, m.y + 110, 1);
+        let hit = -1;
+        for (let i = 0; i < 140 && hit < 0; i++) {
+          // HELD THERE, both of them. The cougar is wandering, and one who
+          // has ambled off the terrace by frame forty is one the wolf is
+          // right to ignore — which would make this measure the drift.
+          if (cg) {
+            if (withCougar) { cg.x = m.x + 150; cg.y = m.y + 90; cg._lvl = 1; }
+            else { cg.x = -900; cg.y = -900; cg._lvl = 0; }
+            cg.vx = cg.vy = 0;
+          }
+          wf._plat = null; wf._lvl = 1; wf._shelfT0 = 0;
+          wf._rockHopEnd = 0; wf._rockHop = null; wf.z = 0;
+          if (wf.state === 'wftobed' || wf.state === 'wfcircle') hit = i;
+          else { w.__only(wf, 'bed'); window.__pump(1); }
+        }
+        if (hit < 0) continue;
+        // read the pick's own flag rather than guessing from geometry
+        const g = wf._eth && wf._eth.goal;
+        if (g && g.ref && g.ref.shelf) shelf++;
+      }
+      return shelf;
+    };
+    if (cg) { cg.state = 'wander'; cg._eth = null;
+              cg.idleUntil = 9e9; cg.intentUntil = 9e9; cg.noEventUntil = 9e9; }
+    const tried = bout(false);
+    const onShelf = bout(true);
+    return { none: false, lvl: bed.lvl, onPlat: bed.onPlat, frames: bed.frames,
+             spent: bed.spent, inCave: bed.inCave, tried: tried,
+             cougarOnShelf: onShelf, onStone: onStone };
+  })()`);
+  chk(!B2.none && B2.lvl === 1 && !B2.onPlat && !B2.inCave && B2.frames > 40
+      && B2.spent <= 31000 && B2.onStone === 'refused',
+    'he beds down ON the terrace, not on the stone, so nothing moves him after nine seconds',
+    B2.none || `level ${B2.lvl}, _plat ${B2.onPlat}, ${B2.frames} frames down, ` +
+      `${Math.round(B2.spent / 1000)}s of the 30s budget, not in the cougar’s room — ` +
+      `and up on the slab he ${B2.onStone}`);
+  chk(!B2.none && B2.cougarOnShelf === 0 && B2.tried > 0,
+    'and he does not take the terrace while the cougar is on it',
+    B2.none || `with the cougar off the map he took it ${B2.tried} times out of eight; ` +
+      `with the cougar standing on it, ${B2.cougarOnShelf}`);
+
+  // ---- 11. THE WIND IS A RULE, NOT A MOOD ------------------------------
+  // Asked of the behaviour and not of a copy of the formula: sixteen
+  // bearings at two ranges, on a clock this page owns so the wind holds
+  // still. Inside 200px it must not matter; outside it, it must.
+  const W = await page4.evaluate(`(() => {
+    const w = window.__saiWorld, B = w.bounds;
+    const wf = w.agents.find((a) => a.species === 'wolf');
+    if (!wf) return { none: 'no wolf' };
+    w.__park(['wolf']); w.__prey.clear();
+    const p = w.__prey.spawn('hare', true);
+    if (!p) return { none: 'no hare would spawn' };
+    p._in = true;
+    const cx = 0.52 * B.w, cy = 0.46 * B.h;
+    const tryAt = (ang, rad) => {
+      const px = cx + Math.cos(ang) * rad, py = cy + Math.sin(ang) * rad;
+      if (!w.__prey.okAt('hare', px, py)) return null;
+      if (!w.__prey.okAt('hare', cx, cy)) return null;
+      w.__prey.release('hare', wf.id);
+      p.x = px; p.y = py; p._fleeUntil = 0;
+      w.__free(wf, cx, cy, 0);
+      const beats = ['wfstalk', 'wfcrouch', 'wfrush', 'wfeat', 'wfmiss'];
+      for (let i = 0; i < 80; i++) {
+        // ANY beat of the hunt counts as "he set off". Sampling for the
+        // stalk alone misses a short one that was already through the
+        // gather by the next frame.
+        if (beats.indexOf(wf.state) >= 0 || wf._huntP) return true;
+        // the hare holds still: this is about the wolf's reach and not
+        // about where a hare had wandered to by frame thirty
+        p.x = px; p.y = py; p.vx = 0; p.vy = 0; p._fleeUntil = 0;
+        if (w.prey.length > 1) w.prey = w.prey.filter((q) => q === p);
+        w.__only(wf, 'rush');
+        window.__pump(1);
+      }
+      return false;
+    };
+    let legal = 0, far = 0, near = 0;
+    for (let i = 0; i < 16; i++) {
+      const ang = (i / 16) * Math.PI * 2;
+      const f = tryAt(ang, 260);
+      if (f === null) continue;
+      const n = tryAt(ang, 150);
+      if (n === null) continue;
+      legal++; if (f) far++; if (n) near++;
+    }
+    return { none: false, legal: legal, far: far, near: near };
+  })()`);
+  chk(!W.none && W.legal >= 6 && W.near === W.legal && W.far > 0 && W.far < W.legal,
+    'he closes further downwind than up: the wind is a rule, not a mood',
+    W.none || `${W.far}/${W.legal} bearings taken at 260px, ${W.near}/${W.legal} at 150px — ` +
+      'inside the halved reach the wind cannot matter, outside it it decides');
+
+  // ---- 12. AND THE APPROACH BENDS THROUGH SOMETHING --------------------
+  const C = await page4.evaluate(`(() => {
+    const w = window.__saiWorld, B = w.bounds;
+    const wf = w.agents.find((a) => a.species === 'wolf');
+    if (!wf) return { none: 'no wolf' };
+    w.__park(['wolf']); w.__prey.clear();
+    const p = w.__prey.spawn('hare', true);
+    if (!p) return { none: 'no hare would spawn' };
+    p._in = true;
+    const kinds = ['berry', 'shrub', 'log', 'root'];
+    const sites = (w.forage || []).filter((f) => kinds.indexOf(f.kind) >= 0);
+    for (const f of sites) {
+      for (let k = 0; k < 12; k++) {
+        const ang = (k / 12) * Math.PI * 2;
+        const ax = f.px - Math.cos(ang) * 150, ay = f.py - Math.sin(ang) * 150;
+        const bx = f.px + Math.cos(ang) * 150, by = f.py + Math.sin(ang) * 150;
+        if (!w.__prey.okAt('hare', bx, by)) continue;
+        p.x = bx; p.y = by; p._fleeUntil = 0;
+        w.__free(wf, ax, ay, 0);
+        if (w.__until(wf, 'rush', ['wfstalk'], 40) < 0) continue;
+        const g = wf._eth && wf._eth.goal;
+        if (!g) continue;
+        if (!g.via) return { none: false, viaCover: false, kind: f.kind, off: 0 };
+        // how far off the straight line the dogleg goes
+        const dx = g.x - ax, dy = g.y - ay, len = Math.hypot(dx, dy) || 1;
+        const off = Math.abs((g.via.x - ax) * dy - (g.via.y - ay) * dx) / len;
+        // ...and WHICH piece of cover it is behind. coverVia takes the
+        // nearest thing between the two, which is not always the one this
+        // fixture lined up — so the waypoint is measured against every
+        // painted thing wide enough to break a silhouette, trunks included.
+        let near = Infinity, kind = 'nothing';
+        for (const q of w.forage || []) {
+          if (kinds.indexOf(q.kind) < 0) continue;
+          const d = Math.hypot(g.via.x - q.px, g.via.y - q.py);
+          if (d < near) { near = d; kind = q.kind; }
+        }
+        for (const t of w.def.trees || []) {
+          const d = Math.hypot(g.via.x - t.x * B.w, g.via.y - t.y * B.h);
+          if (d < near) { near = d; kind = 'trunk'; }
+        }
+        return { none: false, viaCover: true, kind: kind, off: off, toSite: near };
+      }
+    }
+    return { none: 'never got a hunt to start across a piece of cover' };
+  })()`);
+  chk(!C.none && C.viaCover && C.toSite < 80,
+    'and the approach bends through something rather than crossing the open',
+    C.none || `waypoint ${C.off.toFixed(0)}px off the straight line and ` +
+      `${C.toSite.toFixed(0)}px from the ${C.kind} it is behind`);
+
+  await page4.close();
+}
+
+/* =====================================================================
+ * THE SKUNK'S DIG, HIS MOUSE AND HIS DEN — AND THE HEDGEHOG'S GRUBS
+ * =====================================================================
+ *
+ * A THIRD PAGE, ON THE SAME VIRTUAL CLOCK the lake checks use, and for the
+ * same two reasons. Every check below is about a BOUT — a cast about, a dig,
+ * a sleep — and headless rAF is three or four frames a second with dt
+ * clamped at 50ms, so a dig budgeted in wall clock would be a dig nobody
+ * ever waited long enough to see. And the clock cannot be installed on the
+ * page the rest of this suite runs on without stopping its rAF dead.
+ *
+ * Every budget below is in FRAMES with an early exit, and an exhausted
+ * budget reports that it never got to ask rather than asserting a false
+ * negative.
+ */
+{
+  const page5 = await browser.newPage({ viewport: { width: 1500, height: 940 } });
+  page5.on('pageerror', (e) => errs.push('digs page: ' + e.message));
+  await page5.addInitScript(() => {
+    let t = 1000; const cbs = [];
+    performance.now = () => t;
+    window.requestAnimationFrame = (cb) => { cbs.push(cb); return cbs.length; };
+    window.cancelAnimationFrame = () => {};
+    window.__pump = (n) => { for (let i = 0; i < n; i++) { t += 16.667;
+      const list = cbs.splice(0); for (const c of list) { try { c(t); } catch (e) { window.__perr = String(e); } } } };
+  });
+  await page5.goto(process.env.SAI_URL || 'http://localhost:5173/', { waitUntil: 'networkidle' });
+  await page5.waitForTimeout(1800);
+  await page5.evaluate('window.__pump(30)');
+  await page5.evaluate('window.__saiWorld.__seedCast && window.__saiWorld.__seedCast()');
+  // the React snapshot is a 300ms setInterval on the REAL clock and the
+  // sprites are not in the DOM until it has run — the pose check reads
+  // computed styles off them
+  await page5.waitForTimeout(800);
+  await page5.evaluate('window.__pump(20)');
+
+  // the fixture: park everyone but the subject, hand him a clean ledger in
+  // his one domain, and hold ONE of his appetites permanently due while
+  // muzzling the rest. An appetite that is due is still only offered after
+  // the events above it in the list have had their turn.
+  await page5.evaluate(`(() => {
+    const w = window.__saiWorld;
+    w.__park = (keep) => { for (const o of w.agents) if (o.species !== keep) {
+      o.x = -900; o.y = -900; o.state = 'idle'; o.vx = o.vy = 0; o._eth = null;
+      o.idleUntil = 9e9; o.intentUntil = 9e9; o.noEventUntil = 9e9; } };
+    w.__free = (a) => {
+      a.dragging = false; a.z = 0; a.state = 'wander'; a.intent = 'wander';
+      a.intentUntil = 0; a.noEventUntil = 0; a.idleUntil = 0; a._carry = null;
+      a._faceDir = 0; a._eth = null;
+      window.__pump(1);
+      const S = a._eth;
+      if (S) { S.domain = 'land'; S.left = 9e6; S.tripUntil = performance.now() + 9e6; }
+    };
+    w.__digEvs = { skunk: ['windfall', 'scrape', 'dig', 'grubs', 'mousing', 'den'],
+                   hedgehog: ['roots', 'logs', 'grubs', 'curl'] };
+    // hold one appetite due and every sibling nine million ms out, one frame
+    w.__only = (a, id) => {
+      const S = a._eth; if (!S) return;
+      S.cd[id] = 0; S.seekAt[id] = 0; S.near[id] = false;
+      for (const e of (w.__digEvs[a.species] || [])) {
+        if (e !== id) { S.cd[e] = performance.now() + 9e6; S.armed[e] = 0; }
+      }
+      a.noEventUntil = 0;
+    };
+    w.__spriteOf = w.__spriteOf || ((species) => {
+      const all = Array.prototype.slice.call(document.querySelectorAll('.sai-sprite'));
+      return all.find((e) => e.querySelector('.sai-crit--' + species)) || null;
+    });
+  })()`);
+
+  // ---- 1. THE GRUB DIG. He is seeded a stride outside pounce range, so
+  // what this measures is the dig and not the walk — the walk-there leg is
+  // already covered five times over by tofloor, toopen, hhtolog and the two
+  // root legs. The litter trio do not flee, so the whole bout is a search.
+  const D = await page5.evaluate(`(function () {
+    var w = window.__saiWorld;
+    w.__park('skunk');
+    var a = w.agents.find(function (x) { return x.species === 'skunk'; });
+    if (!a) return { none: 'no skunk in the roster' };
+    w.__prey.clear();
+    var p = w.__prey.spawn('grub', true);
+    if (!p) return { none: 'no grub would spawn: no timber on this map' };
+    var site = p._site;
+    w.__free(a);
+    a.x = p.x - 44; a.y = p.y + 6;
+    var pitsBefore = (w.pits || []).length;
+    var seen = {}, dug = 0, cast = 0, feed = 0, ate = -1, id = p.id;
+    for (var i = 0; i < 900; i++) {
+      w.__only(a, 'grubs');
+      seen[a.state] = (seen[a.state] | 0) + 1;
+      if (a.state === 'skgrub') dug++;
+      if (a.state === 'skcast') cast++;
+      if (a.state === 'skgrubeat') { feed++; if (ate < 0) ate = i; }
+      if (ate >= 0 && i > ate + 40) break;
+      window.__pump(1);
+    }
+    var d = Math.hypot(a.x - site.px, a.y - site.py);
+    return { none: false, seen: seen, dug: dug, cast: cast, feed: feed, ate: ate,
+             kind: site.kind, d: d, half: site.half,
+             pitsBefore: pitsBefore, pits: (w.pits || []).length,
+             gone: !w.__prey.of('grub'), eaten: w.__prey().stat.eaten,
+             claim: p.claimedBy || null };
+  })()`);
+  chk(!D.none && D.ate >= 0 && D.d < D.half + 90,
+    'the skunk digs where the grubs actually are, in the timber and the roots',
+    D.none || `dug a ${D.kind} at ${D.d.toFixed(0)}px from its anchor, half ${D.half.toFixed(0)}px`);
+  chk(!D.none && D.pits === D.pitsBefore,
+    'and a grub dig leaves no cone: his pits belong on open ground',
+    D.none || `world.pits ${D.pitsBefore} -> ${D.pits} across ${D.cast + D.dug + D.feed} frames of digging`);
+  chk(!D.none && D.gone && D.eaten > 0 && D.dug > 8,
+    'and the grub goes: it withdrew, and withdrawing is not escaping',
+    D.none || `${D.cast} frames casting, ${D.dug} digging, ${D.feed} with his head in the hole`);
+
+  // ---- 2. THE CRAYFISH IN THE MUDDY SHALLOWS. Two halves of one rule: he
+  // refuses one he cannot physically get to, and he takes one at the lip
+  // from dry ground. The stand is found by sweeping the world's own rho
+  // rather than by watching him wander into it.
+  const C = await page5.evaluate(`(function () {
+    var w = window.__saiWorld;
+    var a = w.agents.find(function (x) { return x.species === 'skunk'; });
+    if (!a) return { none: 'no skunk' };
+    w.__prey.clear();
+    var p = w.__prey.spawn('crayfish', true);
+    if (!p) return { none: 'no crayfish' };
+    var B = w.bounds, shallow = null, deep = null;
+    for (var i = 0; i < 60; i++) {
+      for (var j = 0; j < 60; j++) {
+        var x = (i + 0.5) / 60 * B.w, y = (j + 0.5) / 60 * B.h;
+        var r = w.lakeRhoAt(x, y);
+        if (!shallow && r > 0.90 && r < 0.96) shallow = { x: x, y: y, r: r };
+        if (!deep && r < 0.55) deep = { x: x, y: y, r: r };
+      }
+    }
+    if (!shallow || !deep) return { none: 'no lake on this map' };
+    // OUT IN THE LAKE: he must never set off after it
+    p._in = true; p._settled = true; p.x = deep.x; p.y = deep.y;
+    w.__free(a);
+    a.x = deep.x; a.y = deep.y;              // keepAshore puts him on the bank
+    var deepPicked = -1;
+    for (var k = 0; k < 240; k++) {
+      w.__only(a, 'mousing');
+      if (a.state === 'sktohunt' || a.state === 'skfix' || a.state === 'sksnap') { deepPicked = k; break; }
+      window.__pump(1);
+    }
+    // AT THE LIP: the nearest dry stand inside his pounce
+    p.x = shallow.x; p.y = shallow.y; p._in = true; p._settled = true;
+    var best = null;
+    for (var m = 0; m < 72; m++) {
+      var th = m / 72 * 6.2832;
+      var sx = p.x + Math.cos(th) * 56, sy = p.y + Math.sin(th) * 56;
+      var sr = w.lakeRhoAt(sx, sy);
+      if (sr > 1.05 && (!best || sr < best.r)) best = { x: sx, y: sy, r: sr };
+    }
+    if (!best) return { none: 'no dry ground within 56px of the lip' };
+    w.__free(a);
+    a.x = best.x; a.y = best.y;
+    var struck = -1, fed = -1, wet = 0, rhoAtStrike = 0, gap = 0;
+    for (var n = 0; n < 900; n++) {
+      w.__only(a, 'mousing');
+      if (w.lakeRhoAt(a.x, a.y) < 0.97) wet++;
+      if (a.state === 'sksnap' && struck < 0) {
+        struck = n; rhoAtStrike = w.lakeRhoAt(a.x, a.y);
+        gap = Math.hypot(a.x - p.x, a.y - p.y);
+      }
+      if (a.state === 'skchew' && fed < 0) { fed = n; break; }
+      window.__pump(1);
+    }
+    return { none: false, deepPicked: deepPicked, deepRho: deep.r,
+             shallowRho: shallow.r, standRho: best.r,
+             struck: struck, fed: fed, wet: wet, rhoAtStrike: rhoAtStrike,
+             gap: gap, eaten: w.__prey().stat.eaten };
+  })()`);
+  chk(!C.none && C.struck >= 0 && C.rhoAtStrike >= 1.02 && C.wet === 0,
+    'he takes a crayfish from the bank without ever setting foot in the water',
+    C.none || (C.struck < 0 ? 'never got to ask: no strike inside 900 frames'
+      : `struck standing at rho ${C.rhoAtStrike.toFixed(3)}, ${C.gap.toFixed(0)}px of water between them, ${C.wet} wet frames`));
+  chk(!C.none && C.deepPicked < 0,
+    'and he does not set off after one out in the lake',
+    C.none || `refused one at rho ${C.deepRho.toFixed(2)} for 240 frames, took one at ${C.shallowRho.toFixed(2)}`);
+
+  // ---- 3. THE DEN, BOTH KINDS. Two variants weighted 2:1, so the budget
+  // runs bouts back to back until it has seen each of them once and says so
+  // if it never did.
+  const N = await page5.evaluate(`(function () {
+    var w = window.__saiWorld;
+    var a = w.agents.find(function (x) { return x.species === 'skunk'; });
+    if (!a) return { none: 'no skunk' };
+    w.__prey.clear();
+    w.pits = [];
+    w.__free(a);
+    var dugSlept = 0, pileSlept = 0, spent = 0, pitAtDen = 0, pitD = 0;
+    var pileD = 0, pileKind = null, onPlat = 0, frames = 0;
+    var DUG = ['sktoden', 'skdigden', 'skdenin', 'skdensleep', 'skdenout'];
+    var PILE = ['sktopile', 'skpileunder', 'skpilesleep'];
+    for (var i = 0; i < 12000; i++) {
+      w.__only(a, 'den');
+      if (a.state === 'skdensleep') {
+        dugSlept++; spent = Math.max(spent, a._sleepSpent | 0);
+        if (a._plat) onPlat++;
+        if (dugSlept === 1) {
+          pitAtDen = (w.pits || []).length;
+          var bd = 1e9;
+          for (var q = 0; q < (w.pits || []).length; q++) {
+            var d0 = Math.hypot(w.pits[q].x - a.x, w.pits[q].y - a.y);
+            if (d0 < bd) bd = d0;
+          }
+          pitD = bd;
+        }
+      }
+      if (a.state === 'skpilesleep') {
+        pileSlept++; spent = Math.max(spent, a._sleepSpent | 0);
+        if (a._plat) onPlat++;
+        if (pileSlept === 1) {
+          var bs = null, bsd = 1e9;
+          for (var f = 0; f < (w.forage || []).length; f++) {
+            var s = w.forage[f];
+            var d1 = Math.hypot(s.px - a.x, s.py - a.y);
+            if (d1 < bsd) { bsd = d1; bs = s; }
+          }
+          pileD = bsd; pileKind = bs ? (bs.kind + '/' + (bs.logType || '-')) : null;
+        }
+      }
+      // ...and once a variant has given up what the check needs, CUT THE
+      // BOUT SHORT so the 2:1 roll comes round again instead of the suite
+      // waiting out a twenty-second sleep for it. Five rolls is a one-in-
+      // eight chance of never seeing the lighter-weighted one; twenty is
+      // three in ten thousand.
+      if (dugSlept > 60 && DUG.indexOf(a.state) >= 0) { a.state = 'wander'; if (a._eth) a._eth.goal = null; }
+      if (pileSlept > 60 && PILE.indexOf(a.state) >= 0) { a.state = 'wander'; if (a._eth) a._eth.goal = null; }
+      frames = i;
+      if (dugSlept > 60 && pileSlept > 60) break;
+      window.__pump(1);
+    }
+    // ...and now ONE bout run all the way through, uncut, because the two
+    // above were deliberately cut short and a ceiling you never reach is a
+    // ceiling you have not checked. A deep sleep is a hole in the world:
+    // this is the frames it lasts and the frame-time it is billed.
+    w.__free(a);
+    var deepFrames = 0, deepSpent = 0, entered = -1;
+    for (var z = 0; z < 8000; z++) {
+      w.__only(a, 'den');
+      if (a.state === 'skdensleep' || a.state === 'skpilesleep') {
+        if (entered < 0) entered = z;
+        deepFrames++; deepSpent = Math.max(deepSpent, a._sleepSpent | 0);
+      } else if (entered >= 0) break;          // he is up again
+      window.__pump(1);
+    }
+    return { none: false, dugSlept: dugSlept, pileSlept: pileSlept,
+             spent: spent, pitAtDen: pitAtDen, pitD: pitD,
+             pileD: pileD, pileKind: pileKind, onPlat: onPlat, frames: frames,
+             deepFrames: deepFrames, deepSpent: deepSpent };
+  })()`);
+  chk(!N.none && N.dugSlept > 60 && N.pitAtDen === 1 && N.pitD < 60,
+    'his own den is a hole he dug, and the hole is still there when he is in it',
+    N.none || (N.dugSlept === 0 ? 'never got to ask: no dug den inside 12000 frames'
+      : `one pit ${N.pitD.toFixed(0)}px off him, ${N.dugSlept} frames down it`));
+  chk(!N.none && N.pileSlept > 60 && N.pileKind !== null && N.pileD < 70,
+    'and the other kind is under somebody else’s timber',
+    N.none || (N.pileSlept === 0 ? 'never got to ask: the 2:1 roll never came up pile inside 12000 frames'
+      : `bedded ${N.pileD.toFixed(0)}px into a ${N.pileKind}, ${N.pileSlept} frames`));
+  chk(!N.none && N.deepFrames > 40 && N.deepSpent > 0 && N.deepSpent <= 31000 && N.onPlat === 0,
+    'and a sleeping skunk is a hole in the world with a ceiling on it, spent in frame time',
+    N.none || (N.deepFrames === 0 ? 'never got to ask: no uncut bout inside 8000 frames'
+      : `${N.deepFrames} frames down, billed ${(N.deepSpent / 1000).toFixed(1)}s against the 30s cap, ` +
+        `${N.onPlat} frames on a rock platform`));
+
+  // ---- 4. THE HEDGEHOG'S 120px. The shortest reach in the world, asked of
+  // the rule rather than watched: he is PINNED at two distances from the
+  // same earthworm and the question is only whether the appetite ever picks
+  // it up. Pinned, because an animal free to wander finds anything.
+  const H = await page5.evaluate(`(function () {
+    var w = window.__saiWorld;
+    w.__park('hedgehog');
+    var a = w.agents.find(function (x) { return x.species === 'hedgehog'; });
+    if (!a) return { none: 'no hedgehog in the roster' };
+    w.__prey.clear();
+    var p = w.__prey.spawn('earthworm', true);
+    if (!p) return { none: 'no earthworm would spawn' };
+    var ang = 0.9;
+    var at = function (r) {
+      w.__free(a);
+      a.x = p.x + Math.cos(ang) * r; a.y = p.y + Math.sin(ang) * r;
+      var took = -1;
+      for (var i = 0; i < 200; i++) {
+        w.__only(a, 'grubs');
+        a.x = p.x + Math.cos(ang) * r; a.y = p.y + Math.sin(ang) * r;   // pinned
+        if (a.state === 'hhtodig' || a.state === 'hhcast') { took = i; break; }
+        window.__pump(1);
+      }
+      return took;
+    };
+    var far = at(158), near = at(84);
+    // ...and then let him actually work it
+    w.__free(a);
+    a.x = p.x - 40; a.y = p.y + 5;
+    var dug = 0, cast = 0, feed = 0, ate = -1, held = null;
+    for (var k = 0; k < 900; k++) {
+      w.__only(a, 'grubs');
+      if (a.state === 'hhgrub') { dug++; held = a._huntP ? a._huntP.id : held; }
+      if (a.state === 'hhcast') cast++;
+      if (a.state === 'hhgrubeat') { feed++; if (ate < 0) ate = k; }
+      if (ate >= 0 && k > ate + 40) break;
+      window.__pump(1);
+    }
+    return { none: false, far: far, near: near, dug: dug, cast: cast,
+             feed: feed, ate: ate, gone: !w.__prey.of('earthworm'),
+             eaten: w.__prey().stat.eaten, held: held };
+  })()`);
+  chk(!H.none && H.far < 0 && H.near >= 0,
+    'the hedgehog finds his food by walking into it: the shortest reach in the world',
+    H.none || `nothing at 158px in 200 frames; at 84px he was on it in ${H.near}`);
+  chk(!H.none && H.gone && H.dug + H.cast + H.feed > 60,
+    'and once he is on it, it does not get away',
+    H.none || `${H.cast} frames casting, ${H.dug} digging, ${H.feed} chewing; the earthworm is gone`);
+
+  // ---- 5. HIS OTHER TWO BOUTS ARE UNTOUCHED. The grub dig is a third
+  // appetite and not a replacement: roots and logs are mimed digs into the
+  // world's own drawn openings and they still run.
+  const R = await page5.evaluate(`(function () {
+    var w = window.__saiWorld;
+    var a = w.agents.find(function (x) { return x.species === 'hedgehog'; });
+    if (!a) return { none: 'no hedgehog' };
+    w.__prey.clear();
+    var reach = function (id, want) {
+      w.__free(a);
+      for (var i = 0; i < 2400; i++) {
+        w.__only(a, id);
+        if (want.indexOf(a.state) >= 0) return i;
+        window.__pump(1);
+      }
+      return -1;
+    };
+    var roots = reach('roots', ['rootdig', 'rootbore']);
+    var logs = reach('logs', ['logdive', 'logunder']);
+    return { none: false, roots: roots, logs: logs };
+  })()`);
+  chk(!R.none && R.roots >= 0 && R.logs >= 0,
+    'his root and log bouts still run: the grub dig is a third appetite, not a replacement',
+    R.none || `a root dig in ${R.roots} frames, a log in ${R.logs}`);
+
+  // ---- 6. THE CLAIM COMES BACK. A drag writes a.state from outside the
+  // ethogram, which is the one thing that can take either of these two out
+  // of a strike; the claim it leaves standing would hide the grub from
+  // every other hunter for six seconds and pin it on stage. Both ticks call
+  // huntRelease first, and this is that, for both of them.
+  const G = await page5.evaluate(`(function () {
+    var w = window.__saiWorld;
+    var out = {};
+    var run = function (species, id, digStates) {
+      w.__park(species);
+      var a = w.agents.find(function (x) { return x.species === species; });
+      if (!a) return { none: 'no ' + species };
+      w.__prey.clear();
+      var p = w.__prey.spawn('beetle', true);
+      if (!p) return { none: 'no beetle' };
+      w.__free(a);
+      a.x = p.x - 40; a.y = p.y + 5;
+      var got = -1;
+      for (var i = 0; i < 600; i++) {
+        w.__only(a, id);
+        if (digStates.indexOf(a.state) >= 0 && a._huntP) { got = i; break; }
+        window.__pump(1);
+      }
+      if (got < 0) return { none: 'never held one' };
+      var heldBy = a._huntP.claimedBy;
+      // exactly what IconNode's pointer handlers do, both ends of it. The
+      // DROP matters: stepWorld skips a dragging agent outright, so nothing
+      // of his — ethogram, tick, claim — runs while the pointer holds him,
+      // and the frame after the release is the first one that can hand
+      // anything back.
+      a.dragging = true; a.state = 'drag'; a._faceDir = 0;
+      window.__pump(2);
+      var duringDrag = a._huntP ? 'still held' : 'null';
+      a.dragging = false; w.__drop(a);
+      // ...AND THE APPETITE GOES BACK ON COOLDOWN BEFORE THE NEXT FRAME.
+      // Without this the check cannot tell a release from a re-take: the
+      // drop leaves him in cooldown, which is a free state, so on the very
+      // frame tick() hands the beetle back the ethogram offers the same dig
+      // again and he claims the same beetle again — measured, in three runs
+      // out of six. The claim under test is the one he was holding when the
+      // pointer took him, not one he went and got afterwards.
+      var S2 = a._eth, t2 = performance.now();
+      if (S2) for (var q = 0; q < w.__digEvs[species].length; q++) {
+        var e2 = w.__digEvs[species][q];
+        S2.cd[e2] = t2 + 9e6; S2.seekAt[e2] = t2 + 9e6; S2.armed[e2] = 0;
+      }
+      a.noEventUntil = t2 + 9e6;
+      window.__pump(2);
+      return { none: false, heldBy: heldBy, during: duringDrag,
+               after: a._huntP ? 'still held' : 'null',
+               claimAfter: p.claimedBy || null, state: a.state };
+    };
+    out.skunk = run('skunk', 'grubs', ['sktodig', 'skcast', 'skgrub']);
+    out.hh = run('hedgehog', 'grubs', ['hhtodig', 'hhcast', 'hhgrub']);
+    return out;
+  })()`);
+  chk(!G.skunk.none && !G.hh.none
+      && G.skunk.after === 'null' && G.hh.after === 'null'
+      && !G.skunk.claimAfter && !G.hh.claimAfter,
+    'and a digger dragged off his grub hands it straight back, both of them',
+    (G.skunk.none || G.hh.none)
+      || `held through the drag (${G.skunk.during}, nothing of his runs while the ` +
+         `pointer has him) and handed back on the drop: skunk ${G.skunk.after}, ` +
+         `hedgehog ${G.hh.after}, and the beetle is nobody's`);
+
+  // ---- 7. THE DRAWINGS, ASKED OF THE RULE. A computed display needs no
+  // frames at all, so the state is written straight onto the sprite and put
+  // back — no sim, no pump, no waiting for an animal to reach a pose. That
+  // is also the only way to ask the question this check exists for: a state
+  // selector that names the state and NOT the species is silent, legal, and
+  // hands one animal another's animation, so the last two lines put a
+  // skunk's state on a hedgehog and check that nothing of his moves.
+  const P = await page5.evaluate(`(function () {
+    var w = window.__saiWorld;
+    var sprite = function (species) {
+      var all = Array.prototype.slice.call(document.querySelectorAll('.sai-sprite'));
+      return all.find(function (e) { return e.querySelector('.sai-crit--' + species); }) || null;
+    };
+    var shown = function (species, state, sel) {
+      var el = sprite(species);
+      if (!el) return null;
+      var was = el.dataset.state;
+      el.dataset.state = state;
+      var q = el.querySelector(sel);
+      var d = q ? getComputedStyle(q).display : 'missing';
+      el.dataset.state = was;
+      return d;
+    };
+    return {
+      any: !!sprite('skunk') && !!sprite('hedgehog'),
+      den: shown('skunk', 'skdensleep', '.sai-crit-skdenpose'),
+      denRig: shown('skunk', 'skdensleep', '.sai-crit-body'),
+      grub: shown('skunk', 'skgrub', '.sai-crit-conepose'),
+      grubPit: shown('skunk', 'skgrub', '.cone-pit'),
+      digPit: shown('skunk', 'skdigden', '.cone-pit'),
+      hhDig: shown('hedgehog', 'hhgrub', '.sai-crit-rootdig'),
+      hhRig: shown('hedgehog', 'hhgrub', '.sai-crit-body'),
+      // ...and now the leak test, both ways round
+      hhWearingSkunk: shown('hedgehog', 'skdensleep', '.sai-crit-body'),
+      skWearingHog: shown('skunk', 'hhgrub', '.sai-crit-body')
+    };
+  })()`);
+  chk(P.any && P.den === 'inline' && P.denRig === 'none'
+      && P.hhDig === 'inline' && P.hhRig === 'none',
+    'the den pose and the two dig poses are on screen when their states are',
+    !P.any ? 'never got to ask: no sprite in the DOM yet'
+      : `skdensleep shows the den pose and hides the walking rig; hhgrub shows his root dig`);
+  chk(P.any && P.grub === 'inline' && P.grubPit === 'none' && P.digPit === 'inline',
+    'and the grub dig borrows the cone dig without borrowing its hole',
+    !P.any ? 'never got to ask'
+      : `skgrub hides .cone-pit, skdigden keeps it: one line is the whole difference`);
+  chk(P.any && P.hhWearingSkunk !== 'none' && P.skWearingHog !== 'none',
+    'and neither of them can wear the other\u2019s state: every selector carries a species',
+    !P.any ? 'never got to ask'
+      : `a hedgehog in skdensleep and a skunk in hhgrub are both still drawn whole`);
+
+  await page5.close();
+}
+
 chk(errs.length === 0, 'no JS errors', errs.length ? errs[0] : 'clean');
 console.log(`\n${fail.length ? 'FAIL ' + fail.length : 'ALL PASS'} (${pass.length} passed)`);
 await browser.close();

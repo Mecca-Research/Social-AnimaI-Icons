@@ -168,6 +168,12 @@ export const PREY_CLAIM_MS = 6000;
  * anything smaller than a cougar.
  */
 export const PREY_STAND_RATIO = 0.85;
+/**
+ * How high something has to be before a prey stops counting it. Half the
+ * owl's 46px cruise, so he is unseen the whole way in and seen for the last
+ * third of the stoop. See the threat scan in stepOne.
+ */
+export const SILENT_Z = 24;
 // How far off a threat is noticed, and how long the run lasts once started.
 // Scaled off both sizes rather than flat: a bear is noticed further off
 // than a squirrel, and a boar lets things get closer than a wood mouse does.
@@ -318,7 +324,7 @@ export function preyReport(world, now = now0()) {
     keys: PREY_KEYS.slice(),
     states: { ...PREY_STATES },
     stat: { ...(world.preyStat || { spawned: 0, left: 0, eaten: 0 }) },
-    claimMs: PREY_CLAIM_MS, standRatio: PREY_STAND_RATIO,
+    claimMs: PREY_CLAIM_MS, standRatio: PREY_STAND_RATIO, silentZ: SILENT_Z,
     profile: PREY_PROFILE,
   };
 }
@@ -488,6 +494,18 @@ function stepOne(world, cfg, dt, now, p) {
     const a = agents[i];
     const aa = anyApparent(a.species) || 30;
     if (aa < app * PREY_STAND_RATIO) continue;         // smaller than me
+    // SILENT FLIGHT. An animal well off the ground is not something a mouse
+    // reacts to, and for the owl that is not a concession — it is the whole
+    // adaptation. He is the third slowest thing in the cast: on the ground
+    // he closes on a fleeing wood mouse at six pixels a second, so a bird
+    // that announced himself could never catch one of the seven animals he
+    // is supposed to live on. He rides in at 46px and is noticed only as he
+    // stoops through SILENT_Z, by which point the dive is committed.
+    //
+    // It is a general rule rather than an owl exemption, and it reads right
+    // for everything else that leaves the ground too: a goose passing over
+    // is not a thing you run from.
+    if ((a.z || 0) > SILENT_Z) continue;
     const d = Math.hypot(a.x - p.x, a.y - p.y);
     if (d < FLEE_R(aa, app) && d < td) { threat = a; td = d; }
   }
