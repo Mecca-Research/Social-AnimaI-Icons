@@ -823,6 +823,11 @@ function makeHunt(o) {
   // events array is being built, which is early enough for the Set.
   if (o.zGoto) ETHO_Z_STATES.add(st.stalk);
   return {
+    // the tag the cadence suite reads: a hunt's appetite is a SCAN — most
+    // windows convert to nothing because no prey is standing in sense when
+    // they come due — so the lints that treat every feeding appetite as a
+    // meal (cool<=every, the nominal-share roll-up) must know one apart.
+    hunt: true,
     id: o.id, domain: o.domain, trigger: "seek",
     every: o.every, chance: o.chance, cool: o.cool, miss: o.missCool ?? 15000,
     states: [st.fix, st.strike, st.feed, st.miss].filter(Boolean),
@@ -2646,7 +2651,7 @@ defineEthogram("raccoon", {
     // pick, so he is cheap to share the clearing with.
     {
       id: "berry", domain: "land", trigger: "seek",
-      every: [110000, 170000], chance: 0.50, cool: 24000,
+      every: [146000, 222000], chance: 0.45, cool: 24000,
       variants: [
         {
           // GROUND PICK — the common case. He works the low fruit over in
@@ -2718,7 +2723,7 @@ defineEthogram("raccoon", {
     // claimed, and tests/cadence.mjs is right not to count it.
     {
       id: "paws", domain: "land", trigger: "seek",
-      every: [55000, 90000], chance: 0.50, cool: 30000,
+      every: [70000, 120000], chance: 0.50, cool: 30000,
       states: ["racpaws"], ownsWater: true,
       goto: {
         state: "towaterrub", within: 10, giveUp: 20000, urgency: 0.30,
@@ -4923,7 +4928,7 @@ defineEthogram("fox", {
       // and the one thing no suite asserted. One scrump every 7.1 minutes
       // measured; this is one every 5.1, and he is still the least of all
       // eight by a factor of two.
-      every: [60000, 95000],
+      every: [78000, 122000],
       // A third of the urges taken. Half would put him level with the deer's
       // graze, and he is meant to be the one you notice feeding least.
       chance: 0.35,
