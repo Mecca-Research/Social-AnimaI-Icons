@@ -2584,7 +2584,7 @@ const racCrayHunt = makeHunt({
   burst: 0.35, dash: 60,               // a snatch, inside a band 19px wide
   catchChance: 0.72,                   // backed into the shallows, it has nowhere
   feedMs: [3600, 5200],
-  every: [52000, 84000], chance: 0.60, cool: 26000, missCool: 14000,
+  every: [14000, 24000], chance: 0.60, cool: 26000, missCool: 14000,
   reachable: racCrayReach,
   onFix: racStoneStand,
   st: { stalk: "racwade", fix: "racflip", strike: "racsnatch",
@@ -2646,7 +2646,7 @@ defineEthogram("raccoon", {
     // pick, so he is cheap to share the clearing with.
     {
       id: "berry", domain: "land", trigger: "seek",
-      every: [146000, 222000], chance: 0.45, cool: 24000,
+      every: [110000, 170000], chance: 0.50, cool: 24000,
       variants: [
         {
           // GROUND PICK — the common case. He works the low fruit over in
@@ -2718,7 +2718,7 @@ defineEthogram("raccoon", {
     // claimed, and tests/cadence.mjs is right not to count it.
     {
       id: "paws", domain: "land", trigger: "seek",
-      every: [70000, 120000], chance: 0.50, cool: 30000,
+      every: [55000, 90000], chance: 0.50, cool: 30000,
       states: ["racpaws"], ownsWater: true,
       goto: {
         state: "towaterrub", within: 10, giveUp: 20000, urgency: 0.30,
@@ -2828,7 +2828,7 @@ defineEthogram("raccoon", {
       burst: 0.80, dash: 180,
       catchChance: 0.48,
       feedMs: [3000, 4600],
-      every: [74000, 118000], chance: 0.45, cool: 30000, missCool: 16000,
+      every: [12000, 20000], chance: 0.55, cool: 30000, missCool: 16000,
       // DRY GROUND ONLY. Everything on this list is a forest-floor animal
       // and the crayfish event is where the water work lives; a mouse hunt
       // that walked him into the lake would take the two apart.
@@ -3581,7 +3581,7 @@ defineEthogram("skunk", {
     // here. The arithmetic is written out in tests/cadence.mjs.
     {
       id: "windfall", domain: "land", trigger: "seek",
-      every: [40000, 64000], chance: 0.60, miss: 12000, cool: 14000,
+      every: [30000, 51000], chance: 0.60, miss: 12000, cool: 14000,
       states: ["floorsnuff", "windfalleat"],
       goto: {
         // 30 stops him at the drip line rather than at the stem: fallen
@@ -3754,7 +3754,7 @@ defineEthogram("skunk", {
       creep: 0.30, fixMs: [1600, 2600],
       dash: 50, catchChance: 0.85,
       feedMs: [2600, 3800],
-      every: [66000, 104000], chance: 0.50, cool: 30000, missCool: 15000,
+      every: [12000, 20000], chance: 0.50, cool: 30000, missCool: 15000,
       st: { stalk: "sktodig", fix: "skcast", strike: "skgrub",
             feed: "skgrubeat", miss: "skdry" },
     }),
@@ -3788,7 +3788,7 @@ defineEthogram("skunk", {
       burst: 0.70, dash: 90,
       catchChance: (a, c, p) => (p.species === "crayfish" ? 0.62 : 0.42),
       feedMs: [2800, 4200],
-      every: [82000, 128000], chance: 0.40, cool: 34000, missCool: 18000,
+      every: [16000, 26000], chance: 0.50, cool: 34000, missCool: 18000,
       reachable: skunkCanTake,
       st: { stalk: "sktohunt", fix: "skfix", strike: "sksnap",
             feed: "skchew", miss: "skmiss" },
@@ -4188,7 +4188,7 @@ defineEthogram("cougar", {
       catchChance: (a, c, p) =>
         (p.species === "goat" || p.species === "boar") ? 0.42 : 0.62,
       feedMs: [6000, 9000],
-      every: [70000, 110000], chance: 0.55, cool: 48000, missCool: 22000,
+      every: [14000, 24000], chance: 0.55, cool: 48000, missCool: 22000,
       cover: true,
       reachable: cougarCanTake,
       onKill: cougarKill,
@@ -4605,7 +4605,7 @@ defineEthogram("wolf", {
       burst: 0.95, dash: 300,
       catchChance: (a, c, p) => (p.species === "boar" ? 0.42 : 0.58),
       feedMs: [5000, 8000],
-      every: [58000, 92000], chance: 0.60, cool: 40000, missCool: 18000,
+      every: [14000, 24000], chance: 0.60, cool: 40000, missCool: 18000,
       cover: true,
       reachable: wolfCanTake,
       st: { stalk: "wfstalk", fix: "wfcrouch", strike: "wfrush",
@@ -4620,7 +4620,7 @@ defineEthogram("wolf", {
      */
     {
       id: "scavenge", domain: "land", trigger: "seek",
-      every: [30000, 52000], chance: 0.85, miss: 9000, cool: 20000,
+      every: [12000, 20000], chance: 0.85, miss: 9000, cool: 20000,
       states: ["wfwary", "wfgnaw"],
       goto: { state: "wftoremains", within: 30, giveUp: 40000, none: 12000,
               lost: 10000, urgency: 0.42, pick: wolfCarrion,
@@ -4923,7 +4923,7 @@ defineEthogram("fox", {
       // and the one thing no suite asserted. One scrump every 7.1 minutes
       // measured; this is one every 5.1, and he is still the least of all
       // eight by a factor of two.
-      every: [78000, 122000],
+      every: [60000, 95000],
       // A third of the urges taken. Half would put him level with the deer's
       // graze, and he is meant to be the one you notice feeding least.
       chance: 0.35,
@@ -5095,7 +5095,7 @@ defineEthogram("fox", {
       burst: 1.0, dash: 190,       // ...and the leap, which is all of it
       catchChance: 0.55,
       feedMs: [3200, 5000],
-      every: [26000, 46000], chance: 0.62, cool: 21000, missCool: 13000,
+      every: [9000, 16000], chance: 0.62, cool: 21000, missCool: 13000,
       st: { stalk: "foxstalk", strike: "foxpounce", feed: "foxeat", miss: "foxmiss" },
     }),
   ],
@@ -5578,7 +5578,7 @@ defineEthogram("frog", {
     // on the bottom in an inch of it, which is where a frog waits.
     {
       id: "ambush", domain: "water", trigger: "seek",
-      every: [26000, 46000], chance: 0.60, cool: 15000,
+      every: [16000, 28000], chance: 0.70, cool: 12000,
       states: ["frogstill", "frogtongue", "froggulp"], ownsWater: true,
       goto: {
         state: "toambush", within: 12, giveUp: 26000, none: 9000, lost: 9000,
@@ -6858,7 +6858,7 @@ defineEthogram("hedgehog", {
       creep: 0.34, fixMs: [1400, 2400],
       dash: 44, catchChance: 0.88,
       feedMs: [2800, 4000],
-      every: [60000, 96000], chance: 0.55, cool: 28000, missCool: 14000,
+      every: [12000, 20000], chance: 0.55, cool: 28000, missCool: 14000,
       st: { stalk: "hhtodig", fix: "hhcast", strike: "hhgrub",
             feed: "hhgrubeat", miss: "hhdry" },
     }),
@@ -7149,6 +7149,16 @@ function owlLanding(a, c) {
  */
 const OWL_HUNT_Z = 46;         // how high the approach rides, in stage px
 /**
+ * HOW FAR HE HEARS: half the stage. The owner's spec is a launch from the
+ * nest at prey "half way across the screen", and the number is exactly
+ * that — 1500/2, minus a little so a target at the far wall does not open
+ * a glide that ends off it. One copy; the roost's handoff reads the same
+ * constant the hunt declares.
+ */
+const OWL_SENSE = 720;
+/** the seven he was given, one copy: the hunt and the roost's ear share it */
+const OWL_PREY = ["woodmouse", "vole", "rat", "gopher", "hare", "grouse", "gartersnake"];
+/**
  * HOW CLOSE HE GETS BEFORE HE DROPS, and it is short on purpose.
  *
  * An owl locates by ear, hovers over the SPOT, and comes down on it. He is
@@ -7201,8 +7211,13 @@ const OWL_DASH = 250;
 
 /** the glide: up off the floor, level across, and never touching it again */
 function owlAloft(a, c) {
-  const up = Math.min(1, (c.now - (a._swoopT0 || (a._swoopT0 = c.now))) / OWL_LIFT_MS);
-  a.z = OWL_HUNT_Z * up;
+  // ...from wherever the launch began. A ground start rises 0 -> 46; a nest
+  // launch eases DOWN from the perch's own height instead of snapping to
+  // the ground and climbing back, which is what an absolute ramp did.
+  if (!a._swoopT0) { a._swoopT0 = c.now; a._swoopZ0 = a.z || 0; }
+  const up = Math.min(1, (c.now - a._swoopT0) / OWL_LIFT_MS);
+  const z0 = a._swoopZ0 || 0;
+  a.z = z0 + (OWL_HUNT_Z - z0) * up;
 }
 /** the hover: he stops over the spot and the head does the work */
 function owlHover(a) { a.z = OWL_HUNT_Z; }
@@ -7255,7 +7270,7 @@ defineEthogram("owl", {
   // hunt that reset it would take off from one tree and land in another.
   tick(a) {
     huntRelease(a);
-    a._swoopT0 = 0;                  // the climb-out starts from the floor again
+    a._swoopT0 = 0; a._swoopZ0 = 0;                  // the climb-out starts from the floor again
     if (a._faceDir) a._faceDir = 0;
     if (a._perch) a._perch = null;
   },
@@ -7320,7 +7335,7 @@ defineEthogram("owl", {
         a._flyT0 = c.now;
         a.state = "owlflyup";
       },
-      drive(a, c) {
+      drive(a, c, S) {
         // begin() may have bailed and already ended the event; the engine
         // runs drive() straight after begin() either way.
         const p = a._perch;
@@ -7359,6 +7374,23 @@ defineEthogram("owl", {
           // run a walk cycle. An owl marching on the spot in a nest is
           // exactly the failure this event exists to avoid.
           a.x = p.x; a.y = p.y; a.z = p.z;
+          // A NEST IS A HUNTING PLATFORM. His hearing reaches half the
+          // stage, and a roost that slept through a vole underneath it
+          // would be a bird asleep on the job. When something is in
+          // earshot and the swoop is off its cooldown, the roost ends
+          // where it stands, the appetite is primed, and the glide opens
+          // from the perch's own height — the launch the owner asked for.
+          // The nest is KEPT (_nestI stands): he left on business.
+          if (c.now >= ((S && S.cd && S.cd["swoop"]) || 0)) {
+            const heard = nearestPrey(c.world, a.x, a.y, OWL_SENSE, {
+              species: OWL_PREY, free: true, hunterId: a.id, now: c.now });
+            if (heard && heard.p && heard.p._in) {
+              if (S && S.seekAt) S.seekAt["swoop"] = 0;
+              a._perch = null; a._land = null;
+              endEvent(a, c, { reroll: true, stop: true });
+              return;
+            }
+          }
           if (c.now < a.stateUntil) return;
           a._flyT0 = c.now;
           a._land = owlLanding(a, c);
@@ -7399,16 +7431,20 @@ defineEthogram("owl", {
     // nest tree he committed to survives a hunt untouched.
     makeHunt({
       id: "swoop", domain: "land",
-      prey: ["woodmouse", "vole", "rat", "gopher", "hare", "grouse", "gartersnake"],
-      sense: 340,                       // the widest in the world: he HEARS them
+      prey: OWL_PREY,
+      sense: OWL_SENSE,                 // half the stage: he HEARS them
       pounce: OWL_POUNCE, reach: 26,
-      creep: 0.34,                      // a glide is not a hurry
+      // 0.50: a committed flight, not a drift. A nest launch can open from
+      // 700px out, and a bird that took half a minute to arrive would give
+      // the whole hunt away to the clock; everything violent about him
+      // still happens inside the last 64.
+      creep: 0.50,
       fixMs: [900, 1500],               // the hover, and the head turning on it
       burst: 0.90, dash: OWL_DASH,      // the stoop, budgeted in ground covered
       catchChance: 0.62,
       feedMs: [3400, 5200],
-      every: [34000, 58000], chance: 0.58, cool: 26000, missCool: 15000,
-      giveUp: 30000,                    // he starts further off than anybody
+      every: [10000, 18000], chance: 0.58, cool: 26000, missCool: 15000,
+      giveUp: 36000,                    // he starts further off than anybody
       zGoto: true,                      // the approach is a GLIDE, not a walk
       onApproach: owlAloft, onFix: owlHover, onStrike: owlDive,
       // HE CANNOT TAKE ONE OFF THE WATER. Every animal on his list is a
