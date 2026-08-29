@@ -3019,7 +3019,13 @@ export default function SocialAnimalsRPG() {
        */
       const preyOf = (key) => (W.prey || []).find((p) => p.species === key) || null;
       W.__prey = () => preyReport(W);
-      W.__prey.spawn = (key, force) => spawnPrey(W, key, { force: !!force });
+      W.__prey.spawn = (key, force) => {
+        const p = spawnPrey(W, key, { force: !!force });
+        // a STAGED spawn is a fixture: it wants a visible subject, so a
+        // litter animal staged this way comes up already unearthed
+        if (p && force) p._buried = false;
+        return p;
+      };
       W.__prey.leave = (key) => { const p = preyOf(key); return p ? removePrey(W, p, "left") : false; };
       W.__prey.eat = (key, who) => { const p = preyOf(key); return p ? consumePrey(W, p, who || "test") : false; };
       W.__prey.clear = () => { W.prey = []; W.preyCool = {};
@@ -8748,8 +8754,15 @@ function renderWorld(world, iconsRef, padsRef, damRefs, pitRefs, lakeRefs, preyR
   // it — with none of the pair choreography, because prey do not engage.
   if (preyRefs && world.prey) {
     for (const p of world.prey) {
+      // a buried litter animal has no picture at all — that is the point
+      if (p._buried) {
+        const elB = preyRefs.current.get(p.id);
+        if (elB) elB.style.display = "none";
+        continue;
+      }
       const el = preyRefs.current.get(p.id);
       if (!el) continue;
+      if (el.style.display) el.style.display = "";   // unearthed: visible again
       el.style.left = `${p.x}px`; el.style.top = `${p.y}px`;
       // depth, off the SAME two rules the cast uses: a grub on the far side
       // of a log has to go behind the log, or the log is not there.

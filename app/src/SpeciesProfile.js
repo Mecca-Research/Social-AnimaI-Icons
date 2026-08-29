@@ -365,7 +365,15 @@ function preyRow(o) {
   // disagree in the second decimal — `size` derived from 18.05 against an
   // `apparent` printed as 18.1 — and the self-consistency check that guards
   // this table has nothing to hold on to.
-  const apparent = +apparentFromBulk(o.mass, o.len, o.hgt).toFixed(1);
+  //
+  // `draw` scales the DRAWN size away from what the animal's real bulk says,
+  // and it exists for exactly two rows: the goat and the boar. Their honest
+  // bulk drew them at 66 and 62px — bigger than the wolf — and the owner's
+  // verdict was that they read as peers, not as game: "way too large to be
+  // game hunt for the predators, we need to make them half their current
+  // size." The dims strings keep telling the truth about the real animal;
+  // the picture tells the story of the hunt.
+  const apparent = +(apparentFromBulk(o.mass, o.len, o.hgt) * (o.draw ?? 1)).toFixed(1);
   const fill = o.fill ?? PREY_FILL_PROVISIONAL;
   return { ...o, fill, apparent,
     size: +(apparent / (fill * 2.7)).toFixed(2),
@@ -460,7 +468,7 @@ export const PREY_PROFILE = {
             "distance and impossible to corner.",
   }),
   boar: preyRow({
-    mass: 75, len: 1.3, hgt: 0.675, speed: 40, habitat: "floor", arrival: "edge",
+    draw: 0.5, mass: 75, len: 1.3, hgt: 0.675, speed: 40, habitat: "floor", arrival: "edge",
     fill: 0.6718,   // measured off the drawing by tests/sizes.mjs
     dims: "50-100kg · 1.1-1.5m · 55-80cm at shoulder",
     profile: "Between the cougar and the wolf on the screen and heavier than " +
@@ -470,7 +478,7 @@ export const PREY_PROFILE = {
   }),
   // ---------------- the bluff, and nowhere else ----------------
   goat: preyRow({
-    mass: 92.5, len: 1.4, hgt: 1.05, speed: 25, habitat: "rock", arrival: "edge",
+    draw: 0.5, mass: 92.5, len: 1.4, hgt: 1.05, speed: 25, habitat: "rock", arrival: "edge",
     fill: 0.8242,   // measured off the drawing by tests/sizes.mjs
     dims: "45-140kg · 1.2-1.6m · 90-120cm at shoulder",
     profile: "The second largest animal in the world after the bear, and just " +

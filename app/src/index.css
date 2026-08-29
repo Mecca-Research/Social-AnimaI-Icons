@@ -8450,3 +8450,90 @@ body {
       with no @media block to carry. */
 .sai-crit--frog .tongue-band{ display:none; }
 .sai-tongue{ pointer-events:none; }
+
+/* ==================== v0.46 THE FOX'S CURL-UP ====================
+   The sleep v0.44 shipped without. Three states on the ordinary rig — no
+   new drawing: a fox curling up is his own body, head and brush held
+   differently, exactly like his stalk. Every rule is scoped by state AND
+   .sai-crit--fox; foxturn, foxcurl and foxwake are his alone.            */
+
+/* ---- the circling: body low, nose down, tail swinging round with him */
+.sai-sprite[data-state="foxturn"] .sai-crit--fox .sai-crit-body{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-fox-bedturn 1.3s ease-in-out infinite; }
+@keyframes sai-fox-bedturn{
+  0%,100%{transform:translateY(2.4px) scaleY(.92) rotate(-1.6deg);}
+  50%    {transform:translateY(3.2px) scaleY(.90) rotate(1.8deg);} }
+.sai-sprite[data-state="foxturn"] .sai-crit--fox .sai-crit-head{
+  transform-box:fill-box; transform-origin:18% 88%;
+  animation:sai-fox-bednose 1.3s ease-in-out infinite; }
+@keyframes sai-fox-bednose{
+  0%,100%{transform:rotate(14deg) translate(3px,5px);}
+  50%    {transform:rotate(18deg) translate(4px,7px);} }
+.sai-sprite[data-state="foxturn"] .sai-crit--fox .sai-crit-tail{
+  transform-box:fill-box; transform-origin:96% 40%;
+  animation:sai-fox-bedswish 1.3s ease-in-out infinite; }
+@keyframes sai-fox-bedswish{
+  0%,100%{transform:rotate(10deg) translateY(3px);}
+  50%    {transform:rotate(-6deg) translateY(1px);} }
+
+/* ---- THE BALL. Body flattened into a round loaf, legs gone under it,
+   head sunk to the ground, and the whole character in the brush: rotated
+   right across the face, over the nose and forepaws — the picture the
+   owner asked for, word for word. The only motion is breath. ---- */
+.sai-sprite[data-state="foxcurl"] .sai-crit--fox .sai-crit-leg{ display:none; }
+.sai-sprite[data-state="foxcurl"] .sai-crit--fox .sai-crit-body{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-fox-breath 2.8s ease-in-out infinite;
+}
+@keyframes sai-fox-breath{
+  0%,100%{transform:translateY(7px) scaleY(.72) scaleX(.94);}
+  50%    {transform:translateY(6.4px) scaleY(.75) scaleX(.94);} }
+.sai-sprite[data-state="foxcurl"] .sai-crit--fox .sai-crit-head{
+  transform-box:fill-box; transform-origin:18% 88%;
+  animation:none;
+  transform:rotate(26deg) translate(1px,12px) scale(.92); }
+.sai-sprite[data-state="foxcurl"] .sai-crit--fox .sai-crit-lid{
+  animation:none; transform:scaleY(1); }
+/* the brush: forward and OVER — its tip lands across the muzzle */
+.sai-sprite[data-state="foxcurl"] .sai-crit--fox .sai-crit-tail{
+  transform-box:fill-box; transform-origin:96% 60%;
+  animation:sai-fox-brushbreath 2.8s ease-in-out infinite; }
+@keyframes sai-fox-brushbreath{
+  0%,100%{transform:rotate(-38deg) translate(-14px,9px) scale(1.06,.9);}
+  50%    {transform:rotate(-37deg) translate(-14px,8.4px) scale(1.06,.9);} }
+
+/* ---- waking: the nose comes out from under the brush first ---- */
+.sai-sprite[data-state="foxwake"] .sai-crit--fox .sai-crit-body{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-fox-rise 1.8s ease-out forwards; }
+@keyframes sai-fox-rise{
+  0%  {transform:translateY(7px) scaleY(.72);}
+  55% {transform:translateY(3px) scaleY(.9) scaleX(1.04);}
+  100%{transform:translateY(0) scaleY(1);} }
+.sai-sprite[data-state="foxwake"] .sai-crit--fox .sai-crit-head{
+  transform-box:fill-box; transform-origin:18% 88%;
+  animation:sai-fox-blink 1.8s ease-out forwards; }
+@keyframes sai-fox-blink{
+  0%  {transform:rotate(26deg) translate(1px,12px);}
+  60% {transform:rotate(-8deg) translate(0,-2px);}
+  100%{transform:rotate(0) translate(0,0);} }
+.sai-sprite[data-state="foxwake"] .sai-crit--fox .sai-crit-tail{
+  transform-box:fill-box; transform-origin:96% 60%;
+  animation:sai-fox-brushoff 1.8s ease-out forwards; }
+@keyframes sai-fox-brushoff{
+  0%  {transform:rotate(-38deg) translate(-14px,9px);}
+  100%{transform:rotate(0) translate(0,0);} }
+
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-state="foxturn"] .sai-crit--fox .sai-crit-body,
+  .sai-sprite[data-state="foxturn"] .sai-crit--fox .sai-crit-head,
+  .sai-sprite[data-state="foxturn"] .sai-crit--fox .sai-crit-tail,
+  .sai-sprite[data-state="foxcurl"] .sai-crit--fox .sai-crit-body,
+  .sai-sprite[data-state="foxcurl"] .sai-crit--fox .sai-crit-tail{ animation:none; }
+  .sai-sprite[data-state="foxcurl"] .sai-crit--fox .sai-crit-body{
+    transform:translateY(7px) scaleY(.72) scaleX(.94); }
+  .sai-sprite[data-state="foxcurl"] .sai-crit--fox .sai-crit-tail{
+    transform:rotate(-38deg) translate(-14px,9px) scale(1.06,.9); }
+  /* the wake keeps its one-shot: holding him half-risen is worse */
+}
