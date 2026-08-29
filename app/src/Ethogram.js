@@ -256,7 +256,13 @@ function gotoStalled(a, ctx, S, g) {
   if (G._wt < GOTO_STALL_WIN) return false;
   const net = Math.hypot(a.x - G._wx, a.y - G._wy);
   const yield_ = Math.hypot(a.vx, a.vy) * (G._wt / 1000);
-  const stalled = net < Math.max(G._path, Math.min(32, yield_)) * 0.25;
+  // THE FLOOR IS THE WHOLE DETECTOR. A wall that zeroes both the step and
+  // the velocity leaves path 0 and yield 0, and a threshold built only from
+  // those is 0 — the one animal this exists for, the perfectly stopped one,
+  // was the one it could never see. Every goto walks at gait(urgency 0.18+)
+  // which is 20px/s and up, so under 6px of net progress across a 1.25s
+  // window is stalled no matter what the path and the velocity claim.
+  const stalled = net < Math.max(6, Math.max(G._path, Math.min(32, yield_)) * 0.25);
   G._stall = stalled ? G._stall + G._wt : 0;
   G._wx = a.x; G._wy = a.y; G._wt = 0; G._path = 0;
   if (G._stall < GOTO_STALL_MS) return false;
