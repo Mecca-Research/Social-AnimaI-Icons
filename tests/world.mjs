@@ -4186,7 +4186,25 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
       }
       return null;
     };
-    const talus = spotOn(0), shelf = spotOn(1), plateau = spotOn(2);
+    const plateau = spotOn(2);
+    // THE TALUS SPOT IS PAIRED TO THE SHELF SPOT. cougarCanTake keeps a
+    // floor cougar inside 210px of his prey — his hunts belong to the rock,
+    // not the far meadow — so a talus stand drawn anywhere in the band asks
+    // the distance gate half the time and calls its answer the level rule.
+    let shelf = null, talus = null;
+    for (let i = 0; i < 2500 && !talus; i++) {
+      const sx = 0.005 * B.w + Math.random() * 0.1 * B.w;
+      const sy = 0.1 * B.h + Math.random() * 0.65 * B.h;
+      if (!w.__prey.okAt('goat', sx, sy, { lvl: 1 })) continue;
+      for (let k = 0; k < 40 && !talus; k++) {
+        const tx = 0.005 * B.w + Math.random() * 0.12 * B.w;
+        const ty = sy + Math.random() * 185;
+        if (Math.hypot(tx - sx, ty - sy) > 185) continue;
+        if (!w.__prey.okAt('goat', tx, ty, { lvl: 0 })) continue;
+        talus = { x: tx, y: ty };
+      }
+      if (talus) shelf = { x: sx, y: sy };
+    }
     if (!talus || !shelf || !plateau) {
       return { none: 'the bluff has no room for a goat on all three terraces' };
     }
