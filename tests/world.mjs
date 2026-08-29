@@ -2920,7 +2920,10 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     const bad = [], drift = [];
     for (const k of Object.keys(P)) {
       const r = P[k];
-      const want = B.apparentFromBulk(r.mass, r.len, r.hgt);
+      // 'draw' is the one sanctioned hand on the scale: the goat and the
+      // boar draw at half their honest bulk by the owner's order, and the
+      // factor is DECLARED on the row rather than smuggled into the mass
+      const want = B.apparentFromBulk(r.mass, r.len, r.hgt) * (r.draw || 1);
       if (Math.abs(want - r.apparent) > 0.06) drift.push(k + ' ' + r.apparent + ' vs ' + want.toFixed(2));
       if (Math.abs(r.size - r.apparent / (r.fill * 2.7)) > 0.02) bad.push(k);
     }
@@ -2940,17 +2943,23 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
              minBox: Math.min.apply(null, Object.keys(P).map(function (k) { return P[k].size * 3.1; })) };
   })(window.__saiWorld)`);
   chk(sz.drift.length === 0,
-    'every prey size comes out of the bulk index, not out of a hand',
-    sz.drift.length ? sz.drift.join('; ') : '13 rows reproduce apparentFromBulk exactly');
+    'every prey size is the bulk index times its declared draw factor',
+    sz.drift.length ? sz.drift.join('; ') : '13 rows reproduce apparentFromBulk x draw exactly');
   chk(sz.bad.length === 0, 'and the table is self-consistent: size = apparent / (fill * 2.7)',
     sz.bad.length ? sz.bad.join(', ') : 'all 13 rows');
   chk(sz.woodmouse < sz.frog && sz.woodmouse / sz.bear < 0.30 && sz.woodmouse / sz.bear > 0.18,
     'a wood mouse reads as a mouse next to a bear',
     `wood mouse ${sz.woodmouse}px against bear ${sz.bear}px â€” ${(100 * sz.woodmouse / sz.bear).toFixed(0)}%`);
-  chk(sz.goat < sz.deer && sz.goat > sz.wolf && sz.boar < sz.wolf && sz.boar > sz.cougar,
-    'and the two big prey land where their real bulk puts them',
-    `goat ${sz.goat} under the deer's ${sz.deer}; boar ${sz.boar} between ` +
-    `the wolf's ${sz.wolf} and the cougar's ${sz.cougar}`);
+  // THE OWNER'S CALL, v0.46: at honest bulk these two drew bigger than the
+  // wolf and read as peers, not as game â€” "way too large to be game hunt
+  // for the predators, we need to make them half their current size." So
+  // the rule is now the opposite of the one it replaced: both draw at half
+  // bulk, clearly UNDER every predator that hunts them, and still the two
+  // biggest prey on the floor.
+  chk(sz.goat < sz.cougar && sz.boar < sz.wolf && sz.goat > sz.beetle * 2 && sz.boar > sz.beetle * 2,
+    'and the two big prey draw as game: under their own hunters',
+    `goat ${sz.goat} and boar ${sz.boar}, under the cougar's ${sz.cougar} ` +
+    `and the wolf's ${sz.wolf}`);
   chk(sz.ladder[0] === 'bear' && sz.ladder[sz.ladder.length - 1] === 'beetle',
     'the bear is still the biggest thing in the world, and a beetle the smallest',
     `largest ${sz.ladder[0]}, smallest ${sz.ladder[sz.ladder.length - 1]}: ` +
@@ -3761,6 +3770,10 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     const w = window.__saiWorld;
     const land = (species, ev, sibs, preyKey, gap, hit, budget) => {
       w.__park();
+      // A CLEAN STAGE, or the check hunts somebody else's leftovers: with
+      // strays standing the owl once chased a prey 1127px from the pinned
+      // snake and the check read the wrong chase entirely
+      w.__prey.clear();
       const g = w.__floorSpot(null, null, 0, 0); if (!g) return null;
       const p = w.__putPrey(preyKey, g); if (!p) return null;
       const h = w.__floorSpot(g.x, g.y, gap - 8, gap + 8); if (!h) return null;
@@ -3777,7 +3790,10 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
         p.x = g.x; p.y = g.y; p.vx = 0; p.vy = 0;
         window.__pump(1);
         const sp = Math.hypot(a.vx, a.vy); if (sp > top) top = sp;
-        if (a.state === hit) { started = true; goLeft = a._huntGo; }
+        // the fate is pinned to WIN: this check is about whether the burst
+        // CAN close the ground at all, and a chase fated to lose breaks off
+        // by design â€” that path has its own checks
+        if (a.state === hit) { started = true; a._huntWin = true; goLeft = a._huntGo; }
         // against the PINNED point and not against the live instance: the
         // prey is put back on that point at the top of every frame, so it is
         // the position drive() measured its own reach against, and the sim
@@ -4227,8 +4243,11 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     return { none: false, across1: across1, across2: across2, same: same,
              tried: 3, plateauStalks: off(across1) + off(across2), took: off(same) };
   })()`);
-  chk(!T.none && T.plateauStalks === 0 && T.took === 1,
-    'he never sets off after a goat on a terrace he cannot walk to',
+  // THE RULE MOVED in v0.46: his stalk carries canHop now, so ONE terrace
+  // of separation is a hunt â€” that is the leap the owner asked for pointed
+  // at the goat â€” and only a two-face climb is still refused.
+  chk(!T.none && T.across1.indexOf('set off') === 0 && T.across2 === 'refused' && T.took === 1,
+    'he stalks the goat one face up, and still refuses a two-face climb',
     T.none || `one face up: ${T.across1}; two faces up: ${T.across2}; ` +
       `and on his own terrace he ${T.same}`);
 
@@ -4638,6 +4657,12 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
       if (!w.__prey.okAt('hare', px, py)) return null;
       if (!w.__prey.okAt('hare', cx, cy)) return null;
       w.__prey.release('hare', wf.id);
+      // TRIAL HYGIENE, measured into being: a far-ring engagement leaves
+      // wf._huntP and the hare's claim standing, and the near trial then
+      // reads a stale hunt instead of running its own. Ten clean bearings
+      // in a hygienic probe against eight in this fixture, same build.
+      wf._huntP = null; wf._huntWin = false;
+      p.claimedBy = null; p.hunted = false; p._chasePace = 0;
       p.x = px; p.y = py; p._fleeUntil = 0;
       w.__free(wf, cx, cy, 0);
       const beats = ['wfstalk', 'wfcrouch', 'wfrush', 'wfeat', 'wfmiss'];
@@ -4809,33 +4834,50 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     var site = p._site;
     w.__free(a);
     a.x = p.x - 44; a.y = p.y + 6;
+    // the staged grub arrives unearthed; bury it, because the dig's whole
+    // new contract is that HE brings it up
+    p._buried = true;
     var pitsBefore = (w.pits || []).length;
-    var seen = {}, dug = 0, cast = 0, feed = 0, ate = -1, id = p.id;
-    for (var i = 0; i < 900; i++) {
+    var seen = {}, dug = 0, cast = 0, feed = 0, ate = -1;
+    var unearthedAt = -1, escaped = false, reburied = false;
+    for (var i = 0; i < 1500; i++) {
       w.__only(a, 'grubs');
       seen[a.state] = (seen[a.state] | 0) + 1;
       if (a.state === 'skgrub') dug++;
       if (a.state === 'skcast') cast++;
       if (a.state === 'skgrubeat') { feed++; if (ate < 0) ate = i; }
+      if (!p._buried && unearthedAt < 0) unearthedAt = i;
+      if (p._escapeUntil) escaped = true;
+      if (escaped && p._buried) reburied = true;
       if (ate >= 0 && i > ate + 40) break;
+      if (reburied) break;
       window.__pump(1);
     }
     var d = Math.hypot(a.x - site.px, a.y - site.py);
     return { none: false, seen: seen, dug: dug, cast: cast, feed: feed, ate: ate,
              kind: site.kind, d: d, half: site.half,
+             unearthedAt: unearthedAt, dugFirst: unearthedAt > 0 && dug > 0,
+             escaped: escaped, reburied: reburied,
              pitsBefore: pitsBefore, pits: (w.pits || []).length,
              gone: !w.__prey.of('grub'), eaten: w.__prey().stat.eaten,
              claim: p.claimedBy || null };
   })()`);
-  chk(!D.none && D.ate >= 0 && D.d < D.half + 90,
-    'the skunk digs where the grubs actually are, in the timber and the roots',
-    D.none || `dug a ${D.kind} at ${D.d.toFixed(0)}px from its anchor, half ${D.half.toFixed(0)}px`);
+  chk(!D.none && D.dugFirst && D.d < D.half + 60,
+    'the skunk digs where the grubs actually are, and the grub only appears when he does',
+    D.none || `dug a ${D.kind} at ${D.d.toFixed(0)}px from its anchor (half ${D.half.toFixed(0)}px); ` +
+      `buried until frame ${D.unearthedAt}, after ${D.dug} frames of digging`);
   chk(!D.none && D.pits === D.pitsBefore,
     'and a grub dig leaves no cone: his pits belong on open ground',
     D.none || `world.pits ${D.pitsBefore} -> ${D.pits} across ${D.cast + D.dug + D.feed} frames of digging`);
-  chk(!D.none && D.gone && D.eaten > 0 && D.dug > 8,
-    'and the grub goes: it withdrew, and withdrawing is not escaping',
-    D.none || `${D.cast} frames casting, ${D.dug} digging, ${D.feed} with his head in the hole`);
+  // THE COIN, both faces legal â€” the owner's 50/50: eaten in the feed pose,
+  // or RELEASED, visibly running for the wood and going back under. Either
+  // way the dig itself must have been real (seconds of skgrub on screen).
+  chk(!D.none && D.dug > 8 && ((D.ate >= 0 && D.gone && D.eaten > 0) || (D.escaped && D.reburied)),
+    'and the coin falls: eaten where it lies, or released and back under the wood',
+    D.none || (D.ate >= 0
+      ? `eaten: ${D.feed} frames in the feed pose after ${D.dug} of digging`
+      : `released: it ran and re-buried (escaped ${D.escaped}, reburied ${D.reburied}) ` +
+        `after ${D.dug} frames of digging`));
 
   // ---- 2. THE CRAYFISH IN THE MUDDY SHALLOWS. Two halves of one rule: he
   // refuses one he cannot physically get to, and he takes one at the lip

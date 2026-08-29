@@ -1125,7 +1125,10 @@ function makeDig(o) {
     id: o.id, domain: "land", trigger: "seek",
     every: o.every, chance: o.chance, cool: o.cool, miss: o.missCool ?? 14000,
     states: [st.fix, st.strike, st.feed, st.miss].filter(Boolean),
-    goto: { state: st.stalk, within: o.pounce ?? 30, giveUp: o.giveUp ?? 24000,
+    // within 16, whatever the pounce says: the digging happens where he
+    // STANDS, and a dig opened thirty px from the timber unearths the grub
+    // in open grass — the suite caught it at 52px from the site's anchor
+    goto: { state: st.stalk, within: 16, giveUp: o.giveUp ?? 24000,
             none: 16000, lost: 10000, urgency: o.creep ?? 0.30,
             pick: (a, c) => huntPick(a, c, opts),
             track: (a, c, ref) => huntTrack(a, c, ref, opts) },
@@ -5183,6 +5186,13 @@ function foxBedSpot(a, c) {
     const p = { x: c.rand(70, b.w - 70), y: c.rand(90, b.h - 60) };
     if (c.lakeRho(p.x, p.y) < 1.12) continue;
     if (c.rockZone && c.rockZone(p.x, p.y).on) continue;
+    // ...and clear of the trees: a bed picked under one is a fox drawn
+    // sleeping ON the crown, which is exactly how it came out of the camera
+    let treed = false;
+    for (const t of (c.def && c.def.trees) || []) {
+      if (Math.abs(t.x * b.w - p.x) < 80 && Math.abs(t.y * b.h - p.y) < 150) { treed = true; break; }
+    }
+    if (treed) continue;
     const d = Math.hypot(p.x - a.x, p.y - a.y);
     if (d < bd) { bd = d; best = p; }
   }
