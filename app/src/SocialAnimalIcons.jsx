@@ -341,11 +341,22 @@ const SPRITE_UNIT = 2.7 / 120;
  * what is inside `pad` of this point and at nothing else, so the reach is
  * read off the drawing rather than declared beside it.
  */
+/**
+ * ...and HOW FAR THE AIMED TONGUE CAN GO, in stage px from the mouth. The
+ * strike is dynamic now — TongueLayer draws the band from the mouth to
+ * wherever the sim's tip is, so its length is no longer the drawn band's
+ * fixed ~27px but a radius of its own. One copy of the number: the ambush
+ * reads it off frogTipAt (`strike`, below), and so do the tests — 48px is
+ * about a body-and-a-half of lunge-free reach, which brings the wandering
+ * insects near the shore into play as well as the solved perch rounds.
+ */
+const FROG_STRIKE_PX = 48;
 function frogTipAt(x, y, r, dir) {
   const k = r * SPRITE_UNIT, d = dir < 0 ? -1 : 1;
   return { x: x + d * (FROG_TONGUE.x - 60) * k,
            y: y + (FROG_TONGUE.y - 60) * k,
            pad: FROG_TONGUE.pad * k,
+           strike: FROG_STRIKE_PX,
            // the other end of the same band: what he catches travels back
            // down it to here, which is his mouth
            rootX: x + d * (FROG_TONGUE.root.x - 60) * k,
@@ -2866,7 +2877,8 @@ export default function SocialAnimalsRPG() {
   // the lake's own life: insects that move, plants that get eaten down, and
   // the three things painted back over an animal at zIndex 12
   const lakeRefs = useRef({ bugs: new Map(), weeds: new Map(),
-                            padTop: new Map(), mudTop: new Map(), silt: new Map() });
+                            padTop: new Map(), mudTop: new Map(), silt: new Map(),
+                            tongue: null });
   const preyRefs = useRef(new Map()); // prey id -> HTMLElement
   const [cfg, setCfg] = useState(DEFAULTS);
   const cfgRef = useRef(cfg); cfgRef.current = cfg; // the RAF loop reads the live value
@@ -3344,6 +3356,10 @@ export default function SocialAnimalsRPG() {
             so what has to cover him is drawn again up here. */}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <LakeCanopyLayer bounds={snapshot.bounds}
           padTopRef={lakeRefs.current.padTop} mudTopRef={lakeRefs.current.mudTop} siltRef={lakeRefs.current.silt} />}
+        {/* the frog's aimed tongue: one pooled band at zIndex 11 — over the
+            frog at 10, UNDER the insects at 12 (the pad closes on a fly
+            from below) and under the lake's canopy lilies */}
+        {worldKey === "forest" && snapshot.bounds.w > 0 && <TongueLayer lakeRefs={lakeRefs} />}
         {/* the insects fly OVER everything, which is where insects are */}
         {worldKey === "forest" && snapshot.bounds.w > 0 && <BugLayer bugRefs={lakeRefs.current.bugs} />}
       </div>
@@ -6060,6 +6076,39 @@ function BugLayer({ bugRefs }) {
 }
 
 /**
+ * THE FROG'S AIMED TONGUE, on BugLayer's pattern: one SVG, no React in the
+ * loop, positions written every frame by renderWorld. A CSS keyframe fires
+ * the same band the same distance every time, and the owner's brief is the
+ * opposite of that: the tip has to land on a MOVING insect's pixel position
+ * at arrival and drag it back into the mouth. So the ethogram runs the
+ * strike as sim state (a._frogT: phase + live tip + mouth) and this layer
+ * only draws the line between the two points it is handed.
+ *
+ * One pooled element — there is exactly one frog. Its parts are the drawn
+ * tonguepose band's, from FROG_TONGUE's own export (band half-widths, pad,
+ * inks), scaled by the same r * SPRITE_UNIT as the sprite, so the dynamic
+ * band and the drawing it replaced are indistinguishable. zIndex 11: over
+ * the frog at 10, under the insects and the canopy lilies at 12 — the
+ * tongue sits with him, over the water, and the pad closes on a fly from
+ * below. Sim-driven, so it needs no reduced-motion carve-out.
+ */
+function TongueLayer({ lakeRefs }) {
+  return (
+    <div className="sai-tongue"
+      ref={(el) => { lakeRefs.current.tongue = el; }}
+      style={{ position: "absolute", left: 0, top: 0, zIndex: 11,
+               pointerEvents: "none", display: "none", willChange: "contents" }}>
+      <svg width="1" height="1" style={{ display: "block", overflow: "visible" }}>
+        <polygon className="sai-tongue-fill" fill={FROG_TONGUE.ink.band} points="0,0 0,0 0,0 0,0" />
+        <polygon className="sai-tongue-mid" fill={FROG_TONGUE.ink.mid} opacity=".7" points="0,0 0,0 0,0 0,0" />
+        <ellipse className="sai-tongue-pad" fill={FROG_TONGUE.ink.pad} cx="0" cy="0" rx="1" ry="1" />
+        <ellipse className="sai-tongue-glint" fill={FROG_TONGUE.ink.glint} opacity=".85" cx="0" cy="0" rx="1" ry="1" />
+      </svg>
+    </div>
+  );
+}
+
+/**
  * THE LAKE'S CANOPY PASS — everything painted OVER an animal at zIndex 12.
  *
  * The rule this exists for: an animal is drawn at 10 and the water, the mud
@@ -7204,7 +7253,16 @@ function stepWorld(world, cfg, dt) {
     // import ROCK_BREAKS: "L0" "L1" "B1" "L2" "T1"
     breakY: (line, x) => (def.rock && ROCK_BREAKS[line]
                           ? rockBreakY(bounds, ROCK_BREAKS[line], x) : null),
-    rockEdge: (y) => (def.rock ? rockEdgeX(bounds, y) : 0) };
+    rockEdge: (y) => (def.rock ? rockEdgeX(bounds, y) : 0),
+    // THE WORLD'S OWN LADDER, OFFERED MID-ERRAND. tryRockHop is normally
+    // asked only of a FREE animal (the step loop below), which meant an
+    // errand could never change level: a goto whose line met a riser pushed
+    // at it until the trip gave up. A goto that declares `canHop` may now
+    // ask for the same move when its stall detector fires — the same
+    // species sets, the same faces, the same arcs, nothing re-derived. The
+    // arc it starts is driven to completion by the step loop like any
+    // other, whatever state the animal is in.
+    tryHop: (a) => (def.rock ? tryRockHop(a, bounds, now) : false) };
 
   // ---- the lake's insects, weed beds and shoreline mud ------------------
   // Rebuilt only when the stage changes shape. The insects then MOVE, every
@@ -7981,6 +8039,32 @@ function stepWorld(world, cfg, dt) {
             else a._lvl = rockLevelAt(bounds, a.x, a.y) ?? a._lvl;
           }
         }
+        // A FREE WANDERER BOXED IN BY THE ROCK GETS POINTED BACK OUT. The
+        // errands have the stall detector in driveGoto for this; a plain
+        // wander has no goal to measure against, so it is measured against
+        // itself: while he is wandering the talus pocket at floor level,
+        // his position is snapshotted every three SIM-seconds (summed dt —
+        // never frames, never wall clock), and a window that closed with
+        // almost no net ground — pinned at a face, or circling the pocket —
+        // re-aims his heading east of the bluff's own drawn outline. The
+        // wander block derives next frame's heading from this one's
+        // velocity, so one written heading persists as an amble out, not a
+        // shove. tryRockHop already had its chance this frame (above): an
+        // animal it took is airborne and excluded by !a._rockHop, so this
+        // only ever speaks for the animal the ladder declined.
+        if (a.state === "wander" && !a._rockHop && !a._plat && a.z < 4
+            && (a._lvl ?? ROCK_LEVEL_GROUND) === ROCK_LEVEL_GROUND
+            && rockZone(bounds, a.x, a.y).on) {
+          const s = a._rockPace || (a._rockPace = { x: a.x, y: a.y, s: 0 });
+          s.s += dt;
+          if (s.s >= 3) {
+            if (Math.hypot(a.x - s.x, a.y - s.y) < 24) {
+              const sp = Math.max(24, Math.hypot(a.vx, a.vy));
+              a.vx = sp; a.vy = 0;         // due east: off the rock, into the open
+            }
+            s.x = a.x; s.y = a.y; s.s = 0;
+          }
+        } else if (a._rockPace) a._rockPace = null;
       }
       if (def.pool && !canSwimIn(def, a.species) && a.z < 3) keepOutOfPool(a, bounds, def.pool);
       if (a.z < 3) keepOutOfHouses(a, bounds, def.houses);
@@ -8437,6 +8521,49 @@ function renderWorld(world, iconsRef, padsRef, damRefs, pitRefs, lakeRefs, preyR
       el.style.transform = `translate(${b.x}px, ${b.y}px) rotate(${b.rot.toFixed(1)}deg)`;
       const gone = b.goneUntil > nowMs ? '1' : '';
       if (el.dataset.gone !== gone) el.dataset.gone = gone;
+    }
+    // THE AIMED TONGUE. The ethogram runs the strike as sim state on the
+    // agent (a._frogT: phase, live tip, mouth) and this draws the band
+    // between those two points — nothing here invents geometry. Every
+    // frame either writes fresh points or writes display:none, so a stale
+    // band can never be left frozen across the lake after a strike ends.
+    const tEl = L.tongue;
+    if (tEl) {
+      let fa = null;
+      for (const a of world.agents) {
+        if (a.species === 'frog' && a.state === 'frogtongue' && a._frogT) { fa = a; break; }
+      }
+      if (fa) {
+        const T = fa._frogT, k = fa.r * SPRITE_UNIT;
+        if (!tEl._parts) tEl._parts = {
+          fill: tEl.querySelector('.sai-tongue-fill'),
+          mid: tEl.querySelector('.sai-tongue-mid'),
+          pad: tEl.querySelector('.sai-tongue-pad'),
+          glint: tEl.querySelector('.sai-tongue-glint') };
+        const dx = T.x - T.rootX, dy = T.y - T.rootY, len = Math.hypot(dx, dy) || 1;
+        const ux = dx / len, uy = dy / len, nx = -uy, ny = ux;
+        // the drawn band's own taper and pad, through FROG_TONGUE's export,
+        // scaled exactly as the sprite is — one copy of every number
+        const w0 = FROG_TONGUE.band[0] * k, w1 = FROG_TONGUE.band[1] * k;
+        const q = (x, y) => `${x.toFixed(2)},${y.toFixed(2)}`;
+        tEl._parts.fill.setAttribute('points',
+          `${q(T.rootX + nx * w0, T.rootY + ny * w0)} ${q(T.x + nx * w1, T.y + ny * w1)} ` +
+          `${q(T.x - nx * w1, T.y - ny * w1)} ${q(T.rootX - nx * w0, T.rootY - ny * w0)}`);
+        const m0 = w0 * 0.45, m1 = w1 * 0.45, ox = nx * w0 * 0.35, oy = ny * w0 * 0.35;
+        tEl._parts.mid.setAttribute('points',
+          `${q(T.rootX - ox + nx * m0, T.rootY - oy + ny * m0)} ${q(T.x - ox + nx * m1, T.y - oy + ny * m1)} ` +
+          `${q(T.x - ox - nx * m1, T.y - oy - ny * m1)} ${q(T.rootX - ox - nx * m0, T.rootY - oy - ny * m0)}`);
+        const pr = FROG_TONGUE.pad * k;
+        tEl._parts.pad.setAttribute('cx', T.x.toFixed(2));
+        tEl._parts.pad.setAttribute('cy', T.y.toFixed(2));
+        tEl._parts.pad.setAttribute('rx', pr.toFixed(2));
+        tEl._parts.pad.setAttribute('ry', (pr * 0.85).toFixed(2));
+        tEl._parts.glint.setAttribute('cx', (T.x - ux * 1.4 * k).toFixed(2));
+        tEl._parts.glint.setAttribute('cy', (T.y - 1.6 * k).toFixed(2));
+        tEl._parts.glint.setAttribute('rx', (2.9 * k).toFixed(2));
+        tEl._parts.glint.setAttribute('ry', (2.0 * k).toFixed(2));
+        if (tEl.style.display !== '') tEl.style.display = '';
+      } else if (tEl.style.display !== 'none') tEl.style.display = 'none';
     }
     // how far each weed bed has been eaten down
     for (const p of world.weeds || []) {

@@ -307,14 +307,23 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
 // so they must not add a second appetite — but they do change the mean bout
 // length of the event they belong to, and the two weighted means above are
 // where that lands.
+// ...and the HUNTS are priced by tests/soak.mjs, not here. The nominal
+// formula below assumes every appetite window converts into a bout, which
+// is true of a berry bush (the bush is always there) and false of a hunt
+// (the pick fails whenever no prey stands inside sense, which live is most
+// of the time). Since v0.45 a hunt's appetite is a short SCAN and its real
+// pacing is cool/missCool — pricing it nominally would claim the skunk eats
+// mice for a quarter of his day when the soak measures a kill or two per
+// ten minutes. makeHunt tags its descriptors `hunt: true`; the lint below
+// holds their anti-massacre bounds instead.
 const FEEDING = {
-  skunk:    { windfall: 14.8, scrape: 8.0, grubs: 7.4, mousing: 5.0 },
+  skunk:    { windfall: 14.8, scrape: 8.0 },
   deer:     { browse: 14.5, graze: 5.0 },
   bear:     { strip: 34.0 },     // a floor: he also fishes — see the note above
   squirrel: { cache: 17.1, raid: 12.1 },
   raccoon:  { berry: 24.1 },
   fox:      { scrump: 7.4 },
-  hedgehog: { roots: 12.7, logs: 16.4, grubs: 6.7 },
+  hedgehog: { roots: 12.7, logs: 16.4 },
   goose:    { graze: 20.3, dabble: 12.6 },
 };
 
@@ -451,6 +460,31 @@ const cools = await page.evaluate(`(feeding => {
   return bad; })(${JSON.stringify(FEEDING)})`);
 chk(cools.length === 0, 'no cooldown outlasts its own appetite window',
   cools.length ? cools.join('; ') : 'every cool and miss sits under its every[0]');
+
+// ---- the hunts hold their anti-massacre bounds ----
+// A hunt's appetite is deliberately shorter than its cooldown — the seek is
+// a scan, the cool is the per-kill pacing, and a due seek WAITS OUT its own
+// cooldown (offer() checks cd before the trigger), so the short window costs
+// nothing. What must hold instead: the pacing itself. A predator whose cool
+// slipped under 18s could clear a prey species from the map faster than the
+// respawn clock turns.
+const huntBounds = await page.evaluate(`(() => {
+  const E = window.__saiEtho.ETHOGRAM, bad = [], seen = [];
+  for (const sp of Object.keys(E)) {
+    for (const ev of E[sp].events) {
+      if (!ev.hunt) continue;
+      seen.push(sp + '.' + ev.id);
+      if ((ev.cool || 0) < 18000) bad.push(sp + '.' + ev.id + ' cool ' + ev.cool);
+      if ((ev.miss || 0) < 9000) bad.push(sp + '.' + ev.id + ' miss ' + ev.miss);
+      if (ev.every && ev.every[0] > 30000) bad.push(sp + '.' + ev.id + ' every[0] ' + ev.every[0] + ' — a scan that slow is v0.44 again');
+    }
+  }
+  return { bad: bad, n: seen.length };
+})()`);
+chk(huntBounds.bad.length === 0 && huntBounds.n >= 9,
+  'every hunt is a fast scan behind a slow trigger',
+  huntBounds.bad.length ? huntBounds.bad.join('; ')
+    : huntBounds.n + ' hunts, every one with cool >= 18s, miss >= 9s, scan <= 30s');
 
 chk(errs.length === 0, 'no JS errors', errs.length ? errs[0] : 'clean');
 console.log(`\n${fail.length ? 'FAIL ' + fail.length : 'ALL PASS'} (${pass.length} passed)`);
