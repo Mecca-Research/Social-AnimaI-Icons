@@ -11,6 +11,7 @@ import { SPECIES_PROFILE, speciesSize, PREY_PROFILE, PREY_KEYS,
          apparentFromBulk, BULK_ANCHOR } from "./SpeciesProfile.js";
 import { gait, gaitIn, speedCap, rescueReach, SPEED, GAIT_DEF } from "./Gait.js";
 import { stepEthogram, ethoSwimP, ethoShare, ETHOGRAM, ETHO_STATES, ETHO_Z_STATES, ETHO_OWNWATER_STATES, setTreeMetrics, setForageMetrics, ethoOffstage, hogCurl, squirrelBolt } from "./Ethogram.js";
+import { windDir } from "./Ethogram.js";
 import { stepRemains, leaveRemains, nearestRemains, eatRemains, REMAINS_MAX,
          stepMarks, leaveMark, nearestMark, MARK_MAX } from "./Ethogram.js";
 import { setPreyTerrain, stepPrey, spawnPrey, removePrey, preyReport, preyBlocked,
@@ -3076,6 +3077,9 @@ export default function SocialAnimalsRPG() {
       W.__markNear = (x, y, r, opt) =>
         nearestMark(W, x, y, r == null ? Infinity : r, opt || {});
       W.__marksStep = () => stepMarks(W, performance.now());
+      // the wind, as the wolf reads it — so a check can PLACE its bearings
+      // relative to the real wind instead of praying over a compass rose
+      W.__wind = () => windDir(performance.now());
       W.__rock = { breaks: ROCK_BREAKS, profile: ROCK_PROFILE, cave: ROCK_CAVE,
                    highEntry: [...ROCK_HIGH_ENTRY],
                    // WHO COMES OFF THE CAVE'S TERRACE AT THE EDGE, handed

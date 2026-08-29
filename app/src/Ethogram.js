@@ -4659,7 +4659,7 @@ const wfPostAt = (a) => {
  * bias nobody can see.
  */
 const WIND_PERIOD = 240000;
-const windDir = (now) => ((now % WIND_PERIOD) / WIND_PERIOD) * Math.PI * 2;
+export const windDir = (now) => ((now % WIND_PERIOD) / WIND_PERIOD) * Math.PI * 2;
 /** downwind of the prey is where it cannot smell him; upwind he is halved */
 function wolfScents(a, c, p) {
   const w = windDir(c.now);
