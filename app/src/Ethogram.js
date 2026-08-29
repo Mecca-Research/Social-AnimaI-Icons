@@ -205,6 +205,76 @@ export function stepTowardAt(a, ctx, t, sp) {
 }
 
 /**
+ * A WALK THAT IS NOT GOING ANYWHERE IS NOTICED, NOT ENDURED. A goto whose
+ * straight line runs into a rock face used to push at the wall until the
+ * trip's own giveUp — twenty to forty SECONDS of an animal marching on the
+ * spot, then a re-pick that as often as not chose the same target and paced
+ * him straight back. This watches the ground actually gained each frame.
+ *
+ * "Ground gained" is NET displacement over a window, never the per-frame
+ * kind, and that is a measurement, not a taste: pinned at a face he is not
+ * still. The wall rule only corrects an animal once he is INSIDE the band,
+ * so a cougar pressing at the riser creeps ~1.3px a frame for a dozen
+ * frames and then gets snapped 13px back out — 78px/s of per-frame motion,
+ * a sawtooth netting zero. Watched per frame he looks like an animal at a
+ * dead run. So each ~1.25s window closes with two numbers, the path walked
+ * and the net gained, and a window is a stall when the net is under a
+ * quarter of EITHER the path (the sawtooth: 97px walked, 13 gained) or the
+ * commanded speed's honest yield (the dead pin: nothing moved at all).
+ * Both quarters scale with the animal's own pace, so a turtle's honest
+ * 6px/s is never mistaken for a wolf pinned at a wall. Time accumulates in
+ * SIM time (ctx.dt — the sim clamps dt at 50ms and headless runs three or
+ * four frames a second, so frame counts and wall clocks are both wrong here
+ * by an order of magnitude). The ledger lives on S.goal, so a fresh goal
+ * starts a fresh clock for free.
+ *
+ * After two stalled windows (~2.5s):
+ *   1. a goto that declared `canHop` asks the world for its own level
+ *      change (ctx.tryHop -> tryRockHop). The step above has just written
+ *      the velocity toward the goal, which is exactly the "walking into the
+ *      face" intent tryRockHop reads off the sign of vy — so a cougar
+ *      stalled under the riser leaps it and the walk carries on up top.
+ *   2. otherwise the errand is abandoned cleanly, on the same shape the
+ *      lost-interest branch below uses, plus a heading nudged off the rock
+ *      face so the next wander does not restart flush against it.
+ * Returns true when it consumed the frame (the errand ended or an arc began).
+ */
+const GOTO_STALL_MS = 2500;   // sim-ms of stalled windows before he reacts
+const GOTO_STALL_WIN = 1250;  // sim-ms each measuring window runs
+
+function gotoStalled(a, ctx, S, g) {
+  const G = S.goal;
+  if (G._sx === undefined) {
+    G._sx = a.x; G._sy = a.y;              // last frame, for the path sum
+    G._wx = a.x; G._wy = a.y; G._wt = 0;   // the window's anchor and clock
+    G._path = 0; G._stall = 0;
+    return false;
+  }
+  G._path += Math.hypot(a.x - G._sx, a.y - G._sy);
+  G._sx = a.x; G._sy = a.y;
+  G._wt += ctx.dt * 1000;
+  if (G._wt < GOTO_STALL_WIN) return false;
+  const net = Math.hypot(a.x - G._wx, a.y - G._wy);
+  const yield_ = Math.hypot(a.vx, a.vy) * (G._wt / 1000);
+  const stalled = net < Math.max(G._path, Math.min(32, yield_)) * 0.25;
+  G._stall = stalled ? G._stall + G._wt : 0;
+  G._wx = a.x; G._wy = a.y; G._wt = 0; G._path = 0;
+  if (G._stall < GOTO_STALL_MS) return false;
+  if (g.canHop && ctx.tryHop && ctx.tryHop(a)) { G._stall = 0; return true; }
+  releaseClaim(a, S);
+  endEvent(a, ctx, { cool: g.lost ?? 8000, reroll: true, stop: true });
+  a._stallAbortN = (a._stallAbortN || 0) + 1;      // read by the suites
+  // the nudge: he gave up pressed against stone, so point the wander he is
+  // being handed back to AWAY from the face — east of the bluff's own drawn
+  // outline. The wander block keeps a heading it is given, so one frame of
+  // eastward velocity is a hint, not a shove. Floor level only: an animal
+  // ON a terrace has the shelf's own way-out steer for this.
+  const ex = ctx.rockEdge ? ctx.rockEdge(a.y) : 0;
+  if (ex && (a._lvl ?? 0) === 0 && a.x < ex + 40) { a.vx = 40; a.vy = 0; }
+  return true;
+}
+
+/**
  * The walk-there half of a `goto` event, driven by the engine so no species
  * has to write travel code. Arriving hands over to the event's own begin().
  */
@@ -229,7 +299,7 @@ function driveGoto(a, ctx, S) {
     const dv = g.urgency !== undefined
       ? stepTowardAt(a, ctx, S.goal.via, gait(a, ctx, g.urgency))
       : stepToward(a, ctx, S.goal.via, typeof g.speed === "function" ? g.speed(a, ctx) : (g.speed ?? 1));
-    if (dv > (g.viaWithin ?? 22)) return;
+    if (dv > (g.viaWithin ?? 22)) { gotoStalled(a, ctx, S, g); return; }
     S.goal.via = null;
   }
   // a leg that crosses the shoreline wants two speeds, the way every other
@@ -239,11 +309,16 @@ function driveGoto(a, ctx, S) {
   const d = g.urgency !== undefined
     ? stepTowardAt(a, ctx, S.goal, gait(a, ctx, g.urgency))
     : stepToward(a, ctx, S.goal, typeof g.speed === "function" ? g.speed(a, ctx) : (g.speed ?? 1));
-  if (d <= (g.within ?? 18)) {
+  // ...and never while a hop arc is in the air: a walk that started a leap
+  // mid-errand can pass over its goal on the way up, and beginning the bout
+  // there would seat him at a point the arc has not finished writing.
+  if (d <= (g.within ?? 18) && !a._rockHop) {
     a.vx = 0; a.vy = 0;
     v.begin(a, ctx, S, S.goal.ref);
     if (v.drive) v.drive(a, ctx, S);
+    return;
   }
+  gotoStalled(a, ctx, S, g);
 }
 
 /**
@@ -4125,8 +4200,12 @@ defineEthogram("cougar", {
       id: "prowl", domain: "land", trigger: "seek",
       every: [44000, 74000], chance: 0.55, miss: 14000, cool: 26000,
       states: ["cgsurvey"],
+      // canHop: his vantages live on the bluff, and a walk to one that
+      // stalls at a face may take the world's own ladder mid-errand — he is
+      // the climber and the whole of ROCK_SHELF_DROP, so any level he leaps
+      // to is a level he can leave again.
       goto: { state: "cgtoledge", within: 24, giveUp: 26000, none: 13000,
-              lost: 11000, urgency: 0.28, pick: cougarVantage },
+              lost: 11000, urgency: 0.28, pick: cougarVantage, canHop: true },
       begin(a, c, S, g) {
         a.vx = 0; a.vy = 0;
         a._cgAt = { x: g ? g.x : a.x, y: g ? g.y : a.y };
@@ -4213,8 +4292,12 @@ defineEthogram("cougar", {
       id: "den", domain: "land", trigger: "seek",
       every: [150000, 250000], chance: 0.60, miss: 22000, cool: 70000,
       states: ["cgsettle", "cgsleep", "cgstir"],
+      // canHop: the den run crosses terraces by design — a cougar caught on
+      // the plateau when the appetite fires walks AT the cliff on the way
+      // down to the talus foot, and the stall detector plus the world's own
+      // hop is what turns that from twenty seconds of pushing into a leap.
       goto: { state: "cgtoden", within: 22, giveUp: 40000, none: 22000,
-              lost: 18000, urgency: 0.30, pick: cougarDen },
+              lost: 18000, urgency: 0.30, pick: cougarDen, canHop: true },
       begin(a, c, S, g) {
         a.vx = 0; a.vy = 0;
         // THE FIRST LEG ENDS HERE. He is at the foot of his own riser and
@@ -4680,6 +4763,13 @@ defineEthogram("wolf", {
       id: "bed", domain: "land", trigger: "seek",
       every: [170000, 270000], chance: 0.55, miss: 22000, cool: 75000,
       states: ["wfcircle", "wfsleep", "wfrouse"],
+      // NO canHop, deliberately, and it was considered: wolfBed never picks
+      // a target across a level (shelf beds only from the shelf, floor beds
+      // only from the floor), so a stalled bed walk has its goal on the
+      // wolf's OWN terrace — and the wolf is not in ROCK_SHELF_DROP, so a
+      // mid-errand leap UP would strand him on a terrace whose only exits
+      // are free-state ones while the errand still owned him. The stall
+      // detector's clean abandon is his whole fix, and it is enough.
       goto: { state: "wftobed", within: 22, giveUp: 44000, none: 24000,
               lost: 18000, urgency: 0.30, pick: wolfBed },
       begin(a, c, S, g) {
@@ -5213,7 +5303,14 @@ function creepToward(a, c, t, k) {
 // ---- THE FROG'S AMBUSH ------------------------------------------------
 const AMBUSH_HOLD = [10000, 17000];  // how long a wait lasts if nothing comes
 const AMBUSH_MEALS = 3;              // ...and how many he takes before moving on
-const TONGUE_MS = 260;               // == sai-frog-tongue in index.css
+// The strike's three phases, all in SIM time — the band is drawn by
+// TongueLayer from the state this file writes, not by a CSS clock. A real
+// frog does the whole thing in 70ms; ~320 reads as fast without being a
+// flicker at 60fps. The state runs OUT + HOLD + BACK; the sprite's own
+// head snap (sai-frog-gape/strikehead, .32s) is fitted to the same window.
+const TONGUE_OUT_MS = 130;           // mouth to insect, aimed live
+const TONGUE_HOLD_MS = 40;           // stuck to it
+const TONGUE_BACK_MS = 150;          // ...and hauled back in
 const GULP_MS = 420;                 // == sai-frog-gulp
 const BUG_GONE = [6000, 11000];      // how long an eaten insect stays eaten
 
@@ -5240,23 +5337,30 @@ function ambushPerch(a, c) {
 }
 
 /**
- * WHAT THE TONGUE WOULD ACTUALLY REACH, this frame. The tip is where the
- * drawing puts it and the catch radius is the drawn sticky pad plus the
- * insect's own body — so a strike can only ever land on something the
- * picture says he is touching. Any insect will do, not only the one he came
- * for: a frog that ignored a fly because it was the wrong fly would be a
- * frog obeying a data structure.
+ * WHAT THE TONGUE WOULD ACTUALLY REACH, this frame. The tongue is aimed
+ * now, so the reach is a radius from his MOUTH — frogTipAt's `strike`, the
+ * one copy of that number — plus the insect's own body. That is longer
+ * than the old drawn band, which brings the wandering insects near the
+ * shore into play as well as the round he came to sit under. Any insect
+ * will do, not only the one he came for: a frog that ignored a fly because
+ * it was the wrong fly would be a frog obeying a data structure. The
+ * NEAREST wins, and only on the side he is facing — a strike backwards
+ * over his own skull is not a thing the drawing can do.
  */
 function bugInReach(a, c) {
   const bugs = c.bugs && c.bugs();
   if (!bugs) return null;
   const tip = c.frogTip(a);
-  const R = tip.pad + c.bugR;
+  const d = (a._faceDir || 1) < 0 ? -1 : 1;
+  const R = tip.strike + c.bugR;
+  let best = null, bd = Infinity;
   for (const b of bugs) {
     if (b.goneUntil > c.now) continue;
-    if (Math.hypot(b.x - tip.x, b.y - tip.y) <= R) return b;
+    if ((b.x - tip.rootX) * d < -4) continue;      // behind his head
+    const bdist = Math.hypot(b.x - tip.rootX, b.y - tip.rootY);
+    if (bdist <= R && bdist < bd) { bd = bdist; best = b; }
   }
-  return null;
+  return best;
 }
 
 function driveAmbush(a, c, S) {
@@ -5268,26 +5372,61 @@ function driveAmbush(a, c, S) {
   if (p) { a.x = p.x; a.y = p.y; }
 
   if (a.state === "frogtongue") {
-    // THE FLY RIDES THE TONGUE HOME. The insect is a real object with a
-    // position of its own, and the sim steps it before the animals — so
-    // unless the strike takes it over, it goes on flying its round while
-    // the tongue is stuck to it, and then vanishes from wherever it had got
-    // to. It is carried down the drawn band instead, on the band's own
-    // extension curve (see sai-frog-tongue: out by 34% of the window, held
-    // to 54%, back by the end), which is what makes the catch read.
-    const b = a._frogBug;
-    if (b) {
-      const tip = c.frogTip(a);
-      const u = Math.min(1, Math.max(0, 1 - (a.stateUntil - c.now) / TONGUE_MS));
-      const ext = u < 0.34 ? u / 0.34 : u < 0.54 ? 1 : Math.max(0, 1 - (u - 0.54) / 0.46);
-      b.x = tip.rootX + (tip.x - tip.rootX) * ext;
-      b.y = tip.rootY + (tip.y - tip.rootY) * ext;
+    // THE AIMED STRIKE, in three phases the sim owns outright (TongueLayer
+    // only draws the line this writes). a._frogT is the tongue: its live
+    // tip, the mouth it grows from, and which phase it is in.
+    //
+    //   out   the tip closes on the insect's LIVE position — the fly keeps
+    //         flying, the aim is re-taken every frame, and the easing runs
+    //         to exactly 1 on the arrival frame, so the tip lands ON the
+    //         pixel the insect occupies at that instant, not on a snapshot
+    //         of where it was when the mouth opened.
+    //   hold  stuck. The insect is the tongue's now: the sim steps its
+    //         round before the animals drive, and this pins it back to the
+    //         tip after, so the last write each frame is the catch.
+    //   back  tip and fly travel to the mouth together. Only THERE does
+    //         the insect vanish — one hidden mid-air was the old bug this
+    //         replaces, and one abandoned where the tongue used to be
+    //         would be the new one.
+    const T = a._frogT, b = a._frogBug;
+    if (!T) {
+      // no tongue state to run (interrupted mid-strike): let the fly go
+      // free rather than leaving it pinned to his mouth forever
+      if (c.now >= a.stateUntil) { a._frogBug = null;
+        a.state = "froggulp"; a.stateUntil = c.now + GULP_MS; }
+      return;
     }
-    if (c.now >= a.stateUntil) {
-      // ...and only NOW is it gone. Hiding it at the moment of the strike
-      // made the tongue reach an insect that was no longer there.
-      if (b) { b.goneUntil = c.now + c.rand(BUG_GONE[0], BUG_GONE[1]); a._frogBug = null; }
-      a.state = "froggulp"; a.stateUntil = c.now + GULP_MS;
+    const tip = c.frogTip(a);
+    T.rootX = tip.rootX; T.rootY = tip.rootY;
+    if (T.phase === "out") {
+      const u = Math.min(1, Math.max(0, 1 - (T.until - c.now) / TONGUE_OUT_MS));
+      const e = 1 - (1 - u) * (1 - u);         // fast off the jaw, easing in
+      const gx = b ? b.x : T.x, gy = b ? b.y : T.y;
+      T.x = T.rootX + (gx - T.rootX) * e;
+      T.y = T.rootY + (gy - T.rootY) * e;
+      if (u >= 1) {
+        if (b) { b.x = T.x; b.y = T.y; }        // arrival: tip ON the insect
+        T.phase = "hold"; T.until = c.now + TONGUE_HOLD_MS;
+      }
+    } else if (T.phase === "hold") {
+      if (b) { b.x = T.x; b.y = T.y; }
+      if (c.now >= T.until) {
+        T.phase = "back"; T.until = c.now + TONGUE_BACK_MS;
+        T.gx = T.x; T.gy = T.y;                 // where the catch was made
+      }
+    } else {
+      const u = Math.min(1, Math.max(0, 1 - (T.until - c.now) / TONGUE_BACK_MS));
+      const e = u * u * (3 - 2 * u);
+      T.x = T.gx + (T.rootX - T.gx) * e;
+      T.y = T.gy + (T.rootY - T.gy) * e;
+      if (b) { b.x = T.x; b.y = T.y; }
+      if (u >= 1) {
+        // ...and only NOW, at the mouth, is it gone. The gulp is what
+        // happens to a fly that has just been swallowed.
+        if (b) { b.goneUntil = c.now + c.rand(BUG_GONE[0], BUG_GONE[1]); a._frogBug = null; }
+        a._frogT = null;
+        a.state = "froggulp"; a.stateUntil = c.now + GULP_MS;
+      }
     }
     return;
   }
@@ -5303,12 +5442,19 @@ function driveAmbush(a, c, S) {
   }
 
   // frogstill — and this IS the behaviour. He does nothing at all until one
-  // of them comes inside the reach of the drawing.
+  // of them comes inside the tongue's reach of his mouth.
   const b = bugInReach(a, c);
   if (b) {
+    const tip = c.frogTip(a);
     a._frogBug = b;
     a._frogAte = (a._frogAte || 0) + 1;
-    a.state = "frogtongue"; a.stateUntil = c.now + TONGUE_MS;
+    // the tongue starts AS the mouth: zero length, phase "out". stateUntil
+    // is a backstop, not the mechanism — the phases carry their own clocks.
+    a._frogT = { phase: "out", until: c.now + TONGUE_OUT_MS,
+                 x: tip.rootX, y: tip.rootY, rootX: tip.rootX, rootY: tip.rootY,
+                 gx: 0, gy: 0 };
+    a.state = "frogtongue";
+    a.stateUntil = c.now + TONGUE_OUT_MS + TONGUE_HOLD_MS + TONGUE_BACK_MS + 400;
     return;
   }
   if (c.now >= (a._frogTill || 0)) {
@@ -5553,8 +5699,11 @@ defineEthogram("frog", {
     if (a._faceDir) a._faceDir = 0;
     if (a._frogAim) a._frogAim = null;
     // a fly stuck to a tongue that is no longer striking is a fly that got
-    // away, and it has to be let go of or it stays pinned to his mouth
+    // away, and it has to be let go of or it stays pinned to his mouth —
+    // and the tongue state goes with it, or TongueLayer would keep drawing
+    // a band frozen across the lake from a mouth that has moved on
     if (a._frogBug) a._frogBug = null;
+    if (a._frogT) a._frogT = null;
   },
 
   events: [
@@ -5599,6 +5748,7 @@ defineEthogram("frog", {
         if (b && b.perch) { a.x = b.perch.x; a.y = b.perch.y; a._faceDir = b.perch.dir; }
         a._frogTill = c.now + c.rand(AMBUSH_HOLD[0], AMBUSH_HOLD[1]);
         a._frogAte = 0;
+        a._frogT = null;
         a.state = "frogstill";
       },
       drive: driveAmbush,

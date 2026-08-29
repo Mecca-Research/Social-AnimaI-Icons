@@ -3430,11 +3430,19 @@ const FROG_G = { cx: 60, cy: 106, k: 0.92 };
 const FROG_TIP_LOCAL = [150, 66];    // the sticky pad's centre, before the wrapper
 const FROG_PAD_LOCAL = 7;            // ...and its radius
 const FROG_ROOT_LOCAL = [86, 79.5];  // ...and where the band leaves his mouth
+const FROG_BAND_LOCAL = [5.6, 5.0];  // the band's half-width at the mouth and at the tip
 const FROG_MOUND_LOCAL = [60, 100];  // ...and the centre of the mud he sinks into
+// the band's own paint, exported WITH the geometry: the aimed tongue is now
+// drawn by an imperative layer (TongueLayer in SocialAnimalIcons) and a
+// layer that carried its own copy of these fills would drift a shade away
+// from the sprite the first time either was touched
+const FROG_TONGUE_INK = { band: "#c4536d", mid: "#f096ab", pad: "#d8657f", glint: "#f9c3ce" };
 const frogU = (p) => ({ x: FROG_G.cx + FROG_G.k * (p[0] - FROG_G.cx),
                         y: FROG_G.cy + FROG_G.k * (p[1] - FROG_G.cy) });
 export const FROG_TONGUE = { ...frogU(FROG_TIP_LOCAL), root: frogU(FROG_ROOT_LOCAL),
-                             pad: FROG_PAD_LOCAL * FROG_G.k };
+                             pad: FROG_PAD_LOCAL * FROG_G.k,
+                             band: [FROG_BAND_LOCAL[0] * FROG_G.k, FROG_BAND_LOCAL[1] * FROG_G.k],
+                             ink: FROG_TONGUE_INK };
 /**
  * ...and where the BURIED pose puts its mound, for the same reason. The
  * sprite is centred on its anchor and this pose paints at the ground line,
@@ -3548,15 +3556,25 @@ function FrogDraw({ uid }) {
           waterline in the float pose IS where the lake sits on his back. */}
 
       {/* ---- THE STRIKE (frogtongue) ----
-          Drawn EXTENDED and fired by CSS scaling it out of the mouth, so the
-          pad at FROG_TIP_LOCAL is the furthest the animal can ever reach.
-          Nothing else about him moves during a strike — a sit-and-wait
-          predator whose body also lunges is just a predator. */}
+          The head pose (open mouth, the 2px snap) stays keyed to the state,
+          but the BAND is no longer this drawing's to fire: the tongue is
+          aimed at a live insect now, and a fixed keyframe can neither aim
+          nor vary its length, so TongueLayer in SocialAnimalIcons draws it
+          imperatively from the sim's own strike state. What this group
+          keeps on screen is the first few units of tongue INSIDE the open
+          mouth, covering the seam where the layer's band leaves the sprite
+          — so the tongue leaves a throat rather than hanging off a lip.
+          The old full-reach band stays in the file as `tongue-band`
+          (display:none, always): it is the drawing the exported geometry
+          above was read off, and deleting it would orphan those numbers. */}
       <g className="sai-crit-tonguepose">
-        <path d="M 86 74 C 106 70 128 65 146 61 L 150 71 C 130 76 108 81 88 85 Z" fill="#c4536d" />
-        <path d="M 88 75.5 C 106 71.5 126 67 144 63 L 145.5 66.5 C 126 71 106 76 89 79.5 Z" fill="#f096ab" opacity=".7" />
-        <ellipse cx={FROG_TIP_LOCAL[0]} cy={FROG_TIP_LOCAL[1]} rx={FROG_PAD_LOCAL} ry={FROG_PAD_LOCAL * 0.8} fill="#d8657f" />
-        <ellipse cx={FROG_TIP_LOCAL[0] - 1.4} cy={FROG_TIP_LOCAL[1] - 1.6} rx="3.2" ry="2.2" fill="#f9c3ce" opacity=".85" />
+        <path d="M 79.5 78.2 C 83.5 77.4 87.5 77 91.5 77.4 L 91 82.8 C 87 82.8 83.4 82.6 80.2 81.8 Z" fill={FROG_TONGUE_INK.band} />
+        <g className="tongue-band">
+          <path d="M 86 74 C 106 70 128 65 146 61 L 150 71 C 130 76 108 81 88 85 Z" fill={FROG_TONGUE_INK.band} />
+          <path d="M 88 75.5 C 106 71.5 126 67 144 63 L 145.5 66.5 C 126 71 106 76 89 79.5 Z" fill={FROG_TONGUE_INK.mid} opacity=".7" />
+          <ellipse cx={FROG_TIP_LOCAL[0]} cy={FROG_TIP_LOCAL[1]} rx={FROG_PAD_LOCAL} ry={FROG_PAD_LOCAL * 0.8} fill={FROG_TONGUE_INK.pad} />
+          <ellipse cx={FROG_TIP_LOCAL[0] - 1.4} cy={FROG_TIP_LOCAL[1] - 1.6} rx="3.2" ry="2.2" fill={FROG_TONGUE_INK.glint} opacity=".85" />
+        </g>
       </g>
 
       {/* ---- THE SQUEAK (frogleap) ----

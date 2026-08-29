@@ -2445,9 +2445,11 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
         moved = Math.max(moved, Math.hypot(a.x - x0, a.y - y0)); }
       if (a.state === 'frogtongue') {
         strike = i;
+        // the tongue is AIMED now: the reach is frogTipAt's exported
+        // strike radius from the MOUTH, not the old drawn band's tip
         const tip = w.frogTipAt(a.x, a.y, a.r, a._faceDir || 1);
         for (const b of w.__lakeLife().bugs) {
-          const d = Math.hypot(b.x - tip.x, b.y - tip.y);
+          const d = Math.hypot(b.x - tip.rootX, b.y - tip.rootY);
           if (hitDist < 0 || d < hitDist) hitDist = d;
         }
         ate = a._frogBug ? 1 : 0;
@@ -2459,9 +2461,11 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
       if (a.state === 'froggulp') gone = w.__lakeLife().bugs.filter((b) => b.goneUntil > performance.now()).length; }
     const tip = w.frogTipAt(a.x, a.y, a.r, a._faceDir || 1);
     return { still, moved, strike, hitDist, ate, gone,
-             catchR: tip.pad + w.__lakeLife().bugR, state: a.state, meals: a._frogAte | 0 };
+             catchR: tip.strike + w.__lakeLife().bugR, state: a.state, meals: a._frogAte | 0 };
   })()`);
-  chk(!A.none && A.strike > 0,
+  // strike >= 0, not > 0: the aimed reach is a 48px arc of the round, so a
+  // wait that settles with an insect already inside it strikes on frame one
+  chk(!A.none && A.strike >= 0,
     'the frog waits at the waterline and then the tongue goes out',
     A.none || `held still for ${A.still} frames (${(A.still / 60).toFixed(1)}s of sim), ` +
       `struck on frame ${A.strike}`);
@@ -2469,9 +2473,9 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     'and he does not move a pixel while he waits',
     A.none || `worst drift over ${A.still} waiting frames: ${(A.moved || 0).toFixed(2)}px`);
   chk(!A.none && A.hitDist >= 0 && A.hitDist <= A.catchR,
-    'and what he strikes is inside the reach the drawing gives him',
-    A.none || `nearest insect ${A.hitDist.toFixed(2)}px from the drawn tongue tip, ` +
-      `which catches inside ${A.catchR.toFixed(2)}px`);
+    'and what he strikes is inside the reach the sim exports',
+    A.none || `nearest insect ${A.hitDist.toFixed(2)}px from his mouth, ` +
+      `and the aimed tongue catches inside ${A.catchR.toFixed(2)}px`);
   chk(!A.none && A.gone >= 1,
     'and the insect is eaten rather than merely reached at',
     A.none || `${A.gone} insect(s) off the water after the swallow, ${A.meals} taken this bout`);
@@ -2679,6 +2683,150 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     'and he sleeps balanced on a floating LOG, riding it as it drifts',
     T4.none || `on a ${T4.log ? 'drift log' : 'lily pad'}, never more than ${T4.off.toFixed(2)}px ` +
       `off his seat while it moved ${T4.drift.toFixed(1)}px under him`);
+
+  // ---- 15. THE AIMED TONGUE ------------------------------------------
+  // v0.45: the strike is three sim phases (out/hold/back on a._frogT) and
+  // the band is TongueLayer's, drawn from that state. One strike, watched
+  // frame by frame: the tip must land ON the insect's live position the
+  // frame the extension completes â€” measured against where the insect's
+  // OWN round put it that frame, not against the pin, so a stale aim
+  // cannot pass â€” the insect must ride the tip into the mouth and vanish
+  // only there, and the DOM band must match the sim and go with the state.
+  const AT = await page2.evaluate(`(() => {
+    const w = window.__saiWorld, a = w.agents.find((x) => x.species === 'frog');
+    if (!a) return { none: 'no frog' };
+    const el = document.querySelector('.sai-tongue');
+    if (!el) return { none: 'no tongue layer in the DOM' };
+    w.__park('frog');
+    const b0 = w.__lakeLife().bugs.find((z) => z.perch && !(z.goneUntil > performance.now()));
+    if (!b0) return { none: 'every perch insect eaten already' };
+    a.x = b0.perch.x; a.y = b0.perch.y;
+    w.__free(a, 'water');
+    if (w.__drive(a, 'ambush', ['frogstill'], 300) < 0)
+      return { none: 'never settled to wait; state ' + a.state };
+    a._frogTill = performance.now() + 9e6;      // the wait may not time out under us
+    let hit = -1;
+    for (let i = 0; i < 2400 && hit < 0; i++) {
+      window.__pump(1);
+      if (a.state === 'frogtongue' && a._frogBug) hit = i;
+    }
+    if (hit < 0) return { none: 'no strike in 40s of sim; state ' + a.state };
+    const b = a._frogBug, s0 = { x: b.x, y: b.y };
+    const m = w.frogTipAt(a.x, a.y, a.r, a._faceDir || 1);
+    let arrive = null, worstRide = -1, endB = null, gulp = false;
+    let domFrames = 0, domHidden = -1, worstPad = -1, worstRoot = -1, bandShow = '', domAfter = '?';
+    for (let i = 0; i < 90; i++) {
+      const wasOut = a._frogT && a._frogT.phase === 'out';
+      window.__pump(1);
+      const T = a._frogT;
+      if (a.state === 'frogtongue' && T) {
+        // the DOM layer, against the sim it draws: pad centre on the tip,
+        // band root edge on the mouth, and never hidden mid-strike
+        if (getComputedStyle(el).display === 'none') domHidden = i;
+        else {
+          domFrames++;
+          const pad = el.querySelector('.sai-tongue-pad');
+          worstPad = Math.max(worstPad,
+            Math.hypot(+pad.getAttribute('cx') - T.x, +pad.getAttribute('cy') - T.y));
+          const pts = (el.querySelector('.sai-tongue-fill').getAttribute('points') || '').split(' ');
+          const p0 = pts[0].split(','), p3 = pts[3].split(',');
+          worstRoot = Math.max(worstRoot,
+            Math.hypot((+p0[0] + +p3[0]) / 2 - T.rootX, (+p0[1] + +p3[1]) / 2 - T.rootY));
+        }
+        if (!bandShow) {
+          const g = w.__spriteOf('frog');
+          const band = g && g.querySelector('.tongue-band');
+          bandShow = band ? getComputedStyle(band).display : 'missing';
+        }
+      }
+      if (!arrive && wasOut && T && T.phase !== 'out') {
+        // the arrival frame. Recompute where the insect's round put it
+        // THIS frame from its own fields and the clock (the same sums
+        // stepWorld runs), and ask how far the tip is from that.
+        const t = performance.now() / 1000, L = w.__lakeLife();
+        const wx = L.bugWob * 0.62 * (Math.sin(t * 0.37 + b.p1) + 0.6 * Math.sin(t * 0.79 + b.p2));
+        const wy = L.bugWob * 0.62 * (Math.cos(t * 0.31 + b.p2) + 0.6 * Math.sin(t * 0.61 + b.p1));
+        const ex = b.hx + Math.cos(b.ang) * b.R + wx, ey = b.hy + Math.sin(b.ang) * b.R + wy;
+        arrive = { miss: Math.hypot(T.x - ex, T.y - ey),
+                   flew: Math.hypot(ex - s0.x, ey - s0.y) };
+      }
+      if (arrive && T) worstRide = Math.max(worstRide, Math.hypot(b.x - T.x, b.y - T.y));
+      if (a.state === 'froggulp') {
+        gulp = true;
+        endB = { off: Math.hypot(b.x - m.rootX, b.y - m.rootY),
+                 gone: b.goneUntil > performance.now() };
+        domAfter = el.style.display;
+        break;
+      }
+    }
+    return { hit, arrive, worstRide, endB, gulp, strike: m.strike,
+             domFrames, domHidden, worstPad, worstRoot, bandShow, domAfter,
+             mouth0: Math.hypot(s0.x - m.rootX, s0.y - m.rootY) };
+  })()`);
+  chk(!AT.none && AT.arrive && AT.arrive.miss <= 2,
+    "the tongue tip lands ON the insect's pixel the frame the extension completes",
+    AT.none || `struck at an insect ${AT.mouth0.toFixed(1)}px from his mouth (reach ${AT.strike}px); ` +
+      `at arrival the tip missed the round's own position by ${AT.arrive.miss.toFixed(3)}px`);
+  chk(!AT.none && AT.arrive && AT.arrive.flew > 0.8 && AT.arrive.miss <= 2,
+    'and it was a MOVING target â€” tracked live, not a snapshot aim',
+    AT.none || (AT.arrive ? `the insect flew ${AT.arrive.flew.toFixed(2)}px during the ` +
+      `extension and the tip still landed ${AT.arrive.miss.toFixed(3)}px off it` : 'never arrived'));
+  chk(!AT.none && AT.gulp && AT.worstRide >= 0 && AT.worstRide <= 0.5 &&
+      AT.endB && AT.endB.off <= 3 && AT.endB.gone,
+    'the catch rides the tip into the mouth and only vanishes there',
+    AT.none || (AT.endB ? `never more than ${AT.worstRide.toFixed(3)}px off the tip riding home, ` +
+      `let go ${AT.endB.off.toFixed(2)}px from the mouth, ${AT.endB.gone ? 'gone' : 'STILL ON THE WATER'}, ` +
+      `and the gulp followed` : 'never reached the gulp'));
+  chk(!AT.none && AT.domFrames > 5 && AT.domHidden < 0 &&
+      AT.worstPad >= 0 && AT.worstPad <= 1 && AT.worstRoot <= 1,
+    "the drawn band is the sim's tongue, mouth to tip, every frame of the strike",
+    AT.none || `visible ${AT.domFrames} frames, hidden mid-strike on ` +
+      `${AT.domHidden < 0 ? 'none' : 'frame ' + AT.domHidden}; pad centre worst ` +
+      `${AT.worstPad.toFixed(2)}px off the sim tip, band root worst ${AT.worstRoot.toFixed(2)}px off the mouth`);
+  chk(!AT.none && AT.bandShow === 'none' && AT.domAfter === 'none',
+    'the static drawn band never shows, and the layer goes the frame the strike ends',
+    AT.none || `sprite tongue-band display '${AT.bandShow}' mid-strike; ` +
+      `layer display '${AT.domAfter}' the frame the gulp began`);
+
+  // ---- 16. A WANDERER IN REACH IS FAIR GAME ----------------------------
+  // The reach is a mouth radius now, so the open-water insects near the
+  // shore are food too. Re-home one so its round passes a dozen px from
+  // his mouth, put the rest off the water for a moment, and the strike
+  // has to take it â€” a frog that ignored a fly because it was the wrong
+  // fly would be a frog obeying a data structure.
+  const AW = await page2.evaluate(`(() => {
+    const w = window.__saiWorld, a = w.agents.find((x) => x.species === 'frog');
+    if (!a) return { none: 'no frog' };
+    w.__park('frog');
+    const b0 = w.__lakeLife().bugs.find((z) => z.perch);
+    a.x = b0.perch.x; a.y = b0.perch.y;
+    w.__free(a, 'water');
+    if (w.__drive(a, 'ambush', ['frogstill'], 300) < 0)
+      return { none: 'never settled to wait; state ' + a.state };
+    a._frogTill = performance.now() + 9e6;
+    const m = w.frogTipAt(a.x, a.y, a.r, a._faceDir || 1);
+    const d = (a._faceDir || 1) < 0 ? -1 : 1;
+    const wb = w.__lakeLife().bugs.find((z) => !z.perch);
+    if (!wb) return { none: 'no open-water insect to stray' };
+    for (const z of w.__lakeLife().bugs) if (z !== wb) z.goneUntil = performance.now() + 60000;
+    wb.goneUntil = 0;
+    wb.hx = m.rootX + d * 14 - Math.cos(wb.ang) * wb.R;
+    wb.hy = m.rootY - Math.sin(wb.ang) * wb.R;
+    let hit = null, dist = -1;
+    for (let i = 0; i < 60 && !hit; i++) {
+      window.__pump(1);
+      if (a.state === 'frogtongue' && a._frogBug) {
+        hit = a._frogBug;
+        dist = Math.hypot(hit.x - m.rootX, hit.y - m.rootY);
+      }
+    }
+    if (!hit) return { none: 'never struck at it; state ' + a.state };
+    return { same: hit === wb, wander: !hit.perch, kind: hit.kind, dist, strike: m.strike };
+  })()`);
+  chk(!AW.none && AW.same && AW.wander && AW.dist <= AW.strike + L.bugR,
+    'a wandering insect that strays into mouth-reach is struck like any other',
+    AW.none || `a perchless ${AW.kind} taken ${AW.dist.toFixed(1)}px from his mouth ` +
+      `(reach ${AW.strike}px + ${L.bugR}px of body)`);
 
   const perr = await page2.evaluate('window.__perr || ""');
   chk(!perr, 'nothing threw inside a stepped frame', perr || 'clean');

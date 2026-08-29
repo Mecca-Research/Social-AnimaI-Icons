@@ -5252,7 +5252,7 @@ body {
 
    WHAT THE STATES ARE
      frogstill  the wait. Nothing moves. That IS the behaviour.
-     frogtongue the strike: 260ms, tongue only.
+     frogtongue the strike: ~320ms, aimed by the sim (TongueLayer draws it).
      froggulp   the swallow.
      frogleap   the escape launch, with the squeak.
      frogdive   going in.
@@ -5288,27 +5288,22 @@ body {
   animation:sai-frog-hold 4.6s ease-in-out infinite; }
 @keyframes sai-frog-hold{ 0%,100%{transform:scaleY(1);} 50%{transform:scaleY(1.014);} }
 
-/* THE TONGUE. Drawn at full reach and scaled out of the mouth: 90ms out,
-   50ms stuck to it, 120ms back — which is the 260ms the state runs for, so
-   `forwards` never has anything to hold. The origin is the left edge of the
-   drawn band, which is the corner of his mouth. */
+/* THE TONGUE. The band itself is not fired from here any more: it is aimed
+   at a live insect, so TongueLayer (SocialAnimalIcons) draws it from the
+   sim's strike state, frame by frame — which also means it works under
+   reduced motion. What this state shows of the sprite's own tonguepose is
+   the stub inside the open mouth; the full-reach band the reach was read
+   off stays in the drawing as `tongue-band`, never displayed (end of file). */
 .sai-sprite[data-frog="frogtongue"] .sai-crit--frog .sai-crit-tonguepose{
-  display:inline; transform-box:fill-box; transform-origin:0% 50%;
-  animation:sai-frog-tongue .26s cubic-bezier(.2,.85,.3,1) forwards; }
-@keyframes sai-frog-tongue{
-  0%   {transform:scaleX(.02) scaleY(.6);}
-  34%  {transform:scaleX(1) scaleY(1);}
-  54%  {transform:scaleX(1) scaleY(1);}
-  100% {transform:scaleX(.02) scaleY(.5);}
-}
+  display:inline; }
 .sai-sprite[data-frog="frogtongue"] .sai-crit--frog .sai-crit-mouth-open{
-  opacity:1; animation:sai-frog-gape .26s ease-out forwards; }
+  opacity:1; animation:sai-frog-gape .32s ease-out forwards; }
 .sai-sprite[data-frog="frogtongue"] .sai-crit--frog .sai-crit-mouth-rest{ opacity:0; }
-@keyframes sai-frog-gape{ 0%{transform:scale(.2);} 22%{transform:scale(1.1);} 100%{transform:scale(.3);} }
+@keyframes sai-frog-gape{ 0%{transform:scale(.2);} 22%{transform:scale(1.1);} 82%{transform:scale(1);} 100%{transform:scale(.3);} }
 /* the head snaps 2px forward with the tongue and settles. Two pixels: a
    strike that moves the animal is a lunge, and he is not lunging. */
 .sai-sprite[data-frog="frogtongue"] .sai-crit--frog .sai-crit-head{
-  animation:sai-frog-strikehead .26s cubic-bezier(.2,.85,.3,1) forwards; }
+  animation:sai-frog-strikehead .32s cubic-bezier(.2,.85,.3,1) forwards; }
 @keyframes sai-frog-strikehead{
   0%{transform:translate(0,0);} 26%{transform:translate(2px,-1px);}
   60%{transform:translate(1px,0);} 100%{transform:translate(0,0);}
@@ -5676,7 +5671,8 @@ body {
   .sai-sprite[data-turt="turtnap"] .sai-crit--turtle .sai-crit-body,
   .sai-bug-wing, .sai-bug-body, .sai-bug-dimple,
   .sai-weed-frond, .sai-weed-mat, .sai-veil-silt{ animation:none; }
-  /* held at full reach, which is the frame that says what he just did */
+  /* the band is sim-driven (TongueLayer), so it already respects a still
+     page; the sprite's own strike parts just stop animating */
   .sai-sprite[data-frog="frogtongue"] .sai-crit--frog .sai-crit-tonguepose{
     animation:none; transform:none; }
   .sai-sprite[data-frog="frogtongue"] .sai-crit--frog .sai-crit-head,
@@ -8438,3 +8434,19 @@ body {
   .sai-sprite[data-state="hhgrubeat"] .sai-crit--hedgehog .sai-crit-head{
     transform:translate(-.6px,-1.4px) rotate(-6deg); }
 }
+
+/* ==================== v0.45 THE AIMED TONGUE ====================
+   The frog's strike band is drawn by TongueLayer (SocialAnimalIcons), an
+   imperative SVG driven per-frame from the sim's own strike state — a fixed
+   keyframe can neither aim at a moving insect nor vary its length. Two
+   rules are all the CSS it needs, and both are scoped to the frog:
+
+   1. The sprite's full-reach drawn band (`tongue-band`, inside
+      sai-crit-tonguepose) never shows in ANY state: the layer replaces it,
+      and a frame that drew both would show two tongues. The group stays in
+      the drawing because FROG_TONGUE's exported geometry was read off it.
+   2. No animation rides the layer itself — it is sim-positioned every
+      frame, which is what makes it correct under prefers-reduced-motion
+      with no @media block to carry. */
+.sai-crit--frog .tongue-band{ display:none; }
+.sai-tongue{ pointer-events:none; }
