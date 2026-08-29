@@ -11,6 +11,7 @@ import { SPECIES_PROFILE, speciesSize, PREY_PROFILE, PREY_KEYS,
          apparentFromBulk, BULK_ANCHOR } from "./SpeciesProfile.js";
 import { gait, gaitIn, speedCap, rescueReach, SPEED, GAIT_DEF } from "./Gait.js";
 import { stepEthogram, ethoSwimP, ethoShare, ETHOGRAM, ETHO_STATES, ETHO_Z_STATES, ETHO_OWNWATER_STATES, setTreeMetrics, setForageMetrics, ethoOffstage, hogCurl, squirrelBolt } from "./Ethogram.js";
+import { windDir } from "./Ethogram.js";
 import { stepRemains, leaveRemains, nearestRemains, eatRemains, REMAINS_MAX,
          stepMarks, leaveMark, nearestMark, MARK_MAX } from "./Ethogram.js";
 import { setPreyTerrain, stepPrey, spawnPrey, removePrey, preyReport, preyBlocked,
@@ -3019,7 +3020,13 @@ export default function SocialAnimalsRPG() {
        */
       const preyOf = (key) => (W.prey || []).find((p) => p.species === key) || null;
       W.__prey = () => preyReport(W);
-      W.__prey.spawn = (key, force) => spawnPrey(W, key, { force: !!force });
+      W.__prey.spawn = (key, force) => {
+        const p = spawnPrey(W, key, { force: !!force });
+        // a STAGED spawn is a fixture: it wants a visible subject, so a
+        // litter animal staged this way comes up already unearthed
+        if (p && force) p._buried = false;
+        return p;
+      };
       W.__prey.leave = (key) => { const p = preyOf(key); return p ? removePrey(W, p, "left") : false; };
       W.__prey.eat = (key, who) => { const p = preyOf(key); return p ? consumePrey(W, p, who || "test") : false; };
       W.__prey.clear = () => { W.prey = []; W.preyCool = {};
@@ -3070,6 +3077,9 @@ export default function SocialAnimalsRPG() {
       W.__markNear = (x, y, r, opt) =>
         nearestMark(W, x, y, r == null ? Infinity : r, opt || {});
       W.__marksStep = () => stepMarks(W, performance.now());
+      // the wind, as the wolf reads it — so a check can PLACE its bearings
+      // relative to the real wind instead of praying over a compass rose
+      W.__wind = () => windDir(performance.now());
       W.__rock = { breaks: ROCK_BREAKS, profile: ROCK_PROFILE, cave: ROCK_CAVE,
                    highEntry: [...ROCK_HIGH_ENTRY],
                    // WHO COMES OFF THE CAVE'S TERRACE AT THE EDGE, handed
@@ -8748,8 +8758,15 @@ function renderWorld(world, iconsRef, padsRef, damRefs, pitRefs, lakeRefs, preyR
   // it — with none of the pair choreography, because prey do not engage.
   if (preyRefs && world.prey) {
     for (const p of world.prey) {
+      // a buried litter animal has no picture at all — that is the point
+      if (p._buried) {
+        const elB = preyRefs.current.get(p.id);
+        if (elB) elB.style.display = "none";
+        continue;
+      }
       const el = preyRefs.current.get(p.id);
       if (!el) continue;
+      if (el.style.display) el.style.display = "";   // unearthed: visible again
       el.style.left = `${p.x}px`; el.style.top = `${p.y}px`;
       // depth, off the SAME two rules the cast uses: a grub on the far side
       // of a log has to go behind the log, or the log is not there.

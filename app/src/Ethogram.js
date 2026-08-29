@@ -315,6 +315,27 @@ function driveGoto(a, ctx, S) {
   const d = g.urgency !== undefined
     ? stepTowardAt(a, ctx, S.goal, gait(a, ctx, g.urgency))
     : stepToward(a, ctx, S.goal, typeof g.speed === "function" ? g.speed(a, ctx) : (g.speed ?? 1));
+  // A CLIMBER DOES NOT BUMP THE WALL FIRST. The stall detector below is the
+  // net for everyone; a goto that declared canHop gets the hop BEFORE the
+  // collision: one probe a stride ahead along his own velocity, and if a
+  // face is standing there he takes the world's ladder now. This is the
+  // difference between "hits the middle area a few times then walks away"
+  // — which the owner could reproduce on demand — and an animal that flows
+  // up the rock the moment he reaches it.
+  // ...but never within a hop's length of the goal itself. A hop is a fixed
+  // arc that lands where the ROCK says, not where the walk was going: fired
+  // next to the goal it overshoots, the next probe fires back, and the
+  // arrival test (which rightly refuses to seat an animal mid-arc) never
+  // gets a frame with his feet down. Traced: the den run reached three px
+  // from the cave mouth and bounced between terraces indefinitely.
+  if (g.canHop && ctx.tryHop && !a._rockHop && d > 90) {
+    const spd = Math.hypot(a.vx, a.vy);
+    if (spd > 1) {
+      const z2 = ctx.rockZone
+        ? ctx.rockZone(a.x + (a.vx / spd) * 14, a.y + (a.vy / spd) * 14) : null;
+      if (z2 && z2.on && z2.wall) ctx.tryHop(a);
+    }
+  }
   // ...and never while a hop arc is in the air: a walk that started a leap
   // mid-errand can pass over its goal on the way up, and beginning the bout
   // there would seat him at a point the arc has not finished writing.
@@ -826,8 +847,8 @@ function huntTrack(a, c, ref, o) {
  * whatever the world is doing with him.
  */
 export function huntRelease(a) {
-  if (a._huntP) releasePrey(a._huntP, a.id);
-  a._huntP = null; a._huntGo = 0; a._huntEnd = 0;
+  if (a._huntP) { a._huntP._chasePace = 0; releasePrey(a._huntP, a.id); }
+  a._huntP = null; a._huntGo = 0; a._huntEnd = 0; a._huntWin = false;
 }
 
 /**
@@ -871,11 +892,33 @@ function coverVia(a, c, g) {
   return Math.hypot(best.x - a.x, best.y - a.y) < COVER_NEAR ? null : best;
 }
 
+/**
+ * THE CHASE OPENS WITH ITS ENDING DECIDED — the owner's spec, verbatim: "all
+ * hunts should have a clear chase ... 50/50 of success for now ... if fails,
+ * the predator slows down and prey speeds up, if successful the opposite."
+ * So the roll happens HERE, once, and both animals act it out: the fate is
+ * written onto the prey as a pace multiplier (Prey.js reads it in driveFlee),
+ * and the predator's own ramp lives in the chase drive. catchChance remains
+ * the dial — 0.5 everywhere today, adjustable per species later.
+ */
+function beginChase(a, c, o, p) {
+  a._huntWin = Math.random() < (resolve(o.catchChance, a, c, p) ?? 0.5);
+  // the prey's half of the choreography: tiring, or adrenaline
+  p._chasePace = a._huntWin ? 0.82 : 1.18;
+  const dash = resolve(o.dash, a, c, p) ?? 170;
+  // a winner must never lose to his own fuel gauge: double budget — and the
+  // progress term divides by the SAME number he was given, or the ramp
+  // sits at zero for the first half of every winning chase (measured: the
+  // winner ran flat at 80px/s while the loser opened at 94)
+  a._huntGo = a._huntGo0 = a._huntWin ? dash * 2 : dash;
+  a.stateUntil = c.now + 30000;      // a backstop, not the mechanism
+}
+
 /** let go of a target cleanly, whatever the reason */
 function huntDrop(a, c, quiet) {
   const p = a._huntP;
-  if (p) releasePrey(p, a.id);
-  a._huntP = null; a._huntEnd = 0; a._faceDir = 0;
+  if (p) { p._chasePace = 0; releasePrey(p, a.id); }
+  a._huntP = null; a._huntEnd = 0; a._huntWin = false; a._faceDir = 0;
   endEvent(a, c, { reroll: true, quiet: quiet ?? 1200, stop: true });
 }
 
@@ -941,6 +984,7 @@ function makeHunt(o) {
       pick: (a, c) => huntPick(a, c, o),
       track: (a, c, ref) => huntTrack(a, c, ref, o),
       ...(o.cover ? { via: (a, c, g) => coverVia(a, c, g), viaWithin: 26 } : null),
+      ...(o.canHop ? { canHop: true } : null),
     },
 
     begin(a, c, S, g) {
@@ -958,10 +1002,7 @@ function makeHunt(o) {
                                       o.fixMs ? o.fixMs[1] : 1000);
         return;
       }
-      // the budget is the whole difference between a pounce and a pursuit,
-      // and it is spent in px so that it means the same at 4fps and at 60
-      a._huntGo = resolve(o.dash, a, c, p) ?? 170;
-      a.stateUntil = c.now + 30000;      // a backstop, not the mechanism
+      beginChase(a, c, o, p);
     },
 
     drive(a, c, S) {
@@ -975,8 +1016,7 @@ function makeHunt(o) {
         if (o.onFix) o.onFix(a, c, p);
         if (c.now < a.stateUntil) return;
         a.state = st.strike;
-        a._huntGo = resolve(o.dash, a, c, p) ?? 170;
-        a.stateUntil = c.now + 30000;
+        beginChase(a, c, o, p);
         return;
       }
       // ---- over the kill, or standing where it was ----------------------
@@ -986,37 +1026,51 @@ function makeHunt(o) {
         huntDrop(a, c, a.state === st.feed ? 2600 : 1400);
         return;
       }
-      // ---- the strike ---------------------------------------------------
+      // ---- THE CHASE ----------------------------------------------------
+      // The outcome was rolled when it began (see beginChase) and the chase
+      // CHOREOGRAPHS it, per the owner's spec: a winning predator visibly
+      // speeds up while the prey tires; a losing one falls behind while the
+      // prey pulls away. What the viewer sees IS the mechanics — there is no
+      // hidden coin flip at the moment of contact any more.
       const p = a._huntP;
       if (!p || !p.alive || !p._in) { huntDrop(a, c, 900); return; }
       claimPrey(c.world, p, a.id, c.now);
-      const sp = gait(a, c, o.burst ?? 0.95);
+      const go0 = a._huntGo0 || 170;
+      const u = Math.min(1, Math.max(0, 1 - a._huntGo / go0));   // chase progress
+      // winning: a ramp to +22%. Losing: full commitment for the first half,
+      // then the legs go — down to 62% — which is what "he gave it his best
+      // and it got away" looks like from the outside.
+      const mult = a._huntWin
+        ? 1 + 0.22 * u
+        : (u < 0.55 ? 1 : Math.max(0.62, 1 - (u - 0.55) * 1.4));
+      const sp = gait(a, c, o.burst ?? 0.95) * mult;
       const d = stepTowardAt(a, c, p, sp);
       a._huntGo -= sp * c.dt;            // spend the burst on ground, not on time
       a._faceDir = p.x >= a.x ? 1 : -1;
       if (o.onStrike) o.onStrike(a, c, p, d);
 
-      if (d <= (resolve(o.reach, a, c, p) ?? 22)) {
+      if (a._huntWin && d <= (resolve(o.reach, a, c, p) ?? 22)) {
         a.vx = 0; a.vy = 0;
-        if (Math.random() < (resolve(o.catchChance, a, c, p) ?? 0.6)
-            && consumePrey(c.world, p, a.id, c.now)) {
+        if (consumePrey(c.world, p, a.id, c.now)) {
           if (o.onKill) o.onKill(a, c, p);
-          a._huntP = null;
+          a._huntP = null; a._huntWin = false;
           a.state = st.feed;
           a.stateUntil = c.now + c.rand(o.feedMs ? o.feedMs[0] : 3000,
                                         o.feedMs ? o.feedMs[1] : 5200);
           return;
         }
-        // MISSED. The claim goes back immediately: the animal that just got
-        // away is fair game for the next hunter, and for this one on a later
-        // roll — but not on this one, or a miss is only a delay.
-        releasePrey(p, a.id); a._huntP = null;
-        if (st.miss) { a.state = st.miss; a.stateUntil = c.now + c.rand(900, 1600); return; }
-        huntDrop(a, c, 1400);
+        // the claim was lost under him (lapse, drag) — nothing to eat
+        huntDrop(a, c, 900);
         return;
       }
-      if (a._huntGo <= 0 || c.now >= a.stateUntil) {   // out of burst: he is blown
-        releasePrey(p, a.id); a._huntP = null;
+      // a losing chase breaks off once the gap is visibly opening; either
+      // chase ends when the burst is spent (the winner's spend is a backstop
+      // twice the loser's — the closing arithmetic ends it long before)
+      const blown = a._huntGo <= 0 || c.now >= a.stateUntil ||
+        (!a._huntWin && u > 0.55 && d > ((o.pounce ?? 74) * 1.6));
+      if (blown) {
+        p._chasePace = 0;
+        releasePrey(p, a.id); a._huntP = null; a._huntWin = false;
         if (st.miss) { a.state = st.miss; a.stateUntil = c.now + c.rand(900, 1600); return; }
         huntDrop(a, c, 1400);
       }
@@ -1046,26 +1100,98 @@ function makeHunt(o) {
  * one of each of the three alive at a time), so `none` is the longest in
  * the world at 16s rather than the usual 11.
  */
+/**
+ * A DIG IS NOT A CHASE, and since the litter trio went underground it is
+ * not even a hunt for something visible: the grub only APPEARS when the
+ * digging brings it up — the owner's spec, verbatim: "the grubs only appear
+ * after the skunk and hedgehog dig them up and out... clear animations for
+ * eating but 50/50 chance of one being 'released' afterwards."
+ *
+ * So the dig owns its own choreography instead of borrowing the chase's:
+ *   walk (goto) -> cast about (fix) -> DIG a real stretch of seconds ->
+ *   the grub comes up, visible for the first time -> the coin:
+ *     heads  it is eaten where it lies, in the feed pose
+ *     tails  it is RELEASED: it bolts for the wood at triple its amble and
+ *            goes back under, while the digger stands up dry
+ */
 function makeDig(o) {
-  return makeHunt({
-    ...o,
-    prey: ["grub", "beetle", "earthworm"],
-    habitat: "litter",
-    domain: "land",
-    // Nothing is running, so nothing is chased. 0.20 is below the gait
-    // ladder's "pottering" — the digging animal is not travelling at all,
-    // he is working a spot that is already under his nose.
-    burst: 0.20,
-    catchChance: o.catchChance ?? 0.86,
-    none: 16000,
-    // He may dig anything in the timber. `_site` is the litter animal's own
-    // anchor — the log, root or soil patch it surfaced in and is leashed to
-    // — and a litter prey without one is one that has come adrift of the
-    // wood, which is not a thing to dig for. Anything already spoken for is
-    // filtered out by nearestPrey's own `free`, before this ever runs.
-    reachable: (a, c, p) => !!p._site,
-  });
+  const st = o.st;
+  const opts = { ...o, prey: ["grub", "beetle", "earthworm"], habitat: "litter",
+                 // `_site` is the litter animal's leash to its timber; one
+                 // adrift of the wood is not a thing to dig for
+                 reachable: (a, c, p) => !!p._site };
+  return {
+    hunt: true,
+    id: o.id, domain: "land", trigger: "seek",
+    every: o.every, chance: o.chance, cool: o.cool, miss: o.missCool ?? 14000,
+    states: [st.fix, st.strike, st.feed, st.miss].filter(Boolean),
+    // within 16, whatever the pounce says: the digging happens where he
+    // STANDS, and a dig opened thirty px from the timber unearths the grub
+    // in open grass — the suite caught it at 52px from the site's anchor
+    goto: { state: st.stalk, within: 16, giveUp: o.giveUp ?? 24000,
+            none: 16000, lost: 10000, urgency: o.creep ?? 0.30,
+            pick: (a, c) => huntPick(a, c, opts),
+            track: (a, c, ref) => huntTrack(a, c, ref, opts) },
+    begin(a, c, S, g) {
+      const p = g && g.prey;
+      if (!p || !p.alive) { huntDrop(a, c, 900); return; }
+      claimPrey(c.world, p, a.id, c.now);
+      a._huntP = p;
+      a._digAt = { x: a.x, y: a.y };
+      a._faceDir = p.x >= a.x ? 1 : -1;
+      a.state = st.fix || st.strike;
+      a.stateUntil = c.now + (st.fix
+        ? c.rand(o.fixMs ? o.fixMs[0] : 1400, o.fixMs ? o.fixMs[1] : 2400)
+        : c.rand(DIG_MS[0], DIG_MS[1]));
+    },
+    drive(a, c, S) {
+      const p = a._huntP;
+      // the feed and the dry stand run without a prey reference
+      if (a.state === st.feed || a.state === st.miss) {
+        holdSpot(a, c, a._digAt || { x: a.x, y: a.y });
+        if (c.now < a.stateUntil) return;
+        a._digAt = null;
+        huntDrop(a, c, a.state === st.feed ? 2400 : 1400);
+        return;
+      }
+      if (!p || !p.alive) { huntDrop(a, c, 900); return; }
+      claimPrey(c.world, p, a.id, c.now);
+      holdSpot(a, c, a._digAt || { x: a.x, y: a.y });
+      if (a.state === st.fix) {
+        a._faceDir = p.x >= a.x ? 1 : -1;
+        if (c.now < a.stateUntil) return;
+        a.state = st.strike;
+        a.stateUntil = c.now + c.rand(DIG_MS[0], DIG_MS[1]);
+        return;
+      }
+      // st.strike — the digging itself, seconds of it, spoil flying
+      if (c.now < a.stateUntil) return;
+      // THE UNEARTHING: the grub exists to the eye from this frame on,
+      // brought up at his paws
+      p._buried = false;
+      p.x = a.x + (a._faceDir || 1) * 11;
+      p.y = a.y + 3;
+      if (Math.random() < (o.catchChance ?? 0.5)) {
+        if (consumePrey(c.world, p, a.id, c.now)) {
+          a._huntP = null;
+          a.state = st.feed;
+          a.stateUntil = c.now + c.rand(o.feedMs ? o.feedMs[0] : 2600,
+                                        o.feedMs ? o.feedMs[1] : 3800);
+          return;
+        }
+        huntDrop(a, c, 900);
+        return;
+      }
+      // RELEASED. It runs for the wood while he stands up with nothing —
+      // the tails half of the coin, played out where it can be seen.
+      p._escapeUntil = c.now + c.rand(2200, 3200);
+      p._tx = a.x; p._ty = a.y;
+      releasePrey(p, a.id); a._huntP = null;
+      a.state = st.miss; a.stateUntil = c.now + c.rand(1800, 2600);
+    },
+  };
 }
+const DIG_MS = [2800, 4200];   // the digging on screen, before anything comes up
 
 /* ---------------------------------------------------------------------
  * REMAINS
@@ -2933,7 +3059,7 @@ defineEthogram("raccoon", {
       burst: 0.80, dash: 180,
       catchChance: 0.48,
       feedMs: [3000, 4600],
-      every: [12000, 20000], chance: 0.55, cool: 30000, missCool: 16000,
+      every: [12000, 20000], chance: 0.80, cool: 30000, missCool: 9000,
       // DRY GROUND ONLY. Everything on this list is a forest-floor animal
       // and the crayfish event is where the water work lives; a mouse hunt
       // that walked him into the lake would take the two apart.
@@ -3857,7 +3983,7 @@ defineEthogram("skunk", {
       // what the digging is. Measured again: fifty-odd frames of it.
       sense: 190, pounce: 34, reach: 12,
       creep: 0.30, fixMs: [1600, 2600],
-      dash: 50, catchChance: 0.85,
+      catchChance: 0.50,
       feedMs: [2600, 3800],
       every: [12000, 20000], chance: 0.50, cool: 30000, missCool: 15000,
       st: { stalk: "sktodig", fix: "skcast", strike: "skgrub",
@@ -3893,7 +4019,7 @@ defineEthogram("skunk", {
       burst: 0.70, dash: 90,
       catchChance: (a, c, p) => (p.species === "crayfish" ? 0.62 : 0.42),
       feedMs: [2800, 4200],
-      every: [16000, 26000], chance: 0.50, cool: 34000, missCool: 18000,
+      every: [16000, 26000], chance: 0.75, cool: 34000, missCool: 10000,
       reachable: skunkCanTake,
       st: { stalk: "sktohunt", fix: "skfix", strike: "sksnap",
             feed: "skchew", miss: "skmiss" },
@@ -4053,9 +4179,15 @@ function cougarSpot(a, c, kind) {
 const CG_VANTAGE_TRIES = 7;
 function cougarVantage(a, c) {
   const lvl = standLevel(a, c);
-  const bag = lvl === 2 ? ["ridge", "ridge"]
-            : lvl === 1 ? ["cliff"]
-            : ["talus", "bush", "bush"];
+  // THE ROCK IS THE DOMAIN. From the floor, two of three picks used to be
+  // bushes — which is why he spent a tenth of his day up there instead of
+  // the owner's third. The owner's own line is "ridges, cliffs, and
+  // bushes", in that order: so the bag leans rock from everywhere, with the
+  // bush as the occasional low lookout, and the walk up is the mid-errand
+  // hop's job.
+  const bag = lvl === 2 ? ["ridge", "ridge", "cliff"]
+            : lvl === 1 ? ["cliff", "ridge", "talus"]
+            : ["cliff", "ridge", "talus", "bush"];
   let best = null, bd = Infinity;
   for (let i = 0; i < CG_VANTAGE_TRIES; i++) {
     const p = cougarSpot(a, c, bag[(Math.random() * bag.length) | 0]);
@@ -4126,8 +4258,10 @@ function cougarScrapeGround(a, c) {
 function cougarCanTake(a, c, p) {
   const mine = standLevel(a, c);
   if (p.species === "goat") {
+    // one terrace either way, because the stalk can hop now (canHop on the
+    // hunt's own goto). Same-terrace-only left the goat effectively exempt.
     const lp = c.rockLevel(p.x, p.y);
-    if (lp == null || lp !== mine) return false;
+    if (lp == null || Math.abs(lp - mine) > 1) return false;
   } else {
     if (c.lakeRho(p.x, p.y) <= 1.02) return false;
     const z = c.rockZone(p.x, p.y);
@@ -4223,7 +4357,11 @@ defineEthogram("cougar", {
      */
     {
       id: "prowl", domain: "land", trigger: "seek",
-      every: [44000, 74000], chance: 0.55, miss: 14000, cool: 26000,
+      // THE ROCK IS HIS DOMAIN — the owner's number is a third of his waking
+      // time on it. The appetite is frequent, the survey is long, and a
+      // survey CHAINS: he walks the ridge to another vantage rather than
+      // coming down after one look. Two to three legs is a patrol.
+      every: [26000, 44000], chance: 0.70, miss: 12000, cool: 20000,
       states: ["cgsurvey"],
       // canHop: his vantages live on the bluff, and a walk to one that
       // stalls at a face may take the world's own ladder mid-errand — he is
@@ -4234,14 +4372,29 @@ defineEthogram("cougar", {
       begin(a, c, S, g) {
         a.vx = 0; a.vy = 0;
         a._cgAt = { x: g ? g.x : a.x, y: g ? g.y : a.y };
+        if (a._cgLegs === undefined || a._cgLegs === null) a._cgLegs = 0;
         // he looks OUT: at the widest open ground there is from where he is
         a._faceDir = a.x < c.bounds.w * 0.5 ? 1 : -1;
-        a.state = "cgsurvey"; a.stateUntil = c.now + c.rand(3400, 5600);
+        a.state = "cgsurvey"; a.stateUntil = c.now + c.rand(9000, 16000);
       },
-      drive(a, c) {
+      drive(a, c, S) {
         holdSpot(a, c, a._cgAt || { x: a.x, y: a.y });
         if (c.now < a.stateUntil) return;
-        a._faceDir = 0;
+        // ...and on along the ridge. A patrol is more than one look: up to
+        // two further vantages, walked to along the bands, before he comes
+        // down. The goto state is this event's own, so handing the engine a
+        // fresh goal re-enters the walk exactly as the first leg did.
+        if ((a._cgLegs || 0) < 2 && Math.random() < 0.65) {
+          const g2 = cougarVantage(a, c);
+          if (g2) {
+            a._cgLegs = (a._cgLegs || 0) + 1;
+            S.goal = { x: g2.x, y: g2.y, ref: g2, via: null };
+            S.goalUntil = c.now + 26000;
+            a.state = "cgtoledge";
+            return;
+          }
+        }
+        a._cgLegs = 0; a._faceDir = 0;
         endEvent(a, c, { reroll: true, quiet: 1100, stop: true });
       },
     },
@@ -4294,10 +4447,10 @@ defineEthogram("cougar", {
       creep: 0.18,                       // slower than anything else here
       fixMs: [1100, 2000],
       burst: 1.0, dash: 260,             // top 2.65 at drain 0.55: short and violent
-      catchChance: (a, c, p) =>
-        (p.species === "goat" || p.species === "boar") ? 0.42 : 0.62,
+      canHop: true,                // the stalk takes the rock's own ladder
+      catchChance: 0.50,           // the owner's 50/50, one dial, all prey
       feedMs: [6000, 9000],
-      every: [14000, 24000], chance: 0.55, cool: 48000, missCool: 22000,
+      every: [14000, 24000], chance: 0.80, cool: 42000, missCool: 10000,
       cover: true,
       reachable: cougarCanTake,
       onKill: cougarKill,
@@ -4315,7 +4468,10 @@ defineEthogram("cougar", {
      */
     {
       id: "den", domain: "land", trigger: "seek",
-      every: [150000, 250000], chance: 0.60, miss: 22000, cool: 70000,
+      // a visit every two to three minutes WATCHED, not every four to six:
+      // "deep, lazy sleep inside the cave" is a picture the owner asked for
+      // and a picture nobody sees is not in the world.
+      every: [80000, 140000], chance: 0.60, miss: 22000, cool: 48000,
       states: ["cgsettle", "cgsleep", "cgstir"],
       // canHop: the den run crosses terraces by design — a cougar caught on
       // the plateau when the appetite fires walks AT the cliff on the way
@@ -4325,11 +4481,20 @@ defineEthogram("cougar", {
               lost: 18000, urgency: 0.30, pick: cougarDen, canHop: true },
       begin(a, c, S, g) {
         a.vx = 0; a.vy = 0;
-        // THE FIRST LEG ENDS HERE. He is at the foot of his own riser and
-        // free again the next frame, which is all the world needs to take
-        // him up it.
+        // ONE ERRAND, FOOT TO BED. This used to end at the foot of the riser
+        // and trust a later appetite to fire while he still happened to be
+        // standing there — which is why six watched minutes never showed a
+        // sleep. Now the walk simply continues: a fresh goal at the cave
+        // mouth, and the climb belongs to the mid-errand hops (canHop plus
+        // the wall-ahead probe), which is the "agile easy movements up and
+        // down the rocks" the owner asked for, pointed at his own front door.
         if (!g || !g.den) {
-          endEvent(a, c, { cool: 16000, reroll: true, quiet: 900, stop: true });
+          const m = c.caveMouth();
+          if (!m) { endEvent(a, c, { cool: 16000, reroll: true, quiet: 900, stop: true }); return; }
+          if (a._cgKill) a._carry = "kill";
+          S.goal = { x: m.x - a.r * 0.4, y: m.y, ref: { mouth: m, den: true }, via: null };
+          S.goalUntil = c.now + 42000;
+          a.state = "cgtoden";
           return;
         }
         // ...and on the bluff a level is mandatory. keepOffRock reads _lvl,
@@ -4494,7 +4659,7 @@ const wfPostAt = (a) => {
  * bias nobody can see.
  */
 const WIND_PERIOD = 240000;
-const windDir = (now) => ((now % WIND_PERIOD) / WIND_PERIOD) * Math.PI * 2;
+export const windDir = (now) => ((now % WIND_PERIOD) / WIND_PERIOD) * Math.PI * 2;
 /** downwind of the prey is where it cannot smell him; upwind he is halved */
 function wolfScents(a, c, p) {
   const w = windDir(c.now);
@@ -4718,7 +4883,7 @@ defineEthogram("wolf", {
       burst: 0.95, dash: 300,
       catchChance: (a, c, p) => (p.species === "boar" ? 0.42 : 0.58),
       feedMs: [5000, 8000],
-      every: [14000, 24000], chance: 0.60, cool: 40000, missCool: 18000,
+      every: [14000, 24000], chance: 0.80, cool: 36000, missCool: 10000,
       cover: true,
       reachable: wolfCanTake,
       st: { stalk: "wfstalk", fix: "wfcrouch", strike: "wfrush",
@@ -4786,7 +4951,9 @@ defineEthogram("wolf", {
      */
     {
       id: "bed", domain: "land", trigger: "seek",
-      every: [170000, 270000], chance: 0.55, miss: 22000, cool: 75000,
+      // once every two to four minutes watched: a wolf nobody ever sees
+      // sleep is a wolf with no sleeping behaviour, whatever the code says
+      every: [90000, 150000], chance: 0.60, miss: 20000, cool: 55000,
       states: ["wfcircle", "wfsleep", "wfrouse"],
       // NO canHop, deliberately, and it was considered: wolfBed never picks
       // a target across a level (shelf beds only from the shelf, floor beds
@@ -5006,6 +5173,34 @@ function beginCall(a, c, state, ms) {
   a.state = state; a.stateUntil = c.now + ms;
 }
 
+/**
+ * WHERE A FOX BEDS DOWN: right on the open ground — the owner's words —
+ * so the pick is only "open": off the water, off the bluff, inside the
+ * stage with margin. He is famously unfussy about it; the fuss is all in
+ * the posture.
+ */
+function foxBedSpot(a, c) {
+  const b = c.bounds;
+  let best = null, bd = Infinity;
+  for (let i = 0; i < 16; i++) {
+    const p = { x: c.rand(70, b.w - 70), y: c.rand(90, b.h - 60) };
+    if (c.lakeRho(p.x, p.y) < 1.12) continue;
+    if (c.rockZone && c.rockZone(p.x, p.y).on) continue;
+    // ...and clear of the trees: a bed picked under one is a fox drawn
+    // sleeping ON the crown, which is exactly how it came out of the camera
+    let treed = false;
+    for (const t of (c.def && c.def.trees) || []) {
+      if (Math.abs(t.x * b.w - p.x) < 80 && Math.abs(t.y * b.h - p.y) < 150) { treed = true; break; }
+    }
+    if (treed) continue;
+    const d = Math.hypot(p.x - a.x, p.y - a.y);
+    if (d < bd) { bd = d; best = p; }
+  }
+  return best;
+}
+const FOX_NAP = [16000, 26000];      // one bout; the sleep core holds the ceiling
+const FOX_TURNS = 2;                 // the circling before he drops, a fox ritual
+
 defineEthogram("fox", {
   // He has no entry in this world's swim table at all, so there is one
   // domain and the tier-1 pick is a formality — the squirrel's shape.
@@ -5023,6 +5218,7 @@ defineEthogram("fox", {
     huntRelease(a);
     if (a._faceDir) a._faceDir = 0;
     if (a._carry) a._carry = null;
+    a._sleepSpent = 0;                 // a new day pays off the sleep ledger
   },
 
   events: [
@@ -5196,6 +5392,51 @@ defineEthogram("fox", {
       ],
     },
 
+    /* ---- CURLED ON THE OPEN GROUND --------------------------------------
+     * The sleep the plan asked for and v0.44 shipped without: "curled up
+     * right on the open ground into a tight ball wrapping their long fluffy
+     * tail over their nose and front paws to trap body heat." He circles
+     * twice, drops, and the brush comes over the face — all of it the
+     * ordinary rig held differently, like his hunt.
+     */
+    {
+      id: "curlup", domain: "land", trigger: "seek",
+      every: [90000, 150000], chance: 0.60, miss: 18000, cool: 55000,
+      states: ["foxturn", "foxcurl", "foxwake"],
+      goto: { state: "foxtobed", within: 18, giveUp: 26000, none: 16000,
+              lost: 12000, urgency: 0.30, pick: foxBedSpot },
+      begin(a, c) {
+        a.vx = 0; a.vy = 0;
+        a._foxBed = { x: a.x, y: a.y };
+        a._foxTurns = FOX_TURNS;
+        a._sleepSpent = 0;
+        a._faceDir = 1;
+        a.state = "foxturn"; a.stateUntil = c.now + 1300;
+      },
+      drive(a, c) {
+        holdSpot(a, c, a._foxBed || { x: a.x, y: a.y });
+        if (a.state === "foxturn") {
+          if (c.now < a.stateUntil) return;
+          if (--a._foxTurns > 0) {
+            a._faceDir = -a._faceDir;         // the circle, in a flat world
+            a.stateUntil = c.now + 1300;
+            return;
+          }
+          sleepEnter(a, c, "foxcurl", FOX_NAP);
+          return;
+        }
+        if (a.state === "foxcurl") {
+          if (!sleepSpent(a, c)) return;
+          a.state = "foxwake"; a.stateUntil = c.now + c.rand(1500, 2400);
+          return;
+        }
+        // foxwake — up, a stretch, and on with the day
+        if (c.now < a.stateUntil) return;
+        a._faceDir = 0; a._foxBed = null;
+        endEvent(a, c, { reroll: true, quiet: 1600, stop: true });
+      },
+    },
+
     /* ---- THE MOUSE POUNCE ---------------------------------------------
      * The fox hunts by EAR. He is the only one here who locates prey he
      * cannot see, so his sense radius is the widest on the floor — and the
@@ -5213,9 +5454,9 @@ defineEthogram("fox", {
       sense: 300, pounce: 96, reach: 24,
       creep: 0.26,                 // the slow stiff-legged walk in
       burst: 1.0, dash: 190,       // ...and the leap, which is all of it
-      catchChance: 0.55,
+      catchChance: 0.50,
       feedMs: [3200, 5000],
-      every: [9000, 16000], chance: 0.62, cool: 21000, missCool: 13000,
+      every: [9000, 16000], chance: 0.80, cool: 21000, missCool: 9000,
       st: { stalk: "foxstalk", strike: "foxpounce", feed: "foxeat", miss: "foxmiss" },
     }),
   ],
@@ -6882,7 +7123,7 @@ defineEthogram("hedgehog", {
     // world's hungriest forager and should stay so.
     {
       id: "roots", domain: "land", trigger: "seek",
-      every: [52000, 86000], chance: 0.55, miss: 11000, cool: 26000,
+      every: [44000, 70000], chance: 0.60, miss: 11000, cool: 26000,
       variants: [
         {
           // UNDER IT — the classic: side on, rump up, snout jammed into
@@ -6935,7 +7176,7 @@ defineEthogram("hedgehog", {
     // the one place in this world where two sprites overlap.
     {
       id: "logs", domain: "land", trigger: "seek",
-      every: [58000, 96000], chance: 0.45, miss: 14000, cool: 30000,
+      every: [50000, 82000], chance: 0.45, miss: 14000, cool: 30000,
       // TWO WAYS INTO DEAD WOOD, because there are two kinds of it. He no
       // longer brings his own log to either: the world's log is the log, and
       // the piece of it that has to cover him is drawn over him by
@@ -7036,7 +7277,7 @@ defineEthogram("hedgehog", {
       // 0.34 rather than the skunk's 0.30: his three digs move at one pace,
       // and HOG_TOROOT's own 0.38 is the one they are kept close to.
       creep: 0.34, fixMs: [1400, 2400],
-      dash: 44, catchChance: 0.88,
+      catchChance: 0.50,
       feedMs: [2800, 4000],
       every: [12000, 20000], chance: 0.55, cool: 28000, missCool: 14000,
       st: { stalk: "hhtodig", fix: "hhcast", strike: "hhgrub",
@@ -7621,9 +7862,9 @@ defineEthogram("owl", {
       creep: 0.50,
       fixMs: [900, 1500],               // the hover, and the head turning on it
       burst: 0.90, dash: OWL_DASH,      // the stoop, budgeted in ground covered
-      catchChance: 0.62,
+      catchChance: 0.50,
       feedMs: [3400, 5200],
-      every: [10000, 18000], chance: 0.58, cool: 26000, missCool: 15000,
+      every: [10000, 18000], chance: 0.80, cool: 26000, missCool: 9000,
       giveUp: 36000,                    // he starts further off than anybody
       zGoto: true,                      // the approach is a GLIDE, not a walk
       onApproach: owlAloft, onFix: owlHover, onStrike: owlDive,

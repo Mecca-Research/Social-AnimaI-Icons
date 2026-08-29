@@ -2647,9 +2647,12 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     if (got < 0) return { none: 'never backed up; state ' + a.state };
     const dir = a._faceDir, x0 = a.x, y0 = a.y;
     let turned = 0;
+    // the break is read BEFORE the flip: the frame the bout ends, the next
+    // intent may face him at a new goal, and that turn belongs to the next
+    // bout, not to the backing
     for (let i = 0; i < 260; i++) { window.__pump(1);
-      if (a._faceDir !== dir) turned++;
-      if (a.state !== 'turtback') break; }
+      if (a.state !== 'turtback') break;
+      if (a._faceDir !== dir) turned++; }
     const sp = w.__spriteOf('turtle');
     return { dir, dx: a.x - x0, moved: Math.hypot(a.x - x0, a.y - y0), turned,
              sdir: sp ? sp.dataset.dir : null, state: a.state };
@@ -2920,7 +2923,10 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     const bad = [], drift = [];
     for (const k of Object.keys(P)) {
       const r = P[k];
-      const want = B.apparentFromBulk(r.mass, r.len, r.hgt);
+      // 'draw' is the one sanctioned hand on the scale: the goat and the
+      // boar draw at half their honest bulk by the owner's order, and the
+      // factor is DECLARED on the row rather than smuggled into the mass
+      const want = B.apparentFromBulk(r.mass, r.len, r.hgt) * (r.draw || 1);
       if (Math.abs(want - r.apparent) > 0.06) drift.push(k + ' ' + r.apparent + ' vs ' + want.toFixed(2));
       if (Math.abs(r.size - r.apparent / (r.fill * 2.7)) > 0.02) bad.push(k);
     }
@@ -2940,17 +2946,23 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
              minBox: Math.min.apply(null, Object.keys(P).map(function (k) { return P[k].size * 3.1; })) };
   })(window.__saiWorld)`);
   chk(sz.drift.length === 0,
-    'every prey size comes out of the bulk index, not out of a hand',
-    sz.drift.length ? sz.drift.join('; ') : '13 rows reproduce apparentFromBulk exactly');
+    'every prey size is the bulk index times its declared draw factor',
+    sz.drift.length ? sz.drift.join('; ') : '13 rows reproduce apparentFromBulk x draw exactly');
   chk(sz.bad.length === 0, 'and the table is self-consistent: size = apparent / (fill * 2.7)',
     sz.bad.length ? sz.bad.join(', ') : 'all 13 rows');
   chk(sz.woodmouse < sz.frog && sz.woodmouse / sz.bear < 0.30 && sz.woodmouse / sz.bear > 0.18,
     'a wood mouse reads as a mouse next to a bear',
     `wood mouse ${sz.woodmouse}px against bear ${sz.bear}px â€” ${(100 * sz.woodmouse / sz.bear).toFixed(0)}%`);
-  chk(sz.goat < sz.deer && sz.goat > sz.wolf && sz.boar < sz.wolf && sz.boar > sz.cougar,
-    'and the two big prey land where their real bulk puts them',
-    `goat ${sz.goat} under the deer's ${sz.deer}; boar ${sz.boar} between ` +
-    `the wolf's ${sz.wolf} and the cougar's ${sz.cougar}`);
+  // THE OWNER'S CALL, v0.46: at honest bulk these two drew bigger than the
+  // wolf and read as peers, not as game â€” "way too large to be game hunt
+  // for the predators, we need to make them half their current size." So
+  // the rule is now the opposite of the one it replaced: both draw at half
+  // bulk, clearly UNDER every predator that hunts them, and still the two
+  // biggest prey on the floor.
+  chk(sz.goat < sz.cougar && sz.boar < sz.wolf && sz.goat > sz.beetle * 2 && sz.boar > sz.beetle * 2,
+    'and the two big prey draw as game: under their own hunters',
+    `goat ${sz.goat} and boar ${sz.boar}, under the cougar's ${sz.cougar} ` +
+    `and the wolf's ${sz.wolf}`);
   chk(sz.ladder[0] === 'bear' && sz.ladder[sz.ladder.length - 1] === 'beetle',
     'the bear is still the biggest thing in the world, and a beetle the smallest',
     `largest ${sz.ladder[0]}, smallest ${sz.ladder[sz.ladder.length - 1]}: ` +
@@ -3761,6 +3773,10 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     const w = window.__saiWorld;
     const land = (species, ev, sibs, preyKey, gap, hit, budget) => {
       w.__park();
+      // A CLEAN STAGE, or the check hunts somebody else's leftovers: with
+      // strays standing the owl once chased a prey 1127px from the pinned
+      // snake and the check read the wrong chase entirely
+      w.__prey.clear();
       const g = w.__floorSpot(null, null, 0, 0); if (!g) return null;
       const p = w.__putPrey(preyKey, g); if (!p) return null;
       const h = w.__floorSpot(g.x, g.y, gap - 8, gap + 8); if (!h) return null;
@@ -3777,7 +3793,10 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
         p.x = g.x; p.y = g.y; p.vx = 0; p.vy = 0;
         window.__pump(1);
         const sp = Math.hypot(a.vx, a.vy); if (sp > top) top = sp;
-        if (a.state === hit) { started = true; goLeft = a._huntGo; }
+        // the fate is pinned to WIN: this check is about whether the burst
+        // CAN close the ground at all, and a chase fated to lose breaks off
+        // by design â€” that path has its own checks
+        if (a.state === hit) { started = true; a._huntWin = true; goLeft = a._huntGo; }
         // against the PINNED point and not against the live instance: the
         // prey is put back on that point at the top of every frame, so it is
         // the position drive() measured its own reach against, and the sim
@@ -4170,7 +4189,25 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
       }
       return null;
     };
-    const talus = spotOn(0), shelf = spotOn(1), plateau = spotOn(2);
+    const plateau = spotOn(2);
+    // THE TALUS SPOT IS PAIRED TO THE SHELF SPOT. cougarCanTake keeps a
+    // floor cougar inside 210px of his prey â€” his hunts belong to the rock,
+    // not the far meadow â€” so a talus stand drawn anywhere in the band asks
+    // the distance gate half the time and calls its answer the level rule.
+    let shelf = null, talus = null;
+    for (let i = 0; i < 2500 && !talus; i++) {
+      const sx = 0.005 * B.w + Math.random() * 0.1 * B.w;
+      const sy = 0.1 * B.h + Math.random() * 0.65 * B.h;
+      if (!w.__prey.okAt('goat', sx, sy, { lvl: 1 })) continue;
+      for (let k = 0; k < 40 && !talus; k++) {
+        const tx = 0.005 * B.w + Math.random() * 0.12 * B.w;
+        const ty = sy + Math.random() * 185;
+        if (Math.hypot(tx - sx, ty - sy) > 185) continue;
+        if (!w.__prey.okAt('goat', tx, ty, { lvl: 0 })) continue;
+        talus = { x: tx, y: ty };
+      }
+      if (talus) shelf = { x: sx, y: sy };
+    }
     if (!talus || !shelf || !plateau) {
       return { none: 'the bluff has no room for a goat on all three terraces' };
     }
@@ -4227,8 +4264,11 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     return { none: false, across1: across1, across2: across2, same: same,
              tried: 3, plateauStalks: off(across1) + off(across2), took: off(same) };
   })()`);
-  chk(!T.none && T.plateauStalks === 0 && T.took === 1,
-    'he never sets off after a goat on a terrace he cannot walk to',
+  // THE RULE MOVED in v0.46: his stalk carries canHop now, so ONE terrace
+  // of separation is a hunt â€” that is the leap the owner asked for pointed
+  // at the goat â€” and only a two-face climb is still refused.
+  chk(!T.none && T.across1.indexOf('set off') === 0 && T.across2 === 'refused' && T.took === 1,
+    'he stalks the goat one face up, and still refuses a two-face climb',
     T.none || `one face up: ${T.across1}; two faces up: ${T.across2}; ` +
       `and on his own terrace he ${T.same}`);
 
@@ -4504,6 +4544,12 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     for (let i = 0; i < 2400; i++) {
       window.__pump(1);
       cg.state = 'cgsleep';
+      // ...and PINNED. The forced sleep state cycles through the den drive,
+      // whose ends walk him; unpinned he drifted 876px across one run and
+      // wandered through the keep-off radius on the way, which made the
+      // wolf's refusal flicker. This check is about the RULE, not about
+      // where a sleep-cycling cougar happens to shamble.
+      cg.x = spot.x + 70; cg.y = spot.y; cg.vx = cg.vy = 0;
       if (wf.state === 'wfwary') wary++;
       if (r.feeds < 3 && ate < 0) ate = i;
       if (wf.state === 'wander' && ate >= 0) break;
@@ -4515,8 +4561,9 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
   })()`);
   chk(!V.none && V.awakeTook < 0 && V.feedsAwake === 3 && V.asleepTook >= 0 && V.feeds < 3,
     'he will not touch a carcass with a waking cougar beside it, and takes it the moment the cougar sleeps',
-    V.none || `refused for 1400 frames at ${V.d.toFixed(0)}px awake; asleep he set off ` +
-      `after ${V.asleepTook} and stood off it for ${V.wary} frames first`);
+    V.none || `awakeTook ${V.awakeTook} (want -1), feedsAwake ${V.feedsAwake} (want 3), ` +
+      `asleepTook ${V.asleepTook} (want >=0), feeds ${V.feeds} (want <3); ` +
+      `stood off ${V.wary} frames; cougar ended ${V.d.toFixed(0)}px from the carcass`);
   chk(!V.none && V.feeds === 2 && V.stillThere && !V.held,
     'and one wolf takes one meal out of three, leaving the rest',
     V.none || `feeds went 3 -> ${V.feeds}, the carcass is still on the ground and unheld`);
@@ -4621,26 +4668,52 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
       `with the cougar standing on it, ${B2.cougarOnShelf}`);
 
   // ---- 11. THE WIND IS A RULE, NOT A MOOD ------------------------------
-  // Asked of the behaviour and not of a copy of the formula: sixteen
-  // bearings at two ranges, on a clock this page owns so the wind holds
-  // still. Inside 200px it must not matter; outside it, it must.
+  // Asked deterministically. The page owns a wind hook (__wind reads the
+  // same patched clock the wolf does), so instead of sixteen compass
+  // bearings and a statistical shrug, three placements put the mechanic
+  // itself on trial: dead downwind of the prey he takes 260px, dead
+  // upwind he refuses the same range, and inside the halved reach the
+  // wind cannot matter. wolfScents wants the prey-to-wolf bearing more
+  // than 0.6 PI off the wind for the full 320, so a hare seated AT the
+  // wind angle from the wolf puts him a full PI off it â€” the deepest
+  // downwind there is â€” and seated opposite puts him at zero.
   const W = await page4.evaluate(`(() => {
     const w = window.__saiWorld, B = w.bounds;
     const wf = w.agents.find((a) => a.species === 'wolf');
     if (!wf) return { none: 'no wolf' };
+    if (!w.__wind) return { none: 'no __wind hook on this build' };
     w.__park(['wolf']); w.__prey.clear();
     const p = w.__prey.spawn('hare', true);
     if (!p) return { none: 'no hare would spawn' };
     p._in = true;
-    const cx = 0.52 * B.w, cy = 0.46 * B.h;
-    const tryAt = (ang, rad) => {
-      const px = cx + Math.cos(ang) * rad, py = cy + Math.sin(ang) * rad;
-      if (!w.__prey.okAt('hare', px, py)) return null;
-      if (!w.__prey.okAt('hare', cx, cy)) return null;
+    // Legality mirrors wolfCanTake for BOTH seats: open forest floor, off
+    // the lake, off the rock. A refusal on illegal ground would be
+    // terrain wearing the wind's coat.
+    const ok = (x, y) => x > 40 && x < B.w - 40 && y > B.h * 0.30
+      && y < B.h - 40 && w.lakeRhoAt(x, y) > 1.06 && !w.rockZoneAt(x, y).on
+      && w.__prey.okAt('hare', x, y);
+    const beats = ['wfstalk', 'wfcrouch', 'wfrush', 'wfeat', 'wfmiss'];
+    const trial = (rad, down) => {
+      // read the wind at placement time; 80 frames drift it a handful of
+      // degrees against a 72-degree margin
+      const ang = w.__wind() + (down ? 0 : Math.PI);
+      const dx = Math.cos(ang) * rad, dy = Math.sin(ang) * rad;
+      let cx = -1, cy = -1;
+      for (let gy = 0.32; gy < 0.92 && cx < 0; gy += 0.06)
+        for (let gx = 0.08; gx < 0.94; gx += 0.05) {
+          const x = gx * B.w, y = gy * B.h;
+          if (ok(x, y) && ok(x + dx, y + dy)) { cx = x; cy = y; break; }
+        }
+      if (cx < 0) return null;
+      const px = cx + dx, py = cy + dy;
       w.__prey.release('hare', wf.id);
+      // TRIAL HYGIENE, measured into being: an engagement leaves wf._huntP
+      // and the hare's claim standing, and the next trial then reads a
+      // stale hunt instead of running its own.
+      wf._huntP = null; wf._huntWin = false;
+      p.claimedBy = null; p.hunted = false; p._chasePace = 0;
       p.x = px; p.y = py; p._fleeUntil = 0;
       w.__free(wf, cx, cy, 0);
-      const beats = ['wfstalk', 'wfcrouch', 'wfrush', 'wfeat', 'wfmiss'];
       for (let i = 0; i < 80; i++) {
         // ANY beat of the hunt counts as "he set off". Sampling for the
         // stalk alone misses a short one that was already through the
@@ -4655,21 +4728,18 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
       }
       return false;
     };
-    let legal = 0, far = 0, near = 0;
-    for (let i = 0; i < 16; i++) {
-      const ang = (i / 16) * Math.PI * 2;
-      const f = tryAt(ang, 260);
-      if (f === null) continue;
-      const n = tryAt(ang, 150);
-      if (n === null) continue;
-      legal++; if (f) far++; if (n) near++;
-    }
-    return { none: false, legal: legal, far: far, near: near };
+    const farDown = trial(260, true);
+    const farUp = trial(260, false);
+    const nearUp = trial(150, false);
+    return { none: false, farDown: farDown, farUp: farUp, nearUp: nearUp };
   })()`);
-  chk(!W.none && W.legal >= 6 && W.near === W.legal && W.far > 0 && W.far < W.legal,
+  const windWord = (v) =>
+    v === null ? 'had no legal ground' : v ? 'set off' : 'refused';
+  chk(!W.none && W.farDown === true && W.farUp === false && W.nearUp === true,
     'he closes further downwind than up: the wind is a rule, not a mood',
-    W.none || `${W.far}/${W.legal} bearings taken at 260px, ${W.near}/${W.legal} at 150px â€” ` +
-      'inside the halved reach the wind cannot matter, outside it it decides');
+    W.none || `dead downwind at 260px he ${windWord(W.farDown)}; ` +
+      `dead upwind at 260px he ${windWord(W.farUp)}; ` +
+      `dead upwind at 150px he ${windWord(W.nearUp)}`);
 
   // ---- 12. AND THE APPROACH BENDS THROUGH SOMETHING --------------------
   const C = await page4.evaluate(`(() => {
@@ -4809,33 +4879,58 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     var site = p._site;
     w.__free(a);
     a.x = p.x - 44; a.y = p.y + 6;
+    // the staged grub arrives unearthed; bury it, because the dig's whole
+    // new contract is that HE brings it up
+    p._buried = true;
     var pitsBefore = (w.pits || []).length;
-    var seen = {}, dug = 0, cast = 0, feed = 0, ate = -1, id = p.id;
-    for (var i = 0; i < 900; i++) {
-      w.__only(a, 'grubs');
+    var seen = {}, dug = 0, cast = 0, feed = 0, ate = -1, digAt = null;
+    var unearthedAt = -1, escaped = false, reburied = false;
+    for (var i = 0; i < 2400; i++) {
+      // ONLY UNTIL THE COIN FALLS. Forcing the appetite every frame defeats
+      // missCool, and a skunk allowed to re-pick the grub he just released
+      // digs it straight back up mid-escape â€” two digs deep in one bout and
+      // the re-bury never seen. After the release the world runs honest.
+      if (!escaped) w.__only(a, 'grubs');
       seen[a.state] = (seen[a.state] | 0) + 1;
-      if (a.state === 'skgrub') dug++;
+      if (a.state === 'skgrub') { dug++; if (!digAt) digAt = { x: a.x, y: a.y }; }
       if (a.state === 'skcast') cast++;
       if (a.state === 'skgrubeat') { feed++; if (ate < 0) ate = i; }
+      if (!p._buried && unearthedAt < 0) unearthedAt = i;
+      if (p._escapeUntil) escaped = true;
+      if (escaped && p._buried) reburied = true;
       if (ate >= 0 && i > ate + 40) break;
+      if (reburied) break;
       window.__pump(1);
     }
-    var d = Math.hypot(a.x - site.px, a.y - site.py);
+    // WHERE HE DUG, not where the coin's aftermath wandered him â€” the loop
+    // runs the world honest after a release, and a skunk free to amble for
+    // three seconds is no measure of where the dig was opened
+    var d = digAt ? Math.hypot(digAt.x - site.px, digAt.y - site.py)
+                  : Math.hypot(a.x - site.px, a.y - site.py);
     return { none: false, seen: seen, dug: dug, cast: cast, feed: feed, ate: ate,
              kind: site.kind, d: d, half: site.half,
+             unearthedAt: unearthedAt, dugFirst: unearthedAt > 0 && dug > 0,
+             escaped: escaped, reburied: reburied,
              pitsBefore: pitsBefore, pits: (w.pits || []).length,
              gone: !w.__prey.of('grub'), eaten: w.__prey().stat.eaten,
              claim: p.claimedBy || null };
   })()`);
-  chk(!D.none && D.ate >= 0 && D.d < D.half + 90,
-    'the skunk digs where the grubs actually are, in the timber and the roots',
-    D.none || `dug a ${D.kind} at ${D.d.toFixed(0)}px from its anchor, half ${D.half.toFixed(0)}px`);
+  chk(!D.none && D.dugFirst && D.d < D.half + 60,
+    'the skunk digs where the grubs actually are, and the grub only appears when he does',
+    D.none || `dug a ${D.kind} at ${D.d.toFixed(0)}px from its anchor (half ${D.half.toFixed(0)}px); ` +
+      `buried until frame ${D.unearthedAt}, after ${D.dug} frames of digging`);
   chk(!D.none && D.pits === D.pitsBefore,
     'and a grub dig leaves no cone: his pits belong on open ground',
     D.none || `world.pits ${D.pitsBefore} -> ${D.pits} across ${D.cast + D.dug + D.feed} frames of digging`);
-  chk(!D.none && D.gone && D.eaten > 0 && D.dug > 8,
-    'and the grub goes: it withdrew, and withdrawing is not escaping',
-    D.none || `${D.cast} frames casting, ${D.dug} digging, ${D.feed} with his head in the hole`);
+  // THE COIN, both faces legal â€” the owner's 50/50: eaten in the feed pose,
+  // or RELEASED, visibly running for the wood and going back under. Either
+  // way the dig itself must have been real (seconds of skgrub on screen).
+  chk(!D.none && D.dug > 8 && ((D.ate >= 0 && D.gone && D.eaten > 0) || (D.escaped && D.reburied)),
+    'and the coin falls: eaten where it lies, or released and back under the wood',
+    D.none || (D.ate >= 0
+      ? `eaten: ${D.feed} frames in the feed pose after ${D.dug} of digging`
+      : `released: it ran and re-buried (escaped ${D.escaped}, reburied ${D.reburied}) ` +
+        `after ${D.dug} frames of digging`));
 
   // ---- 2. THE CRAYFISH IN THE MUDDY SHALLOWS. Two halves of one rule: he
   // refuses one he cannot physically get to, and he takes one at the lip
@@ -5002,7 +5097,25 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     w.__prey.clear();
     var p = w.__prey.spawn('earthworm', true);
     if (!p) return { none: 'no earthworm would spawn' };
-    var ang = 0.9;
+    p._in = true;
+    // THE ANGLE IS AUDITIONED, NOT ASSUMED. A fixed bearing from wherever
+    // the worm happened to spawn can pin the hedgehog into the lake or onto
+    // the rock, where a land appetite rightly never fires â€” and the check
+    // then reads terrain and calls it reach. Both rings must stand on grass.
+    var ok = function (x, y) {
+      var B = w.bounds;
+      return x > 30 && x < B.w - 30 && y > B.h * 0.30 && y < B.h - 30
+        && w.lakeRhoAt(x, y) > 1.06 && !w.rockZoneAt(x, y).on;
+    };
+    var ang = -1;
+    for (var t = 0; t < 16; t++) {
+      var cand = (t / 16) * Math.PI * 2;
+      if (ok(p.x + Math.cos(cand) * 158, p.y + Math.sin(cand) * 158)
+          && ok(p.x + Math.cos(cand) * 84, p.y + Math.sin(cand) * 84)) {
+        ang = cand; break;
+      }
+    }
+    if (ang < 0) return { none: 'no legal bearing: the worm sat against the water' };
     var at = function (r) {
       w.__free(a);
       a.x = p.x + Math.cos(ang) * r; a.y = p.y + Math.sin(ang) * r;
@@ -5020,24 +5133,35 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     w.__free(a);
     a.x = p.x - 40; a.y = p.y + 5;
     var dug = 0, cast = 0, feed = 0, ate = -1, held = null;
-    for (var k = 0; k < 900; k++) {
-      w.__only(a, 'grubs');
+    var escaped = false, reburied = false;
+    for (var k = 0; k < 2400; k++) {
+      // same rule as the skunk's coin: once the worm is away, stop forcing
+      // the appetite, or he digs his own miss back up mid-escape
+      if (!escaped) w.__only(a, 'grubs');
       if (a.state === 'hhgrub') { dug++; held = a._huntP ? a._huntP.id : held; }
       if (a.state === 'hhcast') cast++;
       if (a.state === 'hhgrubeat') { feed++; if (ate < 0) ate = k; }
+      if (p._escapeUntil) escaped = true;
+      if (escaped && p._buried) reburied = true;
       if (ate >= 0 && k > ate + 40) break;
+      if (reburied) break;
       window.__pump(1);
     }
     return { none: false, far: far, near: near, dug: dug, cast: cast,
              feed: feed, ate: ate, gone: !w.__prey.of('earthworm'),
+             escaped: escaped, reburied: reburied,
              eaten: w.__prey().stat.eaten, held: held };
   })()`);
   chk(!H.none && H.far < 0 && H.near >= 0,
     'the hedgehog finds his food by walking into it: the shortest reach in the world',
     H.none || `nothing at 158px in 200 frames; at 84px he was on it in ${H.near}`);
-  chk(!H.none && H.gone && H.dug + H.cast + H.feed > 60,
-    'and once he is on it, it does not get away',
-    H.none || `${H.cast} frames casting, ${H.dug} digging, ${H.feed} chewing; the earthworm is gone`);
+  // THE COIN, his as much as the skunk's: half the digs end in the chew,
+  // half end with the worm visibly away and back under the wood.
+  chk(!H.none && H.dug > 8 && ((H.ate >= 0 && H.gone) || (H.escaped && H.reburied)),
+    'and the dig ends on the coin: chewed, or away and back under the wood',
+    H.none || (H.ate >= 0
+      ? `chewed: ${H.feed} frames after ${H.dug} of digging; the earthworm is gone`
+      : `released: escaped ${H.escaped}, re-buried ${H.reburied}, after ${H.dug} frames of digging`));
 
   // ---- 5. HIS OTHER TWO BOUTS ARE UNTOUCHED. The grub dig is a third
   // appetite and not a replacement: roots and logs are mimed digs into the

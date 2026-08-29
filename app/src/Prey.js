@@ -284,6 +284,7 @@ export function releasePrey(p, hunterId) {
   if (!p || p.claimedBy !== hunterId) return false;
   p.claimedBy = null; p.claimUntil = 0; p.hunted = false;
   return true;
+  p._chasePace = 0;
 }
 
 /**
@@ -363,6 +364,12 @@ export function spawnPrey(world, key, opt = {}) {
     bornAt: now, leaveAt: now + between(DWELL_MS[prof.habitat] || DWELL_MS.floor),
     _goal: null, _hold: 0, _site: null, _lvl: 0, _leap: null,
     _settled: false, _fleeUntil: 0, _threat: null, _in: false, _dir: 1,
+    // THE LITTER TRIO LIVE UNDER THE WOOD, not on it — the owner's spec:
+    // "the grubs only appear after the skunk and hedgehog dig them up and
+    // out." Buried is invisible and inert; a dig unearths one, and a dig
+    // that goes the grub's way ends with it visibly getting away and going
+    // back under. _escapeUntil is that dash for cover.
+    _buried: prof.habitat === "litter", _escapeUntil: 0,
     _wobble: Math.random() * 6.283,
   };
 
@@ -429,6 +436,7 @@ export function removePrey(world, p, why, now = now0()) {
   const arr = world.prey || [];
   const i = arr.indexOf(p);
   if (i >= 0) arr.splice(i, 1);
+  p._chasePace = 0;
   p.alive = false; p.state = PREY_STATES.gone;
   p.claimedBy = null; p.claimUntil = 0; p.hunted = false;
   world.preyCool = world.preyCool || {};
@@ -484,7 +492,7 @@ export function stepPrey(world, cfg, dt, now = now0()) {
 
 function stepOne(world, cfg, dt, now, p) {
   const bounds = world.bounds;
-  if (p.claimUntil && now >= p.claimUntil) { p.claimedBy = null; p.hunted = false; }
+  if (p.claimUntil && now >= p.claimUntil) { p.claimedBy = null; p.hunted = false; p._chasePace = 0; }
 
   // ---- 1. is anything frightening nearby? ------------------------------
   const app = preyApparent(p.species) || 20;
@@ -613,6 +621,27 @@ function driveWander(world, p, cfg, dt, now) {
 function driveLitter(world, p, cfg, dt, now) {
   const s = p._site;
   if (!s) { startExit(world, p, now); return; }
+  // underground: inert and unseen. The dwell/leave clock still runs, so the
+  // population still turns over — it just does it out of sight.
+  if (p._buried) { p.state = PREY_STATES.burrow; p.vx = p.vy = 0; return; }
+  // the getaway: unearthed and NOT eaten, it makes fast for cover and goes
+  // back under where it reaches it — the released half of the dig's 50/50
+  if (p._escapeUntil) {
+    if (now >= p._escapeUntil) {
+      p._escapeUntil = 0; p._buried = true;
+      p.x = s.px + (Math.random() - 0.5) * s.half * 0.5;
+      p.y = s.py + (Math.random() - 0.5) * s.half * 0.2;
+      p.vx = p.vy = 0; p.state = PREY_STATES.burrow;
+      return;
+    }
+    const tx = p._tx ?? p.x + 1, ty = p._ty ?? p.y;
+    let ux = p.x - tx, uy = p.y - ty;
+    const d0 = Math.hypot(ux, uy) || 1; ux /= d0; uy /= d0;
+    p.state = PREY_STATES.crawl;
+    const sp2 = pace(p, cfg, 0.34);          // triple its amble: adrenaline
+    advance(world, p, dt, ux * sp2, uy * sp2);
+    return;
+  }
   if (now < p._hold) {
     p.vx = p.vy = 0;
     if (p.state === PREY_STATES.burrow && now >= p._hold - 60) p.state = PREY_STATES.crawl;
@@ -645,7 +674,11 @@ function driveFlee(world, p, cfg, dt, now, threat) {
   const zig = Math.sin(now / 90 + p._wobble) * 0.45;
   const zx = -uy * zig, zy = ux * zig;
   p.state = PREY_STATES.flee;
-  const sp = pace(p, cfg, 0.95);
+  // THE CHASE'S OTHER HALF. A hunter whose chase is fated to land writes a
+  // pace multiplier here when it opens (see beginChase in Ethogram.js):
+  // under 1 the prey is tiring, over 1 it found the adrenaline and pulls
+  // away. What the viewer sees is the outcome being EARNED, not rolled.
+  const sp = pace(p, cfg, 0.95 * (p._chasePace || 1));
   if (!advance(world, p, dt, (ux + zx) * sp, (uy + zy) * sp)) {
     // cornered against its own habitat edge: run along it instead
     advance(world, p, dt, -uy * sp, ux * sp);
