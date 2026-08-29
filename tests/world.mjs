@@ -4864,8 +4864,12 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     var pitsBefore = (w.pits || []).length;
     var seen = {}, dug = 0, cast = 0, feed = 0, ate = -1;
     var unearthedAt = -1, escaped = false, reburied = false;
-    for (var i = 0; i < 1500; i++) {
-      w.__only(a, 'grubs');
+    for (var i = 0; i < 2400; i++) {
+      // ONLY UNTIL THE COIN FALLS. Forcing the appetite every frame defeats
+      // missCool, and a skunk allowed to re-pick the grub he just released
+      // digs it straight back up mid-escape â€” two digs deep in one bout and
+      // the re-bury never seen. After the release the world runs honest.
+      if (!escaped) w.__only(a, 'grubs');
       seen[a.state] = (seen[a.state] | 0) + 1;
       if (a.state === 'skgrub') dug++;
       if (a.state === 'skcast') cast++;
@@ -5068,7 +5072,25 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     w.__prey.clear();
     var p = w.__prey.spawn('earthworm', true);
     if (!p) return { none: 'no earthworm would spawn' };
-    var ang = 0.9;
+    p._in = true;
+    // THE ANGLE IS AUDITIONED, NOT ASSUMED. A fixed bearing from wherever
+    // the worm happened to spawn can pin the hedgehog into the lake or onto
+    // the rock, where a land appetite rightly never fires â€” and the check
+    // then reads terrain and calls it reach. Both rings must stand on grass.
+    var ok = function (x, y) {
+      var B = w.bounds;
+      return x > 30 && x < B.w - 30 && y > B.h * 0.30 && y < B.h - 30
+        && w.lakeRhoAt(x, y) > 1.06 && !w.rockZoneAt(x, y).on;
+    };
+    var ang = -1;
+    for (var t = 0; t < 16; t++) {
+      var cand = (t / 16) * Math.PI * 2;
+      if (ok(p.x + Math.cos(cand) * 158, p.y + Math.sin(cand) * 158)
+          && ok(p.x + Math.cos(cand) * 84, p.y + Math.sin(cand) * 84)) {
+        ang = cand; break;
+      }
+    }
+    if (ang < 0) return { none: 'no legal bearing: the worm sat against the water' };
     var at = function (r) {
       w.__free(a);
       a.x = p.x + Math.cos(ang) * r; a.y = p.y + Math.sin(ang) * r;
@@ -5087,8 +5109,10 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     a.x = p.x - 40; a.y = p.y + 5;
     var dug = 0, cast = 0, feed = 0, ate = -1, held = null;
     var escaped = false, reburied = false;
-    for (var k = 0; k < 1500; k++) {
-      w.__only(a, 'grubs');
+    for (var k = 0; k < 2400; k++) {
+      // same rule as the skunk's coin: once the worm is away, stop forcing
+      // the appetite, or he digs his own miss back up mid-escape
+      if (!escaped) w.__only(a, 'grubs');
       if (a.state === 'hhgrub') { dug++; held = a._huntP ? a._huntP.id : held; }
       if (a.state === 'hhcast') cast++;
       if (a.state === 'hhgrubeat') { feed++; if (ate < 0) ate = k; }
