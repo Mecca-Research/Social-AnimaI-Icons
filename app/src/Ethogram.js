@@ -535,7 +535,26 @@ export function stepEthogram(a, ctx) {
 
   // Tier 3: an event in progress owns the rest of the frame outright. This
   // is also what keeps a second event from starting on top of a running one.
-  if (run) { if (run.drive) run.drive(a, ctx, S); return true; }
+  if (run) {
+    // THE POSE WATCHDOG. No designed hold in this world exceeds forty
+    // seconds in one state — the sleeps are ceilinged at thirty, the owl's
+    // roost runs 24-40, a beaver's bark bout is seven — so a single state
+    // an event owns that has not transitioned in 75 is not a behaviour, it
+    // is a bug being exhibited. One soak caught the skunk eight minutes
+    // into a dig; this makes that whole class impossible rather than that
+    // one instance unlikely. World-owned states (a drag, a fight) are not
+    // events and are not touched.
+    if (a.state !== S.poseSt) { S.poseSt = a.state; S.poseAt = ctx.now; }
+    else if (ctx.now - S.poseAt > 75000) {
+      releaseClaim(a, S);
+      huntRelease(a);
+      a._poseAbortN = (a._poseAbortN || 0) + 1;
+      endEvent(a, ctx, { reroll: true, quiet: 2000, stop: true });
+      S.poseSt = a.state; S.poseAt = ctx.now;
+      return true;
+    }
+    if (run.drive) run.drive(a, ctx, S); return true;
+  }
 
   if (eth.tick) eth.tick(a, ctx, S);
 
