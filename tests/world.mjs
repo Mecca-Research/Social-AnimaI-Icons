@@ -2647,9 +2647,12 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     if (got < 0) return { none: 'never backed up; state ' + a.state };
     const dir = a._faceDir, x0 = a.x, y0 = a.y;
     let turned = 0;
+    // the break is read BEFORE the flip: the frame the bout ends, the next
+    // intent may face him at a new goal, and that turn belongs to the next
+    // bout, not to the backing
     for (let i = 0; i < 260; i++) { window.__pump(1);
-      if (a._faceDir !== dir) turned++;
-      if (a.state !== 'turtback') break; }
+      if (a.state !== 'turtback') break;
+      if (a._faceDir !== dir) turned++; }
     const sp = w.__spriteOf('turtle');
     return { dir, dx: a.x - x0, moved: Math.hypot(a.x - x0, a.y - y0), turned,
              sdir: sp ? sp.dataset.dir : null, state: a.state };
@@ -4678,7 +4681,7 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     const w = window.__saiWorld, B = w.bounds;
     const wf = w.agents.find((a) => a.species === 'wolf');
     if (!wf) return { none: 'no wolf' };
-    if (!window.__wind) return { none: 'no __wind hook on this build' };
+    if (!w.__wind) return { none: 'no __wind hook on this build' };
     w.__park(['wolf']); w.__prey.clear();
     const p = w.__prey.spawn('hare', true);
     if (!p) return { none: 'no hare would spawn' };
@@ -4693,7 +4696,7 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     const trial = (rad, down) => {
       // read the wind at placement time; 80 frames drift it a handful of
       // degrees against a 72-degree margin
-      const ang = window.__wind() + (down ? 0 : Math.PI);
+      const ang = w.__wind() + (down ? 0 : Math.PI);
       const dx = Math.cos(ang) * rad, dy = Math.sin(ang) * rad;
       let cx = -1, cy = -1;
       for (let gy = 0.32; gy < 0.92 && cx < 0; gy += 0.06)
@@ -4880,7 +4883,7 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     // new contract is that HE brings it up
     p._buried = true;
     var pitsBefore = (w.pits || []).length;
-    var seen = {}, dug = 0, cast = 0, feed = 0, ate = -1;
+    var seen = {}, dug = 0, cast = 0, feed = 0, ate = -1, digAt = null;
     var unearthedAt = -1, escaped = false, reburied = false;
     for (var i = 0; i < 2400; i++) {
       // ONLY UNTIL THE COIN FALLS. Forcing the appetite every frame defeats
@@ -4889,7 +4892,7 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
       // the re-bury never seen. After the release the world runs honest.
       if (!escaped) w.__only(a, 'grubs');
       seen[a.state] = (seen[a.state] | 0) + 1;
-      if (a.state === 'skgrub') dug++;
+      if (a.state === 'skgrub') { dug++; if (!digAt) digAt = { x: a.x, y: a.y }; }
       if (a.state === 'skcast') cast++;
       if (a.state === 'skgrubeat') { feed++; if (ate < 0) ate = i; }
       if (!p._buried && unearthedAt < 0) unearthedAt = i;
@@ -4899,7 +4902,11 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
       if (reburied) break;
       window.__pump(1);
     }
-    var d = Math.hypot(a.x - site.px, a.y - site.py);
+    // WHERE HE DUG, not where the coin's aftermath wandered him â€” the loop
+    // runs the world honest after a release, and a skunk free to amble for
+    // three seconds is no measure of where the dig was opened
+    var d = digAt ? Math.hypot(digAt.x - site.px, digAt.y - site.py)
+                  : Math.hypot(a.x - site.px, a.y - site.py);
     return { none: false, seen: seen, dug: dug, cast: cast, feed: feed, ate: ate,
              kind: site.kind, d: d, half: site.half,
              unearthedAt: unearthedAt, dugFirst: unearthedAt > 0 && dug > 0,
