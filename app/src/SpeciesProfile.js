@@ -478,7 +478,10 @@ export const PREY_PROFILE = {
   }),
   // ---------------- the bluff, and nowhere else ----------------
   goat: preyRow({
-    draw: 0.5, mass: 92.5, len: 1.4, hgt: 1.05, speed: 25, habitat: "rock", arrival: "edge",
+    // 0.6, not the boar's 0.5: the owner sized him twice — half of true bulk
+    // was too small against the cougar who hunts him, and a fifth back up
+    // reads as game without reading as livestock
+    draw: 0.6, mass: 92.5, len: 1.4, hgt: 1.05, speed: 25, habitat: "rock", arrival: "edge",
     fill: 0.8242,   // measured off the drawing by tests/sizes.mjs
     dims: "45-140kg · 1.2-1.6m · 90-120cm at shoulder",
     profile: "The second largest animal in the world after the bear, and just " +

@@ -4317,9 +4317,9 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
     'the cougar sleeps in the cave, on the shelf’s own floor',
     R.none || `asleep at level ${R.lvl}, ${R.inCave ? 'inside' : 'outside'} the drawn mouth ` +
       `and ${R.fromMouth.toFixed(0)}px from its centre, on no platform`);
-  chk(!R.none && R.frames > 40 && R.spent <= 31000,
+  chk(!R.none && R.frames > 40 && R.spent <= 39500,
     'and he stays down for a real sleep without dropping out of the world',
-    R.none || `${R.frames} frames asleep, ${Math.round(R.spent / 1000)}s of the 30s budget`);
+    R.none || `${R.frames} frames asleep, ${Math.round(R.spent / 1000)}s of the den's 38s budget`);
 
   // ---- 5. THE GOAT COMES HOME ------------------------------------------
   // The owner's sentence, executed literally: deep lazy sleep inside the
@@ -4364,6 +4364,257 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
   chk(!G.none && G.carried > 0 && !G.debt,
     'and he is carrying it the whole way there',
     G.none || `${G.carried} frames with data-carry="kill", and the debt is cleared`);
+
+  // ---- 5b. FROM THE GREEN GRASS TO THE CAVE (v0.47) --------------------
+  // The owner's third asking, measured dead in v0.46: from grass at shelf
+  // latitude every den walk pinned at the east outline (24 forced walks, 24
+  // stall-aborts, 0 hops), and one begun BESIDE the foot never began at all
+  // (the old pick's 130px null returned "no den today"). The router owns
+  // both approaches now, and this asks the two of them by name.
+  const GC = await page4.evaluate(`(() => {
+    const w = window.__saiWorld, B = w.bounds;
+    const cg = w.agents.find((a) => a.species === 'cougar');
+    if (!cg) return { none: 'no cougar' };
+    w.__park(['cougar']); w.__prey.clear();
+    const m = w.__mouth();
+    const trial = (x, y) => {
+      w.__free(cg, x, y, 0);
+      cg._cgKill = null; cg._carry = null;
+      const ab0 = cg._stallAbortN || 0;
+      let started = -1, settled = -1, hops = 0, hopUp = false;
+      for (let i = 0; i < 2400; i++) {
+        if (started < 0 && cg.state === 'cgtoden') started = i;
+        if (cg._rockHop && !hopUp) { hops++; hopUp = true; }
+        if (!cg._rockHop) hopUp = false;
+        if (cg.state === 'cgsettle' || cg.state === 'cgsleep') { settled = i; break; }
+        w.__only(cg, 'den');
+        window.__pump(1);
+      }
+      return { started: started, settled: settled, hops: hops,
+               aborts: (cg._stallAbortN || 0) - ab0,
+               inCave: settled >= 0 ? w.__inCave(cg.x, cg.y) : false };
+    };
+    // the A1 dead-end: open grass at shelf latitude, well east of the bluff
+    const far = trial(0.44 * B.w, 0.47 * B.h);
+    // ...and the owner's own vantage: the grass right beside the rock foot
+    const foot = trial(0.135 * B.w, 0.72 * B.h);
+    return { none: false, far: far, foot: foot };
+  })()`);
+  chk(!GC.none && GC.far.settled > 0 && GC.far.inCave && GC.far.hops >= 1 && GC.far.aborts === 0,
+    'from open grass at shelf latitude he walks round the foot, climbs, and beds in the cave',
+    GC.none || `started f${GC.far.started}, settled f${GC.far.settled} ` +
+      `(${GC.far.inCave ? 'inside' : 'OUTSIDE'} the room), ${GC.far.hops} hops, ` +
+      `${GC.far.aborts} stall-aborts on the way`);
+  chk(!GC.none && GC.foot.started >= 0 && GC.foot.started < 400 && GC.foot.settled > 0 && GC.foot.aborts === 0,
+    'and a den begun standing beside his own front door BEGINS, instead of dying in the pick',
+    GC.none || `from the foot: started f${GC.foot.started}, settled f${GC.foot.settled}, ` +
+      `${GC.foot.hops} hops, ${GC.foot.aborts} aborts`);
+
+  // ---- 5c. THE CARRY IS ON SCREEN, AND THE BODY COMES HOME WHOLE -------
+  // Link 2's lesson, learned: the flag was healthy in v0.46 while the
+  // visible leg showed nothing, so this reads the PIXELS — the pose node's
+  // computed display on a level-0 walking frame — and then the carcass
+  // stage: a goat nothing has gnawed is a body, and the first gnaw is what
+  // turns it to bone.
+  const CC = await page4.evaluate(`(() => {
+    const w = window.__saiWorld, B = w.bounds;
+    const cg = w.agents.find((a) => a.species === 'cougar');
+    if (!cg) return { none: 'no cougar' };
+    w.__park(['cougar']); w.__prey.clear(); w.remains = [];
+    const m = w.__mouth();
+    const spriteOf = (sp) => {
+      const all = Array.prototype.slice.call(document.querySelectorAll('.sai-sprite'));
+      return all.find((e) => e.querySelector('.sai-crit--' + sp)) || null;
+    };
+    w.__free(cg, 0.34 * B.w, 0.56 * B.h, 0);
+    cg._cgKill = 'goat'; cg._cgKillAt = performance.now();
+    let seen = 0, shown = 0, lvl0shown = 0, bbox = 0;
+    for (let i = 0; i < 2400; i++) {
+      w.__only(cg, 'den');
+      window.__pump(1);
+      if (cg.state === 'cgtoden') {
+        seen++;
+        const el = spriteOf('cougar');
+        const pose = el && el.querySelector('.sai-crit-cgcarrypose');
+        const disp = pose ? getComputedStyle(pose).display : 'none';
+        if (el && el.dataset.carry === 'kill' && disp !== 'none') {
+          shown++;
+          if ((cg._lvl ?? 0) === 0) {
+            lvl0shown++;
+            const r = pose.getBoundingClientRect();
+            bbox = Math.max(bbox, r.width);
+          }
+        }
+      }
+      if (w.remains.length) break;
+    }
+    if (!w.remains.length) return { none: 'the debt was never paid: no remains' };
+    const r = w.remains[0];
+    window.__pump(2);
+    const pool = document.querySelector('[data-rem="goat"]');
+    const freshEl = pool && pool.querySelector('.sai-rem-fresh');
+    const bonesEl = pool && pool.querySelector('.sai-rem-bones');
+    const before = {
+      fresh: pool ? pool.dataset.fresh : 'nopool',
+      freshShown: freshEl ? getComputedStyle(freshEl).display !== 'none' : false,
+      bonesShown: bonesEl ? getComputedStyle(bonesEl).display !== 'none' : false,
+    };
+    // the first gnaw, simulated where eatRemains would do it
+    r.feeds -= 1; r.gnawed = true;
+    window.__pump(2);
+    const after = {
+      fresh: pool ? pool.dataset.fresh : 'nopool',
+      freshShown: freshEl ? getComputedStyle(freshEl).display !== 'none' : false,
+      bonesShown: bonesEl ? getComputedStyle(bonesEl).display !== 'none' : false,
+    };
+    return { none: false, seen: seen, shown: shown, lvl0shown: lvl0shown,
+             bbox: bbox, before: before, after: after };
+  })()`);
+  chk(!CC.none && CC.shown > 0 && CC.lvl0shown > 0 && CC.bbox > 4
+      && CC.shown >= CC.seen * 0.9,
+    'the goat is in his jaws ON SCREEN for the walk home, the floor leg included',
+    CC.none || `${CC.shown}/${CC.seen} cgtoden frames wore the carry ` +
+      `(${CC.lvl0shown} of them on the floor, pose ${CC.bbox.toFixed(0)}px wide)`);
+  chk(!CC.none && CC.before.fresh === '1' && CC.before.freshShown && !CC.before.bonesShown
+      && CC.after.fresh === '' && !CC.after.freshShown && CC.after.bonesShown,
+    'and the carcass at the mouth is a BODY until the first gnaw turns it to bone',
+    CC.none || `fresh flag ${JSON.stringify(CC.before)} before the gnaw, ` +
+      `${JSON.stringify(CC.after)} after`);
+
+  // ---- 5d. THE WOLF COMES UP FOR IT, AND LEAVES WHEN THE OWNER WAKES ---
+  // v0.46 shipped the steal but only for a wolf already standing on the
+  // shelf, which is nowhere a wolf lives — and the sleeping-owner veto was
+  // asked only at the pick, so a cougar who woke mid-meal watched the wolf
+  // keep chewing. Both halves, measured: the routed climb from the floor,
+  // and the break-off inside a second and a half of the wake.
+  const WS = await page4.evaluate(`(() => {
+    const w = window.__saiWorld, B = w.bounds;
+    const cg = w.agents.find((a) => a.species === 'cougar');
+    const wf = w.agents.find((a) => a.species === 'wolf');
+    if (!cg || !wf) return { none: 'cast missing' };
+    if (!w.remains.length) return { none: 'no carcass from 5c' };
+    const r = w.remains[0];
+    w.__park(['cougar', 'wolf']); w.__prey.clear();
+    const m = w.__mouth();
+    // the owner asleep beside his kill, pinned so the walk cannot drift him
+    const bed = { x: m.x - cg.r * 0.4, y: m.y };
+    let started = -1, gnawed = -1, hops = 0, hopUp = false, wary = -1;
+    w.__free(wf, 0.36 * B.w, 0.66 * B.h, 0);
+    for (let i = 0; i < 2600 && gnawed < 0; i++) {
+      cg.x = bed.x; cg.y = bed.y; cg.vx = 0; cg.vy = 0; cg._lvl = 1;
+      cg.state = 'cgsleep'; cg.stateUntil = performance.now() + 9e6;
+      if (started < 0 && wf.state === 'wftoremains') started = i;
+      if (wary < 0 && wf.state === 'wfwary') wary = i;
+      if (wf._rockHop && !hopUp) { hops++; hopUp = true; }
+      if (!wf._rockHop) hopUp = false;
+      if (wf.state === 'wfgnaw') { gnawed = i; break; }
+      w.__only(wf, 'scavenge');
+      window.__pump(1);
+    }
+    if (gnawed < 0) return { none: 'he never reached the meal', started: started,
+                             hops: hops, state: wf.state, lvl: wf._lvl };
+    // THE WAKE. The cougar stands up beside the carcass, and stays there.
+    let leftAt = -1;
+    for (let i = 0; i < 120; i++) {
+      cg.x = r.x - 40; cg.y = r.y + 8; cg.vx = 0; cg.vy = 0; cg._lvl = 1;
+      cg.state = 'wander'; cg.stateUntil = 0;
+      window.__pump(1);
+      if (wf.state !== 'wfgnaw' && wf.state !== 'wfwary') { leftAt = i; break; }
+    }
+    return { none: false, started: started, wary: wary, gnawed: gnawed,
+             hops: hops, wolfLvl: wf._lvl, leftAt: leftAt, wolfState: wf.state };
+  })()`);
+  chk(!WS.none && WS.gnawed > 0 && WS.hops >= 1 && WS.wary >= 0,
+    'the wolf climbs from the forest floor to steal from the cave-mouth carcass',
+    WS.none || `set off f${WS.started}, ${WS.hops} hops up, wary beat f${WS.wary}, ` +
+      `gnawing f${WS.gnawed} at level ${WS.wolfLvl}`);
+  chk(!WS.none && WS.leftAt >= 0 && WS.leftAt <= 40,
+    'and the moment the cougar wakes beside it, he drops the meal and goes',
+    WS.none || (WS.leftAt < 0
+      ? `the cougar stood up and the wolf kept eating (still ${WS.wolfState} after 120 frames)`
+      : `broke off ${WS.leftAt} frames after the wake, into ${WS.wolfState}`));
+
+  // ---- 5e. A CORNERED LOSS SLIPS FREE, AND A HUNTED GOAT LEAPS ---------
+  // The two halves of the broken 50/50 on the rock: v0.46's fated loser
+  // ghosted THROUGH the cornered goat at the same pixel for five seconds
+  // (289-409 pounce frames, 7 of 19 engagements), because the goat's
+  // signature leap was unreachable from a flee and the loss had no way to
+  // be acted out in a 137px arena.
+  const SL = await page4.evaluate(`(() => {
+    const w = window.__saiWorld, B = w.bounds;
+    const cg = w.agents.find((a) => a.species === 'cougar');
+    if (!cg) return { none: 'no cougar' };
+    w.__park(['cougar']); w.__prey.clear();
+    let g = null;
+    for (let k = 0; k < 6 && !g; k++) g = w.__prey.spawn('goat', true);
+    if (!g) return { none: 'no goat would spawn' };
+    // both on the shelf, the goat against its west end
+    const gy = 0.46 * B.h;
+    g._in = true; g._settled = true; g._lvl = 1; g.x = 0.03 * B.w; g.y = gy;
+    w.__free(cg, 0.085 * B.w, gy, 1);
+    let pounceAt = -1, overlapRun = 0, worstOverlap = 0, missAt = -1;
+    let slip = false, fleeLeaps = 0, wasFlee = false, leapDx = 0;
+    for (let i = 0; i < 1400; i++) {
+      cg._lvl = Math.min(2, Math.max(0, cg._lvl ?? 1));
+      if (cg.state === 'cgpounce') {
+        if (pounceAt < 0) pounceAt = i;
+        cg._huntWin = false;                        // the loss, pinned
+        const d = Math.hypot(g.x - cg.x, g.y - cg.y);
+        if (d <= 30) { overlapRun++; worstOverlap = Math.max(worstOverlap, overlapRun); }
+        else overlapRun = 0;
+      }
+      if (pounceAt >= 0 && cg.state === 'cgmiss' && missAt < 0) missAt = i;
+      if (g._slipUntil && g._slipUntil > 0) slip = true;
+      const fleeing = g.state === 'preyflee';
+      if (g._leap && (wasFlee || fleeing)) {
+        fleeLeaps++;
+        leapDx = Math.max(leapDx, Math.abs((g._leap.x1 ?? g._leap.x0) - g._leap.x0));
+        wasFlee = false;
+      } else if (fleeing) wasFlee = true;
+      if (missAt >= 0 && i > missAt + 120) break;
+      w.__only(cg, 'ambush');
+      window.__pump(1);
+    }
+    return { none: false, pounceAt: pounceAt, worstOverlap: worstOverlap,
+             missAt: missAt, slip: slip, fleeLeaps: fleeLeaps, leapDx: leapDx };
+  })()`);
+  chk(!SL.none && SL.pounceAt >= 0 && SL.missAt > 0 && SL.worstOverlap <= 40,
+    'a fated loss against a cornered goat resolves at the touch, not through it',
+    SL.none || (SL.pounceAt < 0 ? 'the pounce never opened'
+      : `pounce f${SL.pounceAt}, worst same-pixel run ${SL.worstOverlap} frames ` +
+        `(v0.46: 289-409), miss f${SL.missAt}`));
+  chk(!SL.none && (SL.slip || SL.fleeLeaps > 0),
+    'and the goat visibly gets away: a slip burst, a panic leap, or both',
+    SL.none || `slip burst ${SL.slip}, ${SL.fleeLeaps} leaps out of the flee ` +
+      `(widest ${SL.leapDx.toFixed(0)}px of sideways bound)`);
+
+  // ---- 5f. A FAILED ROLL KEEPS THE APPETITE (missRetry) ----------------
+  // The engine truth the diagnosis surfaced: triggered() re-arms a seek's
+  // due BEFORE offer() rolls the chance, so for every other event a failed
+  // roll silently costs the whole cycle. The den declares missRetry; a
+  // stubbed sure-fail roll must leave the due ~22s out, not 140-220.
+  const MR = await page4.evaluate(`(() => {
+    const w = window.__saiWorld;
+    const cg = w.agents.find((a) => a.species === 'cougar');
+    if (!cg) return { none: 'no cougar' };
+    w.__park(['cougar']); w.__prey.clear();
+    const B = w.bounds;
+    w.__free(cg, 0.5 * B.w, 0.6 * B.h, 0);
+    window.__pump(1);
+    const S = cg._eth;
+    if (!S) return { none: 'no ethogram state' };
+    const mr = Math.random;
+    Math.random = () => 0.99;                       // every roll fails 0.60
+    S.cd.den = 0; S.seekAt.den = 0; cg.noEventUntil = 0;
+    window.__pump(1);
+    Math.random = mr;
+    const re = (S.seekAt.den || 0) - performance.now();
+    return { none: false, re: re, state: cg.state };
+  })()`);
+  chk(!MR.none && MR.re > 12000 && MR.re < 32000,
+    'a den appetite that fails its roll re-asks in seconds, not next act',
+    MR.none || `the due re-armed ${Math.round(MR.re / 1000)}s out ` +
+      `(the old engine lost it for 140-220s), state ${MR.state}`);
 
   // ---- 6. A HUNTER TAKEN OUT OF HIS OWN STALK HANDS THE PREY BACK ------
   // forceFlee, a fight, a rescue and a drag all write a.state from outside

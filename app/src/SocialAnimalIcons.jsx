@@ -4013,7 +4013,15 @@ function leavePlatform(a, bounds, p, e, now) {
   a._plat = null; a._lvl = e.lvl;
 }
 
-function tryPlatformHop(a, bounds, now) {
+function tryPlatformHop(a, bounds, now, intent) {
+  // INTENT MAY BE HANDED IN. The sign of vy is a guess about what an animal
+  // wants, and it is a wrong one whenever a pin or a hold has zeroed his
+  // velocity — the measured slab case: goal to the north, only exit to the
+  // south, vy scrubbed flat, and he stands on the stone until the nine-second
+  // eviction. A caller who KNOWS the direction (the rock router, the stall
+  // hop) says so; everyone else gets the old reading.
+  const wantUp = intent != null ? intent > 0 : a.vy < -4;
+  const wantDown = intent != null ? intent < 0 : a.vy > 4;
   // ---- already up on one. Its own exits are the only ways off ----
   if (a._plat) {
     const p = rockPlatform(a._plat);
@@ -4027,12 +4035,15 @@ function tryPlatformHop(a, bounds, now) {
     // a row and still up there four minutes later. His stay is capped either
     // way, so the worst this costs him is the nine seconds keepOnPlatform
     // already allows before the rock lets go of him downward.
-    const oneWay = rockShelfOnStone(a, now);
+    // ...but an EXPLICIT ascent outranks the one-way rule: the router only
+    // ever asks for up when the errand's goal is a terrace above, which is
+    // exactly the climb the rule was never meant to refuse.
+    const oneWay = rockShelfOnStone(a, now) && intent == null;
     for (const e of p.exits) {
       const ey = platExitY(bounds, p, e, a.x);
       const up = ey < lip;                       // that exit is ABOVE the top
       if (oneWay && up) continue;
-      if (up ? !(a.vy < -4) : !(a.vy > 4)) continue;
+      if (up ? !wantUp : !wantDown) continue;
       leavePlatform(a, bounds, p, e, now);
       return true;
     }
@@ -4050,7 +4061,7 @@ function tryPlatformHop(a, bounds, now) {
       const ey = platExitY(bounds, p, e, a.x);
       if (Math.abs(a.y - ey) > ROCK_HOP_NEAR) continue;
       const up = ey > lip;                       // the top is above him
-      if (up ? !(a.vy < -4) : !(a.vy > 4)) continue;
+      if (up ? !wantUp : !wantDown) continue;
       a._plat = p.id; a._platT0 = now;
       rockArc(a, platFootY(bounds, p, a.x), platLift(bounds, p, a), a.x, now);
       a._lvl = platLevel(p);
@@ -4071,7 +4082,7 @@ function tryPlatformHop(a, bounds, now) {
  * takes the whole bluff in one move, because a bird coming off the top of a
  * cliff does not stop on the ledge halfway down.
  */
-function tryRockHop(a, bounds, now) {
+function tryRockHop(a, bounds, now, intent) {
   if (now < (a._rockHopEnd || 0)) return true;         // one already running
 
   const lvl = a._lvl ?? ROCK_LEVEL_GROUND;
@@ -4134,7 +4145,9 @@ function tryRockHop(a, bounds, now) {
   // are the two who need the walk west most, and a return for having no
   // verb at all would have skipped exactly them.
   const shelfEdge = rockShelfEdge(a, lvl);
-  const up = a.vy < -4;
+  // intent, when a caller states one, replaces the vy guess — see
+  // tryPlatformHop for why the guess fails exactly when it matters
+  const up = intent != null ? intent > 0 : a.vy < -4;
   const canClimbOn = sp === "climb" || ROCK_CLIFF_JUMPERS.has(a.species);
   if (!(up && canClimbOn) && rockShelfLeaving(a, now)) {
     rockShelfWayOut(a, bounds, now, sp !== null);
@@ -4145,15 +4158,15 @@ function tryRockHop(a, bounds, now) {
   // wall, he is being held by a rock, so the rock's own exits are the only
   // way off it — falling back to the face rule from up there would step him
   // off the top of a slab as if it were not there.
-  if (a._plat) return tryPlatformHop(a, bounds, now);
+  if (a._plat) return tryPlatformHop(a, bounds, now, intent);
   // ...and down on the floor a rock at his feet is a nearer thing to jump at
   // than the face behind it. Not for the owl: a bird does not use a step.
-  if (sp !== "fly" && tryPlatformHop(a, bounds, now)) return true;
+  if (sp !== "fly" && tryPlatformHop(a, bounds, now, intent)) return true;
 
   // Which way is he trying to go? Every face on this bluff runs across the
   // map, so intent is simply the sign of vy — `up` was taken above, before
-  // the steer could write over it.
-  const down = a.vy > 4;
+  // the steer could write over it — unless the caller said outright.
+  const down = intent != null ? intent < 0 : a.vy > 4;
   if (!up && !down) return false;
   // ...and this is the refusal the steer above is the other half of. Only
   // the DROP is refused: going UP off the shelf is exactly the ladder it
@@ -4241,6 +4254,117 @@ function tryRockHop(a, bounds, now) {
   // is world-side and belongs to no ethogram; driveRockHop hands it back.
   if (wings) a.state = ROCK_FLY_STATE;
   return true;
+}
+
+/* ------------------- THE ROCK ROUTER ------------------------------------
+ * One question, asked fresh every frame: "walking at this goal, what is the
+ * next point that gets me there?" NULL means the straight line is fine.
+ * Anything else is the single next waypoint of the bluff's own ladder — a
+ * corner to round, a lane to stand in, a hop to take — and the caller
+ * steers there instead of at the goal until the answer goes quiet.
+ *
+ * This exists because the diagnosis measured the alternative: the bluff's
+ * east outline is a dead end (keepOffRock pins an approacher 13px OFF the
+ * silhouette, where no hop may start), so every terrace-bound errand from
+ * the open forest ended in a 2.5s walk-on-the-spot and an eastward abort —
+ * the owner's "bumps into the rock and walks away like a glitch",
+ * reproduced 24 times out of 24. The ladder itself was healthy: from
+ * inside the talus pocket the same errands completed in seconds. So the
+ * router's whole job is to put the animal where the ladder already works.
+ *
+ * Pure function of position and goal: no plan object, no stored route,
+ * nothing to go stale. WALLS ARE ASKED OF rockLevelAt, NEVER rockZone —
+ * rockLevelAt carves the cave out of the cliff (a point in the room is
+ * level 1), and a sampler that read rockZone.wall would call the den bed
+ * unreachable and dead-end the two marquee walks at the jamb.
+ */
+// the south-of-the-corner corridor: below the riser's east end, where the
+// walk into the talus pocket crosses nothing but ground. The corner itself
+// is where probe A3 measured eight seconds of pinned sliding.
+function rockCorridorY(bounds) {
+  return breakYAt(ROCK_BREAKS.T1, 84) / 1000 * bounds.h + 42;
+}
+function rockSegmentClean(bounds, x0, y0, x1, y1) {
+  const d = Math.hypot(x1 - x0, y1 - y0);
+  const n = Math.max(1, Math.ceil(d / 24));
+  for (let i = 1; i <= n; i++) {
+    const t = i / n;
+    if (rockLevelAt(bounds, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t) === null) return false;
+  }
+  return true;
+}
+function rockWaypoint(bounds, a, gx, gy) {
+  if (a._rockHop) return null;                 // airborne: the arc is the route
+  const sp = rockVerbOf(a.species);
+  if (!sp) return null;                        // no verb on rock, no ladder
+  const goalLvl = rockLevelAt(bounds, gx, gy);
+  if (goalLvl === null) return null;           // a goal inside a wall is not routed
+  const z = rockZone(bounds, a.x, a.y);
+  const myLvl = z.on ? (a._lvl ?? z.level ?? 0) : ROCK_LEVEL_GROUND;
+
+  // ON A STONE: the stone's own exits are the only moves, so the answer is
+  // always "hop, this way" — up when the ladder still climbs, down otherwise
+  // (a platform is never anybody's destination).
+  if (a._plat) {
+    const dir = goalLvl > myLvl ? 1 : -1;
+    return { x: a.x, y: a.y, hop: dir };
+  }
+
+  if (myLvl === goalLvl && rockSegmentClean(bounds, a.x, a.y, gx, gy)) return null;
+
+  // ---- the ladder, one rung at a time ----------------------------------
+  const B = ROCK_BREAKS;
+  if (goalLvl > myLvl) {
+    // the cliff is a climb: only a climber or a cliff-jumper is routed at it
+    if (myLvl >= ROCK_LEVEL_SHELF
+        && sp !== "climb" && !ROCK_CLIFF_JUMPERS.has(a.species)) return null;
+    if (myLvl === ROCK_LEVEL_GROUND && !z.on) {
+      // EAST-SIDE ENTRY: round the foot, never at the face. North of the
+      // corridor the outline bulges east of the pocket, so the first leg is
+      // a point clear of the corner; from there the pocket is open ground.
+      const cy = rockCorridorY(bounds);
+      if (a.y < cy - 10 && a.x > 0.13 * bounds.w) {
+        return { x: rockEdgeX(bounds, cy) + 58, y: cy, hop: 0 };
+      }
+      const px = clamp(gx, 0.016 * bounds.w, 0.066 * bounds.w);
+      return { x: px, y: rockBreakY(bounds, B.T1, px) + 26, hop: 0 };
+    }
+    // on the rock: stand at my band's top line and take the face
+    const line = ROCK_BAND_LINES[myLvl] && ROCK_BAND_LINES[myLvl][0];
+    if (!line) return null;
+    const lx = clamp(gx, 0.014 * bounds.w, 0.07 * bounds.w);
+    const ly = rockBreakY(bounds, B[line], lx);
+    const near = Math.abs(a.y - ly) <= ROCK_HOP_NEAR;
+    return { x: lx, y: ly + 12, hop: near ? 1 : 0 };
+  }
+  if (goalLvl < myLvl) {
+    const line = ROCK_BAND_LINES[myLvl] && ROCK_BAND_LINES[myLvl][1];
+    if (!line) return null;
+    // off the shelf, a non-drop species leaves by the mid-riser step: its
+    // lane is the step's own span, and the step's exits take him the rest
+    // of the way down. The cougar owns the edge jump and gets the whole line.
+    const drop = ROCK_SHELF_DROP.has(a.species);
+    const lx = myLvl === ROCK_LEVEL_SHELF && !drop
+      ? clamp(gx, 0.04 * bounds.w, 0.074 * bounds.w)
+      : clamp(gx, 0.014 * bounds.w, 0.078 * bounds.w);
+    const ly = rockBreakY(bounds, B[line], lx);
+    const near = Math.abs(a.y - ly) <= ROCK_HOP_NEAR;
+    return { x: lx, y: ly - 12, hop: near ? -1 : 0 };
+  }
+  // same level, dirty line: walk my own corridor toward the goal. At ground
+  // that is the south-of-the-corner run; on a terrace it is the band's mid.
+  if (myLvl === ROCK_LEVEL_GROUND) {
+    const cy = rockCorridorY(bounds);
+    if (a.y < cy - 10 && a.x > 0.13 * bounds.w) {
+      return { x: rockEdgeX(bounds, cy) + 58, y: cy, hop: 0 };
+    }
+    return { x: gx, y: Math.max(gy, cy), hop: 0 };
+  }
+  const [topL, botL] = ROCK_BAND_LINES[myLvl] || [];
+  if (!topL || !botL) return null;
+  const mx = clamp(gx, 0.014 * bounds.w, 0.1 * bounds.w);
+  const my = (rockBreakY(bounds, B[topL], mx) + rockBreakY(bounds, B[botL], mx)) / 2;
+  return { x: mx, y: my, hop: 0 };
 }
 
 /**
@@ -6723,6 +6847,7 @@ function RemainsLayer({ remRefs }) {
                 to be the loudest thing here and it turned a carcass into a
                 puddle. Bone is what this drawing is */}
             <ellipse cx="0" cy="4" rx="24" ry="8" fill="#241c12" opacity=".34" />
+            <g className="sai-rem-bones">
             {/* hide and hair FIRST, so the bones sit on top of it */}
             <path className="sai-rem-hide" d="M -8 5 C 2 9.4 16 8 24 2.4 C 19 9.4 5 12.6 -8 9.4 Z" fill="#8d7a5e" opacity=".92" />
             <path className="sai-rem-hide" d="M -23 5 C -18 8 -12 8.6 -8 7.6 C -13.4 10.6 -20 9.6 -23 5 Z" fill="#7d6a52" opacity=".85" />
@@ -6739,6 +6864,29 @@ function RemainsLayer({ remRefs }) {
                 the piece that says "large animal" rather than "twigs" */}
             <path d="M -28 -1.4 C -24 -10 -16.6 -11.4 -15 -4 C -16 1 -22.6 3 -28 -1.4 Z" fill="#efe7d6" />
             <path d="M -25.4 -2 C -23 -6.6 -19 -7.6 -17.4 -4.4" fill="none" stroke="#bdb197" strokeWidth="1.4" opacity=".8" />
+            </g>
+            {/* THE FRESH STAGE — the goat as the cougar left him: a whole
+                body on its side, legs folded, head thrown back with the
+                horn line readable. Shown while data-fresh="1" (a goat
+                nothing has gnawed yet); the first bite turns it to the
+                bones above. Same footprint, same palette family as the
+                live goat's greys. */}
+            <g className="sai-rem-fresh">
+              {/* the flank: one long grey-white mass, deepest at the barrel */}
+              <path d="M -24 3 C -26 -7 -14 -13 0 -12.4 C 13 -12 24 -7 25 0 C 25.4 5 16 8.6 0 8.8 C -12 9 -22 7.6 -24 3 Z" fill="#e6e1d5" />
+              <path d="M -24 3 C -26 -7 -14 -13 0 -12.4 C 5 -12.2 10 -11 14 -9 C 6 -10.4 -8 -10.6 -17 -6 C -22 -3.4 -23.6 0 -24 3 Z" fill="#f2eee4" opacity=".9" />
+              {/* the folded legs, tucked under the barrel */}
+              <path d="M -12 8 C -10 10.6 -4 11 0 9.4" fill="none" stroke="#cfc8b8" strokeWidth="3" strokeLinecap="round" />
+              <path d="M 6 8.6 C 9 10.8 14 10.4 17 8" fill="none" stroke="#c6bfae" strokeWidth="3" strokeLinecap="round" />
+              {/* the head thrown back past the shoulder, cheek to the ground */}
+              <path d="M 24 0 C 30 -2 34 -6 35.4 -10.4 C 32 -12 27 -10.6 24.6 -7 C 23 -4.6 23 -2 24 0 Z" fill="#ded8ca" />
+              {/* the horn line — the one stroke that says mountain goat */}
+              <path d="M 33 -10.6 C 35.6 -13 36.4 -16.4 35 -19.4" fill="none" stroke="#8a7a5c" strokeWidth="2.2" strokeLinecap="round" />
+              <path d="M 30.6 -10.2 C 32.6 -12.4 33.2 -15 32.4 -17.6" fill="none" stroke="#9c8c6c" strokeWidth="1.6" strokeLinecap="round" opacity=".8" />
+              {/* a shut eye and the beard wisp, tiny but load-bearing */}
+              <path d="M 28.6 -8.6 L 31 -8.2" fill="none" stroke="#6d6350" strokeWidth="1" strokeLinecap="round" />
+              <path d="M 26 -4.4 C 25.4 -2.8 25.6 -1.4 26.6 -0.4" fill="none" stroke="#cfc8b8" strokeWidth="1.4" strokeLinecap="round" />
+            </g>
             {/* ...and the second scatter, once something has been at it */}
             <g className="sai-rem-gnaw">
               <path d="M 23 6 C 27 4.6 31 5.4 32.4 8 C 28.6 8.6 25 8 23 6 Z" fill="#7d6a52" opacity=".8" />
@@ -7272,7 +7420,14 @@ function stepWorld(world, cfg, dt) {
     // species sets, the same faces, the same arcs, nothing re-derived. The
     // arc it starts is driven to completion by the step loop like any
     // other, whatever state the animal is in.
-    tryHop: (a) => (def.rock ? tryRockHop(a, bounds, now) : false) };
+    tryHop: (a) => (def.rock ? tryRockHop(a, bounds, now) : false),
+    // ...and the same ladder with the direction SAID rather than guessed
+    // from vy — the router and the stall hop know which way the errand
+    // needs to go, and a pinned animal's vy is exactly the wrong witness.
+    tryHopTo: (a, dir) => (def.rock ? tryRockHop(a, bounds, now, dir) : false),
+    // THE ROUTER: the next waypoint of the bluff's ladder toward (gx, gy),
+    // or null when the straight line is the whole answer. See rockWaypoint.
+    rockWaypoint: (a, gx, gy) => (def.rock ? rockWaypoint(bounds, a, gx, gy) : null) };
 
   // ---- the lake's insects, weed beds and shoreline mud ------------------
   // Rebuilt only when the stage changes shape. The insects then MOVE, every
@@ -8502,6 +8657,12 @@ function renderWorld(world, iconsRef, padsRef, damRefs, pitRefs, lakeRefs, preyR
       if (el.dataset.rem !== r.species) el.dataset.rem = r.species;
       const g = r.gnawed ? "1" : "";
       if (el.dataset.gnawed !== g) el.dataset.gnawed = g;
+      // THE GOAT COMES HOME WHOLE. A carcass the cougar just carried to the
+      // cave is a body, not a ribcage: it stays a body until something has
+      // actually been at it — the first gnaw, and nothing else, turns it to
+      // bone. Goat only: a boar dies where it fell and was never carried.
+      const fr = r.species === "goat" && !r.gnawed ? "1" : "";
+      if (el.dataset.fresh !== fr) el.dataset.fresh = fr;
     }
   }
   if (markRefs) {
