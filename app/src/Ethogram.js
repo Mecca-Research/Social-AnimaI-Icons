@@ -4286,7 +4286,7 @@ function cougarVantage(a, c) {
   // hop's job.
   const bag = lvl === 2 ? ["ridge", "ridge", "cliff"]
             : lvl === 1 ? ["cliff", "ridge", "talus"]
-            : ["cliff", "ridge", "talus", "bush"];
+            : ["cliff", "ridge", "ridge", "talus", "bush"];
   let best = null, bd = Infinity;
   for (let i = 0; i < CG_VANTAGE_TRIES; i++) {
     const p = cougarSpot(a, c, bag[(Math.random() * bag.length) | 0]);
@@ -4371,7 +4371,7 @@ function cougarCanTake(a, c, p) {
     if (z.on && (z.wall || z.level !== 0)) return false;
     if (mine !== 0) return false;                   // ...and he is down there with it
   }
-  if (mine === 0 && Math.hypot(p.x - a.x, p.y - a.y) > 210) return false;
+  if (mine === 0 && Math.hypot(p.x - a.x, p.y - a.y) > 240) return false;
   return true;
 }
 
@@ -4598,7 +4598,12 @@ defineEthogram("cougar", {
         if (a._cgLegs === undefined || a._cgLegs === null) a._cgLegs = 0;
         // he looks OUT: at the widest open ground there is from where he is
         a._faceDir = a.x < c.bounds.w * 0.5 ? 1 : -1;
-        a.state = "cgsurvey"; a.stateUntil = c.now + c.rand(9000, 16000);
+        // a look from STONE lasts longer than a look from a bush: the rock
+        // is the domain and the dwell is where the owner's third of his
+        // waking time actually accrues (soaked at 25% with a flat window)
+        const onRock = c.rockZone(a.x, a.y).on;
+        a.state = "cgsurvey";
+        a.stateUntil = c.now + (onRock ? c.rand(13000, 21000) : c.rand(9000, 16000));
       },
       drive(a, c, S) {
         holdSpot(a, c, a._cgAt || { x: a.x, y: a.y });
@@ -4674,7 +4679,7 @@ defineEthogram("cougar", {
       catchChance: 0.50,           // the owner's 50/50, one dial, all prey
       fixSnap: true,               // a goat that ran into him is pounced, not stared at
       feedMs: [6000, 9000],
-      every: [14000, 24000], chance: 0.80, cool: 42000, missCool: 10000,
+      every: [12000, 20000], chance: 0.80, cool: 42000, missCool: 10000,
       cover: true,
       reachable: cougarCanTake,
       onKill: cougarKill,
