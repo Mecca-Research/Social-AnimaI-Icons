@@ -6122,6 +6122,12 @@ body {
    dragged off it ---- */
 .sai-rem-gnaw{ display:none; }
 [data-gnawed="1"] .sai-rem-gnaw{ display:inline; }
+/* v0.47 THE GOAT COMES HOME WHOLE: an ungnawed goat carcass is a body, not
+   a ribcage. data-fresh is written goat-only by renderWorld, and the first
+   gnaw clears it — the same frame the scatter above turns on. */
+.sai-rem-fresh{ display:none; }
+[data-fresh="1"] .sai-rem-fresh{ display:inline; }
+[data-fresh="1"] .sai-rem-bones{ display:none; }
 /* the hide takes the animal's own colour, so a goat's remains are not a
    boar's. `data-rem` is the species that died */
 [data-rem="goat"] .sai-rem-hide{ fill:#d9d4cb; }

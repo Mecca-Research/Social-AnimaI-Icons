@@ -257,6 +257,7 @@ export function nearestPrey(world, x, y, maxR = Infinity, opt = {}) {
   for (let i = 0; i < arr.length; i++) {
     const p = arr[i];
     if (!p.alive) continue;
+    if (opt.skip && opt.skip.has(p.id)) continue;   // a caller working down the list
     if (sp && !sp.has(p.species)) continue;
     if (opt.habitat && p.habitat !== opt.habitat) continue;
     if (free && isPreyClaimed(p, opt.hunterId, now)) continue;
@@ -573,8 +574,12 @@ function advance(world, p, dt, vx, vy) {
   }
   // A step into the water, into a cliff face, or off the log is simply not
   // taken — the bluff's own rule 2, applied to something much smaller. The
-  // heading is dropped so the next frame picks a new one.
+  // heading is dropped so the next frame picks a new one. The timestamp is
+  // the cross-module witness a hunter reads: "this animal is against its
+  // wall RIGHT NOW", which is what turns a cornered loss into a slip-free
+  // instead of a five-second overlap.
   p.vx = 0; p.vy = 0; p._goal = null;
+  p._blockedAt = now0();
   return false;
 }
 
@@ -594,7 +599,7 @@ function driveWander(world, p, cfg, dt, now) {
   if (p.habitat === "rock" && p._goal.lvl != null && p._goal.lvl !== p._lvl) {
     // ...but first he has to be standing at the edge of the one he is on.
     if (!atBandEdge(world, p, cfg, dt, p._goal.lvl > p._lvl)) return;
-    if (startLeap(world, p, p._goal.lvl, now)) return;
+    if (startLeap(world, p, p._goal.lvl, now, p._goal.x)) return;
     p._shuffle = p._shuffle || (Math.random() < 0.5 ? -1 : 1);
     if (!bandStep(world, p, cfg, dt, p._shuffle)) { p._shuffle = -p._shuffle; p._goal = null; }
     return;
@@ -674,14 +679,48 @@ function driveFlee(world, p, cfg, dt, now, threat) {
   const zig = Math.sin(now / 90 + p._wobble) * 0.45;
   const zx = -uy * zig, zy = ux * zig;
   p.state = PREY_STATES.flee;
+  // A SLIPPED-FREE ANIMAL OWES THE SCENE A LEAP. The hunter that touched a
+  // cornered goat set this flag as it broke off: the escape is played NOW,
+  // up or down a band, away — not a freeze against the same wall.
+  if (p._panicLeap) {
+    p._panicLeap = false;
+    if (p.habitat === "rock" && now >= (p._leapCd || 0)) {
+      const pref = threat && threat.y < p.y ? -1 : 1;
+      for (const s of [pref, -pref]) {
+        const lvl = p._lvl + s;
+        if (lvl < 0 || lvl > 2) continue;
+        if (startLeap(world, p, lvl, now, p.x + ux * 52)) { p._leapCd = now + 1500; return; }
+      }
+    }
+  }
   // THE CHASE'S OTHER HALF. A hunter whose chase is fated to land writes a
   // pace multiplier here when it opens (see beginChase in Ethogram.js):
   // under 1 the prey is tiring, over 1 it found the adrenaline and pulls
   // away. What the viewer sees is the outcome being EARNED, not rolled.
-  const sp = pace(p, cfg, 0.95 * (p._chasePace || 1));
+  // A slip-free burst outranks it for a second: he got away, and it shows.
+  const paceMul = now < (p._slipUntil || 0) ? 1.25 : (p._chasePace || 1);
+  const sp = pace(p, cfg, 0.95 * paceMul);
   if (!advance(world, p, dt, (ux + zx) * sp, (uy + zy) * sp)) {
-    // cornered against its own habitat edge: run along it instead
-    advance(world, p, dt, -uy * sp, ux * sp);
+    // cornered against its own habitat edge: run along it — EITHER hand,
+    // because in a corner one of the two perpendiculars is also a wall and
+    // the old single try left the goat a statue for 83% of its flee frames
+    if (!advance(world, p, dt, -uy * sp, ux * sp)
+        && !advance(world, p, dt, uy * sp, -ux * sp)) {
+      // A MOUNTAIN GOAT'S ESCAPE IS THE LEAP. Its signature move was only
+      // ever dispatched from wander, so the one moment the species exists
+      // for — hunted, against the face — was the one moment it could not
+      // leap. Away from the threat first, the other band second, with a
+      // beat and a half of cooldown so a chase up the bluff reads as
+      // bounding, not ping-pong.
+      if (p.habitat === "rock" && now >= (p._leapCd || 0)) {
+        const pref = threat && threat.y < p.y ? -1 : 1;
+        for (const s of [pref, -pref]) {
+          const lvl = p._lvl + s;
+          if (lvl < 0 || lvl > 2) continue;
+          if (startLeap(world, p, lvl, now, p.x + ux * 52)) { p._leapCd = now + 1500; return; }
+        }
+      }
+    }
   }
 }
 
@@ -864,7 +903,7 @@ function atBandEdge(world, p, cfg, dt, up) {
   return false;
 }
 
-function startLeap(world, p, lvl, now) {
+function startLeap(world, p, lvl, now, gx) {
   if (Math.abs(lvl - p._lvl) !== 1) {
     // two bands apart: take the middle one first
     lvl = p._lvl + Math.sign(lvl - p._lvl);
@@ -873,26 +912,40 @@ function startLeap(world, p, lvl, now) {
   const up = lvl > p._lvl;
   const lines = T.ROCK_BAND_LINES[lvl]; if (!lines) return false;
   const pad = 10 + p.r * 0.4;
-  const y1 = up
-    ? (lines[1] ? T.rockBreakY(b, T.ROCK_BREAKS[lines[1]], p.x) - pad : null)
-    : T.rockBreakY(b, T.ROCK_BREAKS[lines[0]], p.x) + pad;
-  if (y1 == null) return false;
-  const dy = Math.abs(y1 - p.y);
-  if (dy > LEAP_MAX) return false;
-  const z = T.rockZone(b, p.x, y1);
-  if (!z.on || z.wall || z.level !== lvl) return false;
-  p._leap = { t0: now, ms: LEAP_MS(dy), y0: p.y, y1, lvl, lift: 18 + 0.30 * dy };
-  p.state = PREY_STATES.climb;
-  p.vx = 0; p.vy = 0;
-  return true;
+  // A BOUND, NOT AN ELEVATOR. Every measured leap had dx === 0 — pieces
+  // sliding on vertical rails. The landing now drifts up to 56px toward
+  // where he is headed, read off the break line AT the landing x and
+  // re-verified there; if the drifted landing is illegal he shortens the
+  // stride and finally takes the straight-up leap he always had.
+  const drift = gx == null ? 0 : T.clamp(gx - p.x, -56, 56);
+  for (const dx of drift ? [drift, drift * 0.5, 0] : [0]) {
+    const x1 = p.x + dx;
+    const y1 = up
+      ? (lines[1] ? T.rockBreakY(b, T.ROCK_BREAKS[lines[1]], x1) - pad : null)
+      : T.rockBreakY(b, T.ROCK_BREAKS[lines[0]], x1) + pad;
+    if (y1 == null) continue;
+    const dy = Math.abs(y1 - p.y);
+    if (dy > LEAP_MAX) continue;
+    const z = T.rockZone(b, x1, y1);
+    if (!z.on || z.wall || z.level !== lvl) continue;
+    p._leap = { t0: now, ms: LEAP_MS(dy), x0: p.x, x1, y0: p.y, y1, lvl,
+                lift: 18 + 0.30 * dy };
+    p.state = PREY_STATES.climb;
+    p.vx = 0; p.vy = 0;
+    return true;
+  }
+  return false;
 }
 
 function driveLeap(world, p, dt, now) {
   const L = p._leap;
   const u = Math.min(1, (now - L.t0) / L.ms);
+  p.x = L.x0 == null ? p.x : L.x0 + ((L.x1 ?? L.x0) - L.x0) * u;
   p.y = L.y0 + (L.y1 - L.y0) * u;
   p.z = L.lift * Math.sin(Math.PI * u);
   p.vy = (L.y1 - L.y0) / (L.ms / 1000);
+  // the sprite faces the way it is bounding
+  if (L.x1 != null && Math.abs(L.x1 - L.x0) > 6) p._dir = L.x1 < L.x0 ? -1 : 1;
   if (u >= 1) {
     p._leap = null; p.z = 0; p._lvl = L.lvl;
     p.state = PREY_STATES.wander;

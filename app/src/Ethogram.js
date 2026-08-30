@@ -266,7 +266,16 @@ function gotoStalled(a, ctx, S, g) {
   G._stall = stalled ? G._stall + G._wt : 0;
   G._wx = a.x; G._wy = a.y; G._wt = 0; G._path = 0;
   if (G._stall < GOTO_STALL_MS) return false;
-  if (g.canHop && ctx.tryHop && ctx.tryHop(a)) { G._stall = 0; return true; }
+  // the stall hop states its DIRECTION when the router knows one — a pinned
+  // animal's vy is zeroed by the very pin being escaped, so the old vy-read
+  // hop was refused exactly when it was needed (the measured slab case)
+  if (g.canHop) {
+    const w2 = ctx.rockWaypoint ? ctx.rockWaypoint(a, S.goal.x, S.goal.y) : null;
+    const hopped = w2 && w2.hop && ctx.tryHopTo
+      ? ctx.tryHopTo(a, w2.hop)
+      : ctx.tryHop ? ctx.tryHop(a) : false;
+    if (hopped) { G._stall = 0; return true; }
+  }
   releaseClaim(a, S);
   endEvent(a, ctx, { cool: g.lost ?? 8000, reroll: true, stop: true });
   a._stallAbortN = (a._stallAbortN || 0) + 1;      // read by the suites
@@ -308,42 +317,47 @@ function driveGoto(a, ctx, S) {
     if (dv > (g.viaWithin ?? 22)) { gotoStalled(a, ctx, S, g); return; }
     S.goal.via = null;
   }
+  // THE ROCK ROUTER. A goto that declared canHop is a walk the bluff may
+  // stand in the middle of, and the straight line is the wrong route
+  // exactly there. The router answers "what is the next point of the
+  // ladder" fresh each frame — a corner to round, a lane to stand in, a
+  // face to take — and NULL the moment the straight line is honest again.
+  // This replaced a wall-ahead velocity probe that could not fire on the
+  // bluff's east side at all (the bands inside the outline read walkable,
+  // and keepOffRock pins the walker 13px OFF the silhouette where no hop
+  // may start): measured, 24 grass approaches, 24 stall-aborts, 0 hops —
+  // the owner's "bumps into the rock and walks away like a glitch".
+  const wp = g.canHop && ctx.rockWaypoint && !a._rockHop
+    ? ctx.rockWaypoint(a, S.goal.x, S.goal.y) : null;
   // a leg that crosses the shoreline wants two speeds, the way every other
   // swim in this world does, so `speed` may also be read each frame
   // A goto states its URGENCY; how fast that actually is belongs to the
   // animal. A leg at a flat multiplier is what let a turtle cross the map.
+  const tgt = wp || S.goal;
   const d = g.urgency !== undefined
-    ? stepTowardAt(a, ctx, S.goal, gait(a, ctx, g.urgency))
-    : stepToward(a, ctx, S.goal, typeof g.speed === "function" ? g.speed(a, ctx) : (g.speed ?? 1));
-  // A CLIMBER DOES NOT BUMP THE WALL FIRST. The stall detector below is the
-  // net for everyone; a goto that declared canHop gets the hop BEFORE the
-  // collision: one probe a stride ahead along his own velocity, and if a
-  // face is standing there he takes the world's ladder now. This is the
-  // difference between "hits the middle area a few times then walks away"
-  // — which the owner could reproduce on demand — and an animal that flows
-  // up the rock the moment he reaches it.
-  // ...but never within a hop's length of the goal itself. A hop is a fixed
-  // arc that lands where the ROCK says, not where the walk was going: fired
-  // next to the goal it overshoots, the next probe fires back, and the
-  // arrival test (which rightly refuses to seat an animal mid-arc) never
-  // gets a frame with his feet down. Traced: the den run reached three px
-  // from the cave mouth and bounced between terraces indefinitely.
-  if (g.canHop && ctx.tryHop && !a._rockHop && d > 90) {
-    const spd = Math.hypot(a.vx, a.vy);
-    if (spd > 1) {
-      const z2 = ctx.rockZone
-        ? ctx.rockZone(a.x + (a.vx / spd) * 14, a.y + (a.vy / spd) * 14) : null;
-      if (z2 && z2.on && z2.wall) ctx.tryHop(a);
-    }
-  }
+    ? stepTowardAt(a, ctx, tgt, gait(a, ctx, g.urgency))
+    : stepToward(a, ctx, tgt, typeof g.speed === "function" ? g.speed(a, ctx) : (g.speed ?? 1));
+  // the router said the ladder is HERE: take the face in the direction the
+  // errand needs, not the direction a pinned vy happens to point
+  if (wp && wp.hop && ctx.tryHopTo) ctx.tryHopTo(a, wp.hop);
   // ...and never while a hop arc is in the air: a walk that started a leap
   // mid-errand can pass over its goal on the way up, and beginning the bout
   // there would seat him at a point the arc has not finished writing.
-  if (d <= (g.within ?? 18) && !a._rockHop) {
-    a.vx = 0; a.vy = 0;
-    v.begin(a, ctx, S, S.goal.ref);
-    if (v.drive) v.drive(a, ctx, S);
-    return;
+  // ARRIVAL IS A PLACE, NOT A RADIUS. While the router still has a waypoint
+  // the goal is not reachable in a straight line, whatever the distance
+  // reads — and a canHop goal must be stood on at ITS OWN LEVEL: the
+  // diagnosis measured "arrivals" on the grass at the wall's foot, a
+  // terrace goal begun from below it, and nine seconds of a cougar
+  // surveying a rock face from the wrong side of it.
+  if (!wp && d <= (g.within ?? 18) && !a._rockHop) {
+    const lvlOk = !g.canHop || !ctx.rockLevel
+      || (ctx.rockLevel(S.goal.x, S.goal.y) ?? 0) === standLevel(a, ctx);
+    if (lvlOk) {
+      a.vx = 0; a.vy = 0;
+      v.begin(a, ctx, S, S.goal.ref);
+      if (v.drive) v.drive(a, ctx, S);
+      return;
+    }
   }
   gotoStalled(a, ctx, S, g);
 }
@@ -532,6 +546,15 @@ function offer(a, S, ev, ctx) {
 
   if (Math.random() >= ev.chance) {           // not interested this pass
     if (ev.miss) S.cd[ev.id] = now + ev.miss;
+    // A SEEK EVENT MAY KEEP ITS DUE. triggered() re-arms seekAt before this
+    // roll, so for everyone else a failed roll silently costs the whole
+    // every-cycle and `miss` gates nothing — measured on the cougar's den:
+    // 40% of appetites vanishing for 80-140s, and the owner reporting, for
+    // the third time, an animal with no sleep. Opt-in (missRetry) so the
+    // twelve species tuned against the old arithmetic do not shift.
+    if (ev.missRetry && ev.trigger === "seek") {
+      S.seekAt[ev.id] = now + (ev.miss ?? 22000);
+    }
     return false;
   }
   if (ev.delay) { S.armed[ev.id] = now + ev.delay[0] + Math.random() * (ev.delay[1] - ev.delay[0]); return false; }
@@ -801,21 +824,29 @@ function huntPick(a, c, o) {
   // under a live claim, and without an id to compare against, YOUR OWN claim
   // counts as somebody else's — a hunter who re-picks while still holding a
   // lapsing claim would step over the very animal he had reserved.
-  const hit = nearestPrey(c.world, a.x, a.y, o.sense ?? HUNT_SENSE,
-                          { species: o.prey, habitat: o.habitat,
-                            free: true, hunterId: a.id, now: c.now });
-  if (!hit || !hit.p) return null;
-  const p = hit.p;
-  // ...and it must be ON STAGE. A prey still walking in from off the edge is
-  // not catchable, and a hunt that sets off after one walks off the map.
-  if (!p._in || !p.alive) return null;
-  // ...and he must be able to physically GET to it. nearestPrey knows the
-  // map but not the hunter: without this a skunk sets off after a crayfish
-  // in open water he can never enter, and stands at the waterline until the
-  // walk gives up.
-  if (o.reachable && !o.reachable(a, c, p)) return null;
-  if (!claimPrey(c.world, p, a.id, c.now)) return null;
-  return { x: p.x, y: p.y, prey: p };
+  // ...AND THE NEAREST IS NOT THE ONLY. One unreachable animal standing a
+  // few px closer used to shadow every legal target behind it for the whole
+  // window — the measured case: a floor vole eclipsing the goat, and the
+  // marquee rock hunt firing once in five minutes. He works down the list,
+  // a few deep, and claims only the one he accepts.
+  const skip = new Set();
+  for (let k = 0; k < 4; k++) {
+    const hit = nearestPrey(c.world, a.x, a.y, o.sense ?? HUNT_SENSE,
+                            { species: o.prey, habitat: o.habitat,
+                              free: true, hunterId: a.id, now: c.now, skip });
+    if (!hit || !hit.p) return null;
+    const p = hit.p;
+    // it must be ON STAGE (a prey walking in from off the edge is not
+    // catchable), and he must be able to physically GET to it — nearestPrey
+    // knows the map but not the hunter.
+    if (!p._in || !p.alive || (o.reachable && !o.reachable(a, c, p))
+        || !claimPrey(c.world, p, a.id, c.now)) {
+      skip.add(p.id);
+      continue;
+    }
+    return { x: p.x, y: p.y, prey: p };
+  }
+  return null;
 }
 
 /**
@@ -849,6 +880,7 @@ function huntTrack(a, c, ref, o) {
 export function huntRelease(a) {
   if (a._huntP) { a._huntP._chasePace = 0; releasePrey(a._huntP, a.id); }
   a._huntP = null; a._huntGo = 0; a._huntEnd = 0; a._huntWin = false;
+  a._huntPos = null;
 }
 
 /**
@@ -998,8 +1030,15 @@ function makeHunt(o) {
       // an ear. It is the beat that makes a strike read as a decision.
       a.state = st.fix || st.strike;
       if (st.fix) {
-        a.stateUntil = c.now + c.rand(o.fixMs ? o.fixMs[0] : 500,
-                                      o.fixMs ? o.fixMs[1] : 1000);
+        // fixSnap, PER-HUNT OPT-IN: a prey already inside the strike's own
+        // reach has run into the hunter, and a two-second freeze against a
+        // touching animal reads as a stall (measured: 94 frames at 9px).
+        // Opt-in because the raccoon's rock-flip and the skunk's cast ARE
+        // their fix beats — only the cougar asked for the snap.
+        const snap = o.fixSnap
+          && Math.hypot(p.x - a.x, p.y - a.y) < (resolve(o.reach, a, c, p) ?? 22);
+        a.stateUntil = c.now + (snap ? c.rand(300, 500)
+          : c.rand(o.fixMs ? o.fixMs[0] : 500, o.fixMs ? o.fixMs[1] : 1000));
         return;
       }
       beginChase(a, c, o, p);
@@ -1015,6 +1054,22 @@ function makeHunt(o) {
         a._faceDir = p.x >= a.x ? 1 : -1;
         if (o.onFix) o.onFix(a, c, p);
         if (c.now < a.stateUntil) return;
+        // THE LADDER GATE, canHop hunts only: a strike may not open across
+        // a band — the diagnosis clocked 140-409 pounce frames of a cougar
+        // ramming a face the chase state had no ladder for. If the goat
+        // leapt during the gather, the stalk resumes and tracks him there
+        // (the prowl chain's own re-hand shape). A null level — prey
+        // mid-leap over a wall band — counts as not-yet-equal, not a drop.
+        if (o.canHop && c.rockLevel) {
+          const pl = c.rockLevel(p.x, p.y);
+          if (pl === null || pl !== standLevel(a, c)) {
+            S.goal = { x: p.x, y: p.y, ref: { prey: p }, via: null };
+            S.goalOwner = o.id;
+            S.goalUntil = c.now + (o.giveUp ?? 24000);
+            a.state = st.stalk;
+            return;
+          }
+        }
         a.state = st.strike;
         beginChase(a, c, o, p);
         return;
@@ -1044,16 +1099,44 @@ function makeHunt(o) {
         ? 1 + 0.22 * u
         : (u < 0.55 ? 1 : Math.max(0.62, 1 - (u - 0.55) * 1.4));
       const sp = gait(a, c, o.burst ?? 0.95) * mult;
-      const d = stepTowardAt(a, c, p, sp);
-      a._huntGo -= sp * c.dt;            // spend the burst on ground, not on time
+      // ON THE ROCK THE CHASE TAKES THE LADDER. A canHop chase whose prey
+      // is a band away steers by the router and hops with stated intent —
+      // before this, cgpounce had no ladder at all and a cross-level chase
+      // was 140-409 frames of sprinting into a face.
+      const wp = o.canHop && c.rockWaypoint && !a._rockHop
+        ? c.rockWaypoint(a, p.x, p.y) : null;
+      let d;
+      if (wp) {
+        stepTowardAt(a, c, wp, sp);
+        if (wp.hop && c.tryHopTo) c.tryHopTo(a, wp.hop);
+        d = Math.hypot(p.x - a.x, p.y - a.y);
+      } else {
+        d = stepTowardAt(a, c, p, sp);
+      }
+      // the burst is spent on the ground COMMANDED — plus the ground
+      // commanded and not gained, so a pinned chase drains at double and
+      // fails in half the time instead of grinding the outline. Unpinned
+      // frames are byte-identical to the old drain (shortfall ~ 0).
+      const step = sp * c.dt;
+      const moved = a._huntPos
+        ? Math.hypot(a.x - a._huntPos.x, a.y - a._huntPos.y) : step;
+      a._huntPos = { x: a.x, y: a.y };
+      a._huntGo -= step + Math.max(0, step - moved);
       a._faceDir = p.x >= a.x ? 1 : -1;
       if (o.onStrike) o.onStrike(a, c, p, d);
 
-      if (a._huntWin && d <= (resolve(o.reach, a, c, p) ?? 22)) {
+      const reach = resolve(o.reach, a, c, p) ?? 22;
+      // ...never against an animal in the AIR: a goat mid-leap is caught on
+      // the landing or not at all — a kill at the apex left the carry pose
+      // holding a goat that vanished fifty pixels up.
+      if (a._huntWin && d <= reach && !p._leap) {
         a.vx = 0; a.vy = 0;
         if (consumePrey(c.world, p, a.id, c.now)) {
           if (o.onKill) o.onKill(a, c, p);
-          a._huntP = null; a._huntWin = false;
+          a._huntP = null; a._huntWin = false; a._huntPos = null;
+          // a hunt may claim its own aftermath (the cougar walks a goat
+          // home instead of eating where it fell)
+          if (o.afterKill && o.afterKill(a, c, p, S)) return;
           a.state = st.feed;
           a.stateUntil = c.now + c.rand(o.feedMs ? o.feedMs[0] : 3000,
                                         o.feedMs ? o.feedMs[1] : 5200);
@@ -1063,14 +1146,23 @@ function makeHunt(o) {
         huntDrop(a, c, 900);
         return;
       }
+      // THE CORNERED LOSS RESOLVES AT CONTACT, canHop hunts only: a fated
+      // loser whose prey is pinned against its own habitat edge cannot act
+      // the escape out — measured, predator and goat orbiting the same
+      // pixel for five seconds. The moment he touches a blocked prey it
+      // SLIPS FREE instead: a kick of pace, a panic leap if the rock
+      // offers one, and the miss he was always owed.
+      const cornered = o.canHop && !a._huntWin && d <= reach
+        && p._blockedAt && (c.now - p._blockedAt) < 260;
       // a losing chase breaks off once the gap is visibly opening; either
       // chase ends when the burst is spent (the winner's spend is a backstop
       // twice the loser's — the closing arithmetic ends it long before)
-      const blown = a._huntGo <= 0 || c.now >= a.stateUntil ||
+      const blown = cornered || a._huntGo <= 0 || c.now >= a.stateUntil ||
         (!a._huntWin && u > 0.55 && d > ((o.pounce ?? 74) * 1.6));
       if (blown) {
+        if (cornered) { p._slipUntil = c.now + 1400; p._panicLeap = true; }
         p._chasePace = 0;
-        releasePrey(p, a.id); a._huntP = null; a._huntWin = false;
+        releasePrey(p, a.id); a._huntP = null; a._huntWin = false; a._huntPos = null;
         if (st.miss) { a.state = st.miss; a.stateUntil = c.now + c.rand(900, 1600); return; }
         huntDrop(a, c, 1400);
       }
@@ -1327,8 +1419,13 @@ export function nearestMark(world, x, y, maxR = Infinity, opt = {}) {
  * again cannot buy a second thirty seconds.
  */
 const SLEEP_DEEP_MAX = 30000;
+// a sleeper may carry its own ceiling (a._sleepMax): the cougar's den is
+// the owner's "deep, LAZY sleep" and gets a longer lie than the ledger's
+// default. Cleared in the species tick with _sleepSpent, so it can never
+// leak onto another bout.
+const sleepCap = (a) => a._sleepMax || SLEEP_DEEP_MAX;
 export function sleepEnter(a, c, state, win) {
-  const left = Math.max(0, SLEEP_DEEP_MAX - (a._sleepSpent || 0));
+  const left = Math.max(0, sleepCap(a) - (a._sleepSpent || 0));
   a.state = state;
   a.stateUntil = c.now + Math.min(c.rand(win[0], win[1]), left);
   a.vx = 0; a.vy = 0;
@@ -1336,7 +1433,7 @@ export function sleepEnter(a, c, state, win) {
 /** true when this sleep is over, either on its own clock or on the ceiling */
 export function sleepSpent(a, c) {
   a._sleepSpent = (a._sleepSpent || 0) + c.dt * 1000;
-  return a._sleepSpent >= SLEEP_DEEP_MAX || c.now >= a.stateUntil;
+  return a._sleepSpent >= sleepCap(a) || c.now >= a.stateUntil;
 }
 
 defineEthogram("bear", {
@@ -4178,6 +4275,8 @@ function cougarSpot(a, c, kind) {
  */
 const CG_VANTAGE_TRIES = 7;
 function cougarVantage(a, c) {
+  // not with a goat in his jaws: the walk home outranks the view
+  if (a._cgKill) return null;
   const lvl = standLevel(a, c);
   // THE ROCK IS THE DOMAIN. From the floor, two of three picks used to be
   // bushes — which is why he spent a tenth of his day up there instead of
@@ -4225,6 +4324,9 @@ const cgScrapeAt = (a, p) => {
  * as a pit painted over by one.
  */
 function cougarScrapeGround(a, c) {
+  // not with a goat in his jaws — the measured alternative was a scrape
+  // pose with a disembodied goat body swinging beside it
+  if (a._cgKill) return null;
   // ...and only from the forest floor. openGround answers with a point on
   // it, and a scrape begun from the shelf is twenty-two seconds of a cat
   // walking at a riser he cannot climb while an errand owns him.
@@ -4256,6 +4358,7 @@ function cougarScrapeGround(a, c) {
  * at the pick and on every frame of the stalk.
  */
 function cougarCanTake(a, c, p) {
+  if (a._cgKill) return false;       // one goat at a time, and it is in his jaws
   const mine = standLevel(a, c);
   if (p.species === "goat") {
     // one terrace either way, because the stalk can hop now (canHop on the
@@ -4285,9 +4388,18 @@ function cougarKill(a, c, p) {
     return;
   }
   if (p.species !== "goat") return;
+  // THE GOAT IS IN HIS JAWS FROM THE KILL FRAME. The debt and the carry are
+  // set together and travel together: the owner's complaint was a goat that
+  // vanished at the pounce, and the pose it vanished into already existed —
+  // it was simply never worn until the den walk's second leg.
   a._cgKill = "goat";
+  a._cgKillAt = c.now;
+  a._carry = "kill";
   const S = a._eth;
-  if (S) S.seekAt.den = c.now + c.rand(3000, 8000);
+  // the walk home is handed over DIRECTLY by afterKill, so the den appetite
+  // is pushed OUT, not pulled in: the next ordinary den due should come on
+  // its own clock after this sleep, not double-book the one he is owed.
+  if (S) S.seekAt.den = c.now + c.rand(90000, 150000);
 }
 
 /**
@@ -4309,22 +4421,15 @@ function cougarKill(a, c, p) {
 function cougarDen(a, c) {
   const m = c.caveMouth();
   if (!m) return null;                       // a world with no rock in it
-  if (standLevel(a, c) === m.lvl) {
-    // THE CARRY IS RE-TAKEN HERE and not at the kill, because endEvent
-    // clears _carry on every path out of an event and the feed ends in one.
-    // A goto's pick is the only hook the engine offers at the START of a
-    // walk, which is exactly when the kill has to be back in his jaws.
-    if (a._cgKill) a._carry = "kill";
-    return { x: m.x - a.r * 0.4, y: m.y, mouth: m, den: true };
-  }
-  const x = m.x + a.r;                       // clear of the west frame
-  const t1 = c.breakY("T1", x);
-  if (t1 == null) return null;
-  const p = { x, y: t1 + 16 };
-  if (Math.hypot(p.x - a.x, p.y - a.y) < 130) return null;   // he is already there
-  const z = c.rockZone(p.x, p.y);
-  if (!z.on || z.wall || z.level !== 0) return null;
-  return { x: p.x, y: p.y, mouth: m, den: false };
+  // ONE LEG, WHEREVER HE STANDS. The old two-leg staging (talus foot, then
+  // the room) is the router's job now — and its 130px "already there" null
+  // was measured killing every den that fired while he stood on the grass
+  // BESIDE his own front door, which is exactly where the owner watches
+  // from. The carry is re-taken here because endEvent clears _carry on
+  // every path out of an event, and a goto's pick is the engine's only
+  // hook at the start of a walk.
+  if (a._cgKill) a._carry = "kill";
+  return { x: m.x - a.r * 0.4, y: m.y, mouth: m, den: true };
 }
 
 defineEthogram("cougar", {
@@ -4342,12 +4447,130 @@ defineEthogram("cougar", {
     huntRelease(a);
     if (S.claim) releaseClaim(a, S);
     if (a._faceDir) a._faceDir = 0;
-    if (a._carry) a._carry = null;
+    // THE CARRY IS THE DEBT MADE VISIBLE. While _cgKill stands the goat is
+    // in his jaws on every free frame — restored here if any endEvent
+    // stripped it — and the den is pulled close if the walk home died
+    // (stall, drag, giveUp), so a carried goat is never invisible and
+    // never carried for minutes. Past 90 seconds the walk has plainly
+    // failed him: he lays it down where he stands and the debt is paid on
+    // the spot, because a goat that silently evaporates is the one outcome
+    // the owner has now reported three times.
+    if (a._cgKill) {
+      if (!a._carry) a._carry = "kill";
+      if (!a._cgKillAt) a._cgKillAt = c.now;
+      if ((S.seekAt.den ?? 9e9) > c.now + 20000) S.seekAt.den = c.now + c.rand(2000, 5000);
+      if (c.now - a._cgKillAt > 90000) {
+        leaveRemains(c.world, a.x + a.r * 0.5, a.y + 6, "goat", a.id, c.now);
+        a._cgKill = null; a._cgKillAt = 0; a._carry = null;
+      }
+    } else if (a._carry) a._carry = null;
     a._sleepSpent = 0;
+    a._sleepMax = 0;
     a._cgLvl = null;              // the den's held terrace, only its own
   },
 
   events: [
+    /* THE DEN COMES FIRST. Offer order is array order, and the diagnosis
+     * measured a due den starving 89-137s behind prowl and ambush on the
+     * freeing frames — the single biggest reason three watches in a row
+     * showed no sleep. A due den now wins the frame; the appetites it
+     * outranks re-fire within seconds. */
+    /* ---- DEN: deep, lazy sleep inside the cave -------------------------
+     * The one place in this world drawn as a room, and the only animal it
+     * was drawn for. Nothing evicts him: he is not on a platform, so
+     * keepOnPlatform's nine-second clock never starts, and cgsleep is not a
+     * free state, so tryRockHop — and with it the shelf's own way-out steer
+     * — is never offered. Getting OUT afterwards is his alone: he is the
+     * whole of ROCK_SHELF_DROP.
+     */
+    {
+      id: "den", domain: "land", trigger: "seek",
+      // every two-and-a-half to four minutes, and RELIABLY: missRetry keeps
+      // a failed chance roll from silently costing the whole cycle (the
+      // measured 4.5-minute droughts), and the longer `every` buys the
+      // longer lie below without turning him into a mostly-asleep cat —
+      // one composed ~50s sleep per watch, not a corner statue.
+      every: [140000, 220000], chance: 0.60, miss: 22000, cool: 48000,
+      missRetry: true,
+      states: ["cgsettle", "cgsleep", "cgstir"],
+      // canHop: the den run crosses terraces by design — a cougar caught on
+      // the plateau when the appetite fires walks AT the cliff on the way
+      // down to the talus foot, and the stall detector plus the world's own
+      // hop is what turns that from twenty seconds of pushing into a leap.
+      goto: { state: "cgtoden", within: 22, giveUp: 40000, none: 22000,
+              lost: 18000, urgency: 0.30, pick: cougarDen, canHop: true },
+      begin(a, c, S, g) {
+        a.vx = 0; a.vy = 0;
+        // ONE ERRAND, FOOT TO BED. This used to end at the foot of the riser
+        // and trust a later appetite to fire while he still happened to be
+        // standing there — which is why six watched minutes never showed a
+        // sleep. Now the walk simply continues: a fresh goal at the cave
+        // mouth, and the climb belongs to the mid-errand hops (canHop plus
+        // the wall-ahead probe), which is the "agile easy movements up and
+        // down the rocks" the owner asked for, pointed at his own front door.
+        if (!g || !g.den) {
+          const m = c.caveMouth();
+          if (!m) { endEvent(a, c, { cool: 16000, reroll: true, quiet: 900, stop: true }); return; }
+          if (a._cgKill) a._carry = "kill";
+          S.goal = { x: m.x - a.r * 0.4, y: m.y, ref: { mouth: m, den: true }, via: null };
+          S.goalUntil = c.now + 42000;
+          a.state = "cgtoden";
+          return;
+        }
+        // ...and on the bluff a level is mandatory. keepOffRock reads _lvl,
+        // and without it he is on the talus as far as the physics is
+        // concerned and gets shoved out of a wall on the very next frame.
+        a._lvl = g.mouth.lvl;
+        a._cgLvl = g.mouth.lvl;
+        a._cgAt = { x: a.x, y: a.y };
+        a._sleepSpent = 0;
+        a._sleepMax = 38000;         // the owner's DEEP, LAZY sleep: a longer lie
+        a._cgKillAt = 0;
+        if (a._cgKill) {
+          // the goat, finally: dropped at the mouth where the wolf can find
+          // it, which is the whole reason the wolf has a scavenge event
+          leaveRemains(c.world, g.mouth.x + 26, g.mouth.y + 10, "goat", a.id, c.now);
+          a._cgKill = null;
+        }
+        a._carry = null;
+        a.state = "cgsettle"; a.stateUntil = c.now + c.rand(1400, 2200);
+      },
+      drive(a, c) {
+        // BEGIN MAY HAVE HANDED THE ERRAND STRAIGHT BACK. driveGoto calls
+        // begin() and then drive() on the same frame, unconditionally
+        // (Ethogram.js:239) — so a drive that did not ask whose state this
+        // is would run on top of an event that has already ended and put
+        // him to sleep in the state it just left. Measured: a cougar who
+        // refused the den at the foot of the riser lay down on the talus.
+        if (a.state !== "cgsettle" && a.state !== "cgsleep" && a.state !== "cgstir") return;
+        holdSpot(a, c, a._cgAt || { x: a.x, y: a.y });
+        // ...and the level is re-asserted rather than set once. An arc that
+        // was already in the air when the errand started lands during it and
+        // writes _lvl on the way down (tryRockHop:4028, leavePlatform:3987),
+        // which would leave him asleep in the cave owing the rock a terrace
+        // he never walked to.
+        if (a._cgLvl != null) a._lvl = a._cgLvl;
+        if (a.state === "cgsettle") {
+          if (c.now < a.stateUntil) return;
+          sleepEnter(a, c, "cgsleep", [15000, 24000]);
+          return;
+        }
+        if (a.state === "cgsleep") {
+          // spent in FRAME TIME: thirty seconds of a headless run is a
+          // hundred frames and thirty of a real one is eighteen hundred
+          if (!sleepSpent(a, c)) return;
+          a.state = "cgstir"; a.stateUntil = c.now + c.rand(2600, 3800);
+          return;
+        }
+        if (c.now < a.stateUntil) return;
+        if ((a._sleepSpent || 0) >= (a._sleepMax || SLEEP_DEEP_MAX)) {
+          endEvent(a, c, { reroll: true, quiet: 1600, stop: true });
+          return;
+        }
+        sleepEnter(a, c, "cgsleep", [15000, 24000]);
+      },
+    },
+
     /* ---- PROWL: ridges, cliffs and bushes ------------------------------
      * The owner's first sentence, and the only event here with no food and
      * no sleep in it. He walks to somewhere with a view and looks at the
@@ -4449,105 +4672,34 @@ defineEthogram("cougar", {
       burst: 1.0, dash: 260,             // top 2.65 at drain 0.55: short and violent
       canHop: true,                // the stalk takes the rock's own ladder
       catchChance: 0.50,           // the owner's 50/50, one dial, all prey
+      fixSnap: true,               // a goat that ran into him is pounced, not stared at
       feedMs: [6000, 9000],
       every: [14000, 24000], chance: 0.80, cool: 42000, missCool: 10000,
       cover: true,
       reachable: cougarCanTake,
       onKill: cougarKill,
+      // A GOAT IS CARRIED, NOT EATEN WHERE IT FELL. The walk home starts on
+      // the KILL FRAME — no feed pose over a vanished animal, no free-wander
+      // gap for another appetite to claim him with the body in his jaws. The
+      // handoff is to the den event's own goto state, so from here on it is
+      // an ordinary den errand: the router climbs him, begin() beds him, and
+      // the remains land at the mouth for the wolf.
+      afterKill(a, c, p, S) {
+        if (p.species !== "goat") return false;
+        const m = c.caveMouth();
+        if (!m) return false;
+        a._carry = "kill";
+        S.cd.ambush = c.now + 42000;             // the hunt still pays its cooldown
+        S.goal = { x: m.x - a.r * 0.4, y: m.y, ref: { mouth: m, den: true }, via: null };
+        S.goalOwner = "den";
+        S.goalUntil = c.now + 42000;
+        a.state = "cgtoden";
+        return true;
+      },
       st: { stalk: "cgstalk", fix: "cgfix", strike: "cgpounce",
             feed: "cgeat", miss: "cgmiss" },
     }),
 
-    /* ---- DEN: deep, lazy sleep inside the cave -------------------------
-     * The one place in this world drawn as a room, and the only animal it
-     * was drawn for. Nothing evicts him: he is not on a platform, so
-     * keepOnPlatform's nine-second clock never starts, and cgsleep is not a
-     * free state, so tryRockHop — and with it the shelf's own way-out steer
-     * — is never offered. Getting OUT afterwards is his alone: he is the
-     * whole of ROCK_SHELF_DROP.
-     */
-    {
-      id: "den", domain: "land", trigger: "seek",
-      // a visit every two to three minutes WATCHED, not every four to six:
-      // "deep, lazy sleep inside the cave" is a picture the owner asked for
-      // and a picture nobody sees is not in the world.
-      every: [80000, 140000], chance: 0.60, miss: 22000, cool: 48000,
-      states: ["cgsettle", "cgsleep", "cgstir"],
-      // canHop: the den run crosses terraces by design — a cougar caught on
-      // the plateau when the appetite fires walks AT the cliff on the way
-      // down to the talus foot, and the stall detector plus the world's own
-      // hop is what turns that from twenty seconds of pushing into a leap.
-      goto: { state: "cgtoden", within: 22, giveUp: 40000, none: 22000,
-              lost: 18000, urgency: 0.30, pick: cougarDen, canHop: true },
-      begin(a, c, S, g) {
-        a.vx = 0; a.vy = 0;
-        // ONE ERRAND, FOOT TO BED. This used to end at the foot of the riser
-        // and trust a later appetite to fire while he still happened to be
-        // standing there — which is why six watched minutes never showed a
-        // sleep. Now the walk simply continues: a fresh goal at the cave
-        // mouth, and the climb belongs to the mid-errand hops (canHop plus
-        // the wall-ahead probe), which is the "agile easy movements up and
-        // down the rocks" the owner asked for, pointed at his own front door.
-        if (!g || !g.den) {
-          const m = c.caveMouth();
-          if (!m) { endEvent(a, c, { cool: 16000, reroll: true, quiet: 900, stop: true }); return; }
-          if (a._cgKill) a._carry = "kill";
-          S.goal = { x: m.x - a.r * 0.4, y: m.y, ref: { mouth: m, den: true }, via: null };
-          S.goalUntil = c.now + 42000;
-          a.state = "cgtoden";
-          return;
-        }
-        // ...and on the bluff a level is mandatory. keepOffRock reads _lvl,
-        // and without it he is on the talus as far as the physics is
-        // concerned and gets shoved out of a wall on the very next frame.
-        a._lvl = g.mouth.lvl;
-        a._cgLvl = g.mouth.lvl;
-        a._cgAt = { x: a.x, y: a.y };
-        a._sleepSpent = 0;
-        if (a._cgKill) {
-          // the goat, finally: dropped at the mouth where the wolf can find
-          // it, which is the whole reason the wolf has a scavenge event
-          leaveRemains(c.world, g.mouth.x + 26, g.mouth.y + 10, "goat", a.id, c.now);
-          a._cgKill = null;
-        }
-        a._carry = null;
-        a.state = "cgsettle"; a.stateUntil = c.now + c.rand(1400, 2200);
-      },
-      drive(a, c) {
-        // BEGIN MAY HAVE HANDED THE ERRAND STRAIGHT BACK. driveGoto calls
-        // begin() and then drive() on the same frame, unconditionally
-        // (Ethogram.js:239) — so a drive that did not ask whose state this
-        // is would run on top of an event that has already ended and put
-        // him to sleep in the state it just left. Measured: a cougar who
-        // refused the den at the foot of the riser lay down on the talus.
-        if (a.state !== "cgsettle" && a.state !== "cgsleep" && a.state !== "cgstir") return;
-        holdSpot(a, c, a._cgAt || { x: a.x, y: a.y });
-        // ...and the level is re-asserted rather than set once. An arc that
-        // was already in the air when the errand started lands during it and
-        // writes _lvl on the way down (tryRockHop:4028, leavePlatform:3987),
-        // which would leave him asleep in the cave owing the rock a terrace
-        // he never walked to.
-        if (a._cgLvl != null) a._lvl = a._cgLvl;
-        if (a.state === "cgsettle") {
-          if (c.now < a.stateUntil) return;
-          sleepEnter(a, c, "cgsleep", [15000, 24000]);
-          return;
-        }
-        if (a.state === "cgsleep") {
-          // spent in FRAME TIME: thirty seconds of a headless run is a
-          // hundred frames and thirty of a real one is eighteen hundred
-          if (!sleepSpent(a, c)) return;
-          a.state = "cgstir"; a.stateUntil = c.now + c.rand(2600, 3800);
-          return;
-        }
-        if (c.now < a.stateUntil) return;
-        if ((a._sleepSpent || 0) >= SLEEP_DEEP_MAX) {
-          endEvent(a, c, { reroll: true, quiet: 1600, stop: true });
-          return;
-        }
-        sleepEnter(a, c, "cgsleep", [15000, 24000]);
-      },
-    },
   ],
 });
 
@@ -4699,10 +4851,15 @@ function wolfCarrion(a, c) {
   const hit = nearestRemains(c.world, a.x, a.y, WF_SCAV_SENSE, { free: true, byId: a.id });
   if (!hit) return null;
   const r = hit.r;
-  // ...and he has to be able to WALK to it. The goat carcass is at the cave
-  // mouth, which is a terrace up: rule 2 again, and a scavenge that set off
-  // from the talus would stand under the riser until the give-up ran out.
-  if (standLevel(a, c) !== (c.rockLevel(r.x, r.y) ?? 0)) return null;
+  // ...and he has to be able to GET to it. The goat carcass is at the cave
+  // mouth, a terrace up — and the wolf is a leaper with a routed errand
+  // now, so ONE riser is a climb he makes and the steal the owner asked
+  // for finally happens from the forest floor, where the wolf actually
+  // lives. The plateau stays refused, and so does everything else: this
+  // is a one-rung allowance for the one scene built on it.
+  const lr = c.rockLevel(r.x, r.y) ?? 0;
+  const ml = standLevel(a, c);
+  if (lr !== ml && !(lr === 1 && ml === 0)) return null;
   for (const o of c.world.agents) {
     if (o.species !== "cougar" || o.id === a.id) continue;
     if (COUGAR_ASLEEP.has(o.state)) continue;
@@ -4902,6 +5059,9 @@ defineEthogram("wolf", {
       states: ["wfwary", "wfgnaw"],
       goto: { state: "wftoremains", within: 30, giveUp: 40000, none: 12000,
               lost: 10000, urgency: 0.42, pick: wolfCarrion,
+              // canHop: the cave-mouth carcass is a riser up, and the router
+              // climbs him there the same way it walks the cougar home
+              canHop: true,
               track: (a, c, ref) => (ref && ref.rem && ref.rem.feeds > 0 ? ref.rem : null) },
       begin(a, c, S, g) {
         a.vx = 0; a.vy = 0;
@@ -4925,6 +5085,22 @@ defineEthogram("wolf", {
         holdSpot(a, c, a._wfAt || { x: a.x, y: a.y });
         const r = a._wfRem;
         if (!r) { endEvent(a, c, { cool: 9000, reroll: true, quiet: 900, stop: true }); return; }
+        // THE OWNER MAY WAKE. The veto that gated the pick is re-asked on
+        // every frame of the meal: a cougar back on his feet within 190px
+        // ends it NOW — the wolf drops the claim and leaves at a guilty
+        // trot, instead of finishing the mouthful beside an animal twice
+        // his trouble, which is what the pick-only veto let him do.
+        for (const o2 of c.world.agents) {
+          if (o2.species !== "cougar") continue;
+          if (COUGAR_ASLEEP.has(o2.state)) continue;
+          if (Math.hypot(o2.x - r.x, o2.y - r.y) < WF_COUGAR_KEEP) {
+            releaseRemains(r, a.id); a._wfRem = null;
+            a._faceDir = 0;
+            endEvent(a, c, { cool: 16000, reroll: true, quiet: 1400, stop: true });
+            a.vx = 62; a.vy = 26;      // the break-off reads: east, off the shelf lane
+            return;
+          }
+        }
         if (a.state === "wfwary") {
           if (c.now < a.stateUntil) return;
           // one meal out of three, taken on entry: the rest is left for
