@@ -4164,13 +4164,26 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
       const d = Math.hypot(f.px - floor.x, f.py - floor.y);
       if (d < half + cg.r * 0.9 + 26) atBush = f.kind + ' at ' + d.toFixed(0) + 'px';
     }
+    // ...and from the floor the bluff itself is now fair game: the router
+    // is what made a terrace pick reachable from the trees, so "which band"
+    // is asked of all three rather than of the talus alone
+    const onBluff = [0, 1, 2].filter((l) => w.__prey.okAt('goat', floor.x, floor.y, { lvl: l }));
     return { none: false, onShelf: onShelf, onTalus: onTalus, atBush: atBush,
-             floorOk: w.__prey.okAt('hare', floor.x, floor.y) };
+             onBluff: onBluff, floorOk: w.__prey.okAt('hare', floor.x, floor.y) };
   })()`);
-  chk(!VN.none && VN.onShelf && (VN.onTalus || VN.atBush) && VN.floorOk,
-    'he prowls the ground he is on: the terrace up there, the talus or a bush down here',
-    VN.none || `from the shelf he picked a terrace; from the trees he picked ` +
-      `${VN.onTalus ? 'the talus at the foot of the faces' : 'the far side of a ' + VN.atBush}`);
+  // THE CONTRACT MOVED IN v0.47. It used to be "the ground he is on", because
+  // a terrace picked from the trees was a walk that died at the rock's east
+  // outline â€” measured, 24 attempts, 24 stall-aborts. The router walks him
+  // round the foot and up, so the bluff is now somewhere he may set off for
+  // from anywhere; what still has to be true is that the pick is REAL
+  // ground â€” a terrace, a bush, or open floor, and never a wall.
+  const vnWhere = (v) => (v.onBluff && v.onBluff.length
+    ? 'a bluff terrace (level ' + v.onBluff.join('/') + ')'
+    : v.atBush ? 'the far side of a ' + v.atBush
+    : v.floorOk ? 'open forest floor' : 'NOWHERE STANDABLE');
+  chk(!VN.none && VN.onShelf && (VN.onBluff.length > 0 || VN.atBush || VN.floorOk),
+    'he prowls the bluff and the bushes: a terrace up there, and from the trees the rock or a bush',
+    VN.none || `from the shelf he picked a terrace; from the trees he picked ` + vnWhere(VN));
 
   // ---- 3. HE NEVER SETS OFF AT A GOAT ON ANOTHER TERRACE ---------------
   // Rule 2 of the bluff: walking cannot change level, and a stalk is a busy
@@ -4973,6 +4986,12 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
         // the hare holds still: this is about the wolf's reach and not
         // about where a hare had wandered to by frame thirty
         p.x = px; p.y = py; p.vx = 0; p.vy = 0; p._fleeUntil = 0;
+        // ...AND SO DOES THE WOLF. He was free to wander through the trial,
+        // and a wander that carries him 60px west turns a 260px upwind
+        // refusal into a 200px legal take â€” the rule reads as broken when
+        // what actually happened is that he walked. The range is the whole
+        // question here, so the range is pinned.
+        wf.x = cx; wf.y = cy; wf.vx = 0; wf.vy = 0;
         if (w.prey.length > 1) w.prey = w.prey.filter((q) => q === p);
         w.__only(wf, 'rush');
         window.__pump(1);
