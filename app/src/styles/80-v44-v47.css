@@ -1,0 +1,1534 @@
+/* ==================== v0.44 THE COUGAR ====================
+   Eleven states, three of them on a drawn posture and eight on the ordinary
+   rig held differently — the fox's block at 5989 is the pattern and this
+   follows it line for line.
+
+   EVERY SELECTOR BELOW NAMES BOTH THE STATE AND .sai-crit--cougar. State
+   names are global in this file: `cgstalk` is his alone today, and a rule
+   that named only the state would hand his creep to whoever claims the name
+   next. The three `display:none` defaults are the one exception and they
+   cannot name a state, because a default is what is true in every other
+   one; they are scoped by species and by a class nothing else draws.
+
+   Keyframe prefix sai-cougar-. Nine verbs were already taken by the walk,
+   the swim and the pant — bound drive hang headline heave pant pitch reach
+   rudder — and nothing below reuses one.                                  */
+
+/* the two swapped postures and the carried kill, off unless asked for */
+.sai-crit--cougar .sai-crit-cgscrapepose,
+.sai-crit--cougar .sai-crit-cgsleeppose,
+.sai-crit--cougar .sai-crit-cgcarrypose{ display:none; }
+
+/* ---- cgtoledge: he is going somewhere with a view, and he is not in a
+   hurry about it. The one thing that separates this from an ordinary walk
+   is that the head stays LEVEL — a cat crossing open ground on business
+   carries its head still and lets the shoulders do the moving ---- */
+.sai-sprite[data-state="cgtoledge"] .sai-crit--cougar .sai-crit-head{
+  transform-box:fill-box; transform-origin:18% 88%;
+  animation:sai-cougar-carrylevel 2.4s ease-in-out infinite; }
+@keyframes sai-cougar-carrylevel{
+  0%,100%{ transform:rotate(1.4deg) translateY(.6px); }
+  50%    { transform:rotate(-.6deg) translateY(-.4px); } }
+
+/* ---- cgsurvey: stopped high, head sweeping the ground below, and the
+   tail tip going. Nothing else moves. This is the only pose in the block
+   where he is looking at the whole map rather than at one animal ---- */
+.sai-sprite[data-state="cgsurvey"] .sai-crit--cougar .sai-crit-head{
+  transform-box:fill-box; transform-origin:18% 88%;
+  animation:sai-cougar-sweep 4.4s ease-in-out infinite; }
+@keyframes sai-cougar-sweep{
+  0%,100%{ transform:rotate(-9deg) translate(-1.4px,-2px); }
+  30%    { transform:rotate(4deg) translate(1.6px,1.4px); }
+  62%    { transform:rotate(9deg) translate(2.4px,2.6px); }
+  84%    { transform:rotate(-3deg) translate(0,-.6px); } }
+.sai-sprite[data-state="cgsurvey"] .sai-crit--cougar .sai-crit-body{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-cougar-stand 4.4s ease-in-out infinite; }
+@keyframes sai-cougar-stand{
+  0%,100%{ transform:translateY(-1.4px) scaleY(1.03); }
+  50%    { transform:translateY(-2px) scaleY(1.04); } }
+/* the rope tail: a slow travelling curl with a hard tick at the very end
+   of it, which is what a cat's tail does when it is watching something */
+.sai-sprite[data-state="cgsurvey"] .sai-crit--cougar .sai-crit-tail{
+  transform-box:fill-box; transform-origin:96% 46%;
+  animation:sai-cougar-tiptick 1.6s cubic-bezier(.6,0,.4,1) infinite; }
+@keyframes sai-cougar-tiptick{
+  0%,58%,100%{ transform:rotate(-4deg); }
+  70%        { transform:rotate(-16deg) translateY(-2px); }
+  84%        { transform:rotate(3deg) translateY(1px); } }
+
+/* ---- cgstalk: the slowest approach in the world, and it has to LOOK it.
+   The belly goes down, the head goes level and then STOPS MOVING — the
+   stillness of the head over a creeping body is the whole tell — and the
+   legs run at half the walk's tempo. 0.18 urgency is about 60px/s; without
+   this the same speed reads as a cat who has lost interest ---- */
+.sai-sprite[data-state="cgstalk"] .sai-crit--cougar .sai-crit-body{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-cougar-creep 1.9s ease-in-out infinite; }
+@keyframes sai-cougar-creep{
+  0%,100%{ transform:translateY(6.4px) scaleY(.79) scaleX(1.07) rotate(-.9deg); }
+  50%    { transform:translateY(7.4px) scaleY(.76) scaleX(1.08) rotate(.8deg); } }
+.sai-sprite[data-state="cgstalk"] .sai-crit--cougar .sai-crit-head{
+  transform-box:fill-box; transform-origin:18% 88%;
+  animation:sai-cougar-creephead 1.9s ease-in-out infinite; }
+@keyframes sai-cougar-creephead{
+  0%,100%{ transform:rotate(14deg) translate(4.4px,12.4px); }
+  50%    { transform:rotate(14.6deg) translate(4.7px,12.9px); } }
+/* the tail goes STRAIGHT OUT BEHIND and low. A cat stalking carries the
+   rope level with the spine; the flick belongs to the gather, not here */
+.sai-sprite[data-state="cgstalk"] .sai-crit--cougar .sai-crit-tail{
+  transform-box:fill-box; transform-origin:96% 46%;
+  animation:sai-cougar-creeptail 3.8s ease-in-out infinite; }
+@keyframes sai-cougar-creeptail{
+  0%,100%{ transform:rotate(16deg) translateY(7px); }
+  50%    { transform:rotate(13deg) translateY(8px); } }
+.sai-sprite[data-state="cgstalk"] .sai-crit--cougar .sai-crit-leg{
+  animation-duration:1.9s !important; }
+
+/* ---- cgfix: he is in range and has not gone yet. Weight back over the
+   haunches, everything still, and the tail tip the ONLY thing in the
+   drawing that moves — which is exactly what makes a second of standing
+   there read as a decision rather than as a pause ---- */
+.sai-sprite[data-state="cgfix"] .sai-crit--cougar .sai-crit-body{
+  transform-box:fill-box; transform-origin:22% 100%;
+  animation:sai-cougar-gather 2.2s ease-in-out infinite; }
+@keyframes sai-cougar-gather{
+  0%,100%{ transform:translate(-2.6px,5.4px) scaleY(.82) scaleX(1.05) rotate(-2.6deg); }
+  50%    { transform:translate(-3.2px,5.8px) scaleY(.81) scaleX(1.05) rotate(-3deg); } }
+.sai-sprite[data-state="cgfix"] .sai-crit--cougar .sai-crit-head{
+  transform-box:fill-box; transform-origin:18% 88%;
+  animation:none; transform:rotate(7deg) translate(3.4px,6.6px); }
+.sai-sprite[data-state="cgfix"] .sai-crit--cougar .sai-crit-tail{
+  transform-box:fill-box; transform-origin:96% 46%;
+  animation:sai-cougar-fixtail .74s cubic-bezier(.5,0,.5,1) infinite; }
+@keyframes sai-cougar-fixtail{
+  0%,100%{ transform:rotate(12deg) translateY(6px); }
+  46%    { transform:rotate(2deg) translateY(3.4px); } }
+.sai-sprite[data-state="cgfix"] .sai-crit--cougar .sai-crit-leg{
+  animation:none !important; }
+
+/* ---- cgpounce. ONE ARC, and it must not loop: the state lasts as long as
+   the strike does and a repeating bound reads as a cat jumping on the spot.
+   `forwards` holds the landing pose if the strike outlasts the curve, which
+   is what happens on every long one — a 260px dash at his blown 80px/s is
+   three seconds against a 0.58s curve ---- */
+.sai-sprite[data-state="cgpounce"] .sai-crit--cougar .sai-crit-body{
+  transform-box:fill-box; transform-origin:66% 96%;
+  animation:sai-cougar-leap .58s cubic-bezier(.3,-.5,.5,1.35) forwards; }
+@keyframes sai-cougar-leap{
+  0%  { transform:translate(-2px,5px) rotate(-3deg) scaleY(.86) scaleX(1.06); }
+  18% { transform:translate(-5px,7px) rotate(-13deg) scaleY(.8) scaleX(1.09); }  /* coil */
+  44% { transform:translate(9px,-16px) rotate(17deg) scaleY(1.1) scaleX(.97); }  /* out */
+  72% { transform:translate(13px,-7px) rotate(7deg) scaleY(1.04); }
+  100%{ transform:translate(11px,1px) rotate(1deg) scaleY(1); } }
+.sai-sprite[data-state="cgpounce"] .sai-crit--cougar .sai-crit-head{
+  transform-box:fill-box; transform-origin:18% 88%;
+  animation:sai-cougar-leaphead .58s cubic-bezier(.3,-.5,.5,1.35) forwards; }
+@keyframes sai-cougar-leaphead{
+  0%  { transform:rotate(6deg) translate(3px,5px); }
+  18% { transform:rotate(-4deg) translate(1px,1px); }
+  44% { transform:rotate(-16deg) translate(5px,-3px); }
+  100%{ transform:rotate(15deg) translate(7px,5px); } }
+/* the rope streams out and settles last: it is the only part of him still
+   moving when the rest of the animal has landed */
+.sai-sprite[data-state="cgpounce"] .sai-crit--cougar .sai-crit-tail{
+  transform-box:fill-box; transform-origin:96% 46%;
+  animation:sai-cougar-leaptail .58s cubic-bezier(.3,-.5,.5,1.35) forwards; }
+@keyframes sai-cougar-leaptail{
+  0%  { transform:rotate(10deg) translateY(5px); }
+  44% { transform:rotate(-20deg) translateY(-6px); }
+  100%{ transform:rotate(-5deg) translateY(-1px); } }
+.sai-sprite[data-state="cgpounce"] .sai-crit--cougar .sai-crit-leg{
+  animation-duration:.34s !important; }
+
+/* ---- cgeat: crouched over it, head down, shoulders working. Slower and
+   heavier than the fox's worry — he is pulling at something that weighs
+   what he does ---- */
+.sai-sprite[data-state="cgeat"] .sai-crit--cougar .sai-crit-head{
+  transform-box:fill-box; transform-origin:18% 88%;
+  animation:sai-cougar-worry 1.35s ease-in-out infinite; }
+@keyframes sai-cougar-worry{
+  0%,100%{ transform:rotate(33deg) translate(1.6px,19.4px); }
+  34%    { transform:rotate(21deg) translate(0,14.4px); }
+  64%    { transform:rotate(36deg) translate(2.2px,20.6px); } }
+.sai-sprite[data-state="cgeat"] .sai-crit--cougar .sai-crit-body{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-cougar-shoulder 1.35s ease-in-out infinite; }
+@keyframes sai-cougar-shoulder{
+  0%,100%{ transform:translateY(5.6px) scaleY(.87) rotate(3.4deg); }
+  34%    { transform:translateY(4.2px) scaleY(.9) rotate(1deg); }
+  64%    { transform:translateY(6.2px) scaleY(.86) rotate(3.8deg); } }
+.sai-sprite[data-state="cgeat"] .sai-crit--cougar .sai-crit-tail{
+  transform-box:fill-box; transform-origin:96% 46%;
+  animation:sai-cougar-restrope 3.2s ease-in-out infinite; }
+@keyframes sai-cougar-restrope{
+  0%,100%{ transform:rotate(9deg) translateY(4px); }
+  50%    { transform:rotate(5deg) translateY(3px); } }
+
+/* ---- cgmiss: head UP, one forepaw off the ground, casting about. It is
+   over in a second and it is the only moment he is not looking down ---- */
+.sai-sprite[data-state="cgmiss"] .sai-crit--cougar .sai-crit-head{
+  transform-box:fill-box; transform-origin:18% 88%;
+  animation:sai-cougar-castabout .96s ease-in-out infinite; }
+@keyframes sai-cougar-castabout{
+  0%,100%{ transform:rotate(-14deg) translate(1px,-2.6px); }
+  34%    { transform:rotate(-21deg) translate(2.4px,-3.6px); }
+  70%    { transform:rotate(-7deg) translate(-.4px,-1px); } }
+.sai-sprite[data-state="cgmiss"] .sai-crit--cougar .sai-crit-leg-fl{
+  transform-box:fill-box; transform-origin:50% 4%;
+  animation:sai-cougar-forepaw .96s ease-in-out infinite; }
+@keyframes sai-cougar-forepaw{
+  0%,100%{ transform:rotate(-22deg) translateY(-1.4px); }
+  50%    { transform:rotate(-30deg) translateY(-2.4px); } }
+.sai-sprite[data-state="cgmiss"] .sai-crit--cougar .sai-crit-tail{
+  transform-box:fill-box; transform-origin:96% 46%;
+  animation:sai-cougar-lash .96s ease-in-out infinite; }
+@keyframes sai-cougar-lash{
+  0%,100%{ transform:rotate(-3deg); } 42%{ transform:rotate(-15deg); } }
+
+/* ---- cgtoden, and the hundred kilos in his jaws.
+   The carry rides data-carry rather than the state, so the goat is in his
+   mouth on every frame of the walk home whatever the 300ms snapshot thinks
+   his state is — the same reason data-burst and data-fly exist ---- */
+.sai-sprite[data-carry="kill"] .sai-crit--cougar .sai-crit-cgcarrypose{ display:inline; }
+.sai-sprite[data-carry="kill"] .sai-crit--cougar .sai-crit-head{
+  transform-box:fill-box; transform-origin:18% 88%;
+  animation:sai-cougar-carryhead 1.5s ease-in-out infinite; }
+@keyframes sai-cougar-carryhead{
+  0%,100%{ transform:rotate(19deg) translate(1.6px,10.4px); }
+  50%    { transform:rotate(21deg) translate(2px,11.6px); } }
+/* ...and the load swings on the head that carries it, half a beat behind */
+.sai-sprite[data-carry="kill"] .sai-crit--cougar .sai-crit-cgcarrypose{
+  transform-box:fill-box; transform-origin:20% 10%;
+  animation:sai-cougar-swing 1.5s ease-in-out infinite; }
+@keyframes sai-cougar-swing{
+  0%,100%{ transform:rotate(-3deg) translate(-1px,6px); }
+  50%    { transform:rotate(2.4deg) translate(.6px,7.4px); } }
+
+/* ---- THE SCRAPE. One drawn posture, two states.
+   cgscrape rakes: the two hind legs alternate, the body rocks with them,
+   and the litter goes up and back. cgscrapesniff is the same animal with
+   his nose in what he made and his legs still. ---- */
+.sai-sprite[data-state="cgscrape"] .sai-crit--cougar .sai-crit-cgscrapepose,
+.sai-sprite[data-state="cgscrapesniff"] .sai-crit--cougar .sai-crit-cgscrapepose{
+  display:inline; }
+.sai-sprite[data-state="cgscrape"] .sai-crit--cougar .sai-crit-body,
+.sai-sprite[data-state="cgscrape"] .sai-crit--cougar .sai-crit-head,
+.sai-sprite[data-state="cgscrape"] .sai-crit--cougar .sai-crit-tail,
+.sai-sprite[data-state="cgscrape"] .sai-crit--cougar .sai-crit-leg,
+.sai-sprite[data-state="cgscrapesniff"] .sai-crit--cougar .sai-crit-body,
+.sai-sprite[data-state="cgscrapesniff"] .sai-crit--cougar .sai-crit-head,
+.sai-sprite[data-state="cgscrapesniff"] .sai-crit--cougar .sai-crit-tail,
+.sai-sprite[data-state="cgscrapesniff"] .sai-crit--cougar .sai-crit-leg{
+  display:none; }
+.sai-crit--cougar .cgs-body, .sai-crit--cougar .cgs-head,
+.sai-crit--cougar .cgs-hindnear, .sai-crit--cougar .cgs-hindfar,
+.sai-crit--cougar .cgs-litter{ transform-box:fill-box; }
+
+.sai-sprite[data-state="cgscrape"] .sai-crit--cougar .cgs-hindnear{
+  transform-origin:78% 8%; animation:sai-cougar-rakenear .68s cubic-bezier(.35,0,.3,1) infinite; }
+.sai-sprite[data-state="cgscrape"] .sai-crit--cougar .cgs-hindfar{
+  transform-origin:78% 8%; animation:sai-cougar-rakefar .68s cubic-bezier(.35,0,.3,1) infinite; }
+/* out and forward, then a hard drag BACK: the rake is the return stroke,
+   which is why the ease is loaded at the end of it */
+@keyframes sai-cougar-rakenear{
+  0%,100%{ transform:rotate(-26deg) translate(6px,-1.4px); }
+  40%    { transform:rotate(14deg) translate(-5px,1.6px); } }
+@keyframes sai-cougar-rakefar{
+  0%,100%{ transform:rotate(15deg) translate(-5px,1.4px); }
+  40%    { transform:rotate(-24deg) translate(5.4px,-1.2px); } }
+.sai-sprite[data-state="cgscrape"] .sai-crit--cougar .cgs-body{
+  transform-origin:70% 90%; animation:sai-cougar-rakerock .68s ease-in-out infinite; }
+@keyframes sai-cougar-rakerock{
+  0%,100%{ transform:rotate(-1.6deg) translate(1.4px,0); }
+  40%    { transform:rotate(1.8deg) translate(-1.6px,.6px); } }
+/* the litter itself: it does not travel, it PUFFS — the heap is a fixed
+   thing on the ground and the flecks over it are what is being added */
+.sai-sprite[data-state="cgscrape"] .sai-crit--cougar .cgs-litter{
+  transform-origin:74% 82%; animation:sai-cougar-litterfly .68s ease-out infinite; }
+@keyframes sai-cougar-litterfly{
+  0%     { transform:translate(3px,2.4px) scale(.9); opacity:.75; }
+  45%    { transform:translate(-2px,-2.6px) scale(1.05); opacity:1; }
+  100%   { transform:translate(3px,2.4px) scale(.9); opacity:.75; } }
+/* ...and the nose in it afterwards. Everything else is held */
+.sai-sprite[data-state="cgscrapesniff"] .sai-crit--cougar .cgs-head{
+  transform-origin:26% 60%; animation:sai-cougar-snuffle .52s ease-in-out infinite; }
+@keyframes sai-cougar-snuffle{
+  0%,100%{ transform:rotate(2.4deg) translate(-1.4px,1.6px); }
+  50%    { transform:rotate(5deg) translate(-2.2px,2.8px); } }
+
+/* ---- THE DEN. One drawn posture, three states: he folds down into it,
+   he breathes in it, and he lifts his head out of it. Nothing is redrawn
+   between them, because an animal that changes shape between "asleep" and
+   "half awake" reads as two animals ---- */
+.sai-sprite[data-state="cgsettle"] .sai-crit--cougar .sai-crit-cgsleeppose,
+.sai-sprite[data-state="cgsleep"] .sai-crit--cougar .sai-crit-cgsleeppose,
+.sai-sprite[data-state="cgstir"] .sai-crit--cougar .sai-crit-cgsleeppose{
+  display:inline; }
+.sai-sprite[data-state="cgsettle"] .sai-crit--cougar .sai-crit-body,
+.sai-sprite[data-state="cgsettle"] .sai-crit--cougar .sai-crit-head,
+.sai-sprite[data-state="cgsettle"] .sai-crit--cougar .sai-crit-tail,
+.sai-sprite[data-state="cgsettle"] .sai-crit--cougar .sai-crit-leg,
+.sai-sprite[data-state="cgsleep"] .sai-crit--cougar .sai-crit-body,
+.sai-sprite[data-state="cgsleep"] .sai-crit--cougar .sai-crit-head,
+.sai-sprite[data-state="cgsleep"] .sai-crit--cougar .sai-crit-tail,
+.sai-sprite[data-state="cgsleep"] .sai-crit--cougar .sai-crit-leg,
+.sai-sprite[data-state="cgstir"] .sai-crit--cougar .sai-crit-body,
+.sai-sprite[data-state="cgstir"] .sai-crit--cougar .sai-crit-head,
+.sai-sprite[data-state="cgstir"] .sai-crit--cougar .sai-crit-tail,
+.sai-sprite[data-state="cgstir"] .sai-crit--cougar .sai-crit-leg{
+  display:none; }
+.sai-crit--cougar .cgsl-flank, .sai-crit--cougar .cgsl-head,
+.sai-crit--cougar .cgsl-ear, .sai-crit--cougar .cgsl-tail{ transform-box:fill-box; }
+
+/* the fold: one-shot, and held, because he does not fold twice */
+.sai-sprite[data-state="cgsettle"] .sai-crit--cougar .sai-crit-cgsleeppose{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-cougar-fold 1.2s cubic-bezier(.3,.7,.3,1) forwards; }
+@keyframes sai-cougar-fold{
+  0%  { transform:translateY(-9px) scaleY(1.16) rotate(-3deg); }
+  60% { transform:translateY(1.4px) scaleY(.97) rotate(1deg); }
+  100%{ transform:translateY(0) scaleY(1) rotate(0deg); } }
+/* the breath. Four seconds a cycle: a deep, lazy sleep is a SLOW one, and
+   this is the only thing in the drawing that says he is alive */
+.sai-sprite[data-state="cgsleep"] .sai-crit--cougar .cgsl-flank{
+  transform-origin:50% 86%; animation:sai-cougar-flank 4.2s ease-in-out infinite; }
+@keyframes sai-cougar-flank{
+  0%,100%{ transform:scaleY(1) translateY(0); }
+  46%    { transform:scaleY(1.07) translateY(-1.4px); } }
+.sai-sprite[data-state="cgsleep"] .sai-crit--cougar .cgsl-tail{
+  transform-origin:96% 40%; animation:sai-cougar-taildrift 7s ease-in-out infinite; }
+@keyframes sai-cougar-taildrift{
+  0%,100%{ transform:rotate(0deg); } 50%{ transform:rotate(-2.4deg) translateY(-1px); } }
+/* cgstir: the head comes up, one ear rotates, and the flank keeps going —
+   he is deciding whether to get up, which he mostly does not */
+.sai-sprite[data-state="cgstir"] .sai-crit--cougar .cgsl-head{
+  transform-origin:20% 86%; animation:sai-cougar-liftup 2.6s ease-in-out infinite; }
+@keyframes sai-cougar-liftup{
+  0%,100%{ transform:rotate(0deg) translateY(0); }
+  40%    { transform:rotate(-13deg) translate(-1.6px,-5.4px); }
+  70%    { transform:rotate(-10deg) translate(-1.2px,-4.4px); } }
+.sai-sprite[data-state="cgstir"] .sai-crit--cougar .cgsl-ear{
+  transform-origin:50% 90%; animation:sai-cougar-earflick .84s ease-in-out infinite; }
+@keyframes sai-cougar-earflick{
+  0%,72%,100%{ transform:rotate(0deg); }
+  82%        { transform:rotate(-24deg) scaleX(.86); } }
+.sai-sprite[data-state="cgstir"] .sai-crit--cougar .cgsl-flank{
+  transform-origin:50% 86%; animation:sai-cougar-flank 2.8s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce){
+  /* the poses are kept and the motion is not — a stalking cougar still
+     reads as stalking held at the bottom of his crouch, and a sleeping one
+     still reads as asleep with his flank at rest */
+  .sai-sprite[data-state="cgtoledge"] .sai-crit--cougar .sai-crit-head,
+  .sai-sprite[data-state="cgsurvey"] .sai-crit--cougar .sai-crit-head,
+  .sai-sprite[data-state="cgsurvey"] .sai-crit--cougar .sai-crit-body,
+  .sai-sprite[data-state="cgsurvey"] .sai-crit--cougar .sai-crit-tail,
+  .sai-sprite[data-state="cgstalk"] .sai-crit--cougar .sai-crit-body,
+  .sai-sprite[data-state="cgstalk"] .sai-crit--cougar .sai-crit-head,
+  .sai-sprite[data-state="cgstalk"] .sai-crit--cougar .sai-crit-tail,
+  .sai-sprite[data-state="cgfix"] .sai-crit--cougar .sai-crit-body,
+  .sai-sprite[data-state="cgfix"] .sai-crit--cougar .sai-crit-tail,
+  .sai-sprite[data-state="cgeat"] .sai-crit--cougar .sai-crit-head,
+  .sai-sprite[data-state="cgeat"] .sai-crit--cougar .sai-crit-body,
+  .sai-sprite[data-state="cgeat"] .sai-crit--cougar .sai-crit-tail,
+  .sai-sprite[data-state="cgmiss"] .sai-crit--cougar .sai-crit-head,
+  .sai-sprite[data-state="cgmiss"] .sai-crit--cougar .sai-crit-leg-fl,
+  .sai-sprite[data-state="cgmiss"] .sai-crit--cougar .sai-crit-tail,
+  .sai-sprite[data-carry="kill"] .sai-crit--cougar .sai-crit-head,
+  .sai-sprite[data-carry="kill"] .sai-crit--cougar .sai-crit-cgcarrypose,
+  .sai-sprite[data-state="cgscrape"] .sai-crit--cougar .cgs-hindnear,
+  .sai-sprite[data-state="cgscrape"] .sai-crit--cougar .cgs-hindfar,
+  .sai-sprite[data-state="cgscrape"] .sai-crit--cougar .cgs-body,
+  .sai-sprite[data-state="cgscrape"] .sai-crit--cougar .cgs-litter,
+  .sai-sprite[data-state="cgscrapesniff"] .sai-crit--cougar .cgs-head,
+  .sai-sprite[data-state="cgsettle"] .sai-crit--cougar .sai-crit-cgsleeppose,
+  .sai-sprite[data-state="cgsleep"] .sai-crit--cougar .cgsl-flank,
+  .sai-sprite[data-state="cgsleep"] .sai-crit--cougar .cgsl-tail,
+  .sai-sprite[data-state="cgstir"] .sai-crit--cougar .cgsl-head,
+  .sai-sprite[data-state="cgstir"] .sai-crit--cougar .cgsl-ear,
+  .sai-sprite[data-state="cgstir"] .sai-crit--cougar .cgsl-flank{ animation:none; }
+  .sai-sprite[data-state="cgstalk"] .sai-crit--cougar .sai-crit-body{
+    transform:translateY(6.8px) scaleY(.78) scaleX(1.07); }
+  .sai-sprite[data-state="cgstalk"] .sai-crit--cougar .sai-crit-head{
+    transform:rotate(14deg) translate(4.4px,12.4px); }
+  .sai-sprite[data-state="cgfix"] .sai-crit--cougar .sai-crit-body{
+    transform:translate(-2.6px,5.4px) scaleY(.82) scaleX(1.05) rotate(-2.6deg); }
+  .sai-sprite[data-state="cgeat"] .sai-crit--cougar .sai-crit-head{
+    transform:rotate(33deg) translate(1.6px,19.4px); }
+  .sai-sprite[data-state="cgmiss"] .sai-crit--cougar .sai-crit-head{
+    transform:rotate(-14deg) translate(1px,-2.6px); }
+  .sai-sprite[data-carry="kill"] .sai-crit--cougar .sai-crit-head{
+    transform:rotate(19deg) translate(1.6px,10.4px); }
+  .sai-sprite[data-state="cgstir"] .sai-crit--cougar .cgsl-head{
+    transform:rotate(-11deg) translate(-1.4px,-4.6px); }
+  /* the pounce keeps its arc, for the reason the fox's does: it is a
+     one-shot and not a loop, and a cat frozen in mid-air is worse than a
+     cat allowed to land */
+}
+
+/* ==================== v0.44 THE WOLF ====================
+   Seventeen states: three on drawn postures the four-legged rig cannot
+   reach — a muzzle at the sky, a hind leg off the ground, an animal curled
+   into a ball — and fourteen on the ordinary rig held differently.
+
+   EVERY SELECTOR NAMES BOTH THE STATE AND .sai-crit--wolf, for the reason
+   the cougar's block above says: state names are global in this file. The
+   four `display:none` defaults are the exception and cannot name a state.
+
+   Keyframe prefix sai-wolf-. Three verbs were taken by the walk and the
+   carry — carry, carrytail, level — and nothing below reuses one.        */
+
+.sai-crit--wolf .sai-crit-wfhowlpose,
+.sai-crit--wolf .sai-crit-wfrings,
+.sai-crit--wolf .sai-crit-wfmarkpose,
+.sai-crit--wolf .sai-crit-wfbedpose{ display:none; }
+
+/* ---- wfhowl. The pose does the work; what is animated is the throat, a
+   slow lift through the phrase, and the three rings leaving the muzzle at
+   a stagger. WF_HOWL is 3400ms and every cycle here divides into it, so a
+   phrase always ends on a closed throat rather than halfway through a
+   sound that has already finished — the bear's STRIP_BRANCH discipline ---- */
+.sai-sprite[data-state="wfhowl"] .sai-crit--wolf .sai-crit-wfhowlpose,
+.sai-sprite[data-state="wfhowl"] .sai-crit--wolf .sai-crit-wfrings{ display:inline; }
+.sai-sprite[data-state="wfhowl"] .sai-crit--wolf .sai-crit-body,
+.sai-sprite[data-state="wfhowl"] .sai-crit--wolf .sai-crit-head,
+.sai-sprite[data-state="wfhowl"] .sai-crit--wolf .sai-crit-tail,
+.sai-sprite[data-state="wfhowl"] .sai-crit--wolf .sai-crit-leg{ display:none; }
+.sai-crit--wolf .wfh-body, .sai-crit--wolf .wfh-neck,
+.sai-crit--wolf .wfh-throat, .sai-crit--wolf .wfh-head,
+.sai-crit--wolf .wfm-body, .sai-crit--wolf .wfm-head,
+.sai-crit--wolf .wfm-leg, .sai-crit--wolf .wfm-wet,
+.sai-crit--wolf .wfb-flank, .sai-crit--wolf .wfb-head,
+.sai-crit--wolf .wfb-ear, .sai-crit--wolf .wfb-tail{ transform-box:fill-box; }
+
+.sai-sprite[data-state="wfhowl"] .sai-crit--wolf .wfh-neck{
+  transform-origin:30% 96%; animation:sai-wolf-howlneck 1.7s ease-in-out infinite; }
+@keyframes sai-wolf-howlneck{
+  0%,100%{ transform:rotate(3deg) translateY(1.4px); }
+  40%    { transform:rotate(-3.4deg) translateY(-2.4px); }
+  75%    { transform:rotate(-2deg) translateY(-1.4px); } }
+/* the throat: this is the SOUND, and it is the only fast thing in the pose */
+.sai-sprite[data-state="wfhowl"] .sai-crit--wolf .wfh-throat{
+  transform-origin:50% 90%; animation:sai-wolf-howlthroat .34s ease-in-out infinite; }
+@keyframes sai-wolf-howlthroat{
+  0%,100%{ transform:scaleX(1); } 50%{ transform:scaleX(1.14) translateX(-.6px); } }
+.sai-sprite[data-state="wfhowl"] .sai-crit--wolf .wfh-body{
+  transform-origin:50% 100%; animation:sai-wolf-howlheave 1.7s ease-in-out infinite; }
+@keyframes sai-wolf-howlheave{
+  0%,100%{ transform:scaleY(1) translateY(0); }
+  40%    { transform:scaleY(1.03) translateY(-1px); } }
+/* three rings, staggered, travelling further than the fox's wail does:
+   there is no audio and no propagation model, so the DRAWING is the range */
+.sai-crit--wolf .wfring{ opacity:0; }
+.sai-sprite[data-state="wfhowl"] .sai-crit--wolf .wfring{
+  transform-box:fill-box; transform-origin:0% 50%;
+  animation:sai-wolf-howlring 1.7s ease-out infinite; }
+.sai-sprite[data-state="wfhowl"] .sai-crit--wolf .wfring-b{ animation-delay:.24s; }
+.sai-sprite[data-state="wfhowl"] .sai-crit--wolf .wfring-c{ animation-delay:.48s; }
+@keyframes sai-wolf-howlring{
+  0%  { opacity:0; transform:scale(.6) translateX(-6px); }
+  22% { opacity:.95; transform:scale(1) translateX(0); }
+  70% { opacity:.5; transform:scale(1.22) translateX(9px); }
+  100%{ opacity:0; transform:scale(1.4) translateX(18px); } }
+
+/* ---- wflisten: head level, ears forward, absolutely still. It is the
+   pause that makes a call read as a conversation and not as a tic ---- */
+.sai-sprite[data-state="wflisten"] .sai-crit--wolf .sai-crit-head{
+  transform-box:fill-box; transform-origin:18% 88%;
+  animation:none; transform:rotate(-6deg) translateY(-1.6px); }
+.sai-sprite[data-state="wflisten"] .sai-crit--wolf .sai-crit-ear{
+  animation:sai-wolf-prick 2.8s ease-in-out infinite !important; }
+@keyframes sai-wolf-prick{
+  0%,100%{ transform:rotate(-4deg) scaleY(1.08); }
+  50%    { transform:rotate(2deg) scaleY(1.1); } }
+.sai-sprite[data-state="wflisten"] .sai-crit--wolf .sai-crit-leg{
+  animation:none !important; }
+
+/* ---- wftomark: walking with the nose down. He is reading the ground on
+   the way, which is what makes the junction he stops at read as chosen ---- */
+.sai-sprite[data-state="wftomark"] .sai-crit--wolf .sai-crit-head{
+  transform-box:fill-box; transform-origin:18% 88%;
+  animation:sai-wolf-nosedown 1.6s ease-in-out infinite; }
+@keyframes sai-wolf-nosedown{
+  0%,100%{ transform:rotate(15deg) translate(1.6px,8.4px); }
+  50%    { transform:rotate(18deg) translate(2.4px,10px); } }
+
+/* ---- wfsniffpost: nose at the ground, working half a step round it ---- */
+.sai-sprite[data-state="wfsniffpost"] .sai-crit--wolf .sai-crit-head{
+  transform-box:fill-box; transform-origin:18% 88%;
+  animation:sai-wolf-workit .62s ease-in-out infinite; }
+@keyframes sai-wolf-workit{
+  0%,100%{ transform:rotate(20deg) translate(1px,11.4px); }
+  50%    { transform:rotate(24deg) translate(2.4px,13px); } }
+.sai-sprite[data-state="wfsniffpost"] .sai-crit--wolf .sai-crit-body{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-wolf-halfstep 2.6s ease-in-out infinite; }
+@keyframes sai-wolf-halfstep{
+  0%,100%{ transform:translateX(-1.6px) scaleX(1); }
+  50%    { transform:translateX(2px) scaleX(.97); } }
+
+/* ---- wfmark: the whole animal balanced on three legs ---- */
+.sai-sprite[data-state="wfmark"] .sai-crit--wolf .sai-crit-wfmarkpose{ display:inline; }
+.sai-sprite[data-state="wfmark"] .sai-crit--wolf .sai-crit-body,
+.sai-sprite[data-state="wfmark"] .sai-crit--wolf .sai-crit-head,
+.sai-sprite[data-state="wfmark"] .sai-crit--wolf .sai-crit-tail,
+.sai-sprite[data-state="wfmark"] .sai-crit--wolf .sai-crit-leg{ display:none; }
+/* the leg goes up once and STAYS up: he does not pump it */
+.sai-sprite[data-state="wfmark"] .sai-crit--wolf .wfm-leg{
+  transform-origin:92% 60%; animation:sai-wolf-cock .5s cubic-bezier(.3,.8,.4,1) forwards; }
+@keyframes sai-wolf-cock{
+  0%  { transform:rotate(46deg) translate(4px,16px); }
+  70% { transform:rotate(-6deg) translate(-1px,-2px); }
+  100%{ transform:rotate(0deg) translate(0,0); } }
+/* ...and the balance costs him something: a small correction on the body */
+.sai-sprite[data-state="wfmark"] .sai-crit--wolf .wfm-body{
+  transform-origin:70% 100%; animation:sai-wolf-balance 1.9s ease-in-out infinite; }
+@keyframes sai-wolf-balance{
+  0%,100%{ transform:rotate(-1.4deg) translateX(1px); }
+  50%    { transform:rotate(1.2deg) translateX(-1px); } }
+.sai-sprite[data-state="wfmark"] .sai-crit--wolf .wfm-wet{
+  transform-origin:50% 90%; animation:sai-wolf-wet 2.2s ease-out forwards; }
+@keyframes sai-wolf-wet{
+  0%  { opacity:0; transform:scale(.3); }
+  45% { opacity:1; transform:scale(.9); }
+  100%{ opacity:1; transform:scale(1); } }
+
+/* ---- wfscratch: alternating hind paws, kicked back over the mark. The
+   ordinary rig carries this one — the two hind legs are already drawn and
+   what a scratch is, is those two out of phase and going fast ---- */
+.sai-sprite[data-state="wfscratch"] .sai-crit--wolf .sai-crit-leg-bl{
+  transform-box:fill-box; transform-origin:50% 6%;
+  animation:sai-wolf-scratchnear .38s cubic-bezier(.3,0,.4,1) infinite; }
+.sai-sprite[data-state="wfscratch"] .sai-crit--wolf .sai-crit-leg-br{
+  transform-box:fill-box; transform-origin:50% 6%;
+  animation:sai-wolf-scratchfar .38s cubic-bezier(.3,0,.4,1) infinite; }
+@keyframes sai-wolf-scratchnear{
+  0%,100%{ transform:rotate(-30deg) translateY(-1.6px); }
+  45%    { transform:rotate(22deg) translateY(.6px); } }
+@keyframes sai-wolf-scratchfar{
+  0%,100%{ transform:rotate(20deg) translateY(.4px); }
+  45%    { transform:rotate(-28deg) translateY(-1.4px); } }
+.sai-sprite[data-state="wfscratch"] .sai-crit--wolf .sai-crit-body{
+  transform-box:fill-box; transform-origin:70% 100%;
+  animation:sai-wolf-scratchrock .76s ease-in-out infinite; }
+@keyframes sai-wolf-scratchrock{
+  0%,100%{ transform:rotate(1.6deg) translateY(.6px); }
+  50%    { transform:rotate(-1.4deg) translateY(0); } }
+
+/* ---- wfstalk: feline-like, and it has to LOOK borrowed. Lower than his
+   walk, level head, legs at half tempo — the cougar's creep on a longer
+   animal ---- */
+.sai-sprite[data-state="wfstalk"] .sai-crit--wolf .sai-crit-body{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-wolf-slink 1.8s ease-in-out infinite; }
+@keyframes sai-wolf-slink{
+  0%,100%{ transform:translateY(5.4px) scaleY(.83) scaleX(1.05) rotate(-.8deg); }
+  50%    { transform:translateY(6.2px) scaleY(.81) scaleX(1.06) rotate(.7deg); } }
+.sai-sprite[data-state="wfstalk"] .sai-crit--wolf .sai-crit-head{
+  transform-box:fill-box; transform-origin:18% 88%;
+  animation:sai-wolf-fixhead 1.8s ease-in-out infinite; }
+@keyframes sai-wolf-fixhead{
+  0%,100%{ transform:rotate(12deg) translate(3.4px,10.4px); }
+  50%    { transform:rotate(12.4deg) translate(3.6px,10.8px); } }
+.sai-sprite[data-state="wfstalk"] .sai-crit--wolf .sai-crit-tail{
+  transform-box:fill-box; transform-origin:92% 34%;
+  animation:sai-wolf-lowtail 3.6s ease-in-out infinite; }
+@keyframes sai-wolf-lowtail{
+  0%,100%{ transform:rotate(10deg) translateY(4px); }
+  50%    { transform:rotate(7deg) translateY(5px); } }
+.sai-sprite[data-state="wfstalk"] .sai-crit--wolf .sai-crit-leg{
+  animation-duration:1.8s !important; }
+
+/* ---- wfcrouch: flattened, forequarters down, hindquarters up. The gather,
+   and the one beat where a wolf looks like a cat ---- */
+.sai-sprite[data-state="wfcrouch"] .sai-crit--wolf .sai-crit-body{
+  transform-box:fill-box; transform-origin:76% 100%;
+  animation:sai-wolf-coil 2s ease-in-out infinite; }
+@keyframes sai-wolf-coil{
+  0%,100%{ transform:translateY(7px) scaleY(.74) scaleX(1.07) rotate(-3.6deg); }
+  50%    { transform:translateY(7.6px) scaleY(.73) scaleX(1.07) rotate(-4deg); } }
+.sai-sprite[data-state="wfcrouch"] .sai-crit--wolf .sai-crit-head{
+  transform-box:fill-box; transform-origin:18% 88%;
+  animation:none; transform:rotate(8deg) translate(2.4px,9.4px); }
+.sai-sprite[data-state="wfcrouch"] .sai-crit--wolf .sai-crit-tail{
+  transform-box:fill-box; transform-origin:92% 34%;
+  animation:sai-wolf-tipwait .9s cubic-bezier(.5,0,.5,1) infinite; }
+@keyframes sai-wolf-tipwait{
+  0%,100%{ transform:rotate(-6deg) translateY(-2px); }
+  50%    { transform:rotate(2deg) translateY(0); } }
+.sai-sprite[data-state="wfcrouch"] .sai-crit--wolf .sai-crit-leg{
+  animation:none !important; }
+
+/* ---- wfrush. ONE LONG EXTENSION, and it is a RUN and not a leap: the
+   cougar's arc goes up, this one goes FORWARD and stays down. `forwards`
+   holds the extended frame, because a 300px dash at his pace outlasts any
+   curve worth drawing and a repeating bound would read as a dog on a
+   treadmill ---- */
+.sai-sprite[data-state="wfrush"] .sai-crit--wolf .sai-crit-body{
+  transform-box:fill-box; transform-origin:60% 96%;
+  animation:sai-wolf-extend .5s cubic-bezier(.2,.6,.3,1) forwards; }
+@keyframes sai-wolf-extend{
+  0%  { transform:translate(-4px,6px) scaleX(1.04) scaleY(.8) rotate(-4deg); }
+  35% { transform:translate(4px,-1px) scaleX(1.13) scaleY(.92) rotate(2deg); }
+  100%{ transform:translate(8px,1px) scaleX(1.16) scaleY(.9) rotate(1deg); } }
+.sai-sprite[data-state="wfrush"] .sai-crit--wolf .sai-crit-head{
+  transform-box:fill-box; transform-origin:18% 88%;
+  animation:sai-wolf-reachout .5s cubic-bezier(.2,.6,.3,1) forwards; }
+@keyframes sai-wolf-reachout{
+  0%  { transform:rotate(8deg) translate(2px,8px); }
+  100%{ transform:rotate(2deg) translate(7px,5.4px); } }
+.sai-sprite[data-state="wfrush"] .sai-crit--wolf .sai-crit-tail{
+  transform-box:fill-box; transform-origin:92% 34%;
+  animation:sai-wolf-streamtail .5s cubic-bezier(.2,.6,.3,1) forwards; }
+@keyframes sai-wolf-streamtail{
+  0%  { transform:rotate(4deg); }
+  100%{ transform:rotate(-14deg) translateY(-3px); } }
+.sai-sprite[data-state="wfrush"] .sai-crit--wolf .sai-crit-leg{
+  animation-duration:.26s !important; }
+
+/* ---- wfeat: standing OVER it, head down, tugging. A wolf pulls upward at
+   what he is eating where a cat worries at it, and that is the difference
+   between this and cgeat ---- */
+.sai-sprite[data-state="wfeat"] .sai-crit--wolf .sai-crit-head{
+  transform-box:fill-box; transform-origin:18% 88%;
+  animation:sai-wolf-tug 1.1s cubic-bezier(.4,0,.4,1) infinite; }
+@keyframes sai-wolf-tug{
+  0%,100%{ transform:rotate(28deg) translate(1.4px,16px); }
+  30%    { transform:rotate(30deg) translate(2px,17.4px); }
+  55%    { transform:rotate(9deg) translate(-1.6px,9px); } }
+.sai-sprite[data-state="wfeat"] .sai-crit--wolf .sai-crit-body{
+  transform-box:fill-box; transform-origin:40% 100%;
+  animation:sai-wolf-haulback 1.1s cubic-bezier(.4,0,.4,1) infinite; }
+@keyframes sai-wolf-haulback{
+  0%,100%{ transform:translate(1px,2.4px) rotate(1.6deg); }
+  55%    { transform:translate(-2.4px,1.4px) rotate(-1.4deg); } }
+
+/* ---- wfmiss: a skidding stop and the head swinging. He does not stand
+   there looking foolish the way the cat does; he is already turning ---- */
+.sai-sprite[data-state="wfmiss"] .sai-crit--wolf .sai-crit-body{
+  transform-box:fill-box; transform-origin:70% 100%;
+  animation:sai-wolf-skid .9s cubic-bezier(.15,.8,.3,1) infinite; }
+@keyframes sai-wolf-skid{
+  0%  { transform:translate(5px,2px) rotate(-6deg) scaleX(1.08); }
+  40% { transform:translate(-2px,3.4px) rotate(4deg) scaleX(.98); }
+  100%{ transform:translate(0,2px) rotate(0deg) scaleX(1); } }
+.sai-sprite[data-state="wfmiss"] .sai-crit--wolf .sai-crit-head{
+  transform-box:fill-box; transform-origin:18% 88%;
+  animation:sai-wolf-swing .9s ease-in-out infinite; }
+@keyframes sai-wolf-swing{
+  0%,100%{ transform:rotate(-12deg) translate(.6px,-1.6px); }
+  45%    { transform:rotate(6deg) translate(-1.4px,2.4px); } }
+
+/* ---- wftoremains: walking, head low, stopping and starting. The stop is
+   the point: he is not sure the cougar has gone, and a scavenger who
+   crosses the map at a steady trot is a scavenger with nothing to fear ---- */
+.sai-sprite[data-state="wftoremains"] .sai-crit--wolf .sai-crit-head{
+  transform-box:fill-box; transform-origin:18% 88%;
+  animation:sai-wolf-checkit 2.9s ease-in-out infinite; }
+@keyframes sai-wolf-checkit{
+  0%,52%,100%{ transform:rotate(14deg) translate(1.6px,8px); }
+  66%        { transform:rotate(-9deg) translate(-.6px,-2px); }
+  82%        { transform:rotate(-7deg) translate(-.4px,-1.4px); } }
+.sai-sprite[data-state="wftoremains"] .sai-crit--wolf .sai-crit-leg{
+  animation-duration:.44s !important; }
+
+/* ---- wfwary: stopped short of it, head up, one forepaw off the ground.
+   Two and a half seconds of doing nothing, which is the whole beat ---- */
+.sai-sprite[data-state="wfwary"] .sai-crit--wolf .sai-crit-head{
+  transform-box:fill-box; transform-origin:18% 88%;
+  animation:sai-wolf-waryhead 3.2s ease-in-out infinite; }
+@keyframes sai-wolf-waryhead{
+  0%,100%{ transform:rotate(-11deg) translate(.4px,-2.4px); }
+  46%    { transform:rotate(-14deg) translate(1.4px,-3.4px); } }
+.sai-sprite[data-state="wfwary"] .sai-crit--wolf .sai-crit-leg-fl{
+  transform-box:fill-box; transform-origin:50% 4%;
+  animation:sai-wolf-warypaw 3.2s ease-in-out infinite; }
+@keyframes sai-wolf-warypaw{
+  0%,100%{ transform:rotate(-20deg) translateY(-2px); }
+  46%    { transform:rotate(-26deg) translateY(-2.8px); } }
+.sai-sprite[data-state="wfwary"] .sai-crit--wolf .sai-crit-leg-fr,
+.sai-sprite[data-state="wfwary"] .sai-crit--wolf .sai-crit-leg-bl,
+.sai-sprite[data-state="wfwary"] .sai-crit--wolf .sai-crit-leg-br{
+  animation:none !important; }
+
+/* ---- wfgnaw: head down, sideways jaw work, one forepaw ON the carcass.
+   Sideways is the tell — a wolf strips a carcass across the grain ---- */
+.sai-sprite[data-state="wfgnaw"] .sai-crit--wolf .sai-crit-head{
+  transform-box:fill-box; transform-origin:18% 88%;
+  animation:sai-wolf-gnaw .46s ease-in-out infinite; }
+@keyframes sai-wolf-gnaw{
+  0%,100%{ transform:rotate(30deg) translate(1.6px,16.4px) scaleX(1); }
+  50%    { transform:rotate(27deg) translate(.4px,15.6px) scaleX(.95); } }
+.sai-sprite[data-state="wfgnaw"] .sai-crit--wolf .sai-crit-leg-fl{
+  transform-box:fill-box; transform-origin:50% 4%;
+  animation:none; transform:rotate(-15deg) translateY(-1.4px); }
+.sai-sprite[data-state="wfgnaw"] .sai-crit--wolf .sai-crit-body{
+  transform-box:fill-box; transform-origin:40% 100%;
+  animation:sai-wolf-gnawbody 1.4s ease-in-out infinite; }
+@keyframes sai-wolf-gnawbody{
+  0%,100%{ transform:translateY(2.6px) scaleY(.93) rotate(1.4deg); }
+  50%    { transform:translateY(3.4px) scaleY(.91) rotate(2.4deg); } }
+
+/* ---- wftobed / wfcircle. He turns on the spot, twice, and the sim gives
+   him no displacement to do it with — so the turn is drawn: the body
+   squeezes edge-on and the head and brush trade ends through the pinch,
+   which is what a four-legged animal circling its bed looks like from the
+   side. 1.1s a turn, two turns in the bout ---- */
+.sai-sprite[data-state="wfcircle"] .sai-crit--wolf .sai-crit-body{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-wolf-spin 1.1s ease-in-out infinite; }
+@keyframes sai-wolf-spin{
+  0%,100%{ transform:scaleX(1); }
+  50%    { transform:scaleX(.42) translateX(2px); } }
+.sai-sprite[data-state="wfcircle"] .sai-crit--wolf .sai-crit-head{
+  transform-box:fill-box; transform-origin:18% 88%;
+  animation:sai-wolf-spinhead 1.1s ease-in-out infinite; }
+@keyframes sai-wolf-spinhead{
+  0%,100%{ transform:rotate(10deg) translate(0,4px) scaleX(1); }
+  50%    { transform:rotate(2deg) translate(-22px,5px) scaleX(.5); } }
+.sai-sprite[data-state="wfcircle"] .sai-crit--wolf .sai-crit-tail{
+  transform-box:fill-box; transform-origin:92% 34%;
+  animation:sai-wolf-spintail 1.1s ease-in-out infinite; }
+@keyframes sai-wolf-spintail{
+  0%,100%{ transform:translateX(0) scaleX(1); }
+  50%    { transform:translateX(20px) scaleX(.5); } }
+.sai-sprite[data-state="wfcircle"] .sai-crit--wolf .sai-crit-leg{
+  animation-duration:.4s !important; }
+
+/* ---- wfsleep / wfrouse: curled, nose to the flank ---- */
+.sai-sprite[data-state="wfsleep"] .sai-crit--wolf .sai-crit-wfbedpose,
+.sai-sprite[data-state="wfrouse"] .sai-crit--wolf .sai-crit-wfbedpose{ display:inline; }
+.sai-sprite[data-state="wfsleep"] .sai-crit--wolf .sai-crit-body,
+.sai-sprite[data-state="wfsleep"] .sai-crit--wolf .sai-crit-head,
+.sai-sprite[data-state="wfsleep"] .sai-crit--wolf .sai-crit-tail,
+.sai-sprite[data-state="wfsleep"] .sai-crit--wolf .sai-crit-leg,
+.sai-sprite[data-state="wfrouse"] .sai-crit--wolf .sai-crit-body,
+.sai-sprite[data-state="wfrouse"] .sai-crit--wolf .sai-crit-head,
+.sai-sprite[data-state="wfrouse"] .sai-crit--wolf .sai-crit-tail,
+.sai-sprite[data-state="wfrouse"] .sai-crit--wolf .sai-crit-leg{ display:none; }
+/* four and a half seconds a breath. A deep sleep is a SLOW one, and this
+   is the only thing in the drawing that says he is alive */
+.sai-sprite[data-state="wfsleep"] .sai-crit--wolf .wfb-flank{
+  transform-origin:50% 88%; animation:sai-wolf-bedflank 4.5s ease-in-out infinite; }
+@keyframes sai-wolf-bedflank{
+  0%,100%{ transform:scaleY(1) translateY(0); }
+  48%    { transform:scaleY(1.06) translateY(-1.2px); } }
+.sai-sprite[data-state="wfsleep"] .sai-crit--wolf .wfb-ear{
+  transform-origin:50% 96%; animation:sai-wolf-bedear 6.4s ease-in-out infinite; }
+@keyframes sai-wolf-bedear{
+  0%,88%,100%{ transform:rotate(0deg); }
+  93%        { transform:rotate(-13deg); } }
+/* wfrouse: the head comes up off the flank and the brush lets the paws go */
+.sai-sprite[data-state="wfrouse"] .sai-crit--wolf .wfb-head{
+  transform-origin:78% 84%; animation:sai-wolf-rouse 2.6s ease-in-out infinite; }
+@keyframes sai-wolf-rouse{
+  0%     { transform:rotate(0deg) translate(0,0); }
+  45%    { transform:rotate(-16deg) translate(3.4px,-7.4px); }
+  78%    { transform:rotate(-13deg) translate(2.8px,-6px); }
+  100%   { transform:rotate(-14deg) translate(3px,-6.6px); } }
+.sai-sprite[data-state="wfrouse"] .sai-crit--wolf .wfb-tail{
+  transform-origin:88% 40%; animation:sai-wolf-uncurl 2.6s ease-in-out infinite; }
+@keyframes sai-wolf-uncurl{
+  0%  { transform:rotate(0deg) translateX(0); }
+  100%{ transform:rotate(5deg) translateX(-4px); } }
+.sai-sprite[data-state="wfrouse"] .sai-crit--wolf .wfb-flank{
+  transform-origin:50% 88%; animation:sai-wolf-bedflank 2.6s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce){
+  /* the poses stay, the motion goes. A howling wolf held with his muzzle
+     at the sky is still howling; a curled one is still asleep */
+  .sai-sprite[data-state="wfhowl"] .sai-crit--wolf .wfh-neck,
+  .sai-sprite[data-state="wfhowl"] .sai-crit--wolf .wfh-throat,
+  .sai-sprite[data-state="wfhowl"] .sai-crit--wolf .wfh-body,
+  .sai-sprite[data-state="wfhowl"] .sai-crit--wolf .wfring,
+  .sai-sprite[data-state="wflisten"] .sai-crit--wolf .sai-crit-ear,
+  .sai-sprite[data-state="wftomark"] .sai-crit--wolf .sai-crit-head,
+  .sai-sprite[data-state="wfsniffpost"] .sai-crit--wolf .sai-crit-head,
+  .sai-sprite[data-state="wfsniffpost"] .sai-crit--wolf .sai-crit-body,
+  .sai-sprite[data-state="wfmark"] .sai-crit--wolf .wfm-body,
+  .sai-sprite[data-state="wfscratch"] .sai-crit--wolf .sai-crit-leg-bl,
+  .sai-sprite[data-state="wfscratch"] .sai-crit--wolf .sai-crit-leg-br,
+  .sai-sprite[data-state="wfscratch"] .sai-crit--wolf .sai-crit-body,
+  .sai-sprite[data-state="wfstalk"] .sai-crit--wolf .sai-crit-body,
+  .sai-sprite[data-state="wfstalk"] .sai-crit--wolf .sai-crit-head,
+  .sai-sprite[data-state="wfstalk"] .sai-crit--wolf .sai-crit-tail,
+  .sai-sprite[data-state="wfcrouch"] .sai-crit--wolf .sai-crit-body,
+  .sai-sprite[data-state="wfcrouch"] .sai-crit--wolf .sai-crit-tail,
+  .sai-sprite[data-state="wfeat"] .sai-crit--wolf .sai-crit-head,
+  .sai-sprite[data-state="wfeat"] .sai-crit--wolf .sai-crit-body,
+  .sai-sprite[data-state="wfmiss"] .sai-crit--wolf .sai-crit-body,
+  .sai-sprite[data-state="wfmiss"] .sai-crit--wolf .sai-crit-head,
+  .sai-sprite[data-state="wftoremains"] .sai-crit--wolf .sai-crit-head,
+  .sai-sprite[data-state="wfwary"] .sai-crit--wolf .sai-crit-head,
+  .sai-sprite[data-state="wfwary"] .sai-crit--wolf .sai-crit-leg-fl,
+  .sai-sprite[data-state="wfgnaw"] .sai-crit--wolf .sai-crit-head,
+  .sai-sprite[data-state="wfgnaw"] .sai-crit--wolf .sai-crit-body,
+  .sai-sprite[data-state="wfcircle"] .sai-crit--wolf .sai-crit-body,
+  .sai-sprite[data-state="wfcircle"] .sai-crit--wolf .sai-crit-head,
+  .sai-sprite[data-state="wfcircle"] .sai-crit--wolf .sai-crit-tail,
+  .sai-sprite[data-state="wfsleep"] .sai-crit--wolf .wfb-flank,
+  .sai-sprite[data-state="wfsleep"] .sai-crit--wolf .wfb-ear,
+  .sai-sprite[data-state="wfrouse"] .sai-crit--wolf .wfb-head,
+  .sai-sprite[data-state="wfrouse"] .sai-crit--wolf .wfb-tail,
+  .sai-sprite[data-state="wfrouse"] .sai-crit--wolf .wfb-flank{ animation:none; }
+  /* the three rings would otherwise be invisible: they start at opacity 0
+     and the animation is what brings them in, so they are held ON */
+  .sai-sprite[data-state="wfhowl"] .sai-crit--wolf .wfring{ opacity:.9; }
+  .sai-sprite[data-state="wfstalk"] .sai-crit--wolf .sai-crit-body{
+    transform:translateY(5.8px) scaleY(.82) scaleX(1.05); }
+  .sai-sprite[data-state="wfstalk"] .sai-crit--wolf .sai-crit-head{
+    transform:rotate(12deg) translate(3.4px,10.4px); }
+  .sai-sprite[data-state="wfcrouch"] .sai-crit--wolf .sai-crit-body{
+    transform:translateY(7.2px) scaleY(.74) scaleX(1.07) rotate(-3.8deg); }
+  .sai-sprite[data-state="wfeat"] .sai-crit--wolf .sai-crit-head{
+    transform:rotate(28deg) translate(1.4px,16px); }
+  .sai-sprite[data-state="wfgnaw"] .sai-crit--wolf .sai-crit-head{
+    transform:rotate(30deg) translate(1.6px,16.4px); }
+  .sai-sprite[data-state="wfwary"] .sai-crit--wolf .sai-crit-head{
+    transform:rotate(-11deg) translate(.4px,-2.4px); }
+  .sai-sprite[data-state="wftoremains"] .sai-crit--wolf .sai-crit-head{
+    transform:rotate(14deg) translate(1.6px,8px); }
+  .sai-sprite[data-state="wfrouse"] .sai-crit--wolf .wfb-head{
+    transform:rotate(-14deg) translate(3px,-6.6px); }
+  /* the cocked leg keeps its one-shot for the reason the pounce does: it
+     ends held, and a wolf frozen halfway into lifting a leg is worse than
+     a wolf who has lifted it */
+}
+
+/* ==================== v0.43 THE DIG, THE MOUSE AND THE DEN ====================
+   The skunk's three new appetites and the hedgehog's one, drawn.
+
+   Sixteen skunk states and five hedgehog ones, and only ONE of the twenty-one
+   needed a new drawing: the skunk half underground, which no rig can produce
+   because there is no occluder in this world that paints in FRONT of an
+   animal. Everything else is either the ordinary rig held differently or one
+   of the poses each of them already owns, shown for a new state with its
+   spoil pointed somewhere else — the grub dig is the cone dig with the hole
+   taken out of it and the earth turned into leaf litter, and the hedgehog's
+   grub dig is his root dig with the same substitution.
+
+   Every rule below is scoped by BOTH the state and .sai-crit--skunk or
+   .sai-crit--hedgehog. The two default-hide rules carry the species alone,
+   which is the pattern conepose and rootdig already use: a rule with no
+   state in it can still never reach another animal.                        */
+
+/* ---------------------------------------------------------------------
+   THE SKUNK
+   --------------------------------------------------------------------- */
+
+.sai-crit--skunk .sai-crit-skdenpose{ display:none; }
+
+/* ---- THE TWO NOSE-DOWN WALKS (sktohunt, sktodig).
+   He hunts and he digs by NOSE, so both walks put the snuffhead on — the
+   same swap floorsnuff and coneshift make, and for the same reason: a skunk
+   who located food with his eyes would be a different animal. The difference
+   between them is the tail. Going at a mouse he carries it low and level and
+   trailing; going at a log he carries it in the ordinary trot, because
+   nothing in the timber is listening.                                   ---- */
+.sai-sprite[data-state="sktohunt"] .sai-crit--skunk .sai-crit-snuffhead,
+.sai-sprite[data-state="sktodig"] .sai-crit--skunk .sai-crit-snuffhead{ display:inline; }
+.sai-sprite[data-state="sktohunt"] .sai-crit--skunk .sai-crit-head,
+.sai-sprite[data-state="sktodig"] .sai-crit--skunk .sai-crit-head{ display:none; }
+.sai-sprite[data-state="sktohunt"] .sai-crit--skunk .snuff-nose,
+.sai-sprite[data-state="sktodig"] .sai-crit--skunk .snuff-nose{
+  transform-box:fill-box; transform-origin:50% 50%;
+  animation:sai-sk-huntnose .26s ease-in-out infinite; }
+@keyframes sai-sk-huntnose{
+  0%,100%{transform:translate(0,0);} 50%{transform:translate(.8px,-1.1px);} }
+/* the plume flat out behind him and barely moving: the one thing that reads
+   as a skunk with an intention rather than a skunk on his rounds */
+.sai-sprite[data-state="sktohunt"] .sai-crit--skunk .sai-crit-tail{
+  transform-box:fill-box; transform-origin:96% 46%;
+  animation:sai-sk-huntbob 1.6s ease-in-out infinite; }
+@keyframes sai-sk-huntbob{
+  0%,100%{transform:rotate(-13deg) translateY(4px);}
+  50%    {transform:rotate(-10deg) translateY(5px);} }
+/* half the walk's throw on the legs, both walks: he is not going anywhere
+   in a hurry and a skunk at a trot with his nose down reads as a rat */
+.sai-sprite[data-state="sktohunt"] .sai-crit--skunk .sai-crit-leg,
+.sai-sprite[data-state="sktodig"] .sai-crit--skunk .sai-crit-leg{
+  animation-duration:.78s !important; }
+
+/* ---- THE TWO WALKS HOME (sktoden, sktopile). Nothing is being hunted and
+   nothing is being found: he is going to bed. The whole pose is the plume
+   dropped out of its usual high carry and the legs at the same unhurried
+   tempo the cone dig walks at.                                          ---- */
+.sai-sprite[data-state="sktoden"] .sai-crit--skunk .sai-crit-tail,
+.sai-sprite[data-state="sktopile"] .sai-crit--skunk .sai-crit-tail{
+  transform-box:fill-box; transform-origin:96% 46%;
+  animation:sai-sk-huntbob 2.2s ease-in-out infinite; }
+.sai-sprite[data-state="sktoden"] .sai-crit--skunk .sai-crit-leg,
+.sai-sprite[data-state="sktopile"] .sai-crit--skunk .sai-crit-leg{
+  animation-duration:.72s !important; }
+
+/* ---- THE CAST (skcast): the gather at the head of a dig, and the longest
+   beat either digger has — 1.6 to 2.6 seconds of a skunk quartering the
+   timber with his nose. It is a WIDE slow sweep, deliberately much wider
+   and slower than floorsnuff's .78s quarter, because that one is working a
+   ring of fallen fruit he can already smell and this one is looking for
+   something that is under the wood.                                     ---- */
+.sai-sprite[data-state="skcast"] .sai-crit--skunk .sai-crit-snuffhead{ display:inline; }
+.sai-sprite[data-state="skcast"] .sai-crit--skunk .sai-crit-head{ display:none; }
+.sai-sprite[data-state="skcast"] .sai-crit--skunk .snuff-swing{
+  transform-box:fill-box; transform-origin:16% 8%;
+  animation:sai-sk-castnose 1.35s ease-in-out infinite; }
+@keyframes sai-sk-castnose{
+  0%,100%{transform:rotate(-11deg) translate(-2.4px,1.4px);}
+  50%    {transform:rotate(10deg) translate(2.6px,2.8px);} }
+.sai-sprite[data-state="skcast"] .sai-crit--skunk .snuff-nose{
+  transform-box:fill-box; transform-origin:50% 50%;
+  animation:sai-sk-huntnose .22s ease-in-out infinite; }
+/* shoulders down under the sweep, on a slower clock than the head so the
+   two never land together — a body in time with a nose reads as a bobble */
+.sai-sprite[data-state="skcast"] .sai-crit--skunk .sai-crit-body{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-sk-castbody 2.7s ease-in-out infinite; }
+@keyframes sai-sk-castbody{
+  0%,100%{transform:translateY(2.4px) scaleY(.94);}
+  50%    {transform:translateY(3.2px) scaleY(.92);} }
+.sai-sprite[data-state="skcast"] .sai-crit--skunk .sai-crit-tail{
+  transform-box:fill-box; transform-origin:96% 46%;
+  animation:sai-sk-tailup 2.7s ease-in-out infinite; }
+@keyframes sai-sk-tailup{
+  0%,100%{transform:rotate(9deg) translateY(-2px);}
+  50%    {transform:rotate(14deg) translateY(-3.4px);} }
+
+/* ---- THE GRUB DIG (skgrub): the cone dig's drawing with the hole taken
+   out of it. He is sat back on his hocks with both forepaws in the timber,
+   which is the pose he already owns; what changes is that there is no pit
+   at the end of this one — world.pits belongs to his OTHER dig, out on open
+   ground, and openSpot refuses forage sites outright because a cone dug
+   into a log is painted over by the log. So .cone-pit is hidden here and
+   the six clods are recoloured off leaf litter rather than off soil, and
+   thrown faster and flatter: he is tearing rotten wood apart, not sinking
+   a shaft.                                                              ---- */
+.sai-sprite[data-state="skgrub"] .sai-crit--skunk .sai-crit-conepose,
+.sai-sprite[data-state="skgrubeat"] .sai-crit--skunk .sai-crit-conepose,
+.sai-sprite[data-state="skdigden"] .sai-crit--skunk .sai-crit-conepose{ display:inline; }
+.sai-sprite[data-state="skgrub"] .sai-crit--skunk .sai-crit-body,
+.sai-sprite[data-state="skgrub"] .sai-crit--skunk .sai-crit-head,
+.sai-sprite[data-state="skgrub"] .sai-crit--skunk .sai-crit-snuffhead,
+.sai-sprite[data-state="skgrub"] .sai-crit--skunk .sai-crit-tail,
+.sai-sprite[data-state="skgrub"] .sai-crit--skunk .sai-crit-leg,
+.sai-sprite[data-state="skgrubeat"] .sai-crit--skunk .sai-crit-body,
+.sai-sprite[data-state="skgrubeat"] .sai-crit--skunk .sai-crit-head,
+.sai-sprite[data-state="skgrubeat"] .sai-crit--skunk .sai-crit-snuffhead,
+.sai-sprite[data-state="skgrubeat"] .sai-crit--skunk .sai-crit-tail,
+.sai-sprite[data-state="skgrubeat"] .sai-crit--skunk .sai-crit-leg,
+.sai-sprite[data-state="skdigden"] .sai-crit--skunk .sai-crit-body,
+.sai-sprite[data-state="skdigden"] .sai-crit--skunk .sai-crit-head,
+.sai-sprite[data-state="skdigden"] .sai-crit--skunk .sai-crit-snuffhead,
+.sai-sprite[data-state="skdigden"] .sai-crit--skunk .sai-crit-tail,
+.sai-sprite[data-state="skdigden"] .sai-crit--skunk .sai-crit-leg{ display:none; }
+/* NO HOLE IN THE TIMBER. This is the whole difference between the two digs
+   and it is one line. */
+.sai-sprite[data-state="skgrub"] .sai-crit--skunk .cone-pit,
+.sai-sprite[data-state="skgrubeat"] .sai-crit--skunk .cone-pit{ display:none; }
+.sai-sprite[data-state="skgrub"] .sai-crit--skunk .sai-crit-conepose{
+  transform-box:fill-box; transform-origin:26% 96%;
+  animation:sai-sk-timber .3s ease-in-out infinite; }
+@keyframes sai-sk-timber{
+  0%,100%{transform:translate(0,0) rotate(0);}
+  50%    {transform:translate(1.6px,.6px) rotate(1.2deg);} }
+.sai-sprite[data-state="skgrub"] .sai-crit--skunk .cone-arm-n{
+  transform-box:fill-box; transform-origin:50% 6%;
+  animation:sai-sk-timberfly .3s cubic-bezier(.35,0,.25,1) infinite; }
+.sai-sprite[data-state="skgrub"] .sai-crit--skunk .cone-arm-f{
+  transform-box:fill-box; transform-origin:50% 6%;
+  animation:sai-sk-timberfly .3s cubic-bezier(.35,0,.25,1) infinite .15s; }
+@keyframes sai-sk-timberfly{
+  0%,100%{transform:translate(2.6px,-2.4px) rotate(-15deg);}
+  46%    {transform:translate(-2.4px,1.6px) rotate(13deg);} }
+/* the head at half the paws' tempo: the paws clear, the head goes in after
+   what the clearing turns up. The same mismatch the hedgehog's dig uses */
+.sai-sprite[data-state="skgrub"] .sai-crit--skunk .cone-head{
+  transform-box:fill-box; transform-origin:14% 22%;
+  animation:sai-sk-grubup .6s ease-in-out infinite; }
+@keyframes sai-sk-grubup{
+  0%,100%{transform:rotate(0) translate(0,0);}
+  50%    {transform:rotate(5deg) translate(1.6px,1.8px);} }
+.sai-sprite[data-state="skgrub"] .sai-crit--skunk .cone-spray{ opacity:1; }
+.sai-sprite[data-state="skgrub"] .sai-crit--skunk .cone-spray ellipse{
+  transform-box:fill-box; transform-origin:50% 100%;
+  fill:#6d5030;
+  animation:sai-sk-timberfly-out .3s ease-out infinite; }
+.sai-sprite[data-state="skgrub"] .sai-crit--skunk .cone-spray ellipse:nth-child(2){ animation-delay:.06s; fill:#7d5f38; }
+.sai-sprite[data-state="skgrub"] .sai-crit--skunk .cone-spray ellipse:nth-child(3){ animation-delay:.11s; fill:#5d4327; }
+.sai-sprite[data-state="skgrub"] .sai-crit--skunk .cone-spray ellipse:nth-child(4){ animation-delay:.03s; fill:#7d5f38; }
+.sai-sprite[data-state="skgrub"] .sai-crit--skunk .cone-spray ellipse:nth-child(5){ animation-delay:.09s; fill:#6d5030; }
+.sai-sprite[data-state="skgrub"] .sai-crit--skunk .cone-spray ellipse:nth-child(6){ animation-delay:.16s; fill:#5d4327; }
+/* flatter and further than soil: bark and rotten wood are light and they
+   go sideways, where a clod of earth goes up and drops */
+@keyframes sai-sk-timberfly-out{
+  0%,20%{opacity:0; transform:translate(0,0) scale(.4) rotate(0);}
+  38%   {opacity:.95; transform:translate(-6px,-2.6px) scale(1) rotate(-20deg);}
+  100%  {opacity:0; transform:translate(-15px,.6px) scale(.8) rotate(-52deg);} }
+.sai-sprite[data-state="skgrub"] .sai-crit--skunk .cone-tail{
+  transform-box:fill-box; transform-origin:88% 92%;
+  animation:sai-sk-tailup .6s ease-in-out infinite; }
+
+/* ---- WHAT CAME OUT OF IT (skgrubeat): head into the hole, then up and
+   chewing. He stays sat back — getting out of that pose is slow and heavy
+   and the whole bout is under four seconds — so the performance is the head
+   coming up out of the timber and the jaw working at the top of the arc.  */
+.sai-sprite[data-state="skgrubeat"] .sai-crit--skunk .cone-head{
+  transform-box:fill-box; transform-origin:14% 22%;
+  animation:sai-sk-mousehold 1.5s ease-in-out infinite; }
+@keyframes sai-sk-mousehold{
+  0%    {transform:rotate(7deg) translate(1.4px,3.4px);}
+  24%   {transform:rotate(-9deg) translate(-.6px,-2.6px);}
+  32%,44%,56%,68%{transform:rotate(-7deg) translate(-.4px,-1.8px);}
+  38%,50%,62%{transform:rotate(-11deg) translate(-.8px,-3px);}
+  100%  {transform:rotate(7deg) translate(1.4px,3.4px);} }
+.sai-sprite[data-state="skgrubeat"] .sai-crit--skunk .cone-tail{
+  transform-box:fill-box; transform-origin:88% 92%;
+  animation:sai-sk-conetail 1.5s ease-in-out infinite; }
+
+/* ---- NOTHING IN THE PAWS (skdry): the dig came up empty. Back on four
+   feet, head up, and one shake that runs from the shoulders out to the tip
+   of the plume — which is the only whole-body movement either of these two
+   animals makes.                                                        ---- */
+.sai-sprite[data-state="skdry"] .sai-crit--skunk .sai-crit-body{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-sk-shakeoff .44s ease-in-out infinite; }
+@keyframes sai-sk-shakeoff{
+  0%,100%{transform:rotate(-1.6deg) translateX(-1px);}
+  50%    {transform:rotate(1.6deg) translateX(1px);} }
+.sai-sprite[data-state="skdry"] .sai-crit--skunk .sai-crit-head{
+  transform-box:fill-box; transform-origin:20% 86%;
+  animation:sai-sk-shakeoff .38s ease-in-out infinite; }
+.sai-sprite[data-state="skdry"] .sai-crit--skunk .sai-crit-tail{
+  transform-box:fill-box; transform-origin:96% 46%;
+  animation:sai-sk-shakeoff .52s ease-in-out infinite; }
+
+/* ---- THE GATHER BEFORE A MOUSE (skfix): stopped dead, nose down, plume
+   half up. The stillness IS the pose — the cycle below is under a pixel of
+   travel — because the beat exists to say that he has stopped hunting and
+   started deciding, and anything that moves undoes that.                ---- */
+.sai-sprite[data-state="skfix"] .sai-crit--skunk .sai-crit-snuffhead{ display:inline; }
+.sai-sprite[data-state="skfix"] .sai-crit--skunk .sai-crit-head{ display:none; }
+.sai-sprite[data-state="skfix"] .sai-crit--skunk .snuff-swing{
+  transform-box:fill-box; transform-origin:16% 8%;
+  animation:sai-sk-huntbob 2.4s ease-in-out infinite; }
+.sai-sprite[data-state="skfix"] .sai-crit--skunk .snuff-nose{
+  transform-box:fill-box; transform-origin:50% 50%;
+  animation:sai-sk-huntnose .19s ease-in-out infinite; }
+.sai-sprite[data-state="skfix"] .sai-crit--skunk .sai-crit-tail{
+  transform-box:fill-box; transform-origin:96% 46%;
+  animation:sai-sk-tailup 2.4s ease-in-out infinite; }
+
+/* ---- THE SNAP (sksnap). One short committed lunge with the forepaws
+   coming down on it, and it must NOT loop: the state lasts as long as the
+   strike does and a repeating pounce reads as a skunk hopping. `forwards`
+   holds the last frame, which is the pose he ends up in whether he has it
+   or not. It is much shorter and much lower than the fox's leap — a skunk
+   does not clear the ground, he falls on things.                        ---- */
+.sai-sprite[data-state="sksnap"] .sai-crit--skunk .sai-crit-body{
+  transform-box:fill-box; transform-origin:70% 100%;
+  animation:sai-sk-snapin .5s cubic-bezier(.25,-.3,.4,1.3) forwards; }
+@keyframes sai-sk-snapin{
+  0%  {transform:translate(-2px,1px) rotate(-3deg) scaleY(.94);}
+  30% {transform:translate(-4px,3px) rotate(-7deg) scaleY(.88);}   /* gather */
+  62% {transform:translate(8px,2px) rotate(7deg) scaleY(1.02);}    /* down on it */
+  100%{transform:translate(6px,4px) rotate(4deg) scaleY(.97);} }
+.sai-sprite[data-state="sksnap"] .sai-crit--skunk .sai-crit-head{
+  transform-box:fill-box; transform-origin:20% 86%;
+  animation:sai-sk-slipin .5s cubic-bezier(.25,-.3,.4,1.3) forwards; }
+@keyframes sai-sk-slipin{
+  0%  {transform:rotate(6deg) translate(1px,2px);}
+  30% {transform:rotate(-4deg) translate(0,-1px);}
+  100%{transform:rotate(22deg) translate(5px,7px);} }   /* muzzle to the grass */
+.sai-sprite[data-state="sksnap"] .sai-crit--skunk .sai-crit-tail{
+  transform-box:fill-box; transform-origin:96% 46%;
+  animation:sai-sk-plumeflick .5s cubic-bezier(.25,-.3,.4,1.3) forwards; }
+@keyframes sai-sk-plumeflick{
+  0%  {transform:rotate(4deg) translateY(-1px);}
+  62% {transform:rotate(-16deg) translateY(-6px);}
+  100%{transform:rotate(-6deg) translateY(-3px);} }
+.sai-sprite[data-state="sksnap"] .sai-crit--skunk .sai-crit-leg{
+  animation-duration:.3s !important; }
+
+/* ---- OVER IT (skchew): head down, forepaws holding, small worrying tugs.
+   The nose-down head again, because what he is doing is what floorsnuff
+   does with a windfall — the difference is the tempo and the shoulders. */
+.sai-sprite[data-state="skchew"] .sai-crit--skunk .sai-crit-snuffhead{ display:inline; }
+.sai-sprite[data-state="skchew"] .sai-crit--skunk .sai-crit-head{ display:none; }
+.sai-sprite[data-state="skchew"] .sai-crit--skunk .snuff-swing{
+  transform-box:fill-box; transform-origin:16% 8%;
+  animation:sai-sk-mousehold 1.15s ease-in-out infinite; }
+.sai-sprite[data-state="skchew"] .sai-crit--skunk .sai-crit-body{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-sk-castbody 1.15s ease-in-out infinite; }
+.sai-sprite[data-state="skchew"] .sai-crit--skunk .sai-crit-tail{
+  transform-box:fill-box; transform-origin:96% 46%;
+  animation:sai-sk-huntbob 2.3s ease-in-out infinite; }
+
+/* ---- MISSED (skmiss): head up, plume FULLY up, and a stamp. The raised
+   tail is the only thing a skunk does that everything else on the map can
+   read, and putting it here is the one moment in his day where a viewer is
+   told he has lost something.                                           ---- */
+.sai-sprite[data-state="skmiss"] .sai-crit--skunk .sai-crit-head{
+  transform-box:fill-box; transform-origin:20% 86%;
+  animation:sai-sk-lookabout .95s ease-in-out infinite; }
+@keyframes sai-sk-lookabout{
+  0%,100%{transform:rotate(-12deg) translate(0,-2px);}
+  36%    {transform:rotate(-18deg) translate(1.4px,-3.2px);}
+  70%    {transform:rotate(-6deg) translate(-1px,-1px);} }
+.sai-sprite[data-state="skmiss"] .sai-crit--skunk .sai-crit-tail{
+  transform-box:fill-box; transform-origin:96% 52%;
+  animation:sai-sk-flagup .95s ease-out infinite; }
+@keyframes sai-sk-flagup{
+  0%  {transform:rotate(0) translateY(0);}
+  24% {transform:rotate(38deg) translateY(-13px);}
+  100%{transform:rotate(33deg) translateY(-11px);} }
+.sai-sprite[data-state="skmiss"] .sai-crit--skunk .sai-crit-body{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-sk-stampfoot .32s ease-in-out infinite; }
+@keyframes sai-sk-stampfoot{
+  0%,100%{transform:translateY(0);} 40%{transform:translateY(1.9px);} }
+
+/* ---- THE DEN DIG (skdigden): the cone dig at full effort, and the one
+   dig in this branch that DOES leave a hole — dropPit puts a cone at
+   PIT_DX/PIT_DY the moment this state ends, so .cone-pit stays visible and
+   deepens under him exactly as it does out on the open ground. Faster arms
+   than the grub dig and earth-coloured spoil, because it is earth.      ---- */
+.sai-sprite[data-state="skdigden"] .sai-crit--skunk .cone-pit{
+  transform-box:fill-box; transform-origin:50% 0%;
+  animation:sai-sk-deepen 4.4s ease-out forwards; }
+.sai-sprite[data-state="skdigden"] .sai-crit--skunk .sai-crit-conepose{
+  transform-box:fill-box; transform-origin:26% 96%;
+  animation:sai-sk-timber .26s ease-in-out infinite; }
+.sai-sprite[data-state="skdigden"] .sai-crit--skunk .cone-arm-n{
+  transform-box:fill-box; transform-origin:50% 6%;
+  animation:sai-sk-timberfly .26s cubic-bezier(.35,0,.25,1) infinite; }
+.sai-sprite[data-state="skdigden"] .sai-crit--skunk .cone-arm-f{
+  transform-box:fill-box; transform-origin:50% 6%;
+  animation:sai-sk-timberfly .26s cubic-bezier(.35,0,.25,1) infinite .13s; }
+.sai-sprite[data-state="skdigden"] .sai-crit--skunk .cone-head{
+  transform-box:fill-box; transform-origin:14% 22%;
+  animation:sai-sk-grubup .52s ease-in-out infinite; }
+.sai-sprite[data-state="skdigden"] .sai-crit--skunk .cone-spray{ opacity:1; }
+.sai-sprite[data-state="skdigden"] .sai-crit--skunk .cone-spray ellipse{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-sk-earthfly .26s ease-out infinite; }
+.sai-sprite[data-state="skdigden"] .sai-crit--skunk .cone-spray ellipse:nth-child(2){ animation-delay:.05s; }
+.sai-sprite[data-state="skdigden"] .sai-crit--skunk .cone-spray ellipse:nth-child(3){ animation-delay:.1s; }
+.sai-sprite[data-state="skdigden"] .sai-crit--skunk .cone-spray ellipse:nth-child(6){ animation-delay:.15s; }
+@keyframes sai-sk-earthfly{
+  0%,18%{opacity:0; transform:translate(0,0) scale(.4);}
+  36%   {opacity:1; transform:translate(-5px,-6px) scale(1.1);}
+  100%  {opacity:0; transform:translate(-14px,-1px) scale(.9);} }
+.sai-sprite[data-state="skdigden"] .sai-crit--skunk .cone-tail{
+  transform-box:fill-box; transform-origin:88% 92%;
+  animation:sai-sk-conetail .52s ease-in-out infinite; }
+
+/* ---- HALF IN THE GROUND (skdenin, skdensleep, skdenout, skpileunder,
+   skpilesleep). Five states, one drawing, and the difference between them
+   is entirely tempo and direction: going in, lying there, and coming back
+   out. The drawing is the only new SVG in this branch and the note in
+   Critters.jsx says why it had to be one.                               ---- */
+.sai-sprite[data-state="skdenin"] .sai-crit--skunk .sai-crit-skdenpose,
+.sai-sprite[data-state="skdensleep"] .sai-crit--skunk .sai-crit-skdenpose,
+.sai-sprite[data-state="skdenout"] .sai-crit--skunk .sai-crit-skdenpose,
+.sai-sprite[data-state="skpileunder"] .sai-crit--skunk .sai-crit-skdenpose,
+.sai-sprite[data-state="skpilesleep"] .sai-crit--skunk .sai-crit-skdenpose{ display:inline; }
+.sai-sprite[data-state="skdenin"] .sai-crit--skunk .sai-crit-body,
+.sai-sprite[data-state="skdenin"] .sai-crit--skunk .sai-crit-head,
+.sai-sprite[data-state="skdenin"] .sai-crit--skunk .sai-crit-snuffhead,
+.sai-sprite[data-state="skdenin"] .sai-crit--skunk .sai-crit-tail,
+.sai-sprite[data-state="skdenin"] .sai-crit--skunk .sai-crit-leg,
+.sai-sprite[data-state="skdensleep"] .sai-crit--skunk .sai-crit-body,
+.sai-sprite[data-state="skdensleep"] .sai-crit--skunk .sai-crit-head,
+.sai-sprite[data-state="skdensleep"] .sai-crit--skunk .sai-crit-snuffhead,
+.sai-sprite[data-state="skdensleep"] .sai-crit--skunk .sai-crit-tail,
+.sai-sprite[data-state="skdensleep"] .sai-crit--skunk .sai-crit-leg,
+.sai-sprite[data-state="skdenout"] .sai-crit--skunk .sai-crit-body,
+.sai-sprite[data-state="skdenout"] .sai-crit--skunk .sai-crit-head,
+.sai-sprite[data-state="skdenout"] .sai-crit--skunk .sai-crit-snuffhead,
+.sai-sprite[data-state="skdenout"] .sai-crit--skunk .sai-crit-tail,
+.sai-sprite[data-state="skdenout"] .sai-crit--skunk .sai-crit-leg,
+.sai-sprite[data-state="skpileunder"] .sai-crit--skunk .sai-crit-body,
+.sai-sprite[data-state="skpileunder"] .sai-crit--skunk .sai-crit-head,
+.sai-sprite[data-state="skpileunder"] .sai-crit--skunk .sai-crit-snuffhead,
+.sai-sprite[data-state="skpileunder"] .sai-crit--skunk .sai-crit-tail,
+.sai-sprite[data-state="skpileunder"] .sai-crit--skunk .sai-crit-leg,
+.sai-sprite[data-state="skpilesleep"] .sai-crit--skunk .sai-crit-body,
+.sai-sprite[data-state="skpilesleep"] .sai-crit--skunk .sai-crit-head,
+.sai-sprite[data-state="skpilesleep"] .sai-crit--skunk .sai-crit-snuffhead,
+.sai-sprite[data-state="skpilesleep"] .sai-crit--skunk .sai-crit-tail,
+.sai-sprite[data-state="skpilesleep"] .sai-crit--skunk .sai-crit-leg{ display:none; }
+/* NO SPOIL UNDER A WOODPILE. He dug nothing to get in there, so the heap
+   he threw out behind himself is not there — one line, and it is the only
+   thing that tells the two dens apart on screen. */
+.sai-sprite[data-state="skpileunder"] .sai-crit--skunk .den-spoil,
+.sai-sprite[data-state="skpilesleep"] .sai-crit--skunk .den-spoil{ display:none; }
+/* going in: backing down out of sight, tail last, and it holds where it
+   stops rather than looping — a skunk who reversed into a hole once a
+   second would be climbing in and out of it */
+.sai-sprite[data-state="skdenin"] .sai-crit--skunk .den-rump{
+  transform-box:fill-box; transform-origin:8% 60%;
+  animation:sai-sk-slipdown 1.7s ease-in forwards; }
+.sai-sprite[data-state="skpileunder"] .sai-crit--skunk .den-rump{
+  transform-box:fill-box; transform-origin:8% 60%;
+  animation:sai-sk-slipdown 2s ease-in forwards; }
+@keyframes sai-sk-slipdown{
+  0%  {transform:translate(-9px,-4px) rotate(-5deg);}
+  100%{transform:translate(0,0) rotate(0);} }
+.sai-sprite[data-state="skdenin"] .sai-crit--skunk .den-tail,
+.sai-sprite[data-state="skpileunder"] .sai-crit--skunk .den-tail{
+  transform-box:fill-box; transform-origin:80% 96%;
+  animation:sai-sk-denplume 1.7s ease-in forwards; }
+@keyframes sai-sk-denplume{
+  0%  {transform:rotate(-14deg) translate(-7px,-5px);}
+  62% {transform:rotate(9deg) translate(1px,1px);}
+  100%{transform:rotate(0) translate(0,0);} }
+.sai-sprite[data-state="skdenin"] .sai-crit--skunk .den-hind,
+.sai-sprite[data-state="skpileunder"] .sai-crit--skunk .den-hind{
+  transform-box:fill-box; transform-origin:50% 96%;
+  animation:sai-sk-pilein .34s ease-in-out 5; }
+@keyframes sai-sk-pilein{
+  0%,100%{transform:translateX(0);} 50%{transform:translateX(-1.8px);} }
+/* asleep: one slow flank, and the plume tip. Nothing else moves, and the
+   whole point of the state is that nothing else moves — a sleeping animal
+   is a hole in the world and it should look like one */
+.sai-sprite[data-state="skdensleep"] .sai-crit--skunk .den-rump,
+.sai-sprite[data-state="skpilesleep"] .sai-crit--skunk .den-rump{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-sk-denflank 3.6s ease-in-out infinite; }
+@keyframes sai-sk-denflank{
+  0%,100%{transform:scale(1,1);}
+  46%    {transform:scale(1.012,1.035) translateY(-.8px);} }
+.sai-sprite[data-state="skdensleep"] .sai-crit--skunk .den-tail,
+.sai-sprite[data-state="skpilesleep"] .sai-crit--skunk .den-tail{
+  transform-box:fill-box; transform-origin:80% 96%;
+  animation:sai-sk-denflank 7.2s ease-in-out infinite; }
+/* and out: the reverse of going in, on a longer clock — a skunk waking up
+   is slower than a skunk turning in */
+.sai-sprite[data-state="skdenout"] .sai-crit--skunk .den-rump{
+  transform-box:fill-box; transform-origin:8% 60%;
+  animation:sai-sk-denout 2.6s cubic-bezier(.3,0,.4,1) forwards; }
+@keyframes sai-sk-denout{
+  0%  {transform:translate(0,0) rotate(0);}
+  40% {transform:translate(-3px,-1px) rotate(-1.6deg);}
+  100%{transform:translate(-11px,-5px) rotate(-6deg);} }
+.sai-sprite[data-state="skdenout"] .sai-crit--skunk .den-tail{
+  transform-box:fill-box; transform-origin:80% 96%;
+  animation:sai-sk-denwake 2.6s cubic-bezier(.3,0,.4,1) forwards; }
+@keyframes sai-sk-denwake{
+  0%  {transform:rotate(0) translate(0,0);}
+  100%{transform:rotate(-16deg) translate(-8px,-6px);} }
+
+/* ---------------------------------------------------------------------
+   THE HEDGEHOG — the same dig, smaller
+   --------------------------------------------------------------------- */
+
+/* ---- THE WALK IN (hhtodig). His sense is 120px, the shortest reach in
+   this world, so this leg is nearly always a few body lengths: head down,
+   legs at the trundle. He is the slowest animal in the cast and the walk
+   should say so before the dig does.                                   ---- */
+.sai-sprite[data-state="hhtodig"] .sai-crit--hedgehog .sai-crit-head{
+  transform-box:fill-box; transform-origin:14% 30%;
+  animation:sai-hh-trundle .9s ease-in-out infinite; }
+@keyframes sai-hh-trundle{
+  0%,100%{transform:translate(0,2.2px) rotate(4deg);}
+  50%    {transform:translate(.8px,3.2px) rotate(7deg);} }
+.sai-sprite[data-state="hhtodig"] .sai-crit--hedgehog .sai-crit-leg{
+  animation-duration:.52s !important; }
+
+/* ---- THE CAST (hhcast): nose quartering, spines flat. His existing
+   hhsnuff is the same idea at .82s over +-7deg; this one is WIDER and
+   SLOWER — 1.4 to 2.4 seconds of it against hhsnuff's 1.5 to 2.4, but over
+   an animal that is looking for something alive rather than confirming a
+   root he already found. The spines going flat is the tell: a hedgehog
+   with his coat down is one who is concentrating on something else.   ---- */
+.sai-sprite[data-state="hhcast"] .sai-crit--hedgehog .sai-crit-head{
+  transform-box:fill-box; transform-origin:14% 30%;
+  animation:sai-hh-quarter 1.45s ease-in-out infinite; }
+@keyframes sai-hh-quarter{
+  0%,100%{transform:translate(-2px,3.2px) rotate(-11deg);}
+  50%    {transform:translate(2.4px,4.4px) rotate(11deg);} }
+.sai-sprite[data-state="hhcast"] .sai-crit--hedgehog .sai-crit-ear{
+  animation:sai-hh-listen 1.15s ease-in-out infinite; }
+.sai-sprite[data-state="hhcast"] .sai-crit--hedgehog .sai-crit-body{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-hh-spineflat 2.9s ease-in-out infinite; }
+@keyframes sai-hh-spineflat{
+  0%,100%{transform:translateY(1.4px) scaleY(.96);}
+  50%    {transform:translateY(1.9px) scaleY(.945);} }
+
+/* ---- THE DIG (hhgrub): his root dig, shown for a new state with the
+   earth turned into leaf litter. Same reasoning as the skunk's — the pose
+   is right and already drawn, and what changes between digging a root out
+   of packed soil and turning over the litter round a log is what comes off
+   it and how fast. Faster paws than rootdig, lighter scatter, and no
+   deepening mound, because there is no hole in this one.               ---- */
+.sai-sprite[data-state="hhgrub"] .sai-crit--hedgehog .sai-crit-rootdig{ display:inline; }
+.sai-sprite[data-state="hhgrub"] .sai-crit--hedgehog .sai-crit-body,
+.sai-sprite[data-state="hhgrub"] .sai-crit--hedgehog .sai-crit-head,
+.sai-sprite[data-state="hhgrub"] .sai-crit--hedgehog .sai-crit-leg{ display:none; }
+/* no mound: he is scattering litter, not excavating */
+.sai-sprite[data-state="hhgrub"] .sai-crit--hedgehog .rd-mound{ opacity:.45; }
+.sai-sprite[data-state="hhgrub"] .sai-crit--hedgehog .sai-crit-rootdig{
+  transform-box:fill-box; transform-origin:20% 96%;
+  animation:sai-hh-grubdig .29s ease-in-out infinite; }
+@keyframes sai-hh-grubdig{
+  0%,100%{transform:translate(0,0) rotate(0);}
+  50%    {transform:translate(2.1px,.5px) rotate(1.8deg);} }
+.sai-sprite[data-state="hhgrub"] .sai-crit--hedgehog .rd-fore{
+  transform-box:fill-box; transform-origin:50% 16%;
+  animation:sai-hh-grubpaw .29s ease-in-out infinite; }
+@keyframes sai-hh-grubpaw{
+  0%,100%{transform:translate(2.8px,-2.9px) rotate(-20deg);}
+  45%    {transform:translate(-2.9px,2px) rotate(16deg);} }
+.sai-sprite[data-state="hhgrub"] .sai-crit--hedgehog .rd-head{
+  transform-box:fill-box; transform-origin:12% 24%;
+  animation:sai-hh-burrow .58s ease-in-out infinite; }
+.sai-sprite[data-state="hhgrub"] .sai-crit--hedgehog .rd-spines{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-hh-bristle .29s ease-in-out infinite; }
+.sai-sprite[data-state="hhgrub"] .sai-crit--hedgehog .rd-dirt{ opacity:1; }
+.sai-sprite[data-state="hhgrub"] .sai-crit--hedgehog .rd-dirt ellipse{
+  transform-box:fill-box; transform-origin:50% 50%;
+  fill:#6d5030;
+  animation:sai-hh-grubfly .58s ease-out infinite; }
+.sai-sprite[data-state="hhgrub"] .sai-crit--hedgehog .rd-dirt ellipse:nth-child(2){ animation-delay:.08s; fill:#7d5f38; }
+.sai-sprite[data-state="hhgrub"] .sai-crit--hedgehog .rd-dirt ellipse:nth-child(3){ animation-delay:.16s; fill:#5d4327; }
+.sai-sprite[data-state="hhgrub"] .sai-crit--hedgehog .rd-dirt ellipse:nth-child(4){ animation-delay:.24s; fill:#7d5f38; }
+.sai-sprite[data-state="hhgrub"] .sai-crit--hedgehog .rd-dirt ellipse:nth-child(5){ animation-delay:.32s; fill:#6d5030; }
+/* leaf litter goes further and turns over on the way, where a clod of
+   earth arcs and drops — the same substitution the skunk's spoil makes */
+@keyframes sai-hh-grubfly{
+  0%  {opacity:0; transform:translate(12px,7px) scale(.35) rotate(0);}
+  20% {opacity:.95;}
+  100%{opacity:0; transform:translate(-12px,-7px) scale(1.05) rotate(-64deg);} }
+
+/* ---- WHAT HE GOT (hhgrubeat): head up, chewing, spines settling. Back on
+   the ordinary rig, which is the point — the two mimed digs above never
+   come out of the hole, and this one does.                             ---- */
+.sai-sprite[data-state="hhgrubeat"] .sai-crit--hedgehog .sai-crit-head{
+  transform-box:fill-box; transform-origin:14% 30%;
+  animation:sai-hh-grubchew .34s ease-in-out infinite; }
+@keyframes sai-hh-grubchew{
+  0%,100%{transform:translate(-.6px,-1.4px) rotate(-6deg);}
+  50%    {transform:translate(-.2px,-.2px) rotate(-2deg);} }
+.sai-sprite[data-state="hhgrubeat"] .sai-crit--hedgehog .sai-crit-body{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-hh-spinelift 2.4s ease-in-out infinite; }
+@keyframes sai-hh-spinelift{
+  0%    {transform:scale(1.03,1.05) translateY(-1.2px);}
+  100%  {transform:scale(1,1) translateY(0);} }
+
+/* ---- NOTHING THERE (hhdry): nose up, one sneeze, and the coat comes up
+   with it. A second and a half, and then he trundles off.              ---- */
+.sai-sprite[data-state="hhdry"] .sai-crit--hedgehog .sai-crit-head{
+  transform-box:fill-box; transform-origin:14% 30%;
+  animation:sai-hh-sneeze 1.1s ease-in-out infinite; }
+@keyframes sai-hh-sneeze{
+  0%,52%,100%{transform:translate(-1px,-1.6px) rotate(-8deg);}
+  60%       {transform:translate(-2.4px,-3.4px) rotate(-15deg);}
+  68%       {transform:translate(1.8px,1.6px) rotate(9deg);}
+  78%       {transform:translate(-.6px,-1px) rotate(-5deg);} }
+.sai-sprite[data-state="hhdry"] .sai-crit--hedgehog .sai-crit-body{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-hh-spinepuff 1.1s ease-in-out infinite; }
+@keyframes sai-hh-spinepuff{
+  0%,52%,100%{transform:scale(1,1);}
+  64%       {transform:scale(1.04,1.07) translateY(-1.4px);} }
+.sai-sprite[data-state="hhdry"] .sai-crit--hedgehog .sai-crit-ear{
+  animation:sai-hh-listen 1.15s ease-in-out infinite; }
+
+/* ---------------------------------------------------------------------
+   REDUCED MOTION. Every pose above is KEPT and every cycle is stopped:
+   a skunk frozen at the bottom of a dig still reads as a skunk digging,
+   and a hedgehog held with his nose in the litter still reads as one
+   finding a beetle. The two one-shots — the snap and the two den
+   transitions — keep their arcs, because holding an animal halfway into
+   a hole is worse than letting him finish getting into it.
+   --------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-state="sktohunt"] .sai-crit--skunk .snuff-nose,
+  .sai-sprite[data-state="sktodig"] .sai-crit--skunk .snuff-nose,
+  .sai-sprite[data-state="sktohunt"] .sai-crit--skunk .sai-crit-tail,
+  .sai-sprite[data-state="sktoden"] .sai-crit--skunk .sai-crit-tail,
+  .sai-sprite[data-state="sktopile"] .sai-crit--skunk .sai-crit-tail,
+  .sai-sprite[data-state="skcast"] .sai-crit--skunk .snuff-swing,
+  .sai-sprite[data-state="skcast"] .sai-crit--skunk .snuff-nose,
+  .sai-sprite[data-state="skcast"] .sai-crit--skunk .sai-crit-body,
+  .sai-sprite[data-state="skcast"] .sai-crit--skunk .sai-crit-tail,
+  .sai-sprite[data-state="skgrub"] .sai-crit--skunk .sai-crit-conepose,
+  .sai-sprite[data-state="skgrub"] .sai-crit--skunk .cone-arm-n,
+  .sai-sprite[data-state="skgrub"] .sai-crit--skunk .cone-arm-f,
+  .sai-sprite[data-state="skgrub"] .sai-crit--skunk .cone-head,
+  .sai-sprite[data-state="skgrub"] .sai-crit--skunk .cone-spray ellipse,
+  .sai-sprite[data-state="skgrub"] .sai-crit--skunk .cone-tail,
+  .sai-sprite[data-state="skgrubeat"] .sai-crit--skunk .cone-head,
+  .sai-sprite[data-state="skgrubeat"] .sai-crit--skunk .cone-tail,
+  .sai-sprite[data-state="skdry"] .sai-crit--skunk .sai-crit-body,
+  .sai-sprite[data-state="skdry"] .sai-crit--skunk .sai-crit-head,
+  .sai-sprite[data-state="skdry"] .sai-crit--skunk .sai-crit-tail,
+  .sai-sprite[data-state="skfix"] .sai-crit--skunk .snuff-swing,
+  .sai-sprite[data-state="skfix"] .sai-crit--skunk .snuff-nose,
+  .sai-sprite[data-state="skfix"] .sai-crit--skunk .sai-crit-tail,
+  .sai-sprite[data-state="skchew"] .sai-crit--skunk .snuff-swing,
+  .sai-sprite[data-state="skchew"] .sai-crit--skunk .sai-crit-body,
+  .sai-sprite[data-state="skchew"] .sai-crit--skunk .sai-crit-tail,
+  .sai-sprite[data-state="skmiss"] .sai-crit--skunk .sai-crit-head,
+  .sai-sprite[data-state="skmiss"] .sai-crit--skunk .sai-crit-body,
+  .sai-sprite[data-state="skdigden"] .sai-crit--skunk .sai-crit-conepose,
+  .sai-sprite[data-state="skdigden"] .sai-crit--skunk .cone-arm-n,
+  .sai-sprite[data-state="skdigden"] .sai-crit--skunk .cone-arm-f,
+  .sai-sprite[data-state="skdigden"] .sai-crit--skunk .cone-head,
+  .sai-sprite[data-state="skdigden"] .sai-crit--skunk .cone-spray ellipse,
+  .sai-sprite[data-state="skdigden"] .sai-crit--skunk .cone-tail,
+  .sai-sprite[data-state="skdenin"] .sai-crit--skunk .den-hind,
+  .sai-sprite[data-state="skpileunder"] .sai-crit--skunk .den-hind,
+  .sai-sprite[data-state="skdensleep"] .sai-crit--skunk .den-rump,
+  .sai-sprite[data-state="skdensleep"] .sai-crit--skunk .den-tail,
+  .sai-sprite[data-state="skpilesleep"] .sai-crit--skunk .den-rump,
+  .sai-sprite[data-state="skpilesleep"] .sai-crit--skunk .den-tail,
+  .sai-sprite[data-state="hhtodig"] .sai-crit--hedgehog .sai-crit-head,
+  .sai-sprite[data-state="hhcast"] .sai-crit--hedgehog .sai-crit-head,
+  .sai-sprite[data-state="hhcast"] .sai-crit--hedgehog .sai-crit-ear,
+  .sai-sprite[data-state="hhcast"] .sai-crit--hedgehog .sai-crit-body,
+  .sai-sprite[data-state="hhgrub"] .sai-crit--hedgehog .sai-crit-rootdig,
+  .sai-sprite[data-state="hhgrub"] .sai-crit--hedgehog .rd-fore,
+  .sai-sprite[data-state="hhgrub"] .sai-crit--hedgehog .rd-head,
+  .sai-sprite[data-state="hhgrub"] .sai-crit--hedgehog .rd-spines,
+  .sai-sprite[data-state="hhgrub"] .sai-crit--hedgehog .rd-dirt ellipse,
+  .sai-sprite[data-state="hhgrubeat"] .sai-crit--hedgehog .sai-crit-head,
+  .sai-sprite[data-state="hhgrubeat"] .sai-crit--hedgehog .sai-crit-body,
+  .sai-sprite[data-state="hhdry"] .sai-crit--hedgehog .sai-crit-head,
+  .sai-sprite[data-state="hhdry"] .sai-crit--hedgehog .sai-crit-body,
+  .sai-sprite[data-state="hhdry"] .sai-crit--hedgehog .sai-crit-ear{ animation:none; }
+  /* the poses that have to be HELD somewhere other than their 0% frame */
+  .sai-sprite[data-state="skcast"] .sai-crit--skunk .snuff-swing{
+    transform:rotate(-2deg) translate(0,2.2px); }
+  .sai-sprite[data-state="skcast"] .sai-crit--skunk .sai-crit-body{
+    transform:translateY(2.8px) scaleY(.93); }
+  .sai-sprite[data-state="skfix"] .sai-crit--skunk .sai-crit-tail{
+    transform:rotate(12deg) translateY(-2.7px); }
+  .sai-sprite[data-state="skmiss"] .sai-crit--skunk .sai-crit-tail{
+    animation:none; transform:rotate(33deg) translateY(-11px); }
+  .sai-sprite[data-state="skgrub"] .sai-crit--skunk .cone-arm-n,
+  .sai-sprite[data-state="skdigden"] .sai-crit--skunk .cone-arm-n{
+    transform:translate(-1px,.6px) rotate(6deg); }
+  .sai-sprite[data-state="skdigden"] .sai-crit--skunk .cone-pit{
+    animation:none; transform:scale(1,1); opacity:1; }
+  /* the spoil is a stream of moving clods and nothing else; with the motion
+     off it is three specks sitting on the ground, so it goes */
+  .sai-sprite[data-state="skgrub"] .sai-crit--skunk .cone-spray,
+  .sai-sprite[data-state="skdigden"] .sai-crit--skunk .cone-spray{ opacity:.55; }
+  .sai-sprite[data-state="hhgrub"] .sai-crit--hedgehog .rd-dirt{ opacity:.55; }
+  .sai-sprite[data-state="hhcast"] .sai-crit--hedgehog .sai-crit-head{
+    transform:translate(0,3.8px) rotate(0deg); }
+  .sai-sprite[data-state="hhgrub"] .sai-crit--hedgehog .rd-fore{
+    transform:translate(-1px,.4px) rotate(4deg); }
+  .sai-sprite[data-state="hhdry"] .sai-crit--hedgehog .sai-crit-head{
+    transform:translate(-2.4px,-3.4px) rotate(-15deg); }
+  .sai-sprite[data-state="hhgrubeat"] .sai-crit--hedgehog .sai-crit-head{
+    transform:translate(-.6px,-1.4px) rotate(-6deg); }
+}
+
+/* ==================== v0.45 THE AIMED TONGUE ====================
+   The frog's strike band is drawn by TongueLayer (SocialAnimalIcons), an
+   imperative SVG driven per-frame from the sim's own strike state — a fixed
+   keyframe can neither aim at a moving insect nor vary its length. Two
+   rules are all the CSS it needs, and both are scoped to the frog:
+
+   1. The sprite's full-reach drawn band (`tongue-band`, inside
+      sai-crit-tonguepose) never shows in ANY state: the layer replaces it,
+      and a frame that drew both would show two tongues. The group stays in
+      the drawing because FROG_TONGUE's exported geometry was read off it.
+   2. No animation rides the layer itself — it is sim-positioned every
+      frame, which is what makes it correct under prefers-reduced-motion
+      with no @media block to carry. */
+.sai-crit--frog .tongue-band{ display:none; }
+.sai-tongue{ pointer-events:none; }
+
+/* ==================== v0.46 THE FOX'S CURL-UP ====================
+   The sleep v0.44 shipped without. Three states on the ordinary rig — no
+   new drawing: a fox curling up is his own body, head and brush held
+   differently, exactly like his stalk. Every rule is scoped by state AND
+   .sai-crit--fox; foxturn, foxcurl and foxwake are his alone.            */
+
+/* ---- the circling: body low, nose down, tail swinging round with him */
+.sai-sprite[data-state="foxturn"] .sai-crit--fox .sai-crit-body{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-fox-bedturn 1.3s ease-in-out infinite; }
+@keyframes sai-fox-bedturn{
+  0%,100%{transform:translateY(2.4px) scaleY(.92) rotate(-1.6deg);}
+  50%    {transform:translateY(3.2px) scaleY(.90) rotate(1.8deg);} }
+.sai-sprite[data-state="foxturn"] .sai-crit--fox .sai-crit-head{
+  transform-box:fill-box; transform-origin:18% 88%;
+  animation:sai-fox-bednose 1.3s ease-in-out infinite; }
+@keyframes sai-fox-bednose{
+  0%,100%{transform:rotate(14deg) translate(3px,5px);}
+  50%    {transform:rotate(18deg) translate(4px,7px);} }
+.sai-sprite[data-state="foxturn"] .sai-crit--fox .sai-crit-tail{
+  transform-box:fill-box; transform-origin:96% 40%;
+  animation:sai-fox-bedswish 1.3s ease-in-out infinite; }
+@keyframes sai-fox-bedswish{
+  0%,100%{transform:rotate(10deg) translateY(3px);}
+  50%    {transform:rotate(-6deg) translateY(1px);} }
+
+/* ---- THE BALL. Body flattened into a round loaf, legs gone under it,
+   head sunk to the ground, and the whole character in the brush: rotated
+   right across the face, over the nose and forepaws — the picture the
+   owner asked for, word for word. The only motion is breath. ---- */
+.sai-sprite[data-state="foxcurl"] .sai-crit--fox .sai-crit-leg{ display:none; }
+.sai-sprite[data-state="foxcurl"] .sai-crit--fox .sai-crit-body{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-fox-breath 2.8s ease-in-out infinite;
+}
+@keyframes sai-fox-breath{
+  0%,100%{transform:translateY(7px) scaleY(.72) scaleX(.94);}
+  50%    {transform:translateY(6.4px) scaleY(.75) scaleX(.94);} }
+.sai-sprite[data-state="foxcurl"] .sai-crit--fox .sai-crit-head{
+  transform-box:fill-box; transform-origin:18% 88%;
+  animation:none;
+  transform:rotate(26deg) translate(1px,12px) scale(.92); }
+.sai-sprite[data-state="foxcurl"] .sai-crit--fox .sai-crit-lid{
+  animation:none; transform:scaleY(1); }
+/* the brush: forward and OVER — its tip lands across the muzzle */
+.sai-sprite[data-state="foxcurl"] .sai-crit--fox .sai-crit-tail{
+  transform-box:fill-box; transform-origin:96% 60%;
+  animation:sai-fox-brushbreath 2.8s ease-in-out infinite; }
+@keyframes sai-fox-brushbreath{
+  0%,100%{transform:rotate(-38deg) translate(-14px,9px) scale(1.06,.9);}
+  50%    {transform:rotate(-37deg) translate(-14px,8.4px) scale(1.06,.9);} }
+
+/* ---- waking: the nose comes out from under the brush first ---- */
+.sai-sprite[data-state="foxwake"] .sai-crit--fox .sai-crit-body{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-fox-rise 1.8s ease-out forwards; }
+@keyframes sai-fox-rise{
+  0%  {transform:translateY(7px) scaleY(.72);}
+  55% {transform:translateY(3px) scaleY(.9) scaleX(1.04);}
+  100%{transform:translateY(0) scaleY(1);} }
+.sai-sprite[data-state="foxwake"] .sai-crit--fox .sai-crit-head{
+  transform-box:fill-box; transform-origin:18% 88%;
+  animation:sai-fox-blink 1.8s ease-out forwards; }
+@keyframes sai-fox-blink{
+  0%  {transform:rotate(26deg) translate(1px,12px);}
+  60% {transform:rotate(-8deg) translate(0,-2px);}
+  100%{transform:rotate(0) translate(0,0);} }
+.sai-sprite[data-state="foxwake"] .sai-crit--fox .sai-crit-tail{
+  transform-box:fill-box; transform-origin:96% 60%;
+  animation:sai-fox-brushoff 1.8s ease-out forwards; }
+@keyframes sai-fox-brushoff{
+  0%  {transform:rotate(-38deg) translate(-14px,9px);}
+  100%{transform:rotate(0) translate(0,0);} }
+
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-state="foxturn"] .sai-crit--fox .sai-crit-body,
+  .sai-sprite[data-state="foxturn"] .sai-crit--fox .sai-crit-head,
+  .sai-sprite[data-state="foxturn"] .sai-crit--fox .sai-crit-tail,
+  .sai-sprite[data-state="foxcurl"] .sai-crit--fox .sai-crit-body,
+  .sai-sprite[data-state="foxcurl"] .sai-crit--fox .sai-crit-tail{ animation:none; }
+  .sai-sprite[data-state="foxcurl"] .sai-crit--fox .sai-crit-body{
+    transform:translateY(7px) scaleY(.72) scaleX(.94); }
+  .sai-sprite[data-state="foxcurl"] .sai-crit--fox .sai-crit-tail{
+    transform:rotate(-38deg) translate(-14px,9px) scale(1.06,.9); }
+  /* the wake keeps its one-shot: holding him half-risen is worse */
+}
