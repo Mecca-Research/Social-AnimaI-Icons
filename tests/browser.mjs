@@ -71,13 +71,35 @@ export async function launchBrowser({ fast = false, ...extra } = {}) {
  * Past that the clamp bites, the world ages slower than the clock measuring
  * it, and every budget in every fixture quietly means something else.
  */
-export async function fastClock(page, k = 4) {
-  await page.addInitScript((K) => {
-    const P = performance, pt0 = P.now(), pnow = P.now.bind(P);
-    P.now = () => pt0 + (pnow() - pt0) * K;
-    const dt0 = Date.now(), dnow = Date.now.bind(Date);
-    Date.now = () => dt0 + (dnow() - dt0) * K;
+export async function fastClock(page, cap = 4) {
+  await page.addInitScript((CAP) => {
+    // The scale is an ACCUMULATOR, not a multiply of elapsed-since-load, so
+    // it can change mid-flight and the clock still only ever goes forward.
+    const P = performance, pnow = P.now.bind(P), dnow = Date.now.bind(Date);
+    let k = 1, pAcc = P.now(), pLast = pnow(), dAcc = Date.now(), dLast = dnow();
+    P.now = () => { const r = pnow(); pAcc += (r - pLast) * k; pLast = r; return pAcc; };
+    Date.now = () => { const r = dnow(); dAcc += (r - dLast) * k; dLast = r; return dAcc; };
     const raf = window.requestAnimationFrame.bind(window);
     window.requestAnimationFrame = (cb) => raf(() => cb(P.now()));
-  }, k);
+
+    // K IS MEASURED ON THE MACHINE, not assumed. The sim clamps dt at 50ms,
+    // so the dilated frame must stay under that: past it the world ages
+    // slower than the clock timing it and every budget in every fixture
+    // quietly means something else. A fixed 4 was right on this box at
+    // 81fps and wrong on a slower CI runner, where it took a turtle's walk
+    // to a log past its own give-up. So: sample the real frame interval,
+    // then take the largest whole scale that still lands under 40ms, and
+    // never more than the cap. A machine too slow to gain anything gets 1
+    // and behaves exactly as it did before any of this.
+    const gaps = []; let prev = pnow();
+    const sample = () => {
+      const now = pnow(); gaps.push(now - prev); prev = now;
+      if (gaps.length < 24) return raf(sample);
+      gaps.sort((a, b) => a - b);
+      const mid = gaps[gaps.length >> 1] || 16.7;
+      k = Math.max(1, Math.min(CAP, Math.floor(40 / mid)));
+      window.__saiClockK = k;
+    };
+    raf(sample);
+  }, cap);
 }
