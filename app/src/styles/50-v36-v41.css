@@ -1,0 +1,919 @@
+/* ==================== v0.36 the owl: the call and the roost ==================== */
+/* Three drawn poses, all owl-scoped. State names are namespaced inside an
+   ethogram and NOT in the DOM, so every rule below carries .sai-crit--owl
+   rather than trusting "owlroost" to stay his — the same discipline the
+   squirrel's larder block adopted. */
+.sai-crit-hootpose, .sai-crit-roostpose, .sai-crit-flappose{ display:none; }
+
+/* Every pose replaces the whole standing bird. The folded wing is a RIG part
+   on this species — unlike the bear, who has none — so .sai-crit-wing has to
+   be named here or it hangs in mid-air beside the drawing that replaced it.
+   (.sai-crit-ear lives inside .sai-crit-head on the owl, so it goes with it.) */
+.sai-sprite[data-state="owlhoot"] .sai-crit--owl .sai-crit-body,
+.sai-sprite[data-state="owlhoot"] .sai-crit--owl .sai-crit-head,
+.sai-sprite[data-state="owlhoot"] .sai-crit--owl .sai-crit-tail,
+.sai-sprite[data-state="owlhoot"] .sai-crit--owl .sai-crit-leg,
+.sai-sprite[data-state="owlhoot"] .sai-crit--owl .sai-crit-wing,
+.sai-sprite[data-state="owlflyup"] .sai-crit--owl .sai-crit-body,
+.sai-sprite[data-state="owlflyup"] .sai-crit--owl .sai-crit-head,
+.sai-sprite[data-state="owlflyup"] .sai-crit--owl .sai-crit-tail,
+.sai-sprite[data-state="owlflyup"] .sai-crit--owl .sai-crit-leg,
+.sai-sprite[data-state="owlflyup"] .sai-crit--owl .sai-crit-wing,
+.sai-sprite[data-state="owlroost"] .sai-crit--owl .sai-crit-body,
+.sai-sprite[data-state="owlroost"] .sai-crit--owl .sai-crit-head,
+.sai-sprite[data-state="owlroost"] .sai-crit--owl .sai-crit-tail,
+.sai-sprite[data-state="owlroost"] .sai-crit--owl .sai-crit-leg,
+.sai-sprite[data-state="owlroost"] .sai-crit--owl .sai-crit-wing,
+.sai-sprite[data-state="owlflydown"] .sai-crit--owl .sai-crit-body,
+.sai-sprite[data-state="owlflydown"] .sai-crit--owl .sai-crit-head,
+.sai-sprite[data-state="owlflydown"] .sai-crit--owl .sai-crit-tail,
+.sai-sprite[data-state="owlflydown"] .sai-crit--owl .sai-crit-leg,
+.sai-sprite[data-state="owlflydown"] .sai-crit--owl .sai-crit-wing{ display:none; }
+
+/* ---- THE CALL -------------------------------------------------------
+   There is no audio in this world, so the frog's chorus is the only prior
+   art for a voice and it is the right prior art: a throat that pumps and
+   rings that roll off the head. What is different here is the RHYTHM, and
+   the rhythm is the word. The frog runs one pulse on an .82s loop, which
+   reads as a continuous chorus. This runs TWO pulses inside the first
+   second of a 3.2s loop and then nothing for two and a bit — puff, puff,
+   silence — which is "hoo-hoo" written in time rather than in sound. Every
+   sub-animation below is cut to the same 3.2s so the throat, the head, the
+   tail and the arcs all pulse on the same two beats; a call whose parts
+   drifted apart would read as fidgeting.
+   The bout length in the ethogram is a whole number of these, so he always
+   stops on the silence with his throat down. ---- */
+.sai-sprite[data-state="owlhoot"] .sai-crit--owl .sai-crit-hootpose{ display:inline; }
+
+.sai-sprite[data-state="owlhoot"] .sai-crit--owl .hoot-throat{
+  transform-box:fill-box; transform-origin:50% 12%;
+  animation:sai-owl-throat 3.2s ease-in-out infinite; }
+@keyframes sai-owl-throat{
+  0%{transform:scale(.34,.30);}          /* down, tucked under the chin */
+  6%{transform:scale(1,1);}              /* HOO */
+  13%{transform:scale(.46,.42);}
+  19%{transform:scale(.96,.94);}         /* hoo */
+  27%{transform:scale(.34,.30);}
+  100%{transform:scale(.34,.30);}        /* ...and the long wait */
+}
+/* head driven down and out on each pulse — an owl throws the call, it does
+   not just open its mouth. Pivot at the back-bottom of the skull, where the
+   head actually meets the shoulders in the drawing. */
+.sai-sprite[data-state="owlhoot"] .sai-crit--owl .hoot-head{
+  transform-box:fill-box; transform-origin:18% 78%;
+  animation:sai-owl-hoothead 3.2s ease-in-out infinite; }
+@keyframes sai-owl-hoothead{
+  0%{transform:rotate(0) translate(0,0);}
+  6%{transform:rotate(6deg) translate(1.6px,1.2px);}
+  13%{transform:rotate(1deg) translate(.4px,.3px);}
+  19%{transform:rotate(5deg) translate(1.3px,1px);}
+  27%{transform:rotate(0) translate(0,0);}
+  100%{transform:rotate(0) translate(0,0);}
+}
+/* the push behind it: the chest compresses as the throat fills */
+.sai-sprite[data-state="owlhoot"] .sai-crit--owl .hoot-body{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-owl-hootbody 3.2s ease-in-out infinite; }
+@keyframes sai-owl-hootbody{
+  0%{transform:scale(1,1);} 6%{transform:scale(1.035,.965);}
+  13%{transform:scale(1,1);} 19%{transform:scale(1.03,.97);}
+  27%{transform:scale(1,1);} 100%{transform:scale(1,1);}
+}
+/* tail cocks on each pulse. Pivot at the rump end (bottom-right of the
+   tail's own box) so the TIP swings, and positive rotation is what lifts it
+   — the tip sits up-left of the pivot. */
+.sai-sprite[data-state="owlhoot"] .sai-crit--owl .hoot-tail{
+  transform-box:fill-box; transform-origin:100% 100%;
+  animation:sai-owl-hoottail 3.2s ease-in-out infinite; }
+@keyframes sai-owl-hoottail{
+  0%{transform:rotate(0);} 6%{transform:rotate(13deg);}
+  13%{transform:rotate(4deg);} 19%{transform:rotate(11deg);}
+  27%{transform:rotate(0);} 100%{transform:rotate(0);}
+}
+/* The arcs. fill-box with the origin on their LEFT edge, unlike the frog's,
+   which scale about the svg origin and get their outward travel as a side
+   effect of that; here the travel is written down and the growth happens
+   away from the bill, which is what a wave leaving a source does.
+   Two emissions per cycle: the reset at 13.5% happens at zero opacity, so
+   the snap back to the bill is never on screen. */
+.sai-sprite[data-state="owlhoot"] .sai-crit--owl .hoot-call path{
+  transform-box:fill-box; transform-origin:0% 50%; opacity:0;
+  animation:sai-owl-call 3.2s ease-out infinite; }
+.sai-sprite[data-state="owlhoot"] .sai-crit--owl .hoot-call path:nth-child(2){ animation-delay:.11s; }
+.sai-sprite[data-state="owlhoot"] .sai-crit--owl .hoot-call path:nth-child(3){ animation-delay:.22s; }
+@keyframes sai-owl-call{
+  0%{opacity:0; transform:translateX(-6px) scale(.68);}
+  4%{opacity:.8;}
+  13%{opacity:0; transform:translateX(13px) scale(1.3);}
+  13.5%{opacity:0; transform:translateX(-6px) scale(.68);}
+  17%{opacity:.72;}
+  27%{opacity:0; transform:translateX(13px) scale(1.3);}
+  100%{opacity:0; transform:translateX(13px) scale(1.3);}
+}
+
+/* ---- THE FLIGHT, both ways ------------------------------------------
+   He IS in the air here, unlike the bear on bark and the squirrel on the
+   trunk, so the generic data-air rig is wanted for once: the airborne lean
+   and the shrunk shadow both stay. Only the folded-wing flap is overridden,
+   and only because the wing it targets has been swapped away.
+   The two legs share one drawing and differ only here — and that is the
+   species. SpeciesProfile: "Rarely flies fast. Glides slow and silent." ---- */
+.sai-sprite[data-state="owlflyup"] .sai-crit--owl .sai-crit-flappose,
+.sai-sprite[data-state="owlflydown"] .sai-crit--owl .sai-crit-flappose{ display:inline; }
+
+/* up: deep fast beats, the two wings a fifth of a stroke apart so the pair
+   reads as a wingbeat rather than as one shape scaling */
+.sai-sprite[data-state="owlflyup"] .sai-crit--owl .flap-wing-near{
+  transform-box:fill-box; transform-origin:96% 88%;
+  animation:sai-owl-beat .30s ease-in-out infinite; }
+.sai-sprite[data-state="owlflyup"] .sai-crit--owl .flap-wing-far{
+  transform-box:fill-box; transform-origin:97% 80%;
+  animation:sai-owl-beat .30s ease-in-out infinite; animation-delay:.06s; }
+@keyframes sai-owl-beat{
+  0%,100%{transform:rotate(-17deg) scaleY(1);}
+  50%{transform:rotate(22deg) scaleY(.86);}
+}
+/* down: not a single stroke. Wings set, a slow flex, height traded for
+   distance by the sim's own z curve. */
+.sai-sprite[data-state="owlflydown"] .sai-crit--owl .flap-wing-near,
+.sai-sprite[data-state="owlflydown"] .sai-crit--owl .flap-wing-far{
+  transform-box:fill-box; transform-origin:96% 86%;
+  animation:sai-owl-glide 1.1s ease-in-out infinite; }
+@keyframes sai-owl-glide{ 0%,100%{transform:rotate(4deg);} 50%{transform:rotate(-5deg);} }
+
+/* ---- THE ROOST: nothing moves ---------------------------------------
+   This is the one state in the file that turns animation OFF rather than
+   replacing it with something else, because the absence is the behavior —
+   the hedgehog's ball is the closest relative, and even the ball breathes.
+   Left alone, four separate things would put a twitch back into a bird
+   whose entire point is that it has none: the always-on rig loops (breathe,
+   headbob, tailsway, blink), the shadow pulse, and the airborne lean that
+   data-air brings the moment z passes 3 — which it has, by ninety-odd px.
+   The universal selector is deliberate. Any animation added to this owl
+   later has to stop here too, and nobody is going to remember to come back
+   and add it to a list. Specificity beats every rig default and every
+   data-air rule; the one selector that outranks it is the data-walking
+   pair, and the roost drive() SNAPS his position instead of easing it, so
+   on-screen displacement is exactly zero and data-walking is never set. */
+.sai-sprite[data-state="owlroost"] .sai-crit--owl .sai-crit-roostpose{ display:inline; }
+.sai-sprite[data-state="owlroost"] .sai-crit-root.sai-crit--owl,
+.sai-sprite[data-state="owlroost"] .sai-crit--owl *{ animation:none; }
+/* ...and no ground shadow ninety px up a tree. data-air already dims it to
+   .14; up in the boughs it should not be there at all. */
+.sai-sprite[data-state="owlroost"] .sai-crit--owl .sai-crit-shadow{ opacity:0; }
+
+@media (prefers-reduced-motion: reduce){
+  /* Same call the frog's chorus makes: the pose stays — a still owl leaning
+     forward with its throat already out still reads as one that is calling —
+     and only the pulsing stops. The arcs are opacity-driven, so killing the
+     animation would leave all three parked at opacity 0, which is the right
+     answer: a frozen sound wave is not a quieter picture, it is a wrong one. */
+  .sai-sprite[data-state="owlhoot"] .sai-crit--owl .hoot-throat,
+  .sai-sprite[data-state="owlhoot"] .sai-crit--owl .hoot-head,
+  .sai-sprite[data-state="owlhoot"] .sai-crit--owl .hoot-body,
+  .sai-sprite[data-state="owlhoot"] .sai-crit--owl .hoot-tail,
+  .sai-sprite[data-state="owlhoot"] .sai-crit--owl .hoot-call path,
+  .sai-sprite[data-state="owlflyup"] .sai-crit--owl .flap-wing-near,
+  .sai-sprite[data-state="owlflyup"] .sai-crit--owl .flap-wing-far,
+  .sai-sprite[data-state="owlflydown"] .sai-crit--owl .flap-wing-near,
+  .sai-sprite[data-state="owlflydown"] .sai-crit--owl .flap-wing-far{ animation:none; }
+  /* the deflated throat is the pose's resting state and has to be applied by
+     hand once the keyframe that held it there is gone */
+  .sai-sprite[data-state="owlhoot"] .sai-crit--owl .hoot-throat{
+    transform-box:fill-box; transform-origin:50% 12%; transform:scale(.92,.9); }
+  /* the roost needs nothing here. It is already the stillest thing on screen. */
+}
+
+
+/* ============ v0.35 squirrel: scatter caches, the drey, the bolt ============
+   Scoped to the squirrel throughout, same as v0.32 and v0.33: these state
+   names are namespaced inside his ethogram and nowhere else in the DOM, so
+   "dreyup" is not a promise. The exception is .sai-drey, which is world
+   furniture the way .sai-larder was, and is scoped by being one element. */
+
+/* ---- patting the soil back down ----
+   The scrape has to STOP EXISTING. With nothing drawn at an anchor, a
+   crouch that leaves turned earth behind on the sprite for its last frames
+   is the one thing that would give the position away — and the pat IS the
+   act of hiding it. So the mound flattens and fades across the two seconds
+   of it, and by the time he stands up that pixel is bare ground again.
+   (The flying clods stay off: .dig-dirt is already opacity 0 here.) */
+.sai-sprite[data-state="cachepat"] .sai-crit--squirrel .dig-mound{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-sq-smooth 2s ease-in forwards; }
+@keyframes sai-sq-smooth{
+  0%{opacity:1; transform:scaleY(1);}
+  70%{opacity:.85; transform:scaleY(.5);}
+  100%{opacity:0; transform:scaleY(.18);}
+}
+
+/* ---- cutting nest material: head down in the shrub, quick snips, both
+   forepaws holding the stem steady. Two of the three animations are his
+   own from v0.32 — a snip is a shorter, harder version of a pluck ---- */
+.sai-sprite[data-state="twigsnip"] .sai-crit--squirrel .sai-crit-head{
+  animation:sai-sq-snip .28s ease-in-out infinite; }
+@keyframes sai-sq-snip{
+  0%,100%{transform:translate(1.6px,3.4px) rotate(6deg);}
+  50%{transform:translate(2.8px,5.4px) rotate(11deg);}
+}
+.sai-sprite[data-state="twigsnip"] .sai-crit--squirrel .sai-crit-tail{
+  animation:sai-sq-huntail .5s ease-in-out infinite; }
+.sai-sprite[data-state="twigsnip"] .sai-crit--squirrel .sai-crit-leg-fr,
+.sai-sprite[data-state="twigsnip"] .sai-crit--squirrel .sai-crit-leg-fl{
+  animation:sai-sq-reach .56s ease-in-out infinite; }
+
+/* ---- the bundle in the jaws, for the whole haul ---- */
+.sai-crit-twigbundle, .cling-twigs{ display:none; }
+.sai-sprite[data-carry="twigs"] .sai-crit--squirrel .sai-crit-twigbundle{ display:inline; }
+.sai-sprite[data-carry="twigs"] .sai-crit--squirrel .cling-twigs{ display:inline; }
+.sai-sprite[data-carry="twigs"][data-walking="1"] .sai-crit--squirrel .sai-crit-twigbundle{
+  transform-box:fill-box; transform-origin:8% 60%;
+  animation:sai-sq-bundlebob var(--sai-gait,.5s) ease-in-out infinite; }
+@keyframes sai-sq-bundlebob{
+  0%,100%{transform:rotate(-3deg) translateY(0);}
+  50%{transform:rotate(3.5deg) translateY(-1.4px);}
+}
+
+/* ---- the drey climb: the SAME trunk-cling drawing the nut tree uses ----
+   He is on bark, squared to it, with both hands free — the drawing already
+   says all of that, and a second one would be the same squirrel twice. So
+   nothing new is drawn for the climb; only the load and the tempo change. */
+.sai-sprite[data-state="dreyup"] .sai-crit--squirrel .sai-crit-clingpose,
+.sai-sprite[data-state="dreyweave"] .sai-crit--squirrel .sai-crit-clingpose,
+.sai-sprite[data-state="dreydown"] .sai-crit--squirrel .sai-crit-clingpose{ display:inline; }
+/* the horizontal rig goes entirely, and both of its carried items with it —
+   the cling drawing has a bundle of its own, and two would be one too many */
+.sai-sprite[data-state="dreyup"] .sai-crit--squirrel .sai-crit-body,
+.sai-sprite[data-state="dreyup"] .sai-crit--squirrel .sai-crit-head,
+.sai-sprite[data-state="dreyup"] .sai-crit--squirrel .sai-crit-tail,
+.sai-sprite[data-state="dreyup"] .sai-crit--squirrel .sai-crit-leg,
+.sai-sprite[data-state="dreyup"] .sai-crit--squirrel .sai-crit-cheeknut,
+.sai-sprite[data-state="dreyup"] .sai-crit--squirrel .sai-crit-twigbundle,
+.sai-sprite[data-state="dreyweave"] .sai-crit--squirrel .sai-crit-body,
+.sai-sprite[data-state="dreyweave"] .sai-crit--squirrel .sai-crit-head,
+.sai-sprite[data-state="dreyweave"] .sai-crit--squirrel .sai-crit-tail,
+.sai-sprite[data-state="dreyweave"] .sai-crit--squirrel .sai-crit-leg,
+.sai-sprite[data-state="dreyweave"] .sai-crit--squirrel .sai-crit-cheeknut,
+.sai-sprite[data-state="dreyweave"] .sai-crit--squirrel .sai-crit-twigbundle,
+.sai-sprite[data-state="dreydown"] .sai-crit--squirrel .sai-crit-body,
+.sai-sprite[data-state="dreydown"] .sai-crit--squirrel .sai-crit-head,
+.sai-sprite[data-state="dreydown"] .sai-crit--squirrel .sai-crit-tail,
+.sai-sprite[data-state="dreydown"] .sai-crit--squirrel .sai-crit-leg,
+.sai-sprite[data-state="dreydown"] .sai-crit--squirrel .sai-crit-cheeknut,
+.sai-sprite[data-state="dreydown"] .sai-crit--squirrel .sai-crit-twigbundle{ display:none; }
+/* he is off the ground so data-air is set, but bark is not sky — v0.33's
+   rule for the nut tree, and this is the same problem on a bigger trunk */
+.sai-sprite[data-state="dreyup"] .sai-crit-root.sai-crit--squirrel,
+.sai-sprite[data-state="dreyweave"] .sai-crit-root.sai-crit--squirrel,
+.sai-sprite[data-state="dreydown"] .sai-crit-root.sai-crit--squirrel{ animation:none; }
+
+/* up: his own hitches from the nut tree, a shade slower — he is climbing
+   with a mouthful this time. Down: the same swap of the diagonal pairs and
+   the same pivot about the shoulders, because the weight is on his front
+   end going down whatever he is carrying. */
+.sai-sprite[data-state="dreyup"] .sai-crit--squirrel .sai-crit-clingpose{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-sq-haul .38s ease-in-out infinite; }
+.sai-sprite[data-state="dreyup"] .sai-crit--squirrel .cling-arm-near,
+.sai-sprite[data-state="dreyup"] .sai-crit--squirrel .cling-leg-far{
+  animation:sai-sq-hitchA .38s ease-in-out infinite; }
+.sai-sprite[data-state="dreyup"] .sai-crit--squirrel .cling-arm-far,
+.sai-sprite[data-state="dreyup"] .sai-crit--squirrel .cling-leg-near{
+  animation:sai-sq-hitchB .38s ease-in-out infinite; }
+.sai-sprite[data-state="dreydown"] .sai-crit--squirrel .sai-crit-clingpose{
+  transform-box:fill-box; transform-origin:50% 0%;
+  animation:sai-sq-creep .46s ease-in-out infinite; }
+.sai-sprite[data-state="dreydown"] .sai-crit--squirrel .cling-arm-near,
+.sai-sprite[data-state="dreydown"] .sai-crit--squirrel .cling-leg-far{
+  animation:sai-sq-hitchB .46s ease-in-out infinite; }
+.sai-sprite[data-state="dreydown"] .sai-crit--squirrel .cling-arm-far,
+.sai-sprite[data-state="dreydown"] .sai-crit--squirrel .cling-leg-near{
+  animation:sai-sq-hitchA .46s ease-in-out infinite; }
+.sai-sprite[data-state="dreyup"] .sai-crit--squirrel .cling-tail,
+.sai-sprite[data-state="dreydown"] .sai-crit--squirrel .cling-tail{
+  transform-box:fill-box; transform-origin:88% 92%;
+  animation:sai-sq-clingtail .64s ease-in-out infinite; }
+
+/* the weave: reach, tuck, and PRESS HOME — then hold. That hold at the end
+   of each push is the whole difference between weaving something and
+   scrabbling at it, and it is why this is not the .26s canopy grab. The
+   two arms run half a cycle apart so one is always bearing on the nest. */
+.sai-sprite[data-state="dreyweave"] .sai-crit--squirrel .cling-arm-near{
+  transform-box:fill-box; transform-origin:5% 85%;
+  animation:sai-sq-weave .78s ease-in-out infinite; }
+.sai-sprite[data-state="dreyweave"] .sai-crit--squirrel .cling-arm-far{
+  transform-box:fill-box; transform-origin:95% 85%;
+  animation:sai-sq-weave .78s ease-in-out infinite; animation-delay:.39s; }
+@keyframes sai-sq-weave{
+  0%{transform:rotate(-7deg) translate(-2.2px,2.6px);}
+  35%{transform:rotate(8deg) translate(2.8px,-3.2px);}
+  55%,100%{transform:rotate(2deg) translate(1.2px,-1.2px);}
+}
+.sai-sprite[data-state="dreyweave"] .sai-crit--squirrel .cling-head{
+  transform-box:fill-box; transform-origin:50% 90%;
+  animation:sai-sq-weavehead .78s ease-in-out infinite; }
+@keyframes sai-sq-weavehead{
+  0%,100%{transform:rotate(-3deg);} 45%{transform:rotate(4deg) translateY(-1.4px);}
+}
+.sai-sprite[data-state="dreyweave"] .sai-crit--squirrel .cling-tail{
+  transform-box:fill-box; transform-origin:88% 92%;
+  animation:sai-sq-clingflick .42s ease-in-out infinite; }
+
+/* ---- THE BOLT ----
+   The path is the ethogram's: legs of 150-320ms thrown 30-75 degrees to
+   alternating sides. What the drawing has to do is sell the TURN, because
+   the renderer answers a heading flip by mirroring the sprite, and a
+   sprite that only snaps left-right reads as a glitch rather than a swerve.
+   So the whole svg banks, the plume lashes at twice the leg rate (a
+   squirrel steers with it — it is the largest thing he owns), the ears go
+   flat and stay flat, and the body bounds rather than walks. */
+.sai-sprite[data-state="boltzag"] .sai-crit-root.sai-crit--squirrel{
+  animation:sai-sq-swerve .34s ease-in-out infinite; }
+@keyframes sai-sq-swerve{
+  0%{transform:rotate(-6deg) translateY(-1px);}
+  25%{transform:rotate(1deg) translateY(1.4px);}
+  50%{transform:rotate(6deg) translateY(-1px);}
+  75%{transform:rotate(-1deg) translateY(1.4px);}
+  100%{transform:rotate(-6deg) translateY(-1px);}
+}
+.sai-sprite[data-state="boltzag"] .sai-crit--squirrel .sai-crit-tail{
+  transform-box:fill-box; transform-origin:88% 88%;
+  animation:sai-sq-lash .17s ease-in-out infinite; }
+@keyframes sai-sq-lash{
+  0%,100%{transform:rotate(-13deg) translateX(2px);}
+  50%{transform:rotate(12deg) translateX(-2px);}
+}
+.sai-sprite[data-state="boltzag"] .sai-crit--squirrel .sai-crit-ear{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-sq-earflat .34s ease-in-out infinite; }
+@keyframes sai-sq-earflat{
+  0%,100%{transform:rotate(-26deg) scaleY(.82);}
+  50%{transform:rotate(-31deg) scaleY(.78);}
+}
+.sai-sprite[data-state="boltzag"] .sai-crit--squirrel .sai-crit-body{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-sq-bound .17s ease-in-out infinite; }
+@keyframes sai-sq-bound{
+  0%,100%{transform:translateY(0) scaleY(1);}
+  45%{transform:translateY(-2.6px) scaleY(1.05);}
+}
+
+/* ---- THE DREY, course by course ----
+   The reveal is the larder caps' trick, which is the one thing out of that
+   layer worth keeping: a count that only ever goes up, shown by revealing
+   the first n of a fixed list of children. Order is load-bearing — floor,
+   walls, roof, moss, lining, in the order he builds them — and the settle
+   only fires on the child that has just appeared, because the ones already
+   showing never leave display:none and so never restart. */
+.sai-drey-part{ display:none; transform-box:fill-box; transform-origin:50% 100%; }
+.sai-drey[data-n="1"] .sai-drey-part:nth-child(-n+1),
+.sai-drey[data-n="2"] .sai-drey-part:nth-child(-n+2),
+.sai-drey[data-n="3"] .sai-drey-part:nth-child(-n+3),
+.sai-drey[data-n="4"] .sai-drey-part:nth-child(-n+4),
+.sai-drey[data-n="5"] .sai-drey-part:nth-child(-n+5),
+.sai-drey[data-n="6"] .sai-drey-part:nth-child(-n+6){
+  display:inline; animation:sai-drey-settle .9s ease-out 1; }
+@keyframes sai-drey-settle{
+  0%{opacity:0; transform:translateY(-5px) scale(.86);}
+  55%{opacity:1; transform:translateY(1.5px) scale(1.04);}
+  100%{opacity:1; transform:translateY(0) scale(1);}
+}
+/* the green lining is the only part of a drey that is still alive, and it
+   is the last thing he adds — so the finished nest is the one that moves */
+.sai-drey-leaves{
+  transform-box:fill-box; transform-origin:60% 100%;
+  animation:sai-drey-leaf 5.4s ease-in-out infinite; }
+@keyframes sai-drey-leaf{
+  0%,100%{transform:rotate(-2.2deg);} 50%{transform:rotate(2.6deg) translateY(-.8px);}
+}
+
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-state="cachepat"] .sai-crit--squirrel .dig-mound,
+  .sai-sprite[data-state="twigsnip"] .sai-crit--squirrel .sai-crit-head,
+  .sai-sprite[data-state="twigsnip"] .sai-crit--squirrel .sai-crit-tail,
+  .sai-sprite[data-state="twigsnip"] .sai-crit--squirrel .sai-crit-leg-fr,
+  .sai-sprite[data-state="twigsnip"] .sai-crit--squirrel .sai-crit-leg-fl,
+  .sai-sprite[data-carry="twigs"][data-walking="1"] .sai-crit--squirrel .sai-crit-twigbundle,
+  .sai-sprite[data-state="dreyup"] .sai-crit--squirrel .sai-crit-clingpose,
+  .sai-sprite[data-state="dreyup"] .sai-crit--squirrel .cling-arm-near,
+  .sai-sprite[data-state="dreyup"] .sai-crit--squirrel .cling-arm-far,
+  .sai-sprite[data-state="dreyup"] .sai-crit--squirrel .cling-leg-near,
+  .sai-sprite[data-state="dreyup"] .sai-crit--squirrel .cling-leg-far,
+  .sai-sprite[data-state="dreyup"] .sai-crit--squirrel .cling-tail,
+  .sai-sprite[data-state="dreyweave"] .sai-crit--squirrel .cling-arm-near,
+  .sai-sprite[data-state="dreyweave"] .sai-crit--squirrel .cling-arm-far,
+  .sai-sprite[data-state="dreyweave"] .sai-crit--squirrel .cling-head,
+  .sai-sprite[data-state="dreyweave"] .sai-crit--squirrel .cling-tail,
+  .sai-sprite[data-state="dreydown"] .sai-crit--squirrel .sai-crit-clingpose,
+  .sai-sprite[data-state="dreydown"] .sai-crit--squirrel .cling-arm-near,
+  .sai-sprite[data-state="dreydown"] .sai-crit--squirrel .cling-arm-far,
+  .sai-sprite[data-state="dreydown"] .sai-crit--squirrel .cling-leg-near,
+  .sai-sprite[data-state="dreydown"] .sai-crit--squirrel .cling-leg-far,
+  .sai-sprite[data-state="dreydown"] .sai-crit--squirrel .cling-tail,
+  .sai-sprite[data-state="boltzag"] .sai-crit--squirrel .sai-crit-tail,
+  .sai-sprite[data-state="boltzag"] .sai-crit--squirrel .sai-crit-ear,
+  .sai-sprite[data-state="boltzag"] .sai-crit--squirrel .sai-crit-body,
+  .sai-drey-leaves{ animation:none; }
+  /* the bank is a rotation the sprite holds, not a wobble it repeats, so
+     it is frozen at the upright frame rather than left mid-lean */
+  .sai-sprite[data-state="boltzag"] .sai-crit-root.sai-crit--squirrel{
+    animation:none; transform:none; }
+  /* the mound would otherwise be frozen ON, which is the one thing the
+     scatter cache cannot have: it is shown flattened and gone instead. The
+     nut goes with it — v0.32 froze that one visible too, and a nut lying on
+     ground with no hole under it is worse than either half alone. */
+  .sai-sprite[data-state="cachepat"] .sai-crit--squirrel .dig-mound,
+  .sai-sprite[data-state="cachepat"] .sai-crit--squirrel .dig-nut{ opacity:0; }
+  /* the parts still have to APPEAR; only their arrival stops bouncing */
+  .sai-drey[data-n="1"] .sai-drey-part:nth-child(-n+1),
+  .sai-drey[data-n="2"] .sai-drey-part:nth-child(-n+2),
+  .sai-drey[data-n="3"] .sai-drey-part:nth-child(-n+3),
+  .sai-drey[data-n="4"] .sai-drey-part:nth-child(-n+4),
+  .sai-drey[data-n="5"] .sai-drey-part:nth-child(-n+5),
+  .sai-drey[data-n="6"] .sai-drey-part:nth-child(-n+6){ animation:none; }
+}
+
+/* ==================== v0.34 species fight displays ====================
+   The fight state machine and its timings are untouched. Everything here
+   hangs off the SAME global hook the generic fight already uses —
+   .sai-sprite[data-state="fight"] — narrowed by .sai-crit--SPECIES, plus
+   one data flag of its own for the thing that happens after the fight is
+   already over. Nothing below claims a state name the sim does not set.
+   ==================================================================== */
+
+/* ---- SKUNK: the aposematic display -----------------------------------
+   A whole crouch swapped in, for the same reason the claw scrape is one:
+   the rig is a level ellipse on four full-length shanks. It cannot arch,
+   cannot drop its chest, and — the one that settles it — cannot stand its
+   tail on end, because the plume is drawn lying back over the rump and no
+   rotation puts it upright without swinging the tip past his own nose. */
+.sai-crit--skunk .sai-crit-apopose{ display:none; }
+.sai-sprite[data-state="fight"] .sai-crit--skunk .sai-crit-apopose{ display:inline; }
+.sai-sprite[data-state="fight"] .sai-crit--skunk .sai-crit-body,
+.sai-sprite[data-state="fight"] .sai-crit--skunk .sai-crit-head,
+.sai-sprite[data-state="fight"] .sai-crit--skunk .sai-crit-snuffhead,
+.sai-sprite[data-state="fight"] .sai-crit--skunk .sai-crit-tail,
+.sai-sprite[data-state="fight"] .sai-crit--skunk .sai-crit-leg{ display:none; }
+/* his stomp raises his own dust on the stomp's clock. The generic fight
+   dust runs at .5s against a .3s stomp and the two beat against each
+   other, which reads as two animals' worth of feet. */
+.sai-sprite[data-state="fight"] .sai-crit--skunk .sai-crit-dust{ opacity:0; animation:none; }
+
+/* THE DROP INTO THE STANCE. The pose exists only while the state does, so
+   mounting it IS the entry beat — one shot, forwards, and no new state. */
+.sai-sprite[data-state="fight"] .sai-crit--skunk .sai-crit-apopose{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-sk-hunker .42s cubic-bezier(.3,0,.2,1) forwards; }
+@keyframes sai-sk-hunker{
+  0%  {transform:translateY(-5px) scale(.97,1.1);}   /* stood up, tall */
+  62% {transform:translateY(1px) scale(1.03,.97);}   /* dropped past it */
+  100%{transform:translateY(0) scale(1,1);}
+}
+/* THE HACKLES. The one part of the display that is not motion: he gets
+   BIGGER. Slow, because piloerection is not a shiver. */
+.sai-sprite[data-state="fight"] .sai-crit--skunk .apo-body{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-sk-bristle 1.05s ease-in-out infinite; }
+@keyframes sai-sk-bristle{
+  0%,100%{transform:scale(1,1);}
+  45%{transform:scale(1.02,1.07) translateY(-.6px);}
+}
+/* THE STOMP. Hard down and slow up, so the accent lands on the floor and
+   not in the air. The far foot runs half a beat behind on a shorter throw
+   — two feet on one curve is a bounce, not a stamp. */
+.sai-sprite[data-state="fight"] .sai-crit--skunk .apo-fore-n{
+  transform-box:fill-box; transform-origin:50% 0%;
+  animation:sai-sk-stompA .3s cubic-bezier(.2,0,.9,1) infinite; }
+.sai-sprite[data-state="fight"] .sai-crit--skunk .apo-fore-f{
+  transform-box:fill-box; transform-origin:50% 0%;
+  animation:sai-sk-stompB .3s cubic-bezier(.2,0,.9,1) infinite .15s; }
+@keyframes sai-sk-stompA{
+  0%  {transform:translateY(-4.2px) rotate(-7deg);}
+  30% {transform:translateY(0) rotate(2deg);}       /* down, hard */
+  46% {transform:translateY(-.6px) rotate(1deg);}   /* the rebound */
+  100%{transform:translateY(-4.2px) rotate(-7deg);}
+}
+@keyframes sai-sk-stompB{
+  0%  {transform:translateY(-3px) rotate(-5deg);}
+  34% {transform:translateY(0) rotate(1.5deg);}
+  50% {transform:translateY(-.4px) rotate(.8deg);}
+  100%{transform:translateY(-3px) rotate(-5deg);}
+}
+.sai-crit--skunk .apo-stomp{ opacity:0; }
+.sai-sprite[data-state="fight"] .sai-crit--skunk .apo-stomp{ opacity:1; }
+.sai-sprite[data-state="fight"] .sai-crit--skunk .apo-stomp ellipse{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-sk-puff .3s ease-out infinite; }
+.sai-sprite[data-state="fight"] .sai-crit--skunk .apo-stomp ellipse:nth-child(2){ animation-delay:.15s; }
+.sai-sprite[data-state="fight"] .sai-crit--skunk .apo-stomp ellipse:nth-child(3){ animation-delay:.06s; }
+.sai-sprite[data-state="fight"] .sai-crit--skunk .apo-stomp ellipse:nth-child(4){ animation-delay:.21s; }
+@keyframes sai-sk-puff{
+  0%,26%{opacity:0; transform:translate(0,0) scale(.4);}
+  40%{opacity:.85; transform:translate(-1.6px,-2.6px) scale(1);}
+  100%{opacity:0; transform:translate(-5px,-4.6px) scale(1.5);}
+}
+/* THE FLAG. The loudest thing on him and deliberately the stillest: a
+   rigid quiver about its own base. A plume that SWINGS here reads as a
+   happy dog, which is the exact opposite of the message. */
+.sai-sprite[data-state="fight"] .sai-crit--skunk .apo-tail{
+  transform-box:fill-box; transform-origin:60% 100%;
+  animation:sai-sk-flag .17s ease-in-out infinite; }
+@keyframes sai-sk-flag{ 0%,100%{transform:rotate(-1.6deg);} 50%{transform:rotate(1.6deg);} }
+/* the head stays low and aimed. Half the stomp tempo, so one duck lands
+   per pair of feet rather than one per foot. */
+.sai-sprite[data-state="fight"] .sai-crit--skunk .apo-head{
+  transform-box:fill-box; transform-origin:14% 26%;
+  animation:sai-sk-snarl .6s ease-in-out infinite; }
+@keyframes sai-sk-snarl{
+  0%,100%{transform:rotate(0) translate(0,0);}
+  50%{transform:rotate(2.4deg) translate(.6px,1px);}
+}
+
+/* ---- SKUNK: the spray. NOT bound to a state, on purpose. --------------
+   The break-up is being redrawn (dash-away / walk-away, no standing
+   pause), so anything hung on the state he lands in after the break would
+   go with it. `data-musk` is a window the sim opens on the BREAK EVENT
+   itself — the frame his state stops being "fight", by whichever of the
+   four routes it ends — the same channel data-burst uses for the one fact
+   about a moment that CSS cannot recover for itself. */
+.sai-crit--skunk .sai-crit-muskpose{ display:none; }
+.sai-sprite[data-musk="1"] .sai-crit--skunk .sai-crit-muskpose{ display:inline; }
+.sai-sprite[data-musk="1"] .sai-crit--skunk .sai-crit-body,
+.sai-sprite[data-musk="1"] .sai-crit--skunk .sai-crit-head,
+.sai-sprite[data-musk="1"] .sai-crit--skunk .sai-crit-snuffhead,
+.sai-sprite[data-musk="1"] .sai-crit--skunk .sai-crit-tail,
+.sai-sprite[data-musk="1"] .sai-crit--skunk .sai-crit-leg{ display:none; }
+/* He is going away from it while he fires, which is both what a skunk
+   does and what the sprite is already doing — the break-up handed him a
+   velocity a frame ago. So the legs scramble: this is the one drawn pose
+   in the file that TRAVELS, and a still one would slide. */
+.sai-sprite[data-musk="1"] .sai-crit--skunk .musk-hind{
+  transform-box:fill-box; transform-origin:50% 0%;
+  animation:sai-sk-scramble .26s ease-in-out infinite; }
+.sai-sprite[data-musk="1"] .sai-crit--skunk .musk-fore{
+  transform-box:fill-box; transform-origin:50% 0%;
+  animation:sai-sk-scramble .26s ease-in-out infinite .13s; }
+@keyframes sai-sk-scramble{ 0%,100%{transform:rotate(-13deg);} 50%{transform:rotate(11deg);} }
+.sai-sprite[data-musk="1"] .sai-crit--skunk .musk-tail{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-sk-plumeup .13s ease-in-out infinite; }
+@keyframes sai-sk-plumeup{ 0%,100%{transform:rotate(-2.2deg);} 50%{transform:rotate(2.2deg);} }
+/* THE JET. 1.1s one-shot, matching MUSK_MS in the sim, and the cloud
+   front reaches full extent at 24% of it — which is the ~260ms the sim
+   allows before it stops treating this as a spray in flight. The reach
+   and half-width the hit test uses are READ OFF this drawing (MUSK_REACH
+   / MUSK_HALF); the cloud that is drawn is the cloud that hits. */
+.sai-sprite[data-musk="1"] .sai-crit--skunk .musk-jet{
+  animation:sai-sk-spray 1.1s ease-out forwards; }
+@keyframes sai-sk-spray{ 0%{opacity:0;} 8%{opacity:1;} 62%{opacity:.9;} 100%{opacity:0;} }
+.sai-sprite[data-musk="1"] .sai-crit--skunk .musk-stream{
+  transform-box:fill-box; transform-origin:0% 50%;
+  animation:sai-sk-jetgrow 1.1s ease-out forwards; }
+@keyframes sai-sk-jetgrow{
+  0%{transform:scaleX(.06); opacity:1;}
+  24%{transform:scaleX(1); opacity:1;}
+  70%{transform:scaleX(1); opacity:.45;}
+  100%{transform:scaleX(1); opacity:0;}
+}
+.sai-sprite[data-musk="1"] .sai-crit--skunk .musk-cloud{
+  transform-box:fill-box; transform-origin:0% 50%;
+  animation:sai-sk-cloud 1.1s ease-out forwards; }
+@keyframes sai-sk-cloud{
+  0%{transform:translateX(-46px) scale(.34); opacity:0;}   /* still at the gland */
+  24%{transform:translateX(0) scale(1); opacity:.95;}      /* arrived */
+  100%{transform:translateX(9px) scale(1.22); opacity:0;}  /* thins out */
+}
+.sai-sprite[data-musk="1"] .sai-crit--skunk .musk-drops ellipse{
+  transform-box:fill-box; transform-origin:50% 50%;
+  animation:sai-sk-drops 1.1s ease-out forwards; }
+.sai-sprite[data-musk="1"] .sai-crit--skunk .musk-drops ellipse:nth-child(2){ animation-delay:.06s; }
+.sai-sprite[data-musk="1"] .sai-crit--skunk .musk-drops ellipse:nth-child(3){ animation-delay:.11s; }
+.sai-sprite[data-musk="1"] .sai-crit--skunk .musk-drops ellipse:nth-child(4){ animation-delay:.17s; }
+@keyframes sai-sk-drops{
+  0%{opacity:0; transform:translate(-40px,0) scale(.4);}
+  30%{opacity:.9; transform:translate(0,0) scale(1);}
+  100%{opacity:0; transform:translate(14px,6px) scale(.7);}
+}
+/* and he watches it land */
+.sai-sprite[data-musk="1"] .sai-crit--skunk .musk-head{
+  transform-box:fill-box; transform-origin:60% 90%;
+  animation:sai-sk-lookback 1.1s ease-in-out forwards; }
+@keyframes sai-sk-lookback{
+  0%{transform:rotate(6deg) translate(2px,0);}
+  30%{transform:rotate(-3deg) translate(0,0);}
+  100%{transform:rotate(-6deg) translate(-1.4px,0);}
+}
+
+/* ---- SKUNK: the cone pits --------------------------------------------
+   Everything here is set AGAINST the claw scrape, because the two are
+   four seconds apart in the same animal's repertoire and would otherwise
+   be the same behavior twice. Scrape: rump up on straight hocks, ONE paw
+   at .22s, litter travelling six pixels, no hole. Dig: sat back on the
+   haunches, BOTH paws at .34s on an uneven beat, clods travelling eleven,
+   soil going forward as well as back, and a cone at the end of it. */
+.sai-crit--skunk .sai-crit-conepose{ display:none; }
+.sai-sprite[data-state="conedig"] .sai-crit--skunk .sai-crit-conepose,
+.sai-sprite[data-state="conenose"] .sai-crit--skunk .sai-crit-conepose{ display:inline; }
+.sai-sprite[data-state="conedig"] .sai-crit--skunk .sai-crit-body,
+.sai-sprite[data-state="conedig"] .sai-crit--skunk .sai-crit-head,
+.sai-sprite[data-state="conedig"] .sai-crit--skunk .sai-crit-snuffhead,
+.sai-sprite[data-state="conedig"] .sai-crit--skunk .sai-crit-tail,
+.sai-sprite[data-state="conedig"] .sai-crit--skunk .sai-crit-leg,
+.sai-sprite[data-state="conenose"] .sai-crit--skunk .sai-crit-body,
+.sai-sprite[data-state="conenose"] .sai-crit--skunk .sai-crit-head,
+.sai-sprite[data-state="conenose"] .sai-crit--skunk .sai-crit-snuffhead,
+.sai-sprite[data-state="conenose"] .sai-crit--skunk .sai-crit-tail,
+.sai-sprite[data-state="conenose"] .sai-crit--skunk .sai-crit-leg{ display:none; }
+/* the shuffle between holes borrows the nose-down head he already has —
+   he is not travelling, he is looking for the next likely inch. The ride
+   that keeps that head on his shoulders is keyed on [data-walking] alone,
+   so it already applies here with nothing added. */
+.sai-sprite[data-state="coneshift"] .sai-crit--skunk .sai-crit-snuffhead{ display:inline; }
+.sai-sprite[data-state="coneshift"] .sai-crit--skunk .sai-crit-head{ display:none; }
+.sai-sprite[data-state="coneshift"] .sai-crit--skunk .snuff-swing{
+  transform-box:fill-box; transform-origin:0% 5%;
+  animation:sai-sk-quarter .78s ease-in-out infinite; }
+.sai-sprite[data-state="coneshift"] .sai-crit--skunk .snuff-nose{
+  transform-box:fill-box; transform-origin:50% 50%;
+  animation:sai-sk-twitch .2s ease-in-out infinite; }
+.sai-sprite[data-state="coneshift"] .sai-crit--skunk .sai-crit-tail{
+  animation:sai-sk-plume 1.1s ease-in-out infinite; }
+
+/* THE LURCH, and this is the clumsiness: 1.7s against a .34s stroke is
+   five strokes to a lurch and never the same stroke twice. Nothing in
+   this pose divides into anything else in it, on purpose. */
+.sai-sprite[data-state="conedig"] .sai-crit--skunk .sai-crit-conepose{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-sk-lurch 1.7s ease-in-out infinite; }
+@keyframes sai-sk-lurch{
+  0%,100%{transform:translate(0,0) rotate(0);}
+  22%{transform:translate(-1.4px,.6px) rotate(-1.2deg);}
+  48%{transform:translate(1px,1.4px) rotate(.8deg);}
+  61%{transform:translate(2.2px,-.4px) rotate(1.6deg);}   /* over-balanced */
+  78%{transform:translate(-.6px,.9px) rotate(-.5deg);}
+}
+/* both paws, and the whole point is that they do not agree: half a beat
+   apart and the near one digging thirty per cent deeper than the far. */
+.sai-sprite[data-state="conedig"] .sai-crit--skunk .cone-arm-n{
+  transform-box:fill-box; transform-origin:26% 0%;
+  animation:sai-sk-paddleA .34s cubic-bezier(.3,0,.3,1) infinite; }
+.sai-sprite[data-state="conedig"] .sai-crit--skunk .cone-arm-f{
+  transform-box:fill-box; transform-origin:26% 0%;
+  animation:sai-sk-paddleB .34s cubic-bezier(.3,0,.3,1) infinite .17s; }
+@keyframes sai-sk-paddleA{
+  0%  {transform:translate(4.4px,-2.2px) rotate(-13deg);}  /* out over the rim */
+  34% {transform:translate(-4.6px,1.6px) rotate(11deg);}   /* hauled through */
+  52% {transform:translate(-3px,-3.4px) rotate(5deg);}     /* picked up */
+  100%{transform:translate(4.4px,-2.2px) rotate(-13deg);}
+}
+@keyframes sai-sk-paddleB{
+  0%  {transform:translate(3.2px,-1.6px) rotate(-9deg);}
+  38% {transform:translate(-3.2px,1.1px) rotate(8deg);}
+  56% {transform:translate(-2px,-2.4px) rotate(3deg);}
+  100%{transform:translate(3.2px,-1.6px) rotate(-9deg);}
+}
+/* the face goes in once every three strokes, not every one: the head is
+   what is in the way of the paws, so it can only be down when they are up */
+.sai-sprite[data-state="conedig"] .sai-crit--skunk .cone-head{
+  transform-box:fill-box; transform-origin:12% 24%;
+  animation:sai-sk-duck 1.02s ease-in-out infinite; }
+@keyframes sai-sk-duck{
+  0%,58%,100%{transform:rotate(0) translate(0,0);}
+  72%{transform:rotate(7deg) translate(-1px,2.6px);}
+  84%{transform:rotate(5deg) translate(-.6px,2px);}
+}
+/* ...and stays in for the whole of conenose, which is what makes it a
+   hole rather than a scratch */
+.sai-sprite[data-state="conenose"] .sai-crit--skunk .cone-head{
+  transform-box:fill-box; transform-origin:12% 24%;
+  animation:sai-sk-nosein .5s ease-in-out infinite; }
+@keyframes sai-sk-nosein{
+  0%,100%{transform:rotate(8deg) translate(-1.2px,3px);}
+  50%{transform:rotate(10deg) translate(-1.8px,4px);}
+}
+.sai-crit--skunk .cone-spray{ opacity:0; }
+.sai-sprite[data-state="conedig"] .sai-crit--skunk .cone-spray{ opacity:1; }
+.sai-sprite[data-state="conedig"] .sai-crit--skunk .cone-spray ellipse{
+  transform-box:fill-box; transform-origin:50% 100%;
+  animation:sai-sk-fling .34s ease-out infinite; }
+.sai-sprite[data-state="conedig"] .sai-crit--skunk .cone-spray ellipse:nth-child(2){ animation-delay:.07s; }
+.sai-sprite[data-state="conedig"] .sai-crit--skunk .cone-spray ellipse:nth-child(3){ animation-delay:.13s; }
+.sai-sprite[data-state="conedig"] .sai-crit--skunk .cone-spray ellipse:nth-child(6){ animation-delay:.19s; }
+/* the two that go the WRONG way — soil past his own nose is what a
+   digging skunk does and a digging dog does not */
+.sai-sprite[data-state="conedig"] .sai-crit--skunk .cone-spray ellipse:nth-child(4){
+  animation-name:sai-sk-flingfwd; animation-delay:.04s; }
+.sai-sprite[data-state="conedig"] .sai-crit--skunk .cone-spray ellipse:nth-child(5){
+  animation-name:sai-sk-flingfwd; animation-delay:.1s; }
+@keyframes sai-sk-fling{
+  0%,22%{opacity:0; transform:translate(0,0) scale(.4);}
+  40%{opacity:.95; transform:translate(-4px,-4px) scale(1);}
+  100%{opacity:0; transform:translate(-11px,-2px) scale(.85);}
+}
+@keyframes sai-sk-flingfwd{
+  0%,22%{opacity:0; transform:translate(0,0) scale(.4);}
+  40%{opacity:.9; transform:translate(3.4px,-3.4px) scale(1);}
+  100%{opacity:0; transform:translate(9px,-1px) scale(.85);}
+}
+/* THE PIT DEEPENS as he works it. One rule covering both states, so the
+   handover from conedig to conenose does not restart it — a hole that
+   re-filled itself when he put his nose in would undo the whole point. */
+.sai-sprite[data-state="conedig"] .sai-crit--skunk .cone-pit,
+.sai-sprite[data-state="conenose"] .sai-crit--skunk .cone-pit{
+  transform-box:fill-box; transform-origin:50% 0%;
+  animation:sai-sk-deepen 5.2s ease-out forwards; }
+@keyframes sai-sk-deepen{
+  0%  {transform:scale(.42,.3); opacity:.55;}
+  70% {transform:scale(.92,.86); opacity:1;}
+  100%{transform:scale(1,1); opacity:1;}
+}
+/* a loose, heavy sway — the scrape's plume is held tight at +-3deg/.44s
+   because his rump is up there; this one is sat on and swings */
+.sai-sprite[data-state="conedig"] .sai-crit--skunk .cone-tail,
+.sai-sprite[data-state="conenose"] .sai-crit--skunk .cone-tail{
+  transform-box:fill-box; transform-origin:88% 92%;
+  animation:sai-sk-conetail .68s ease-in-out infinite; }
+@keyframes sai-sk-conetail{ 0%,100%{transform:rotate(-5deg);} 50%{transform:rotate(4deg);} }
+
+/* ---- GOOSE: the hiss --------------------------------------------------
+   Head and neck only, the same swap his preen, crop and dabble all make,
+   for the same reason all three times: the neck is one filled path rooted
+   in the breast and the rotation that would lay it level carries the head
+   out past his own tail. Body, legs and wings stay on the rig, so the
+   global fight leg-drive and wing-flare go on running underneath. */
+.sai-crit--goose .sai-crit-hisspose{ display:none; }
+.sai-sprite[data-state="fight"] .sai-crit--goose .sai-crit-hisspose{ display:inline; }
+.sai-sprite[data-state="fight"] .sai-crit--goose .sai-crit-head{ display:none; }
+
+/* THE CHARGE, and it is ONE keyframe on TWO elements — the rig's body and
+   the drawn neck — because they are separate subtrees that have to travel
+   as one lump. Same problem sai-sk-ride solves for the skunk's swapped
+   head, and solved the same way: bound to the same selector so they
+   cannot drift. It is a PURE TRANSLATE for a hard reason — the two have
+   different fill boxes, so any rotation in here would pivot them about
+   different points and tear the neck off the shoulders. The pitch is
+   drawn into the pose instead.
+   This also replaces the global rear-and-rock for the goose: a bird
+   driving forward at something does not rear, and sai-crit-fightbody had
+   him bucking on the spot. */
+.sai-sprite[data-state="fight"] .sai-crit--goose .sai-crit-body,
+.sai-sprite[data-state="fight"] .sai-crit--goose .sai-crit-hisspose{
+  animation:sai-goose-charge .42s cubic-bezier(.25,0,.35,1) infinite; }
+@keyframes sai-goose-charge{
+  0%,100%{transform:translate(0,0);}
+  20%{transform:translate(4.4px,1.2px);}   /* the drive */
+  52%{transform:translate(-1.8px,0);}      /* the gather for the next */
+}
+/* the strike: the head jabs out along the level neck at twice the
+   charge's tempo, so one charge carries two lunges of the head */
+.sai-sprite[data-state="fight"] .sai-crit--goose .hiss-neck{
+  transform-box:fill-box; transform-origin:0% 42%;
+  animation:sai-goose-strike .21s ease-in-out infinite; }
+@keyframes sai-goose-strike{
+  0%,100%{transform:translate(0,0) rotate(0);}
+  50%{transform:translate(2.2px,-.6px) rotate(-1.8deg);}
+}
+/* the gape working. A hiss is a held breath punctuated, not a chew, so
+   the jaw opens WIDER on the out-breath instead of closing. */
+.sai-sprite[data-state="fight"] .sai-crit--goose .hiss-jaw{
+  transform-box:fill-box; transform-origin:2% 6%;
+  animation:sai-goose-gape .84s ease-in-out infinite; }
+@keyframes sai-goose-gape{
+  0%,100%{transform:rotate(0);}
+  30%{transform:rotate(7deg);}
+  70%{transform:rotate(2deg);}
+}
+/* THE TONGUE, and it is the fastest thing in this file on purpose. 85ms
+   is past the point where the eye tracks position, so it reads as a BUZZ
+   rather than a wag — which is what a hissing goose's tongue does, and
+   the only way to draw a sound with no audio to draw it from. */
+.sai-sprite[data-state="fight"] .sai-crit--goose .hiss-tongue{
+  transform-box:fill-box; transform-origin:0% 50%;
+  animation:sai-goose-tongue .085s linear infinite; }
+@keyframes sai-goose-tongue{
+  0%,100%{transform:translateY(-.7px) rotate(-2.4deg);}
+  50%{transform:translateY(.7px) rotate(2.4deg);}
+}
+/* the air leaving him, in bursts on the gape's clock */
+.sai-crit--goose .hiss-air{ opacity:0; }
+.sai-sprite[data-state="fight"] .sai-crit--goose .hiss-air{ opacity:1; }
+.sai-sprite[data-state="fight"] .sai-crit--goose .hiss-air path{
+  transform-box:fill-box; transform-origin:0% 50%;
+  animation:sai-goose-hissair .84s ease-out infinite; }
+.sai-sprite[data-state="fight"] .sai-crit--goose .hiss-air path:nth-child(2){ animation-delay:.07s; }
+.sai-sprite[data-state="fight"] .sai-crit--goose .hiss-air path:nth-child(3){ animation-delay:.14s; }
+@keyframes sai-goose-hissair{
+  0%,18%{opacity:0; transform:translateX(-7px) scaleX(.3);}
+  38%{opacity:.85; transform:translateX(0) scaleX(1);}
+  100%{opacity:0; transform:translateX(11px) scaleX(1.25);}
+}
+
+/* ---- SQUIRREL: chatter and tail flicks --------------------------------
+   No pose swap. Everything a scolding squirrel does, the rig can already
+   do — he stays on all fours and shouts. What the rig could NOT do is
+   make a sound, and his FaceKit is built mouths={false}, so the global
+   fight rule that opens every other animal's jaws found nothing on him to
+   open. The gape and the bark are drawn; the flick is the rig's own tail
+   taken off the global lash. */
+.sai-crit--squirrel .sai-crit-chatter,
+.sai-crit--squirrel .sai-crit-barkpuff{ display:none; }
+.sai-sprite[data-state="fight"] .sai-crit--squirrel .sai-crit-chatter,
+.sai-sprite[data-state="fight"] .sai-crit--squirrel .sai-crit-barkpuff{ display:inline; }
+
+/* the jaw: hard open, hard shut, and then a beat of nothing. A continuous
+   flap reads as talking; this is a volley of four clipped barks and a
+   pause, which is what a grey squirrel actually does. */
+.sai-sprite[data-state="fight"] .sai-crit--squirrel .sai-crit-chatter{
+  transform-box:fill-box; transform-origin:50% 0%;
+  animation:sai-sq-chatterjaw .52s ease-in-out infinite; }
+@keyframes sai-sq-chatterjaw{
+  0%,4%   {transform:scaleY(1);}
+  10%     {transform:scaleY(.25);}
+  16%     {transform:scaleY(1);}
+  22%     {transform:scaleY(.25);}
+  28%     {transform:scaleY(1);}
+  34%     {transform:scaleY(.3);}
+  40%,100%{transform:scaleY(1);}
+}
+/* THE BARK. Two volleys per cycle on the jaw's clock, staggered across
+   the three chevrons, and each one is gone before the next lands so the
+   eye counts barks instead of watching a siren. */
+.sai-sprite[data-state="fight"] .sai-crit--squirrel .sai-crit-barkpuff path{
+  transform-box:fill-box; transform-origin:0% 50%;
+  animation:sai-sq-bark .52s ease-out infinite; }
+.sai-sprite[data-state="fight"] .sai-crit--squirrel .sai-crit-barkpuff path:nth-child(2){ animation-delay:.055s; }
+.sai-sprite[data-state="fight"] .sai-crit--squirrel .sai-crit-barkpuff path:nth-child(3){ animation-delay:.11s; }
+@keyframes sai-sq-bark{
+  0%,3%   {opacity:0; transform:translateX(-6px) scale(.4);}
+  12%     {opacity:.95; transform:translateX(0) scale(1);}
+  30%     {opacity:0; transform:translateX(7px) scale(1.25);}
+  36%     {opacity:0; transform:translateX(-6px) scale(.4);}
+  44%     {opacity:.9; transform:translateX(0) scale(1);}
+  62%,100%{opacity:0; transform:translateX(8px) scale(1.3);}
+}
+/* THE FLICK. The global fight lash runs .3s across 34 degrees, which on a
+   plume this size is a slow wave. A grey squirrel's alarm flick is the
+   opposite — small, hard, three a second, with a check at the top of each
+   throw — and it is the single most recognisable thing he does. */
+.sai-sprite[data-state="fight"] .sai-crit--squirrel .sai-crit-tail{
+  animation:sai-sq-tailflick .165s cubic-bezier(.3,0,.2,1) infinite; }
+@keyframes sai-sq-tailflick{
+  0%  {transform:rotate(-13deg);}
+  40% {transform:rotate(9deg);}
+  55% {transform:rotate(6deg);}    /* the check */
+  100%{transform:rotate(-13deg);}
+}
+/* and it is not only the tail that bristles */
+.sai-sprite[data-state="fight"] .sai-crit--squirrel .sai-crit-ear{
+  animation:sai-sq-bristle .165s ease-in-out infinite; }
+@keyframes sai-sq-bristle{ 0%,100%{transform:rotate(-4deg);} 50%{transform:rotate(3deg);} }
+
+/* ---- reduced motion ---- */
+@media (prefers-reduced-motion: reduce){
+  .sai-sprite[data-state="fight"] .sai-crit--skunk .sai-crit-apopose,
+  .sai-sprite[data-state="fight"] .sai-crit--skunk .apo-body,
+  .sai-sprite[data-state="fight"] .sai-crit--skunk .apo-fore-n,
+  .sai-sprite[data-state="fight"] .sai-crit--skunk .apo-fore-f,
+  .sai-sprite[data-state="fight"] .sai-crit--skunk .apo-stomp ellipse,
+  .sai-sprite[data-state="fight"] .sai-crit--skunk .apo-tail,
+  .sai-sprite[data-state="fight"] .sai-crit--skunk .apo-head,
+  .sai-sprite[data-musk="1"] .sai-crit--skunk .musk-hind,
+  .sai-sprite[data-musk="1"] .sai-crit--skunk .musk-fore,
+  .sai-sprite[data-musk="1"] .sai-crit--skunk .musk-tail,
+  .sai-sprite[data-musk="1"] .sai-crit--skunk .musk-jet,
+  .sai-sprite[data-musk="1"] .sai-crit--skunk .musk-stream,
+  .sai-sprite[data-musk="1"] .sai-crit--skunk .musk-cloud,
+  .sai-sprite[data-musk="1"] .sai-crit--skunk .musk-drops ellipse,
+  .sai-sprite[data-musk="1"] .sai-crit--skunk .musk-head,
+  .sai-sprite[data-state="conedig"] .sai-crit--skunk .sai-crit-conepose,
+  .sai-sprite[data-state="conedig"] .sai-crit--skunk .cone-arm-n,
+  .sai-sprite[data-state="conedig"] .sai-crit--skunk .cone-arm-f,
+  .sai-sprite[data-state="conedig"] .sai-crit--skunk .cone-head,
+  .sai-sprite[data-state="conenose"] .sai-crit--skunk .cone-head,
+  .sai-sprite[data-state="conedig"] .sai-crit--skunk .cone-spray ellipse,
+  .sai-sprite[data-state="conedig"] .sai-crit--skunk .cone-pit,
+  .sai-sprite[data-state="conenose"] .sai-crit--skunk .cone-pit,
+  .sai-sprite[data-state="conedig"] .sai-crit--skunk .cone-tail,
+  .sai-sprite[data-state="conenose"] .sai-crit--skunk .cone-tail,
+  .sai-sprite[data-state="coneshift"] .sai-crit--skunk .snuff-swing,
+  .sai-sprite[data-state="coneshift"] .sai-crit--skunk .snuff-nose,
+  .sai-sprite[data-state="coneshift"] .sai-crit--skunk .sai-crit-tail,
+  .sai-sprite[data-state="fight"] .sai-crit--goose .sai-crit-body,
+  .sai-sprite[data-state="fight"] .sai-crit--goose .sai-crit-hisspose,
+  .sai-sprite[data-state="fight"] .sai-crit--goose .hiss-neck,
+  .sai-sprite[data-state="fight"] .sai-crit--goose .hiss-jaw,
+  .sai-sprite[data-state="fight"] .sai-crit--goose .hiss-tongue,
+  .sai-sprite[data-state="fight"] .sai-crit--goose .hiss-air path,
+  .sai-sprite[data-state="fight"] .sai-crit--squirrel .sai-crit-chatter,
+  .sai-sprite[data-state="fight"] .sai-crit--squirrel .sai-crit-barkpuff path,
+  .sai-sprite[data-state="fight"] .sai-crit--squirrel .sai-crit-tail,
+  .sai-sprite[data-state="fight"] .sai-crit--squirrel .sai-crit-ear{ animation:none; }
+  /* Every one of these is a POSTURE and postures stay: an arched skunk, a
+     goose with its neck out, a squirrel with its mouth open and a hole in
+     the ground are all still true with nothing moving. Only the opacity
+     groups need saying, because the global kill leaves them at whatever
+     their keyframe's first frame was rather than at their authored value. */
+  .sai-sprite[data-state="fight"] .sai-crit--skunk .apo-stomp{ opacity:1; }
+  .sai-sprite[data-state="conedig"] .sai-crit--skunk .cone-spray{ opacity:1; }
+  .sai-sprite[data-state="fight"] .sai-crit--goose .hiss-air{ opacity:1; }
+}

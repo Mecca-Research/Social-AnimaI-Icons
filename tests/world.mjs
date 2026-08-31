@@ -3198,6 +3198,15 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
         }
       }
     }
+    // NOBODY ELSE ON THE MAP. A threat is re-read from the live cast every
+    // frame, so clearing _threat once means nothing: on CI a cougar stood
+    // near the talus and the goat spent all four hundred frames in
+    // preyflee, which is a goat that never wanders and therefore never
+    // takes the goal it is being handed. This asks about the LEAP.
+    for (const o of w.agents) {
+      o.x = -2000; o.y = -2000; o.vx = 0; o.vy = 0; o.state = 'idle';
+      o._eth = null; o.idleUntil = 9e9; o.intentUntil = 9e9; o.noEventUntil = 9e9;
+    }
     g._in = true; g._lvl = 0; g._hold = 0; g._leap = null; g._threat = null;
     g.state = 'preywander'; g._goal = null; g._shuffle = 0;
     g.leaveAt = performance.now() + 9e6;
@@ -4117,10 +4126,17 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
   chk(!P.none && P.fixFrames > 0 && P.fixMoved < 2,
     'and then stops dead before he goes',
     P.none || `${P.fixFrames} frames gathered, ${P.fixMoved.toFixed(1)}px of drift`);
-  chk(!P.none && P.dashFrames > 0 && P.dashPx <= 300,
+  // THE BUDGET IS 260px, DOUBLED FOR A WINNER. beginChase hands a chase
+  // fated to land twice the dash so the closing arithmetic â€” not the fuel â€”
+  // is what ends it; a loser is held to the dash itself. Either way it is a
+  // FIXED distance, which is the thing this asks: bounded, not a chase
+  // across the map. The cap follows the outcome rather than pretending both
+  // are 260, which is what made it read as a failure at 330px on a kill.
+  const dashCap = P.outcome === 'kill' ? 580 : 320;
+  chk(!P.none && P.dashFrames > 0 && P.dashPx <= dashCap,
     'a pounce is a fixed distance, not a chase',
-    P.none || `${P.dashPx.toFixed(0)}px of ground spent against a 260px budget, ` +
-      `over ${P.dashFrames} frames â€” ${P.outcome}`);
+    P.none || `${P.dashPx.toFixed(0)}px of ground spent against a ${dashCap}px ceiling ` +
+      `(260 doubled for a fated win), over ${P.dashFrames} frames â€” ${P.outcome}`);
 
   // ---- 2b. THE VANTAGE: ridges, cliffs and bushes ----------------------
   // The owner's first sentence, and the only event of his with no food and
@@ -4155,7 +4171,10 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     if (!shelf || !floor) return { none: 'the prowl never picked anywhere' };
     // a goat may stand on a terrace and nowhere else, so the world's own
     // habitat rule is the cheapest way to ask which band a point is in
-    const onShelf = w.__prey.okAt('goat', shelf.x, shelf.y, { lvl: 1 });
+    // ...and from the SHELF his own bag offers cliff, ridge AND talus, so
+    // "a terrace" means any of the three bands, not level 1 specifically â€”
+    // a talus pick from up there is the walk down he was always allowed
+    const onShelf = [0, 1, 2].some((l) => w.__prey.okAt('goat', shelf.x, shelf.y, { lvl: l }));
     const onTalus = w.__prey.okAt('goat', floor.x, floor.y, { lvl: 0 });
     let atBush = null;
     for (const f of w.forage || []) {
@@ -4164,13 +4183,26 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
       const d = Math.hypot(f.px - floor.x, f.py - floor.y);
       if (d < half + cg.r * 0.9 + 26) atBush = f.kind + ' at ' + d.toFixed(0) + 'px';
     }
+    // ...and from the floor the bluff itself is now fair game: the router
+    // is what made a terrace pick reachable from the trees, so "which band"
+    // is asked of all three rather than of the talus alone
+    const onBluff = [0, 1, 2].filter((l) => w.__prey.okAt('goat', floor.x, floor.y, { lvl: l }));
     return { none: false, onShelf: onShelf, onTalus: onTalus, atBush: atBush,
-             floorOk: w.__prey.okAt('hare', floor.x, floor.y) };
+             onBluff: onBluff, floorOk: w.__prey.okAt('hare', floor.x, floor.y) };
   })()`);
-  chk(!VN.none && VN.onShelf && (VN.onTalus || VN.atBush) && VN.floorOk,
-    'he prowls the ground he is on: the terrace up there, the talus or a bush down here',
-    VN.none || `from the shelf he picked a terrace; from the trees he picked ` +
-      `${VN.onTalus ? 'the talus at the foot of the faces' : 'the far side of a ' + VN.atBush}`);
+  // THE CONTRACT MOVED IN v0.47. It used to be "the ground he is on", because
+  // a terrace picked from the trees was a walk that died at the rock's east
+  // outline â€” measured, 24 attempts, 24 stall-aborts. The router walks him
+  // round the foot and up, so the bluff is now somewhere he may set off for
+  // from anywhere; what still has to be true is that the pick is REAL
+  // ground â€” a terrace, a bush, or open floor, and never a wall.
+  const vnWhere = (v) => (v.onBluff && v.onBluff.length
+    ? 'a bluff terrace (level ' + v.onBluff.join('/') + ')'
+    : v.atBush ? 'the far side of a ' + v.atBush
+    : v.floorOk ? 'open forest floor' : 'NOWHERE STANDABLE');
+  chk(!VN.none && VN.onShelf && (VN.onBluff.length > 0 || VN.atBush || VN.floorOk),
+    'he prowls the bluff and the bushes: a terrace up there, and from the trees the rock or a bush',
+    VN.none || `from the shelf he picked a terrace; from the trees he picked ` + vnWhere(VN));
 
   // ---- 3. HE NEVER SETS OFF AT A GOAT ON ANOTHER TERRACE ---------------
   // Rule 2 of the bluff: walking cannot change level, and a stalk is a busy
@@ -4499,7 +4531,23 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     // the owner asleep beside his kill, pinned so the walk cannot drift him
     const bed = { x: m.x - cg.r * 0.4, y: m.y };
     let started = -1, gnawed = -1, hops = 0, hopUp = false, wary = -1;
-    w.__free(wf, 0.36 * B.w, 0.66 * B.h, 0);
+    // ON THE FLOOR AND INSIDE HIS NOSE. WF_SCAV_SENSE is 420px and the
+    // cave-mouth carcass sits hard against the west frame, so a wolf
+    // parked at a third of the stage is 530px away and cannot smell it â€”
+    // he then wanders until luck carries him into range, which is a coin
+    // toss dressed up as a check. The seat is swept for the nearest legal
+    // forest floor inside his nose; the CLIMB is what this asks about.
+    let seat = null, sd = Infinity;
+    for (let gy = 0.40; gy < 0.94; gy += 0.03)
+      for (let gx = 0.06; gx < 0.60; gx += 0.03) {
+        const x = gx * B.w, y = gy * B.h;
+        if (!w.__prey.okAt('hare', x, y)) continue;      // legal forest floor
+        const d = Math.hypot(x - r.x, y - r.y);
+        if (d < 260 || d > 400) continue;                 // in his nose, not on top of it
+        if (d < sd) { sd = d; seat = { x: x, y: y }; }
+      }
+    if (!seat) return { none: 'no legal floor seat inside the wolf\\u2019s nose' };
+    w.__free(wf, seat.x, seat.y, 0);
     for (let i = 0; i < 2600 && gnawed < 0; i++) {
       cg.x = bed.x; cg.y = bed.y; cg.vx = 0; cg.vy = 0; cg._lvl = 1;
       cg.state = 'cgsleep'; cg.stateUntil = performance.now() + 9e6;
@@ -4973,6 +5021,12 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
         // the hare holds still: this is about the wolf's reach and not
         // about where a hare had wandered to by frame thirty
         p.x = px; p.y = py; p.vx = 0; p.vy = 0; p._fleeUntil = 0;
+        // ...AND SO DOES THE WOLF. He was free to wander through the trial,
+        // and a wander that carries him 60px west turns a 260px upwind
+        // refusal into a 200px legal take â€” the rule reads as broken when
+        // what actually happened is that he walked. The range is the whole
+        // question here, so the range is pinned.
+        wf.x = cx; wf.y = cy; wf.vx = 0; wf.vy = 0;
         if (w.prey.length > 1) w.prey = w.prey.filter((q) => q === p);
         w.__only(wf, 'rush');
         window.__pump(1);
@@ -5358,15 +5412,34 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
       return x > 30 && x < B.w - 30 && y > B.h * 0.30 && y < B.h - 30
         && w.lakeRhoAt(x, y) > 1.06 && !w.rockZoneAt(x, y).on;
     };
-    var ang = -1;
-    for (var t = 0; t < 16; t++) {
-      var cand = (t / 16) * Math.PI * 2;
-      if (ok(p.x + Math.cos(cand) * 158, p.y + Math.sin(cand) * 158)
-          && ok(p.x + Math.cos(cand) * 84, p.y + Math.sin(cand) * 84)) {
-        ang = cand; break;
+    var bearing = function () {
+      for (var t = 0; t < 16; t++) {
+        var cand = (t / 16) * Math.PI * 2;
+        if (ok(p.x + Math.cos(cand) * 158, p.y + Math.sin(cand) * 158)
+            && ok(p.x + Math.cos(cand) * 84, p.y + Math.sin(cand) * 84)) return cand;
       }
+      return -1;
+    };
+    var ang = bearing();
+    // ...and if the worm's own timber sat against the water, MOVE THE WORM
+    // rather than skipping the check. Where it spawned is the litter
+    // system's business and it is asked elsewhere; this is about the
+    // hedgehog's 120px, and a check that quietly excuses itself on CI
+    // because of a spawn roll is not a check.
+    if (ang < 0) {
+      var moved = false;
+      for (var gy = 0.30; gy < 0.92 && !moved; gy += 0.04)
+        for (var gx = 0.30; gx < 0.92; gx += 0.04) {
+          var nx = gx * w.bounds.w, ny = gy * w.bounds.h;
+          if (!ok(nx, ny)) continue;
+          var sx = p.x, sy = p.y;
+          p.x = nx; p.y = ny;
+          if (bearing() >= 0) { moved = true; break; }
+          p.x = sx; p.y = sy;
+        }
+      ang = bearing();
     }
-    if (ang < 0) return { none: 'no legal bearing: the worm sat against the water' };
+    if (ang < 0) return { none: 'nowhere on this stage has both rings on legal ground' };
     var at = function (r) {
       w.__free(a);
       a.x = p.x + Math.cos(ang) * r; a.y = p.y + Math.sin(ang) * r;

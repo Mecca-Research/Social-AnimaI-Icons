@@ -1,0 +1,78 @@
+# The full verification board, on every change.
+#
+# Every suite in tests/ drives a REAL headless Chromium against a vite dev
+# server serving live source, on a virtual clock (see tests/world.mjs's
+# header). Each suite exits non-zero on any failing check, so this job is
+# red the moment any of the ~370 checks is.
+#
+# The "published build is the source" step is the CI form of the bug that
+# motivated this pipeline: v0.46 briefly served a stale committed bundle
+# missing whole features while every suite passed against live source.
+# Rebuilding here and diffing against the committed bundles catches that
+# class on the PR instead of on the live site.
+name: suites
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: suites-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  suites:
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: |
+          npm i --no-save playwright@1.49.1
+          npx playwright install --with-deps chromium
+
+      - name: Test fixtures parse cleanly
+        run: npm run test:parse
+
+      - name: Committed bundles match the source
+        run: |
+          npm run build
+          if ! git diff --quiet -- index.html assets docs favicon.svg 2>/dev/null; then
+            echo "::error::The committed bundles (repo root / docs) do not match a fresh build."
+            echo "Run 'npm run build' locally and commit the result — the live site serves the committed files."
+            git diff --stat -- index.html assets docs
+            exit 1
+          fi
+
+      - name: Start dev server
+        run: |
+          npm run dev -- --host 127.0.0.1 --port 5173 &
+          for i in $(seq 1 30); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:5173/ || true)
+            [ "$code" = "200" ] && exit 0
+            sleep 2
+          done
+          echo "::error::dev server never came up" && exit 1
+
+      - name: Cadence
+        run: npm run test:cadence
+      - name: Sizes
+        run: npm run test:sizes
+      - name: Gait
+        run: npm run test:gait
+      - name: Ethogram
+        run: npm run test:bear
+      - name: Forage
+        run: npm run test:forage
+      - name: World
+        run: npm run test:world

@@ -1,0 +1,54 @@
+# Deploy GitHub Pages from the BUILD, not from committed bundles.
+#
+# Today the live site serves bundles committed to the repo root and docs/
+# ("Deploy from a branch"), which is how a stale bundle once shipped with
+# whole features missing. This workflow is the replacement: every push to
+# main builds fresh and deploys dist/ directly.
+#
+# IT TAKES EFFECT ONLY when the repository's Pages setting is switched to
+# "Source: GitHub Actions" (Settings -> Pages). Until then it runs green and
+# deploys nothing visible, and the committed bundles keep serving — flip the
+# setting, confirm the site, and the publish-to-root/docs step (and the
+# committed bundles themselves) can then be retired.
+name: pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx vite build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
