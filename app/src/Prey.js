@@ -405,7 +405,16 @@ export function spawnPrey(world, key, opt = {}) {
     // arrival gives him that edge, rather than to place him by hand.
     if (prof.habitat === "rock") {
       for (let i = 0; i < 24 && p.x > 0; i++) T.enterFromEdge(p, world, sp);
-      if (p.x > 0) return null;                 // no west entry on this stage
+      // ...and if two dozen rolls never came up west, he is WALKED IN there
+      // rather than not arriving at all. Measured: one goat in forty was
+      // losing its arrival to the dice — a silent no-show that also spent
+      // the species' cooldown, so the bluff could stand empty for minutes
+      // for no reason a viewer could see. The roll is still how he normally
+      // gets his edge; this is only the floor under it.
+      if (p.x > 0) {
+        p.x = -T.EDGE_OFF * 0.85;
+        p.y = (0.68 + Math.random() * 0.24) * world.bounds.h;
+      }
       p.y = T.clamp(p.y, 0.68 * world.bounds.h, 0.92 * world.bounds.h);
       p.vx = Math.abs(p.vx) || sp; p.vy = 0;
     }

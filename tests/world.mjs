@@ -3198,6 +3198,15 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
         }
       }
     }
+    // NOBODY ELSE ON THE MAP. A threat is re-read from the live cast every
+    // frame, so clearing _threat once means nothing: on CI a cougar stood
+    // near the talus and the goat spent all four hundred frames in
+    // preyflee, which is a goat that never wanders and therefore never
+    // takes the goal it is being handed. This asks about the LEAP.
+    for (const o of w.agents) {
+      o.x = -2000; o.y = -2000; o.vx = 0; o.vy = 0; o.state = 'idle';
+      o._eth = null; o.idleUntil = 9e9; o.intentUntil = 9e9; o.noEventUntil = 9e9;
+    }
     g._in = true; g._lvl = 0; g._hold = 0; g._leap = null; g._threat = null;
     g.state = 'preywander'; g._goal = null; g._shuffle = 0;
     g.leaveAt = performance.now() + 9e6;
@@ -5403,15 +5412,34 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
       return x > 30 && x < B.w - 30 && y > B.h * 0.30 && y < B.h - 30
         && w.lakeRhoAt(x, y) > 1.06 && !w.rockZoneAt(x, y).on;
     };
-    var ang = -1;
-    for (var t = 0; t < 16; t++) {
-      var cand = (t / 16) * Math.PI * 2;
-      if (ok(p.x + Math.cos(cand) * 158, p.y + Math.sin(cand) * 158)
-          && ok(p.x + Math.cos(cand) * 84, p.y + Math.sin(cand) * 84)) {
-        ang = cand; break;
+    var bearing = function () {
+      for (var t = 0; t < 16; t++) {
+        var cand = (t / 16) * Math.PI * 2;
+        if (ok(p.x + Math.cos(cand) * 158, p.y + Math.sin(cand) * 158)
+            && ok(p.x + Math.cos(cand) * 84, p.y + Math.sin(cand) * 84)) return cand;
       }
+      return -1;
+    };
+    var ang = bearing();
+    // ...and if the worm's own timber sat against the water, MOVE THE WORM
+    // rather than skipping the check. Where it spawned is the litter
+    // system's business and it is asked elsewhere; this is about the
+    // hedgehog's 120px, and a check that quietly excuses itself on CI
+    // because of a spawn roll is not a check.
+    if (ang < 0) {
+      var moved = false;
+      for (var gy = 0.30; gy < 0.92 && !moved; gy += 0.04)
+        for (var gx = 0.30; gx < 0.92; gx += 0.04) {
+          var nx = gx * w.bounds.w, ny = gy * w.bounds.h;
+          if (!ok(nx, ny)) continue;
+          var sx = p.x, sy = p.y;
+          p.x = nx; p.y = ny;
+          if (bearing() >= 0) { moved = true; break; }
+          p.x = sx; p.y = sy;
+        }
+      ang = bearing();
     }
-    if (ang < 0) return { none: 'no legal bearing: the worm sat against the water' };
+    if (ang < 0) return { none: 'nowhere on this stage has both rings on legal ground' };
     var at = function (r) {
       w.__free(a);
       a.x = p.x + Math.cos(ang) * r; a.y = p.y + Math.sin(ang) * r;
