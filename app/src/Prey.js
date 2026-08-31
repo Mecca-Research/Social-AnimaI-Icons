@@ -926,6 +926,14 @@ function startLeap(world, p, lvl, now, gx) {
     if (y1 == null) continue;
     const dy = Math.abs(y1 - p.y);
     if (dy > LEAP_MAX) continue;
+    // THE STAGE IS A BOUND TOO, and the drift is what made that matter. A
+    // leap used to land at the take-off x, which the goat had walked to and
+    // was therefore legal by construction; a bound that carries 56px west
+    // off the shelf can land it clean off the frame — measured, a panicking
+    // goat at x -70, gone from the world. habitatOk's own edge rule, asked
+    // of the LANDING because that is the step being taken.
+    if (x1 < EDGE_PAD || x1 > b.w - EDGE_PAD
+        || y1 < EDGE_PAD + 10 || y1 > b.h - EDGE_PAD) continue;
     const z = T.rockZone(b, x1, y1);
     if (!z.on || z.wall || z.level !== lvl) continue;
     p._leap = { t0: now, ms: LEAP_MS(dy), x0: p.x, x1, y0: p.y, y1, lvl,

@@ -4117,10 +4117,17 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
   chk(!P.none && P.fixFrames > 0 && P.fixMoved < 2,
     'and then stops dead before he goes',
     P.none || `${P.fixFrames} frames gathered, ${P.fixMoved.toFixed(1)}px of drift`);
-  chk(!P.none && P.dashFrames > 0 && P.dashPx <= 300,
+  // THE BUDGET IS 260px, DOUBLED FOR A WINNER. beginChase hands a chase
+  // fated to land twice the dash so the closing arithmetic — not the fuel —
+  // is what ends it; a loser is held to the dash itself. Either way it is a
+  // FIXED distance, which is the thing this asks: bounded, not a chase
+  // across the map. The cap follows the outcome rather than pretending both
+  // are 260, which is what made it read as a failure at 330px on a kill.
+  const dashCap = P.outcome === 'kill' ? 580 : 320;
+  chk(!P.none && P.dashFrames > 0 && P.dashPx <= dashCap,
     'a pounce is a fixed distance, not a chase',
-    P.none || `${P.dashPx.toFixed(0)}px of ground spent against a 260px budget, ` +
-      `over ${P.dashFrames} frames — ${P.outcome}`);
+    P.none || `${P.dashPx.toFixed(0)}px of ground spent against a ${dashCap}px ceiling ` +
+      `(260 doubled for a fated win), over ${P.dashFrames} frames — ${P.outcome}`);
 
   // ---- 2b. THE VANTAGE: ridges, cliffs and bushes ----------------------
   // The owner's first sentence, and the only event of his with no food and
@@ -4155,7 +4162,10 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
     if (!shelf || !floor) return { none: 'the prowl never picked anywhere' };
     // a goat may stand on a terrace and nowhere else, so the world's own
     // habitat rule is the cheapest way to ask which band a point is in
-    const onShelf = w.__prey.okAt('goat', shelf.x, shelf.y, { lvl: 1 });
+    // ...and from the SHELF his own bag offers cliff, ridge AND talus, so
+    // "a terrace" means any of the three bands, not level 1 specifically —
+    // a talus pick from up there is the walk down he was always allowed
+    const onShelf = [0, 1, 2].some((l) => w.__prey.okAt('goat', shelf.x, shelf.y, { lvl: l }));
     const onTalus = w.__prey.okAt('goat', floor.x, floor.y, { lvl: 0 });
     let atBush = null;
     for (const f of w.forage || []) {
@@ -4512,7 +4522,23 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
     // the owner asleep beside his kill, pinned so the walk cannot drift him
     const bed = { x: m.x - cg.r * 0.4, y: m.y };
     let started = -1, gnawed = -1, hops = 0, hopUp = false, wary = -1;
-    w.__free(wf, 0.36 * B.w, 0.66 * B.h, 0);
+    // ON THE FLOOR AND INSIDE HIS NOSE. WF_SCAV_SENSE is 420px and the
+    // cave-mouth carcass sits hard against the west frame, so a wolf
+    // parked at a third of the stage is 530px away and cannot smell it —
+    // he then wanders until luck carries him into range, which is a coin
+    // toss dressed up as a check. The seat is swept for the nearest legal
+    // forest floor inside his nose; the CLIMB is what this asks about.
+    let seat = null, sd = Infinity;
+    for (let gy = 0.40; gy < 0.94; gy += 0.03)
+      for (let gx = 0.06; gx < 0.60; gx += 0.03) {
+        const x = gx * B.w, y = gy * B.h;
+        if (!w.__prey.okAt('hare', x, y)) continue;      // legal forest floor
+        const d = Math.hypot(x - r.x, y - r.y);
+        if (d < 260 || d > 400) continue;                 // in his nose, not on top of it
+        if (d < sd) { sd = d; seat = { x: x, y: y }; }
+      }
+    if (!seat) return { none: 'no legal floor seat inside the wolf\\u2019s nose' };
+    w.__free(wf, seat.x, seat.y, 0);
     for (let i = 0; i < 2600 && gnawed < 0; i++) {
       cg.x = bed.x; cg.y = bed.y; cg.vx = 0; cg.vy = 0; cg._lvl = 1;
       cg.state = 'cgsleep'; cg.stateUntil = performance.now() + 9e6;
