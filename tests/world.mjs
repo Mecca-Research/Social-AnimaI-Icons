@@ -16,8 +16,8 @@
  * And where a check is about GEOMETRY rather than timing, it asks the world
  * for the geometry instead of watching an animal wander into it.
  */
-const { chromium } = await import(process.env.SAI_PLAYWRIGHT || 'playwright');
-const browser = await chromium.launch({ executablePath: process.env.SAI_CHROMIUM || undefined });
+import { launchBrowser } from "./browser.mjs";
+const browser = await launchBrowser();
 const page = await browser.newPage({ viewport: { width: 1500, height: 940 } });
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 await page.goto(process.env.SAI_URL || 'http://localhost:5173/', { waitUntil: 'networkidle' });

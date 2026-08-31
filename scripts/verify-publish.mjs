@@ -21,6 +21,7 @@ import { readFile } from "node:fs/promises";
 import { join, extname, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { launchBrowser } from "../tests/browser.mjs";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css",
                 ".svg": "image/svg+xml", ".json": "application/json" };
@@ -37,8 +38,7 @@ const server = createServer(async (req, res) => {
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
 const url = `http://127.0.0.1:${server.address().port}/`;
 
-const { chromium } = await import(process.env.SAI_PLAYWRIGHT || "playwright");
-const browser = await chromium.launch({ executablePath: process.env.SAI_CHROMIUM || undefined });
+const browser = await launchBrowser();
 const page = await browser.newPage({ viewport: { width: 1500, height: 940 } });
 const errs = []; page.on("pageerror", (e) => errs.push(e.message));
 // A virtual clock, because the hop question has to RUN FRAMES: _rockHop is set

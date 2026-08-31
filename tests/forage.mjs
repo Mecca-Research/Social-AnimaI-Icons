@@ -15,9 +15,10 @@
  * which is what chain() does. How often it comes round is a separate
  * question and deserves a separate check.
  */
-const { chromium } = await import(process.env.SAI_PLAYWRIGHT || 'playwright');
-const browser = await chromium.launch({ executablePath: process.env.SAI_CHROMIUM || undefined });
+import { launchBrowser, fastClock } from "./browser.mjs";
+const browser = await launchBrowser({ fast: true });
 const page = await browser.newPage({ viewport: { width: 1500, height: 940 } });
+await fastClock(page);
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 await page.goto(process.env.SAI_URL || 'http://localhost:5173/', { waitUntil: 'networkidle' });
 await page.waitForTimeout(2500);
@@ -28,7 +29,15 @@ await page.evaluate('window.__saiWorld.__seedCast && window.__saiWorld.__seedCas
 await page.waitForTimeout(600);
 
 const pass = [], fail = [];
-const chk = (ok, l, d) => { (ok?pass:fail).push(`${l} — ${d}`); console.log(`${ok?'  ✔':'  ✘'} ${l} — ${d}`); };
+// SAI_TIME=1 stamps each line with the seconds since the last one, which
+// is how the slow checks in here were found: node buffers stdout through
+// a pipe, so timing the lines from outside measures the flush, not the work.
+const T0 = { t: Date.now() };
+const chk = (ok, l, d) => { (ok?pass:fail).push(`${l} — ${d}`);
+  const el = process.env.SAI_TIME
+    ? `[${((Date.now() - T0.t) / 1000).toFixed(1)}s] ` : '';
+  T0.t = Date.now();
+  console.log(`${ok?'  ✔':'  ✘'} ${el}${l} — ${d}`); };
 
 // Everyone EXCEPT the subject, held still. Muzzling the subject's own
 // events is not enough isolation, because two things reach him from
@@ -82,6 +91,7 @@ chk(world.forage === 27 && world.kinds === 'berry,foodtree,log,nut,root,shrub,so
 chk(world.eth.includes('squirrel'), 'squirrel has an ethogram', world.eth);
 
 // force a species' event to fire now, and report the state chain it walks
+
 async function chain(species, evId, ms = 60000, seed = '') {
   return page.evaluate(`(async w => { const a=w.agents.find(x=>x.species==='${species}');
     ${stillness(species)}

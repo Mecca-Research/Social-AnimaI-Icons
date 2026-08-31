@@ -44,8 +44,8 @@
  * SpeciesProfile.js's `fill` column has to be measured with, or the table
  * and the suite are describing two different animals.
  */
-const { chromium } = await import(process.env.SAI_PLAYWRIGHT || 'playwright');
-const browser = await chromium.launch({ executablePath: process.env.SAI_CHROMIUM || undefined });
+import { launchBrowser } from "./browser.mjs";
+const browser = await launchBrowser();
 const page = await browser.newPage({ viewport: { width: 1600, height: 1000 } });
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 await page.goto(process.env.SAI_URL || 'http://localhost:5173/', { waitUntil: 'networkidle' });
