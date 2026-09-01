@@ -4764,20 +4764,30 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
     if (!S) return { none: 'no ethogram state' };
     const mr = Math.random;
     Math.random = () => 0.99;                       // every roll fails 0.60
-    // ...and the den is the ONLY thing asked. Zeroing its ledger by hand
-    // left the frame open to whichever sibling appetite happened to be due
-    // — which is how adding a fifth event to the cougar turned this green
-    // check red without changing a line of the engine it measures.
-    w.__only(cg, 'den');
-    window.__pump(1);
+    // ...AND IT ASKS UNTIL IT IS ANSWERED. One pumped frame was enough
+    // whenever the frame happened to reach offer('den'), and this check has
+    // now gone red twice on runs where it did not — reporting seekAt.den
+    // still at zero, which is not "the engine lost the appetite" but "the
+    // engine was never asked about it". A single frame cannot tell those
+    // apart; twenty can, and the loop exits on the first frame that
+    // actually re-arms. The ledger is re-read rather than captured, because
+    // an _eth replaced mid-bout would leave the old object's zero standing.
+    let re = 0, asked = -1;
+    for (let i = 0; i < 20; i++) {
+      w.__only(cg, 'den');
+      window.__pump(1);
+      const S1 = cg._eth;
+      if (S1 && S1.seekAt.den > 0) { re = S1.seekAt.den - performance.now(); asked = i + 1; break; }
+    }
     Math.random = mr;
-    const re = (S.seekAt.den || 0) - performance.now();
-    return { none: false, re: re, state: cg.state };
+    return { none: false, re: re, state: cg.state, asked: asked };
   })()`);
-  chk(!MR.none && MR.re > 12000 && MR.re < 32000,
+  chk(!MR.none && MR.asked > 0 && MR.re > 12000 && MR.re < 32000,
     'a den appetite that fails its roll re-asks in seconds, not next act',
-    MR.none || `the due re-armed ${Math.round(MR.re / 1000)}s out ` +
-      `(the old engine lost it for 140-220s), state ${MR.state}`);
+    MR.none || (MR.asked < 0
+      ? `the den was never offered at all in twenty frames of asking, state ${MR.state}`
+      : `the due re-armed ${Math.round(MR.re / 1000)}s out after ${MR.asked} frame(s) ` +
+        `of asking (the old engine lost it for 140-220s), state ${MR.state}`));
 
   // ---- 5g. THE ROLL, WHICH WAS NEVER HERE (v0.49) ----------------------
   // Reported as a regression — "he does not roll any more" — and it had
