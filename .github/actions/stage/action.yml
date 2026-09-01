@@ -1,0 +1,52 @@
+name: stage
+description: >
+  Node, the app's dependencies, a Chromium, and a dev server on 5173.
+  Everything a suite needs and nothing else — kept in one place so the
+  workflow reads as the list of things that run rather than as four
+  copies of how to get ready to run them.
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: 22
+        cache: npm
+
+    - run: npm ci
+      shell: bash
+
+    # THE BROWSER, AND NOTHING AROUND IT.
+    #
+    # This used to be `playwright install --with-deps chromium`, and the
+    # --with-deps is an apt install of the font packages a browser needs to
+    # render the world's writing systems: Japanese Gothic, WenQuanYi Zen Hei,
+    # Cyrillic and Thai, 17.5MB of glyphs. This page draws animals as SVG
+    # paths and its only text is the Latin toolbar, so not one of those fonts
+    # is ever asked for. On 2026-09-01 that apt fetch ran at 39.6 kB/s and
+    # took SEVEN MINUTES AND TWENTY-ONE SECONDS on one job while five others
+    # did the same step in twenty. The libraries Chromium actually links are
+    # already on the runner image, which ships Chrome, Edge and Firefox.
+    #
+    # SKIP_BROWSER_DOWNLOAD stops the npm postinstall pulling all three
+    # engines; the line after it fetches the one we drive.
+    - name: Chromium
+      shell: bash
+      env:
+        PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+      run: |
+        npm i --no-save playwright@1.49.1
+        npx playwright install chromium
+
+    # ...and the suites drive LIVE SOURCE, not a bundle: that is the whole
+    # reason there is a dev server here instead of a static directory.
+    - name: Dev server on 5173
+      shell: bash
+      run: |
+        npm run dev -- --host 127.0.0.1 --port 5173 &
+        for i in $(seq 1 40); do
+          code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:5173/ || true)
+          [ "$code" = "200" ] && exit 0
+          sleep 1
+        done
+        echo "::error::dev server never came up on 127.0.0.1:5173" && exit 1
