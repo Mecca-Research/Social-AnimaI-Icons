@@ -163,8 +163,18 @@ async function chain(species, evId, ms = 60000, seed = '') {
         S.cd['${evId}'] = 0;
       }
       if (a._muskAim || w.agents.some(o=>o.state==='fight')) scared++;
+      // STARTED MEANS AN ETHOGRAM STATE, not merely "no longer wander".
+      // The world puts an animal into 'idle' of its own accord, and idle
+      // used to count: the fixture then stopped holding the appetite due
+      // and unmuzzled the siblings, and the next wander frame ended the
+      // run. What that reports is 'wander>idle>wander' from a ninety
+      // second budget in which the event was asked for perhaps twice —
+      // which is exactly what CI printed for the goose's dabble. The
+      // engine already keeps the set of states an event owns, goto states
+      // included (ETHO_STATES, exposed as __saiEtho.states), so the
+      // question is asked of it rather than of a list kept here.
       if (a.state!==last){ seen.push(a.state+(a._carry?'['+a._carry+']':'')); last=a.state;
-        if (a.state!=='wander') started=true; }
+        if (window.__saiEtho.states.has(a.state)) started=true; }
       maxZ = Math.max(maxZ, a.z || 0);
       if (started && a.state==='wander') break;
     }
