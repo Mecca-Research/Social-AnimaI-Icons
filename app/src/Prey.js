@@ -525,7 +525,17 @@ function stepOne(world, cfg, dt, now, p) {
     // is not a thing you run from.
     if ((a.z || 0) > SILENT_Z) continue;
     const d = Math.hypot(a.x - p.x, a.y - p.y);
-    if (d < FLEE_R(aa, app) && d < td) { threat = a; td = d; }
+    // A PREDATOR WITH NOTHING IN MIND IS NOT AN EMERGENCY. Full reach is
+    // owed to a hunter who is actually working — one holding a claim, or in
+    // the beats of a hunt — and a predator merely passing gets two thirds of
+    // it. Measured on the bluff, where the cougar and the goat share a
+    // hundred and seventy pixels of terrace: the goat spent 92 of its 166
+    // seconds on stage in flight, from an animal that was patrolling, so it
+    // never foraged and never took a goal, and the pair of them read as two
+    // animals standing next to each other doing nothing. A hunt still
+    // panics it at the full radius, which is what makes the hunt read.
+    const busy = !!a._huntP || (a._eth && a._eth.goalOwner === "ambush");
+    if (d < FLEE_R(aa, app) * (busy ? 1 : 0.66) && d < td) { threat = a; td = d; }
   }
   if (threat) {
     p._threat = threat.id; p._tx = threat.x; p._ty = threat.y;
@@ -581,12 +591,22 @@ function advance(world, p, dt, vx, vy) {
   if (!p._in || p.state === PREY_STATES.exit || habitatOk(world, p, nx, ny)) {
     p.x = nx; p.y = ny; return true;
   }
-  // A step into the water, into a cliff face, or off the log is simply not
-  // taken — the bluff's own rule 2, applied to something much smaller. The
-  // heading is dropped so the next frame picks a new one. The timestamp is
-  // the cross-module witness a hunter reads: "this animal is against its
-  // wall RIGHT NOW", which is what turns a cornered loss into a slip-free
-  // instead of a five-second overlap.
+  // ...BUT A WALL IS NOT A DEAD END. Refusing the whole step and dropping
+  // the goal is what a goat on a ninety-pixel terrace does thirty-one times
+  // in two minutes — it walks at something, is refused, forgets where it was
+  // going, picks again, and the eye reads that as pacing back and forth
+  // between two points. So the step is tried one axis at a time first: he
+  // slides ALONG the face he cannot cross, which is what an animal does.
+  if (vx && habitatOk(world, p, p.x + vx * dt, p.y)) {
+    p.x += vx * dt; p.vy = 0; return true;
+  }
+  if (vy && habitatOk(world, p, p.x, p.y + vy * dt)) {
+    p.y += vy * dt; p.vx = 0; return true;
+  }
+  // genuinely cornered: both axes refused. The heading is dropped so the
+  // next frame picks a new one, and the timestamp is the cross-module
+  // witness a hunter reads — "this animal is against its wall RIGHT NOW" —
+  // which is what turns a cornered loss into a slip-free.
   p.vx = 0; p.vy = 0; p._goal = null;
   p._blockedAt = now0();
   return false;
