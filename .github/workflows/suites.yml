@@ -1,15 +1,15 @@
-# The full verification board, on every change.
+# The full verification board, on every change — in parallel.
 #
 # Every suite in tests/ drives a REAL headless Chromium against a vite dev
-# server serving live source, on a virtual clock (see tests/world.mjs's
-# header). Each suite exits non-zero on any failing check, so this job is
-# red the moment any of the ~370 checks is.
+# server serving live source. They used to run end to end in one job and the
+# board took seventeen minutes; they are independent of each other, so the
+# wall clock is now the SLOWEST suite rather than the sum of all six.
 #
-# The "published build is the source" step is the CI form of the bug that
-# motivated this pipeline: v0.46 briefly served a stale committed bundle
-# missing whole features while every suite passed against live source.
-# Rebuilding here and diffing against the committed bundles catches that
-# class on the PR instead of on the live site.
+# The other half of that seventeen minutes was the frame rate: headless
+# Chromium ran this page at 8.4fps and the suites that wait on the world's
+# own animation frames waited at that speed. tests/browser.mjs launches
+# every one of them unthrottled — 81.4fps measured on the same page — and
+# the numbers those checks read are frames and pixels, never wall clock.
 name: suites
 
 on:
@@ -21,29 +21,26 @@ concurrency:
   group: suites-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  PLAYWRIGHT_VERSION: 1.49.1
+
 jobs:
-  suites:
+  # The cheap gates first, and the one that matters most: the live site
+  # serves COMMITTED bundles, so a build that does not match its source is
+  # the v0.46 bug (a stale bundle missing whole features while every suite
+  # passed against live source) waiting to happen again.
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Install Playwright Chromium
-        run: |
-          npm i --no-save playwright@1.49.1
-          npx playwright install --with-deps chromium
-
+      - run: npm ci
       - name: Test fixtures parse cleanly
         run: npm run test:parse
-
       - name: Committed bundles match the source
         run: |
           npm run build
@@ -52,6 +49,41 @@ jobs:
             echo "Run 'npm run build' locally and commit the result — the live site serves the committed files."
             git diff --stat -- index.html assets docs
             exit 1
+          fi
+
+  suites:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false          # one red suite must not hide the other five
+      matrix:
+        suite: [world, forage, ethogram, gait, cadence, sizes]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # the browser is ~150MB and identical every run: fetch it once per
+      # version and let the other five jobs read it out of the cache
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}
+
+      - name: Install Playwright
+        run: |
+          npm i --no-save playwright@${{ env.PLAYWRIGHT_VERSION }}
+          if [ "${{ steps.pw-cache.outputs.cache-hit }}" = "true" ]; then
+            npx playwright install-deps chromium
+          else
+            npx playwright install --with-deps chromium
           fi
 
       - name: Start dev server
@@ -64,15 +96,5 @@ jobs:
           done
           echo "::error::dev server never came up" && exit 1
 
-      - name: Cadence
-        run: npm run test:cadence
-      - name: Sizes
-        run: npm run test:sizes
-      - name: Gait
-        run: npm run test:gait
-      - name: Ethogram
-        run: npm run test:bear
-      - name: Forage
-        run: npm run test:forage
-      - name: World
-        run: npm run test:world
+      - name: ${{ matrix.suite }}
+        run: node tests/${{ matrix.suite }}.mjs

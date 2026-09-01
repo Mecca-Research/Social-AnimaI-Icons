@@ -24,8 +24,8 @@
  * Env: SAI_URL, SAI_PLAYWRIGHT, SAI_CHROMIUM as the other suites.
  *      SAI_SOAK_MIN to override the simulated minutes (default 12).
  */
-const { chromium } = await import(process.env.SAI_PLAYWRIGHT || 'playwright');
-const browser = await chromium.launch({ executablePath: process.env.SAI_CHROMIUM || undefined });
+import { launchBrowser } from "./browser.mjs";
+const browser = await launchBrowser();
 const page = await browser.newPage({ viewport: { width: 1500, height: 940 } });
 page.on('pageerror', (e) => console.log('PAGEERR', e.message));
 await page.addInitScript(() => {

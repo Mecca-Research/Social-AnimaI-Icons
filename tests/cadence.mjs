@@ -273,9 +273,10 @@
  *     timer, which this cannot price without modelling his domain plan.
  *     Counting `strip` alone therefore puts a FLOOR under him.
  */
-const { chromium } = await import(process.env.SAI_PLAYWRIGHT || 'playwright');
-const browser = await chromium.launch({ executablePath: process.env.SAI_CHROMIUM || undefined });
+import { launchBrowser, fastClock } from "./browser.mjs";
+const browser = await launchBrowser({ fast: true });
 const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+await fastClock(page);
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 await page.goto(process.env.SAI_URL || 'http://localhost:5173/', { waitUntil: 'networkidle' });
 await page.waitForTimeout(2500);

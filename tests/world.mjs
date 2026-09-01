@@ -16,8 +16,8 @@
  * And where a check is about GEOMETRY rather than timing, it asks the world
  * for the geometry instead of watching an animal wander into it.
  */
-const { chromium } = await import(process.env.SAI_PLAYWRIGHT || 'playwright');
-const browser = await chromium.launch({ executablePath: process.env.SAI_CHROMIUM || undefined });
+import { launchBrowser } from "./browser.mjs";
+const browser = await launchBrowser();
 const page = await browser.newPage({ viewport: { width: 1500, height: 940 } });
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 await page.goto(process.env.SAI_URL || 'http://localhost:5173/', { waitUntil: 'networkidle' });
@@ -4099,7 +4099,7 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     const urg = window.__saiEtho.ETHOGRAM.cougar.events
       .find((e) => e.id === 'ambush').goto.urgency;
     let creepN = 0, creepPx = 0, fixN = 0, fx = cg.x, fy = cg.y, fixMoved = 0;
-    let dashPx = 0, dashN = 0, outcome = 'ran on';
+    let dashPx = 0, dashN = 0, dashBudget = 0, outcome = 'ran on';
     for (let i = 0; i < 2000; i++) {
       const st = cg.state, px = cg.x, py = cg.y;
       window.__pump(1);
@@ -4107,14 +4107,18 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
       if (st === 'cgstalk') { creepN++; creepPx += moved; }
       if (st === 'cgfix') { if (fixN === 0) { fx = px; fy = py; }
                             fixN++; fixMoved = Math.max(fixMoved, Math.hypot(cg.x - fx, cg.y - fy)); }
-      if (st === 'cgpounce') { dashN++; dashPx += moved; }
+      if (st === 'cgpounce') { dashN++; dashPx += moved;
+        // the budget he was actually handed: beginChase doubles it for a
+        // chase fated to land, and the fixture cannot know that roll
+        dashBudget = Math.max(dashBudget, cg._huntGo0 || 0); }
       if (cg.state === 'cgeat') { outcome = 'kill'; break; }
       if (cg.state === 'cgmiss') { outcome = 'miss'; break; }
       if (cg.state === 'wander' && i > 40) { outcome = 'let it go'; break; }
     }
     return { none: false, urg: urg, outcome: outcome,
              creptFrames: creepN, creepSpeed: creepN ? creepPx / (creepN * 0.016667) : 0,
-             fixFrames: fixN, fixMoved: fixMoved, dashPx: dashPx, dashFrames: dashN };
+             fixFrames: fixN, fixMoved: fixMoved, dashPx: dashPx, dashFrames: dashN,
+             dashBudget: dashBudget };
   })()`);
   const cruise = S.none ? 0 : S.cruise;
   chk(!P.none && cruise > 0 && P.creptFrames > 8 && P.urg < 0.30 && P.creepSpeed < cruise,
@@ -4126,17 +4130,19 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
   chk(!P.none && P.fixFrames > 0 && P.fixMoved < 2,
     'and then stops dead before he goes',
     P.none || `${P.fixFrames} frames gathered, ${P.fixMoved.toFixed(1)}px of drift`);
-  // THE BUDGET IS 260px, DOUBLED FOR A WINNER. beginChase hands a chase
-  // fated to land twice the dash so the closing arithmetic â€” not the fuel â€”
-  // is what ends it; a loser is held to the dash itself. Either way it is a
-  // FIXED distance, which is the thing this asks: bounded, not a chase
-  // across the map. The cap follows the outcome rather than pretending both
-  // are 260, which is what made it read as a failure at 330px on a kill.
-  const dashCap = P.outcome === 'kill' ? 580 : 320;
-  chk(!P.none && P.dashFrames > 0 && P.dashPx <= dashCap,
+  // THE BUDGET IS 260px, DOUBLED FOR A WINNER â€” and the fixture cannot know
+  // which roll it got, so it reads the budget the chase was actually handed
+  // (_huntGo0) rather than guessing from how the chase ended. Keying the
+  // ceiling off the OUTCOME was wrong twice over: a fated win that spends
+  // its whole 520 and never closes ends in a MISS, which CI duly produced at
+  // 519px against a 320px ceiling meant for losers. What this asks is the
+  // thing it always meant to: a pounce spends a fixed distance and stops,
+  // whatever the coin said.
+  const dashCap = (P.dashBudget || 260) + 60;
+  chk(!P.none && P.dashFrames > 0 && P.dashBudget > 0 && P.dashPx <= dashCap,
     'a pounce is a fixed distance, not a chase',
-    P.none || `${P.dashPx.toFixed(0)}px of ground spent against a ${dashCap}px ceiling ` +
-      `(260 doubled for a fated win), over ${P.dashFrames} frames â€” ${P.outcome}`);
+    P.none || `${P.dashPx.toFixed(0)}px of ground spent against the ${P.dashBudget}px ` +
+      `budget this chase was handed, over ${P.dashFrames} frames â€” ${P.outcome}`);
 
   // ---- 2b. THE VANTAGE: ridges, cliffs and bushes ----------------------
   // The owner's first sentence, and the only event of his with no food and
