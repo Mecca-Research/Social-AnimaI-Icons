@@ -2134,9 +2134,22 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
       a.x = X; a.y = lineY("T1", X) + 10;
       a.intentUntil = performance.now() + 9e6; a.noEventUntil = performance.now() + 9e6;
       const plats = [], lvls = [0]; let arc = null, footN = 0, footBad = 0;
+      // THE SHOVE STOPS BEFORE THE MEASUREMENT DOES. vy = -70 every frame is
+      // how he is made to go at the riser at all â€” nothing in the world
+      // walks an animal into a face on purpose â€” but carrying it to the last
+      // frame means the final state asserted on is wherever the FIXTURE'S
+      // push had him at an arbitrary instant, and for the wolf that is
+      // sometimes inside the stone above the ledge he had already landed on.
+      // The check that reads it ("his paws on the drawn top") went red on CI
+      // with footBad 0, so the wall term was the one failing.
+      //
+      // The last six frames are free ones. keepOffRock corrects an animal
+      // who is somewhere he may not be, so what the wall flag then reports is
+      // where the WORLD left him rather than where the shove did.
+      const SHOVE = n - 6;
       for (let i = 0; i < n; i++) {
         a.state = "wander"; a.x = X;
-        if (a.vy > -20) a.vy = -70;
+        if (i < SHOVE && a.vy > -20) a.vy = -70;
         await frame();
         if (a._plat && a._rockHop && !arc) arc = Object.assign({}, a._rockHop);
         if (a._plat && !a._rockHop) {
@@ -2151,7 +2164,9 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
       park(a);
       return { plats, lvls: lvls.join(""), end, arc, footN, footBad, wall };
     };
-    return { wolf: await climb("wolf", 14), turtle: await climb("turtle", 14) };
+    // twenty, so the six free frames at the end leave the same fourteen of
+    // shove these two have always had
+    return { wolf: await climb("wolf", 20), turtle: await climb("turtle", 20) };
   })(window.__saiWorld)`);
   const W = r.wolf, T = r.turtle;
   chk(!!W && W.plats.includes('step'),
