@@ -298,7 +298,7 @@ async function bout(pg, src, ok, tries = 4) {
   // ...and grazing has to be on grass. The bare-earth predicate the world
   // computes is the same one the goose consults, so this asks it directly
   // rather than trying to read pixels back off the canvas.
-  const r = await page.evaluate(`(async w => {
+  const r = await bout(page, `(async w => {
     const g = w.agents.find(a => a.species === 'goose'), s = w.def.sward, b = w.bounds;
     if (!w.onBareEarthAt) return { nohook: true };
     g._eth = null; g.state = 'wander'; g.intent = 'wander'; g.z = 0;
@@ -317,7 +317,8 @@ async function bout(pg, src, ok, tries = 4) {
       if (w.onBareEarthAt(g.x, g.y, g.r * 0.8)) onEarth++;
     }
     return { saw, frames, onEarth };
-  })(window.__saiWorld)`);
+  })(window.__saiWorld)`,
+    (x) => x.modes.every((m) => m === "dash" || m === "walk") && x.still < x.frames * 0.34 && x.engaged === 0 && x.windowMs >= 4000 && x.windowMs <= 7200);
   if (r.nohook) chk(false, 'the grazing goose stays on grass', 'no onBareEarthAt hook exposed');
   else chk(r.saw && r.onEarth === 0, 'the grazing goose stays on grass',
     `${r.onEarth} of ${r.frames} cropping frames on bare earth`);
@@ -4778,7 +4779,7 @@ async function bout(pg, src, ok, tries = 4) {
   // (289-409 pounce frames, 7 of 19 engagements), because the goat's
   // signature leap was unreachable from a flee and the loss had no way to
   // be acted out in a 137px arena.
-  const SL = await page4.evaluate(`(() => {
+  const SL = await bout(page4, `(() => {
     const w = window.__saiWorld, B = w.bounds;
     const cg = w.agents.find((a) => a.species === 'cougar');
     if (!cg) return { none: 'no cougar' };
@@ -4815,7 +4816,8 @@ async function bout(pg, src, ok, tries = 4) {
     }
     return { none: false, pounceAt: pounceAt, worstOverlap: worstOverlap,
              missAt: missAt, slip: slip, fleeLeaps: fleeLeaps, leapDx: leapDx };
-  })()`);
+  })()`,
+    (x) => !x.none && x.pounceAt >= 0 && x.missAt > 0 && x.worstOverlap <= 40 && (x.slip || x.fleeLeaps > 0));
   chk(!SL.none && SL.pounceAt >= 0 && SL.missAt > 0 && SL.worstOverlap <= 40,
     'a fated loss against a cornered goat resolves at the touch, not through it',
     SL.none || (SL.pounceAt < 0 ? 'the pounce never opened'
