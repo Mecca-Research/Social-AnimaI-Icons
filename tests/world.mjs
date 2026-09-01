@@ -5810,7 +5810,7 @@ async function bout(pg, src, ok, tries = 4) {
   // of a strike; the claim it leaves standing would hide the grub from
   // every other hunter for six seconds and pin it on stage. Both ticks call
   // huntRelease first, and this is that, for both of them.
-  const G = await page5.evaluate(`(function () {
+  const G = await bout(page5, `(function () {
     var w = window.__saiWorld;
     var out = {};
     var run = function (species, id, digStates) {
@@ -5860,7 +5860,8 @@ async function bout(pg, src, ok, tries = 4) {
     out.skunk = run('skunk', 'grubs', ['sktodig', 'skcast', 'skgrub']);
     out.hh = run('hedgehog', 'grubs', ['hhtodig', 'hhcast', 'hhgrub']);
     return out;
-  })()`);
+  })()`,
+    (x) => x.skunk && x.hh && !x.skunk.none && !x.hh.none && x.skunk.after === "null" && x.hh.after === "null" && !x.skunk.claimAfter && !x.hh.claimAfter);
   chk(!G.skunk.none && !G.hh.none
       && G.skunk.after === 'null' && G.hh.after === 'null'
       && !G.skunk.claimAfter && !G.hh.claimAfter,
