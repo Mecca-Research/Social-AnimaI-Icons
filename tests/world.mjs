@@ -5136,7 +5136,7 @@ async function bout(pg, src, ok, tries = 4) {
     V.none || `feeds went 3 -> ${V.feeds}, the carcass is still on the ground and unheld`);
 
   // ---- 10. THE BED -----------------------------------------------------
-  const B2 = await page4.evaluate(`(() => {
+  const B2 = await bout(page4, `(() => {
     const w = window.__saiWorld, B = w.bounds;
     const wf = w.agents.find((a) => a.species === 'wolf');
     const cg = w.agents.find((a) => a.species === 'cougar');
@@ -5222,7 +5222,8 @@ async function bout(pg, src, ok, tries = 4) {
     return { none: false, lvl: bed.lvl, onPlat: bed.onPlat, frames: bed.frames,
              spent: bed.spent, inCave: bed.inCave, tried: tried,
              cougarOnShelf: onShelf, onStone: onStone };
-  })()`);
+  })()`,
+    (x) => !x.none && x.lvl === 1 && !x.onPlat && !x.inCave && x.frames > 40 && x.onStone === "refused" && x.cougarOnShelf === 0 && x.tried > 0);
   chk(!B2.none && B2.lvl === 1 && !B2.onPlat && !B2.inCave && B2.frames > 40
       && B2.spent <= 31000 && B2.onStone === 'refused',
     'he beds down ON the terrace, not on the stone, so nothing moves him after nine seconds',
