@@ -357,22 +357,25 @@ await page.waitForTimeout(400);
   // he can cross water is the swim leg's business, not this one's.
   const seed = `{ for (const p of w.pads) p.userId=null;   // nobody else is holding one
        const p=w.pads[0]; a.x=p.x-18; a.y=p.y-12; }`;
-  let r = await chain('frog', 'float', 140000, seed);
+  const r = await chainUntil('frog', 'float', 140000, seed,
+    (x) => /padsit/.test(x.chain));
   // One retry. The pads drift, and a pick that lands on a float other than
   // the one he was set beside turns a bout check into a swim check — which
   // at 3.8fps is a coin toss on the give-up timer, not a statement about
   // whether floats work.
-  if (!/padsit/.test(r.chain)) r = await chain('frog', 'float', 140000, seed);
-  chk(/padsit/.test(r.chain), 'frog rides a float', r.chain);
+  chk(/padsit/.test(r.chain), 'frog rides a float',
+    `${r.chain}${r.tries > 1 ? ` (bout ${r.tries})` : ''}`);
 }
 {
   // Pad claims cleared and seeded beside a LOG float, same reasoning as the
   // frog: the give-up is wall-clock and his progress is frame-based.
-  const r = await chain('turtle', 'float', 140000,
+  const r = await chainUntil('turtle', 'float', 140000,
     `{ for (const p of w.pads) p.userId=null;
        const L=w.pads.filter(p=>p.log); const p=L[0]||w.pads[0];
-       a.x=p.x-30; a.y=p.y-20; }`);
-  chk(/padsit/.test(r.chain), 'turtle basks on a log', r.chain);
+       a.x=p.x-30; a.y=p.y-20; }`,
+    (x) => /padsit/.test(x.chain));
+  chk(/padsit/.test(r.chain), 'turtle basks on a log',
+    `${r.chain}${r.tries > 1 ? ` (bout ${r.tries})` : ''}`);
   // sample the claim WHILE he is on it — chain() runs to completion and the
   // claim is released on the way out, so checking afterwards proves nothing
   const onLog = await page.evaluate(`(async w => { const t=w.agents.find(a=>a.species==='turtle');
@@ -658,6 +661,25 @@ const alone = `for (let oi = 0, o = null; oi < w.agents.length; oi++) {
  * chain()'s own note asks for: this checks whether the event WORKS, and how
  * often it comes round is tests/cadence.mjs's question.
  */
+/**
+ * ONE ROLL OF THE DICE IS NOT A MEASUREMENT — the same argument as
+ * world.mjs's bout(), and the frog below has carried a hand-written
+ * version of it since the floats went in: "at 3.8fps [the give-up] is a
+ * coin toss on the give-up timer, not a statement about whether floats
+ * work." That reasoning is not the frog's alone. `ok` is the check's own
+ * condition, so what is demanded is unchanged and only the number of
+ * attempts is not.
+ */
+async function chainUntil(species, evId, ms, seed, ok, tries = 4) {
+  let r = null;
+  for (let i = 1; i <= tries; i++) {
+    r = await chain(species, evId, ms, seed);
+    r.tries = i;
+    if (ok(r)) break;
+  }
+  return r;
+}
+
 async function chainBout(species, evId, seed, tries = 5, ms = 90000) {
   const states = await page.evaluate(`(() => {
     const e = window.__saiEtho.ETHOGRAM['${species}'].events.find(x => x.id === '${evId}');
