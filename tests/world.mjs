@@ -3786,10 +3786,19 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
       // strays standing the owl once chased a prey 1127px from the pinned
       // snake and the check read the wrong chase entirely
       w.__prey.clear();
-      const g = w.__floorSpot(null, null, 0, 0); if (!g) return null;
-      const p = w.__putPrey(preyKey, g); if (!p) return null;
-      const h = w.__floorSpot(g.x, g.y, gap - 8, gap + 8); if (!h) return null;
-      const a = w.__putHunter(species, h, 'land'); if (!a) return null;
+      const g = w.__floorSpot(null, null, 0, 0);
+      if (!g) return { setup: 'nowhere legal to stand a ' + preyKey };
+      const p = w.__putPrey(preyKey, g);
+      if (!p) return { setup: 'no ' + preyKey + ' would spawn' };
+      // PLUS OR MINUS SIXTEEN, not eight. A sixteen-pixel ring around a
+      // point that landed in a corner or against the shore can be almost
+      // entirely illegal ground, and __floorSpot then comes back empty:
+      // measured at one setup in a hundred and ninety-five. The gap is
+      // still a stride outside pounce either way.
+      const h = w.__floorSpot(g.x, g.y, gap - 16, gap + 16);
+      if (!h) return { setup: 'nowhere legal to stand a ' + species + ' ' + gap + 'px off it' };
+      const a = w.__putHunter(species, h, 'land');
+      if (!a) return { setup: 'no ' + species + ' in the cast' };
       // minD is measured from the moment he commits and on EVERY frame
       // after it, not only on the frames he is still in the strike state:
       // the frame the strike resolves on has already flipped him to the
@@ -3816,23 +3825,40 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  �
           return { caught: !p.alive, minD: minD, goLeft: goLeft, top: top, ended: ended };
         }
       }
-      return { caught: false, minD: minD, goLeft: goLeft, top: top,
-               ended: 'nothing: the budget ran out first', ranOut: true };
+      // ...and WHICH KIND of running out, because the two say opposite
+      // things. A false 'started' means the approach never got him to the
+      // strike at all, and reporting that as "closed to 9999px against a
+      // reach of 26" — which is what this used to print — describes a
+      // strike that never happened.
+      return { caught: false, minD: minD, goLeft: goLeft, top: top, started: started,
+               ended: started ? 'nothing: the budget ran out mid-strike'
+                              : 'nothing: he never reached the strike', ranOut: true };
     };
-    return { rac: land('raccoon', 'ratting', ['berry', 'paws', 'roost', 'crayfish'], 'woodmouse', 100, 'racgrab', 900),
-             owl: land('owl', 'swoop', ['hoot', 'roost'], 'gartersnake', 180, 'owlswoop', 1400) };
+    // THE BUDGET HAS TO OUTLAST ONE ABANDONED APPROACH. Both hunts declare
+    // a giveUp — the owl's is 36s, which is 2160 frames — and __offer
+    // re-arms the appetite every frame, so a first leg that stalls is
+    // dropped and a second one starts. At 1400 frames the owl could not
+    // afford even one of those: the whole budget went into a single glide,
+    // 'started' stayed false, and the check reported the STRIKE as unable
+    // to close ground it had never been asked to cover. Measured over 195
+    // isolated runs of this exact fixture the strike begins at frame
+    // 195-381, so this is not a slower check — it is one that can tell the
+    // two failures apart.
+    return { rac: land('raccoon', 'ratting', ['berry', 'paws', 'roost', 'crayfish'], 'woodmouse', 100, 'racgrab', 1600),
+             owl: land('owl', 'swoop', ['hoot', 'roost'], 'gartersnake', 180, 'owlswoop', 2600) };
   })()`);
-  chk(K.rac && !K.rac.ranOut && K.rac.minD <= 22 && K.rac.goLeft > 0,
+  const said = (r, reach, dash) =>
+    !r ? 'never got to ask: the fixture returned nothing'
+    : r.setup ? `never got to ask: ${r.setup}`
+    : r.ranOut && !r.started ? `he never reached the strike at all — ${r.ended}`
+    : `closed to ${r.minD.toFixed(1)}px against a reach of ${reach} and ended in ${r.ended}, ` +
+      `${r.goLeft.toFixed(0)}px of the ${dash} unspent (top ${r.top.toFixed(0)}px/s)`;
+  chk(K.rac && !K.rac.setup && !K.rac.ranOut && K.rac.minD <= 22 && K.rac.goLeft > 0,
     'the raccoon’s grab reaches what it is aimed at, with burst still in hand',
-    K.rac ? `closed to ${K.rac.minD.toFixed(1)}px against a reach of 22 and ended in ${K.rac.ended}, ` +
-            `${K.rac.goLeft.toFixed(0)}px of the 180 unspent (top ${K.rac.top.toFixed(0)}px/s)`
-          : 'never got to ask: no floor pair');
-  chk(K.owl && !K.owl.ranOut && K.owl.minD <= 26 && K.owl.goLeft > 0,
+    said(K.rac, 22, 180));
+  chk(K.owl && !K.owl.setup && !K.owl.ranOut && K.owl.minD <= 26 && K.owl.goLeft > 0,
     'and so does the owl’s stoop, on the slow end of his list',
-    K.owl ? `closed to ${K.owl.minD.toFixed(1)}px on a garter snake against a reach of 26 and ` +
-            `ended in ${K.owl.ended}, ${K.owl.goLeft.toFixed(0)}px of the 250 unspent ` +
-            `(top ${K.owl.top.toFixed(0)}px/s)`
-          : 'never got to ask: no floor pair');
+    said(K.owl, 26, 250));
 
   // ---- 7. A HUNTER TAKEN OUT OF HIS OWN STRIKE HANDS THE PREY BACK -----
   // huntRelease as the first line of both ticks. A drag, a fight or a
