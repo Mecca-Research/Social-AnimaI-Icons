@@ -93,7 +93,17 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
   const r = await page.evaluate(`(async (w) => {
     const bv = w.agents.find(a => a.species === 'beaver');
     if (!bv) return { none: 'no beaver in the roster' };
-    const frame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 20)));
+    // ONE ITERATION IS ONE WORLD STEP, and the zero is what makes that true
+    // at any frame rate. These waits used to be 16-25ms, which was a no-op
+    // while the page rendered at 8fps â€” the 125ms frame swallowed it â€” and
+    // became two or three extra world steps per iteration the moment the
+    // suite took the speed flags at 81fps. Every frame budget in these loops
+    // was then being spent two to three times faster than it was written
+    // for: measured, the wolf shoved up the riser for fourteen iterations
+    // overshot the ledge and ended inside the wall in three runs of six.
+    // setTimeout(0) after the rAF resumes on the next macrotask, which is
+    // after that frame's rAF callbacks â€” the world step included â€” have run.
+    const frame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
     // The owner's own shortcut: pick him up and drop him off the edge. A dam
     // run starts on going OFF-STAGE, so a throw is worth a crossing â€” and
     // six pixels over the line has to be enough, which is what dropOffstage
@@ -1338,7 +1348,7 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     // DAM_PLACED is refreshed from world.damCount at the head of a frame, so
     // the land test does not know about the timber until one has run
     for (let i = 0; i < 3; i++)
-      await new Promise(r => requestAnimationFrame(() => setTimeout(r, 25)));
+      await new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
     // every drawn log is land, at its own centre
     let wetLogs = 0;
     for (const L of logs) if (w.inWaterAt(L.x, L.y)) wetLogs++;
@@ -1499,7 +1509,7 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     if (!bv) return { none: 'no beaver in the roster' };
     const f = (w.forage || []).find(q => q.kind === 'foodtree');
     if (!f) return { none: 'no food tree in the world' };
-    const frame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 16)));
+    const frame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
     const S = bv._eth;
     const park = () => { const t = performance.now();
       for (const e of window.__saiEtho.ETHOGRAM.beaver.events) {
@@ -1569,7 +1579,7 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     if (!bv) return { none: 'no beaver' };
     const first = (w.def.damCourses || [])[0];
     if (!first) return { none: 'the world does not say how the dam is coursed' };
-    const frame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 16)));
+    const frame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
     const S = bv._eth, was = w.damCount | 0;
     for (const a of w.agents) if (a !== bv) {
       a.noEventUntil = performance.now() + 9e6; a.intentUntil = performance.now() + 9e6;
@@ -1754,7 +1764,7 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
       const a = L[i], b = L[i + 1] || L[i];
       const f = b[0] === a[0] ? 0 : (xPm - a[0]) / (b[0] - a[0]);
       return (a[1] + (b[1] - a[1]) * f) / 1000 * B.h; };
-    const frame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 20)));
+    const frame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
     const park = (o) => { o.x = -900; o.y = -900; o.state = 'idle';
       o.idleUntil = performance.now() + 9e6; o.noEventUntil = performance.now() + 9e6; };
     const run = async (nm, lvl, xPm, y0, vy, n) => {
@@ -1862,7 +1872,7 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
       const a = L[i], b = L[i + 1] || L[i];
       const f = b[0] === a[0] ? 0 : (xPm - a[0]) / (b[0] - a[0]);
       return (a[1] + (b[1] - a[1]) * f) / 1000 * B.h; };
-    const frame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 20)));
+    const frame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
     const park = (o) => { o.x = -900; o.y = -900; o.state = 'idle';
       o.idleUntil = performance.now() + 9e6; o.noEventUntil = performance.now() + 9e6; };
     // AN ETHOGRAM WILL EAT THIS TEST IF IT IS LET. The goose walks off to the
@@ -2112,7 +2122,7 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
       const a = L[i], b = L[i + 1] || L[i];
       const f = b[0] === a[0] ? 0 : (xPm - a[0]) / (b[0] - a[0]);
       return (a[1] + (b[1] - a[1]) * f) / 1000 * B.h; };
-    const frame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 20)));
+    const frame = () => new Promise(r => requestAnimationFrame(() => setTimeout(r, 0)));
     const park = (o) => { o.x = -900; o.y = -900; o.state = "idle";
       o.idleUntil = performance.now() + 9e6; o.noEventUntil = performance.now() + 9e6; };
     const climb = async (nm, n) => {
