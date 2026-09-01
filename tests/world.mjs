@@ -95,8 +95,11 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
  *
  * What it deliberately gives up: a behaviour that only works one time in
  * `tries` now passes. That is the price of testing a stochastic system at
- * all, and the failure messages carry `tries` so a check that needed three
- * goes says so instead of looking clean.
+ * all, so every retry is ANNOUNCED â€” a line above the checks that read the
+ * bout, and a count in the run summary. Without that a behaviour that
+ * degrades from always working to one-in-four reads as an ordinary clean
+ * pass, which would make this helper a way of hiding regressions rather
+ * than a way of measuring a stochastic system.
  *
  * THE ONE WAY TO GET THIS WRONG is a partial `ok`. A predicate that stops
  * on less than the check asks for retries the parts it names and abandons
@@ -106,12 +109,23 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
  * Every predicate below is its check's own condition, terms and all, and a
  * new one belongs beside the chk it serves rather than near the fixture.
  */
+const retried = [];
 async function bout(pg, src, ok, tries = 4) {
   let r = null;
   for (let i = 1; i <= tries; i++) {
     r = (await pg.evaluate(src)) || {};
     r.tries = i;
     if (ok(r)) break;
+  }
+  // AND IT SAYS SO. A retry nobody can see is the one thing this helper
+  // must not be: the whole cost of it is that a behaviour which used to
+  // work every time and now works one time in four still reads as an
+  // ordinary clean pass. The line prints immediately above the checks
+  // that read this bout, so the retry is attached to them by position,
+  // and the count is repeated in the run's own summary.
+  if (r.tries > 1) {
+    retried.push(r.tries);
+    console.log(`  \u21bb bout took ${r.tries} of ${tries} attempts`);
   }
   return r;
 }
@@ -4306,7 +4320,9 @@ async function bout(pg, src, ok, tries = 4) {
              dashBudget: dashBudget };
   })()`,
     (x) => !x.none && x.creptFrames > 8 && x.urg < 0.30 && x.fixFrames > 0
-           && x.fixMoved < 2 && x.dashFrames > 0 && (S.none || x.creepSpeed < S.cruise));
+           && x.fixMoved < 2 && x.dashFrames > 0
+           && x.dashBudget > 0 && x.dashPx <= x.dashBudget + 60
+           && (S.none || x.creepSpeed < S.cruise));
   const cruise = S.none ? 0 : S.cruise;
   chk(!P.none && cruise > 0 && P.creptFrames > 8 && P.urg < 0.30 && P.creepSpeed < cruise,
     'he stalks in at less than his own walking pace',
@@ -5926,6 +5942,11 @@ async function bout(pg, src, ok, tries = 4) {
 }
 
 chk(errs.length === 0, 'no JS errors', errs.length ? errs[0] : 'clean');
+if (retried.length) {
+  console.log(`  \u21bb ${retried.length} bout(s) needed more than one attempt ` +
+    `(${retried.join(', ')}) â€” a behaviour that used to take one is a regression ` +
+    `even when the check is green`);
+}
 console.log(`\n${fail.length ? 'FAIL ' + fail.length : 'ALL PASS'} (${pass.length} passed)`);
 await browser.close();
 process.exit(fail.length ? 1 : 0);
