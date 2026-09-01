@@ -172,6 +172,28 @@ function cougarScrapeGround(a, c) {
 }
 
 /**
+ * WHERE HE ROLLS. Same two rules the scrape has and for the same reasons:
+ * not with a goat in his jaws — a hundred kilos of carcass has no place in
+ * a posture drawn without one — and only from the forest floor, because a
+ * cat on his back with four paws in the air is a cat who is not holding a
+ * terrace, and keepOffRock would put him somewhere else halfway through it.
+ *
+ * The point is vetted at his own feet rather than at an offset: unlike the
+ * scrape, nothing here is thrown clear of him. openGround's own pit test
+ * still applies, which only makes the patch cleaner than it has to be.
+ */
+function cougarRollGround(a, c) {
+  if (a._cgKill) return null;
+  if (standLevel(a, c) !== 0) return null;
+  for (let i = 0; i < 4; i++) {
+    const p = openGround(a, c);
+    if (!p) return null;
+    if (cgStandable(p, c, a, 0)) return p;
+  }
+  return null;
+}
+
+/**
  * WHAT HE CAN ACTUALLY GET TO. The goat lives on the bluff and nowhere else
  * (Prey.js habitatOk, case "rock"); everything else is forest floor, which
  * means off the water and off the terraces, because that is where habitatOk
@@ -201,9 +223,20 @@ function cougarCanTake(a, c, p) {
     if (c.lakeRho(p.x, p.y) <= 1.02) return false;
     const z = c.rockZone(p.x, p.y);
     if (z.on && (z.wall || z.level !== 0)) return false;
-    if (mine !== 0) return false;                   // ...and he is down there with it
+    // ONE TERRACE, THE WAY THE GOAT ALREADY WORKS. This used to demand he be
+    // ON THE FLOOR with it, which quietly meant that every minute he spent up
+    // on his own rock was a minute the only legal prey in the world was the
+    // goat — measured, two stalks in ten minutes and both at the goat. He is
+    // the whole of ROCK_SHELF_DROP and takes the face in one arc, so a hare
+    // on the talus below is a hunt he can finish; the plateau is still too
+    // far to come down from onto anything.
+    if (mine > 1) return false;
   }
-  if (mine === 0 && Math.hypot(p.x - a.x, p.y - a.y) > 240) return false;
+  // ...and the floor reach IS his sense. It was cut to 210 (then 240) on the
+  // reasoning that he sees less among the trunks, but his prey list is four
+  // species and only one of each is ever out, so the cut was the main brake
+  // on him hunting at all rather than a piece of character.
+  if (mine === 0 && Math.hypot(p.x - a.x, p.y - a.y) > 300) return false;
   return true;
 }
 
@@ -268,8 +301,23 @@ defineEthogram("cougar", {
   // He is in this world's swim table at 0.1 and in DIP_TIMED, so the water
   // is a place he passes through rather than a place he works: the plan has
   // one answer and the shape is the fox's.
-  domainOf: () => "land",
-  domains: { land: { share: 1, dwell: [24000, 44000] } },
+  // HE MAY GET WET, and until now he could not. The plan said land at a
+  // share of one, and planDomain's enforcement reads that as "if he is in
+  // the water and his plan is not, put him ashore" — so the world's own dip
+  // (he is in DIP_TIMED with the wolf, the deer and the raccoon) was offered
+  // and then cancelled on the next frame, every time. Measured: ninety-two
+  // seconds of swim intent in a ten-minute watch and not one wet frame.
+  //
+  // A twelfth of his day, in visits of six to twelve seconds, which is what
+  // a cat does with water: crosses it, cools off in it, and gets out.
+  domainOf: (a, c) => (c.def.hasWater && c.isWet(a.x, a.y) ? "water" : "land"),
+  domains: {
+    land: { share: 0.92, dwell: [24000, 44000] },
+    // the lake is the far side of the map from his bluff, and the travel
+    // allowance is what a plan gets to ARRIVE in: at 22s he kept planning
+    // water from the west rock and re-planning before he ever reached it
+    water: { share: 0.09, dwell: [8000, 14000], travel: 48000, pull: 0.4 },
+  },
 
   // A drag, a fight, a rescue or a forced flee can take him out of any of
   // this from outside, and every one of them writes a.state directly. The
@@ -416,7 +464,13 @@ defineEthogram("cougar", {
       // time on it. The appetite is frequent, the survey is long, and a
       // survey CHAINS: he walks the ridge to another vantage rather than
       // coming down after one look. Two to three legs is a patrol.
-      every: [26000, 44000], chance: 0.70, miss: 12000, cool: 20000,
+      // MEASURED AND CUT BACK. At [26,44]s with a 13-21s hold and two
+      // chained legs, the survey was 243 seconds of a 600-second watch —
+      // forty per cent of his life spent standing still looking at things,
+      // which is what "he stands around and does nothing" actually was. It
+      // also left him no free frames, and the water and the wander are had
+      // on free frames. A patrol is now rarer, shorter and single-legged.
+      every: [30000, 52000], chance: 0.68, miss: 14000, cool: 22000,
       states: ["cgsurvey"],
       // canHop: his vantages live on the bluff, and a walk to one that
       // stalls at a face may take the world's own ladder mid-errand — he is
@@ -435,7 +489,7 @@ defineEthogram("cougar", {
         // waking time actually accrues (soaked at 25% with a flat window)
         const onRock = c.rockZone(a.x, a.y).on;
         a.state = "cgsurvey";
-        a.stateUntil = c.now + (onRock ? c.rand(13000, 21000) : c.rand(9000, 16000));
+        a.stateUntil = c.now + (onRock ? c.rand(6000, 10000) : c.rand(5000, 8000));
       },
       drive(a, c, S) {
         holdSpot(a, c, a._cgAt || { x: a.x, y: a.y });
@@ -444,7 +498,7 @@ defineEthogram("cougar", {
         // two further vantages, walked to along the bands, before he comes
         // down. The goto state is this event's own, so handing the engine a
         // fresh goal re-enters the walk exactly as the first leg did.
-        if ((a._cgLegs || 0) < 2 && Math.random() < 0.65) {
+        if ((a._cgLegs || 0) < 2 && Math.random() < 0.55) {
           const g2 = cougarVantage(a, c);
           if (g2) {
             a._cgLegs = (a._cgLegs || 0) + 1;
@@ -490,6 +544,64 @@ defineEthogram("cougar", {
         }
         a._faceDir = 0;
         endEvent(a, c, { reroll: true, quiet: 1200, stop: true });
+      },
+    },
+
+    /* ---- ROLL: over onto his back, and a good scrub in the dirt --------
+     * The owner asked for this one by name and it was never here: no state,
+     * no drawing, nothing in the history of the file. So it is written from
+     * the animal rather than restored — a felid rolls where the ground is
+     * dry and open, and it is a WORKING posture, not a nap. He goes down in
+     * three quarters of a second, scrubs his shoulders side to side with
+     * all four paws paddling, and comes back up in one movement.
+     *
+     * Its appetite sits between the scrape's and the prowl's on purpose:
+     * often enough that a watch of a few minutes contains one, rare enough
+     * that it never competes with the hunt. It is offered AFTER the prowl
+     * and the scrape in array order, which is the order of his priorities —
+     * a view and a territorial notice are both business, and this is not.
+     */
+    {
+      id: "roll", domain: "land", trigger: "seek",
+      every: [44000, 76000], chance: 0.62, miss: 15000, cool: 30000,
+      // missRetry, like the den's: a failed chance roll costs fifteen
+      // seconds rather than the whole cycle, because the measured way a
+      // behaviour disappears from a watch is a full `every` lost to one
+      // unlucky roll and then another.
+      missRetry: true,
+      states: ["cgflop", "cgroll", "cgrise"],
+      goto: { state: "cgtoroll", within: 20, giveUp: 22000, none: 13000,
+              lost: 11000, urgency: 0.26, pick: cougarRollGround },
+      begin(a, c, S, g) {
+        a.vx = 0; a.vy = 0;
+        if (g) { a.x = g.x; a.y = g.y; }        // the vetted patch, exactly
+        // the drawing is not mirrored — the head is drawn at the east end
+        // and the tail west — so the face is pinned the way the scrape's is
+        a._faceDir = 1;
+        a._cgAt = { x: a.x, y: a.y };
+        // the numbers are the STYLESHEET'S. sai-cougar-flop is .74s and
+        // sai-cougar-rise is 1.05s, both one-shot and held, so a state that
+        // ended early would cut a posture mid-fall and one that ended late
+        // would leave him frozen at the end of it.
+        a.state = "cgflop"; a.stateUntil = c.now + 740;
+      },
+      drive(a, c) {
+        // held, exactly as the scrape is: five seconds on his back is long
+        // enough for the crowd separation to walk a lying cat off his patch
+        holdSpot(a, c, a._cgAt || { x: a.x, y: a.y });
+        if (c.now < a.stateUntil) return;
+        if (a.state === "cgflop") {
+          // three to five scrubs at the 1.15s the rock cycle actually runs,
+          // so the bout always ends between beats rather than mid-swing
+          a.state = "cgroll"; a.stateUntil = c.now + c.rand(3450, 5750);
+          return;
+        }
+        if (a.state === "cgroll") {
+          a.state = "cgrise"; a.stateUntil = c.now + 1050;
+          return;
+        }
+        a._faceDir = 0;
+        endEvent(a, c, { reroll: true, quiet: 1300, stop: true });
       },
     },
 

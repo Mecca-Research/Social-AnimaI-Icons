@@ -1,15 +1,24 @@
-# The full verification board, on every change — in parallel.
+# The verification board. THREE JOBS, and the shape is the point.
 #
-# Every suite in tests/ drives a REAL headless Chromium against a vite dev
-# server serving live source. They used to run end to end in one job and the
-# board took seventeen minutes; they are independent of each other, so the
-# wall clock is now the SLOWEST suite rather than the sum of all six.
+# It was seven: a build gate plus a six-way matrix, one suite per job. Every
+# one of those six paid its own checkout, npm ci, browser cache, browser
+# install and dev server — about forty seconds of setup — and four of them
+# then ran a test lasting four to fourteen seconds. Six jobs also asked
+# actions/cache for the SAME key on the same second, and the one that lost
+# that race re-fetched the browser's apt font packages at 39.6 kB/s: seven
+# minutes and twenty-one seconds, on 2026-09-01, in a fourteen-minute board.
 #
-# The other half of that seventeen minutes was the frame rate: headless
-# Chromium ran this page at 8.4fps and the suites that wait on the world's
-# own animation frames waited at that speed. tests/browser.mjs launches
-# every one of them unthrottled — 81.4fps measured on the same page — and
-# the numbers those checks read are frames and pixels, never wall clock.
+# So the setup is paid twice instead of seven times, the apt is gone (see
+# .github/actions/stage), and the split is by COST rather than by file:
+#
+#   build    ten seconds, needs no browser at all
+#   suites   the five short ones back to back, one dev server between them
+#   world    the long one, alone, because it is the wall clock
+#
+# The five in `suites` add up to about three and a half minutes of tests,
+# which still lands inside world's run, so the board is world plus setup —
+# the same wall clock as the matrix, with five fewer machines and none of
+# the cache contention that produced the seven-minute step.
 name: suites
 
 on:
@@ -21,14 +30,11 @@ concurrency:
   group: suites-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  PLAYWRIGHT_VERSION: 1.49.1
-
 jobs:
-  # The cheap gates first, and the one that matters most: the live site
-  # serves COMMITTED bundles, so a build that does not match its source is
-  # the v0.46 bug (a stale bundle missing whole features while every suite
-  # passed against live source) waiting to happen again.
+  # THE CHEAPEST GATE, AND THE ONE THAT MATTERS MOST: the live site serves
+  # COMMITTED bundles, so a build that does not match its source is the v0.46
+  # bug — a stale bundle missing whole features while every suite passed
+  # against live source — waiting to happen again. No browser, ten seconds.
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -51,50 +57,26 @@ jobs:
             exit 1
           fi
 
+  # The five short suites, one after another against one dev server. Their
+  # own runtimes are 5s, 4s, 14s, 63s and 98s; a job apiece cost eight times
+  # more in setup than any of them cost in tests.
   suites:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-    strategy:
-      fail-fast: false          # one red suite must not hide the other five
-      matrix:
-        suite: [world, forage, ethogram, gait, cadence, sizes]
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - uses: ./.github/actions/stage
+      - run: node tests/cadence.mjs
+      - run: node tests/gait.mjs
+      - run: node tests/sizes.mjs
+      - run: node tests/ethogram.mjs
+      - run: node tests/forage.mjs
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-
-      - run: npm ci
-
-      # the browser is ~150MB and identical every run: fetch it once per
-      # version and let the other five jobs read it out of the cache
-      - name: Cache Playwright browsers
-        id: pw-cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: pw-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}
-
-      - name: Install Playwright
-        run: |
-          npm i --no-save playwright@${{ env.PLAYWRIGHT_VERSION }}
-          if [ "${{ steps.pw-cache.outputs.cache-hit }}" = "true" ]; then
-            npx playwright install-deps chromium
-          else
-            npx playwright install --with-deps chromium
-          fi
-
-      - name: Start dev server
-        run: |
-          npm run dev -- --host 127.0.0.1 --port 5173 &
-          for i in $(seq 1 30); do
-            code=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:5173/ || true)
-            [ "$code" = "200" ] && exit 0
-            sleep 2
-          done
-          echo "::error::dev server never came up" && exit 1
-
-      - name: ${{ matrix.suite }}
-        run: node tests/${{ matrix.suite }}.mjs
+  # ...and the long one on its own, because it IS the board's wall clock.
+  world:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/stage
+      - run: node tests/world.mjs

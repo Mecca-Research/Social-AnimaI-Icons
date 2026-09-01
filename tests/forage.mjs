@@ -163,8 +163,18 @@ async function chain(species, evId, ms = 60000, seed = '') {
         S.cd['${evId}'] = 0;
       }
       if (a._muskAim || w.agents.some(o=>o.state==='fight')) scared++;
+      // STARTED MEANS AN ETHOGRAM STATE, not merely "no longer wander".
+      // The world puts an animal into 'idle' of its own accord, and idle
+      // used to count: the fixture then stopped holding the appetite due
+      // and unmuzzled the siblings, and the next wander frame ended the
+      // run. What that reports is 'wander>idle>wander' from a ninety
+      // second budget in which the event was asked for perhaps twice —
+      // which is exactly what CI printed for the goose's dabble. The
+      // engine already keeps the set of states an event owns, goto states
+      // included (ETHO_STATES, exposed as __saiEtho.states), so the
+      // question is asked of it rather than of a list kept here.
       if (a.state!==last){ seen.push(a.state+(a._carry?'['+a._carry+']':'')); last=a.state;
-        if (a.state!=='wander') started=true; }
+        if (window.__saiEtho.states.has(a.state)) started=true; }
       maxZ = Math.max(maxZ, a.z || 0);
       if (started && a.state==='wander') break;
     }
@@ -752,13 +762,27 @@ for (const [ev, want, label, kind] of [
   // The root event has two variants at equal weight and they are different
   // drawings — digging beside the root, and boring into its underside seen
   // from behind. One that never comes up is a pose nobody will ever see.
+  // SIXTEEN FLIPS, NOT EIGHT. The two variants are w:1 against w:1 and the
+  // coin is fair — measured at 17/13 over thirty bouts — so this is a
+  // "see both faces" sampler and its false-failure rate is pure
+  // arithmetic: 2 / 2^tries. At eight that is 0.78%, which is one CI run
+  // in a hundred and twenty-eight, and CI duly produced eight rootbores in
+  // a row. At sixteen it is one in thirty-two thousand. The check itself is
+  // unchanged and still fails outright if a variant is broken — one that
+  // never comes up does not come up in sixteen tries either — and the loop
+  // still stops at the first pair, so the usual cost is the same three
+  // bouts it always was.
+  const TRIES = 16;
   const seen = new Set();
-  for (let i = 0; i < 8 && seen.size < 2; i++) {
+  let tries = 0;
+  for (; tries < TRIES && seen.size < 2; tries++) {
     const r = await chain('hedgehog', 'roots', 40000, `a.x=.30*w.bounds.w; a.y=.60*w.bounds.h;`);
     if (/rootdig/.test(r.chain)) seen.add('rootdig');
     if (/rootbore/.test(r.chain)) seen.add('rootbore');
   }
-  chk(seen.size === 2, 'both root variants come up', [...seen].join(' + ') || 'neither');
+  chk(seen.size === 2, 'both root variants come up',
+    seen.size === 2 ? `${[...seen].join(' + ')} in ${tries} bouts`
+      : `${[...seen].join(' + ') || 'neither'} in ${tries} bouts — the other never fired`);
 }
 chk(errs.length === 0, 'no JS errors', errs.length ? errs[0] : 'clean');
 console.log(`\n${fail.length ? 'FAIL ' + fail.length : 'ALL PASS'} (${pass.length} passed)`);

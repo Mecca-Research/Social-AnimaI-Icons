@@ -3597,8 +3597,11 @@ function RockLayer({ bounds }) {
     // down is a mass whose top is somewhere above the window.
     const { EDGE_UP, EDGE_PLAT, EDGE_CLIFF, EDGE_SHELF, EDGE_RISER } = ROCK_EDGES;
     // ...and the talus, which runs off the BOTTOM of the frame as well. It
-    // narrows the whole way down: past y 700 the west-low oak's root plate
-    // is the neighbour and nothing here may pass x 48.
+    // no longer narrows the whole way down: it is pinched to 70 under the
+    // west-low oak's crown, which is the one thing in the south-west that
+    // binds it, and then FANS OUT to 116 — EDGE_SHELF's own widest point —
+    // so the bottom of the mass reaches as far east as its middle does.
+    // The numbers and the working are in Rock.js, beside ROCK_EDGES.
     const FOOT = ROCK_EDGES.FOOT;
 
     const outline = poly([[-90, -60]].concat(EDGE_UP, EDGE_PLAT.slice(1),

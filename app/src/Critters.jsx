@@ -654,6 +654,69 @@ function CougarDraw({ uid }) {
         </g>
       </g>
 
+
+      {/* ================= THE ROLL =================
+          Belly up, spine in the dirt, all four legs in the air. A cat on
+          its back is not a cat asleep: the shoulders SCRUB, the paws
+          paddle, the head tips back far enough that the chin is the
+          highest thing on the face. Three states share this one drawing —
+          cgflop tips him over, cgroll works him side to side, cgrise puts
+          him back on his feet — for the same reason the three den states
+          share the sleep pose.
+
+          The one line that tells it apart at icon size is the INVERSION:
+          the cream is on top, because the cream is his belly, and the ears
+          are folded under the skull instead of standing off it. */}
+      <g className="sai-crit-cgrollpose">
+        {/* the tail, flicked out west along the ground with a hook in it */}
+        <g className="cgr-tail">
+          <path d="M 34 98 C 22 100 13 103.4 6 101" stroke={F[1]} strokeWidth="6.4" fill="none" strokeLinecap="round" />
+          <path d="M 11 101.8 C 9 101.2 7.4 100.8 6 101" stroke={tip} strokeWidth="6.8" fill="none" strokeLinecap="round" />
+        </g>
+        {/* THE BACK PRESSED INTO THE GROUND. Wider and flatter than the
+            sleeping flank, because a spine on the dirt spreads. */}
+        <g className="cgr-trunk">
+          <ellipse cx="60" cy="94" rx="33" ry="12.4" fill={F[2]} />
+          <ellipse cx="60" cy="91.4" rx="30" ry="10" fill={cream} />
+          <path d="M 36 91 q 10 -3.4 22 -2.6 q 12 .8 22 3.4" stroke={F[0]} strokeWidth="1.5" fill="none" opacity=".5" strokeLinecap="round" />
+        </g>
+        {/* FOUR LEGS UP. The far pair darker and shorter — they are on the
+            other side of him — and the near pair full length with the paws
+            flopped over at the wrist, which is the line that reads as
+            LOOSE rather than as kicking. */}
+        <g className="cgr-legfar">
+          <path d="M 48 88 C 45 78 44 72 46.4 66" stroke={F[2]} strokeWidth="6.2" fill="none" strokeLinecap="round" />
+          <path d="M 72 88 C 75 79 76 73 73.6 67" stroke={F[2]} strokeWidth="6.2" fill="none" strokeLinecap="round" />
+        </g>
+        <g className="cgr-legnear">
+          <path d="M 53 89 C 49 79 47 70 50 62" stroke={F[1]} strokeWidth="7" fill="none" strokeLinecap="round" />
+          <ellipse cx="51" cy="60.4" rx="5.4" ry="3.6" fill={cream} transform="rotate(-18 51 60.4)" />
+          <path d="M 68 89 C 72 80 74 71 71 63" stroke={F[1]} strokeWidth="7" fill="none" strokeLinecap="round" />
+          <ellipse cx="70" cy="61.4" rx="5.2" ry="3.5" fill={cream} transform="rotate(16 70 61.4)" />
+        </g>
+        {/* THE HEAD, TIPPED BACK. Upside down at the east end: the skull is
+            on the dirt, the muzzle points up and away, and the eyes are
+            SQUEEZED — the curve goes the other way from the sleeping pair,
+            which is the difference between shut and screwed shut. */}
+        <g className="cgr-head">
+          <circle cx="95" cy="92" r="14" fill={`url(#${uid}f)`} />
+          {/* the ears, folded flat under the skull */}
+          <path d="M 88.5 100.5 q -4.6 2.8 -8.6 1.8" stroke={F[2]} strokeWidth="4.4" fill="none" strokeLinecap="round" />
+          <path d="M 96 102.4 q -1.6 3 -5.6 3.4" stroke={F[2]} strokeWidth="4" fill="none" strokeLinecap="round" />
+          <ellipse cx="99" cy="84.4" rx="8" ry="6" fill={cream} transform="rotate(-24 99 84.4)" />
+          <path d="M 101 81.6 l 3.2 2.4 -3 2.6 -3.2 -2.4 Z" fill={nose} />
+          <path d="M 87.6 95 q 3.4 -2.2 6.8 -.4" stroke={ink} strokeWidth="1.7" fill="none" strokeLinecap="round" />
+          <path d="M 95 90 q 3.2 -2 6.2 -.4" stroke={ink} strokeWidth="1.5" fill="none" strokeLinecap="round" />
+          {/* whiskers hanging DOWN off an upside-down muzzle */}
+          <path d="M 104 88 l 6.4 3.6 M 104 90.6 l 5.6 4.8" stroke={cream} strokeWidth="1.1" fill="none" strokeLinecap="round" opacity=".72" />
+        </g>
+        {/* the dust he is working up, which is what makes it read as a
+            scrub rather than as a dead cat */}
+        <g className="cgr-dust">
+          <ellipse cx="41" cy="103.4" rx="9" ry="3.2" fill="#7d6a52" opacity=".5" />
+          <ellipse cx="79" cy="104.2" rx="8" ry="3" fill="#7d6a52" opacity=".42" />
+        </g>
+      </g>
       {/* ================= THE KILL IN HIS JAWS =================
           Not a posture: the ordinary walking rig carries this one, with the
           head dropped by CSS and a hundred kilos of mountain goat swinging

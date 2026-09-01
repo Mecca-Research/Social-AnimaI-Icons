@@ -16,9 +16,40 @@
  * And where a check is about GEOMETRY rather than timing, it asks the world
  * for the geometry instead of watching an animal wander into it.
  */
-import { launchBrowser } from "./browser.mjs";
-const browser = await launchBrowser();
+import { launchBrowser, fastClock } from "./browser.mjs";
+// THE FLAGS AND THE CLOCK, AND THEY ONLY WORK AS A PAIR. This suite ran
+// without either for two releases, on the finding that the speed flags
+// alone moved four of its results. That finding was right and the
+// conclusion drawn from it was wrong, because of how the sim takes its dt:
+// elapsed wall time, clamped at 50ms.
+//
+//   at 8fps, headless default   125ms elapsed -> dt clamps to 50ms
+//   at 81fps, flags on           12ms elapsed -> dt is 12ms
+//
+// Page one budgets its checks in FRAMES â€” `for (f = 0; f < 400; f++) await
+// frame()` â€” so 400 frames is twenty seconds of world at 8fps and under
+// seven at 81. Every frame-budgeted check here was therefore a different
+// test on every machine, and a FASTER runner gave the animal LESS time to
+// do the thing being asked about. Three CI runs in a row failed on three
+// different pairs of checks with not one line of the app changed between
+// them; that is what was happening.
+//
+// fastClock is the missing half. It scales performance.now, Date.now and
+// the rAF timestamp together by a factor measured from real frame
+// intervals, so a dilated frame lands just under the 50ms clamp whatever
+// the machine renders at â€” which is the rate these checks were written
+// against. Measured on this box, and the numbers are the whole argument:
+//
+//   flags off, clock off   page one 362s, whole suite 555s, 268 pass
+//   flags on,  clock off   page one 434s (the factor computes to 1 without
+//                          the flags, so it buys nothing but overhead)
+//   flags on,  clock on    page one 155s, whole suite 265s, 268 pass
+//
+// Pages two to five drive their own pumped clock and are indifferent to
+// both; they get the flags' speed for free and ignore the rest.
+const browser = await launchBrowser({ fast: true });
 const page = await browser.newPage({ viewport: { width: 1500, height: 940 } });
+await fastClock(page);
 const errs = []; page.on('pageerror', (e) => errs.push(e.message));
 await page.goto(process.env.SAI_URL || 'http://localhost:5173/', { waitUntil: 'networkidle' });
 await page.waitForTimeout(2500);
@@ -3203,7 +3234,22 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     // near the talus and the goat spent all four hundred frames in
     // preyflee, which is a goat that never wanders and therefore never
     // takes the goal it is being handed. This asks about the LEAP.
-    for (const o of w.agents) {
+    // PARKED MEANS DRAGGED, not merely moved off the map, and the
+    // difference is the whole of this check. An agent put at (-2000,-2000)
+    // does not stay there: the world wraps anything past its own edge
+    // straight back on. Measured â€” all fourteen were back on stage on the
+    // NEXT FRAME, the cougar re-entering at (-59,592) and walking to
+    // (345,639), which is eight pixels from where this fixture stands the
+    // goat. So the comment above was right about the cause and the cure
+    // never worked, and what it produced is a goat in preyflee for 399 of
+    // these 400 frames on a map this check believes is empty.
+    //
+    // stepWorld skips a dragging agent outright (SocialAnimalIcons.jsx:6560
+    // and :6636), which is the only park that holds. They are handed back
+    // at the end of the bout so the checks after this one still have a cast.
+    const parked = w.agents.slice();
+    for (const o of parked) {
+      o.dragging = true;
       o.x = -2000; o.y = -2000; o.vx = 0; o.vy = 0; o.state = 'idle';
       o._eth = null; o.idleUntil = 9e9; o.intentUntil = 9e9; o.noEventUntil = 9e9;
     }
@@ -3220,6 +3266,7 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
       if (g._lvl === 1) break;
     }
     const z = w.rockZoneAt(g.x, g.y);
+    for (const o of parked) o.dragging = false;
     return { lvls: lvls.join(''), states: states, maxZ: air.length ? Math.max.apply(null, air) : 0,
              band: z.band, wall: z.wall, on: z.on, level: z.level, lvl: g._lvl,
              placed: placed, frames: Object.keys(states).map(function (k) {
@@ -3529,6 +3576,28 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
       if (S) { S.domain = dom; S.left = 9e6; S.tripUntil = performance.now() + 9e6; }
       return a;
     };
+    // HOW MANY FRAMES A BOUT IS ALLOWED, ASKED OF THE EVENT rather than
+    // guessed at the call site. Every hunt here declares a giveUp â€” 36s for
+    // the owl, makeHunt's default 24s for the rest â€” and __offer re-arms the
+    // appetite on every frame, so a first approach that stalls is abandoned
+    // and a second one starts. A budget shorter than one giveUp therefore
+    // cannot tell "this bout does not work" from "this bout was given less
+    // room than one walk to the prey", and it reported the first while
+    // measuring the second: 1400 frames for a 2160-frame giveUp on the owl,
+    // 1000 for a 1440 on the raccoon. Both were live checks that failed on
+    // CI saying nothing true.
+    //
+    // giveUp plus five and twenty seconds of bout, in frames. The loops all
+    // break the moment the bout resolves, so this is a ceiling that costs
+    // nothing in the ordinary case â€” it is only spent when something has
+    // genuinely gone wrong, which is exactly when a check needs the room to
+    // say so accurately.
+    w.__frames = (species, id, boutSec) => {
+      const ev = (window.__saiEtho.ETHOGRAM[species] || {}).events || [];
+      const e = ev.find((x) => x.id === id);
+      const giveUp = (e && e.goto && e.goto.giveUp) || 24000;
+      return Math.ceil((giveUp + (boutSec == null ? 25 : boutSec) * 1000) / 16.667);
+    };
     // one frame of the event under test, with every sibling appetite held off
     w.__offer = (a, id, sibs) => {
       const S = a._eth;
@@ -3557,7 +3626,7 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     a._nestI = 3;
     const seen = {}; let maxGlideZ = 0, started = -1;
     let lastStoopZ = -1, lastStoopD = -1, air = 0;
-    for (let i = 0; i < 1400; i++) {
+    for (let i = 0, N = w.__frames('owl', 'swoop'); i < N; i++) {
       w.__offer(a, 'swoop', ['hoot', 'roost']);
       window.__pump(1);
       seen[a.state] = (seen[a.state] | 0) + 1;
@@ -3702,7 +3771,7 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     if (!a) return { none: 'no raccoon' };
     const seen = {}; let onDam = 0, dry = 0;
     let rhoAtFix = -1, wetAtFix = false, deepest = 0;
-    for (let i = 0; i < 1200; i++) {
+    for (let i = 0, N = w.__frames('raccoon', 'crayfish'); i < N; i++) {
       w.__offer(a, 'crayfish', ['berry', 'paws', 'roost', 'ratting']);
       p.x = g.x; p.y = g.y; p.vx = 0; p.vy = 0;
       window.__pump(1);
@@ -3741,7 +3810,7 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     X.none || (X.finished
       ? `${X.crossedDam} frames standing on a log, ${X.dryWorkFrames} working out of the water, ` +
         `deepest rho ${X.deepest.toFixed(3)}`
-      : 'never got to ask: 1200 frames and the bout had not resolved'));
+      : 'never got to ask: the bout had not resolved inside one giveUp plus a bout'));
 
   // ---- 5. THE MOUSE HUNT KEEPS HIM OUT OF THE WATER --------------------
   const Y = await page3.evaluate(`(() => {
@@ -3752,7 +3821,7 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     const h = w.__floorSpot(g.x, g.y, 94, 106); if (!h) return { none: 'nowhere to stand 100px off it' };
     const a = w.__putHunter('raccoon', h, 'land'); if (!a) return { none: 'no raccoon' };
     const seen = {}; let wet = 0, frames = 0;
-    for (let i = 0; i < 1000; i++) {
+    for (let i = 0, N = w.__frames('raccoon', 'ratting'); i < N; i++) {
       w.__offer(a, 'ratting', ['berry', 'paws', 'roost', 'crayfish']);
       window.__pump(1);
       seen[a.state] = (seen[a.state] | 0) + 1;
@@ -3770,7 +3839,7 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
       ? `${Y.wetFrames} of ${Y.frames} frames wet, and the bout ran ` +
         `stalk -> fix ${Y.fixFrames} -> grab ${Y.grabFrames} -> ` +
         ((Y.seen['racmunch'] | 0) ? 'munch' : 'miss')
-      : 'never got to ask: 1000 frames and the bout had not resolved'));
+      : 'never got to ask: the bout had not resolved inside one giveUp plus a bout'));
 
   // ---- 6. THE STRIKE CAN ACTUALLY LAND ---------------------------------
   // The one thing a hunt has to be able to do, and the one this branch
@@ -3786,10 +3855,19 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
       // strays standing the owl once chased a prey 1127px from the pinned
       // snake and the check read the wrong chase entirely
       w.__prey.clear();
-      const g = w.__floorSpot(null, null, 0, 0); if (!g) return null;
-      const p = w.__putPrey(preyKey, g); if (!p) return null;
-      const h = w.__floorSpot(g.x, g.y, gap - 8, gap + 8); if (!h) return null;
-      const a = w.__putHunter(species, h, 'land'); if (!a) return null;
+      const g = w.__floorSpot(null, null, 0, 0);
+      if (!g) return { setup: 'nowhere legal to stand a ' + preyKey };
+      const p = w.__putPrey(preyKey, g);
+      if (!p) return { setup: 'no ' + preyKey + ' would spawn' };
+      // PLUS OR MINUS SIXTEEN, not eight. A sixteen-pixel ring around a
+      // point that landed in a corner or against the shore can be almost
+      // entirely illegal ground, and __floorSpot then comes back empty:
+      // measured at one setup in a hundred and ninety-five. The gap is
+      // still a stride outside pounce either way.
+      const h = w.__floorSpot(g.x, g.y, gap - 16, gap + 16);
+      if (!h) return { setup: 'nowhere legal to stand a ' + species + ' ' + gap + 'px off it' };
+      const a = w.__putHunter(species, h, 'land');
+      if (!a) return { setup: 'no ' + species + ' in the cast' };
       // minD is measured from the moment he commits and on EVERY frame
       // after it, not only on the frames he is still in the strike state:
       // the frame the strike resolves on has already flipped him to the
@@ -3816,23 +3894,40 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
           return { caught: !p.alive, minD: minD, goLeft: goLeft, top: top, ended: ended };
         }
       }
-      return { caught: false, minD: minD, goLeft: goLeft, top: top,
-               ended: 'nothing: the budget ran out first', ranOut: true };
+      // ...and WHICH KIND of running out, because the two say opposite
+      // things. A false 'started' means the approach never got him to the
+      // strike at all, and reporting that as "closed to 9999px against a
+      // reach of 26" â€” which is what this used to print â€” describes a
+      // strike that never happened.
+      return { caught: false, minD: minD, goLeft: goLeft, top: top, started: started,
+               ended: started ? 'nothing: the budget ran out mid-strike'
+                              : 'nothing: he never reached the strike', ranOut: true };
     };
-    return { rac: land('raccoon', 'ratting', ['berry', 'paws', 'roost', 'crayfish'], 'woodmouse', 100, 'racgrab', 900),
-             owl: land('owl', 'swoop', ['hoot', 'roost'], 'gartersnake', 180, 'owlswoop', 1400) };
+    // THE BUDGET HAS TO OUTLAST ONE ABANDONED APPROACH. Both hunts declare
+    // a giveUp â€” the owl's is 36s, which is 2160 frames â€” and __offer
+    // re-arms the appetite every frame, so a first leg that stalls is
+    // dropped and a second one starts. At 1400 frames the owl could not
+    // afford even one of those: the whole budget went into a single glide,
+    // 'started' stayed false, and the check reported the STRIKE as unable
+    // to close ground it had never been asked to cover. Measured over 195
+    // isolated runs of this exact fixture the strike begins at frame
+    // 195-381, so this is not a slower check â€” it is one that can tell the
+    // two failures apart.
+    return { rac: land('raccoon', 'ratting', ['berry', 'paws', 'roost', 'crayfish'], 'woodmouse', 100, 'racgrab', w.__frames('raccoon', 'ratting')),
+             owl: land('owl', 'swoop', ['hoot', 'roost'], 'gartersnake', 180, 'owlswoop', w.__frames('owl', 'swoop')) };
   })()`);
-  chk(K.rac && !K.rac.ranOut && K.rac.minD <= 22 && K.rac.goLeft > 0,
+  const said = (r, reach, dash) =>
+    !r ? 'never got to ask: the fixture returned nothing'
+    : r.setup ? `never got to ask: ${r.setup}`
+    : r.ranOut && !r.started ? `he never reached the strike at all â€” ${r.ended}`
+    : `closed to ${r.minD.toFixed(1)}px against a reach of ${reach} and ended in ${r.ended}, ` +
+      `${r.goLeft.toFixed(0)}px of the ${dash} unspent (top ${r.top.toFixed(0)}px/s)`;
+  chk(K.rac && !K.rac.setup && !K.rac.ranOut && K.rac.minD <= 22 && K.rac.goLeft > 0,
     'the raccoonâ€™s grab reaches what it is aimed at, with burst still in hand',
-    K.rac ? `closed to ${K.rac.minD.toFixed(1)}px against a reach of 22 and ended in ${K.rac.ended}, ` +
-            `${K.rac.goLeft.toFixed(0)}px of the 180 unspent (top ${K.rac.top.toFixed(0)}px/s)`
-          : 'never got to ask: no floor pair');
-  chk(K.owl && !K.owl.ranOut && K.owl.minD <= 26 && K.owl.goLeft > 0,
+    said(K.rac, 22, 180));
+  chk(K.owl && !K.owl.setup && !K.owl.ranOut && K.owl.minD <= 26 && K.owl.goLeft > 0,
     'and so does the owlâ€™s stoop, on the slow end of his list',
-    K.owl ? `closed to ${K.owl.minD.toFixed(1)}px on a garter snake against a reach of 26 and ` +
-            `ended in ${K.owl.ended}, ${K.owl.goLeft.toFixed(0)}px of the 250 unspent ` +
-            `(top ${K.owl.top.toFixed(0)}px/s)`
-          : 'never got to ask: no floor pair');
+    said(K.owl, 26, 250));
 
   // ---- 7. A HUNTER TAKEN OUT OF HIS OWN STRIKE HANDS THE PREY BACK -----
   // huntRelease as the first line of both ticks. A drag, a fight or a
@@ -3976,7 +4071,7 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
       if (S) { S.domain = 'land'; S.left = 9e6; S.tripUntil = performance.now() + 9e6; }
       a.x = x; a.y = y; a._lvl = lvl || 0; a.vx = 0; a.vy = 0; a.state = 'wander';
     };
-    w.__evs = { cougar: ['prowl', 'scrape', 'ambush', 'den'],
+    w.__evs = { cougar: ['prowl', 'scrape', 'ambush', 'den', 'roll'],
                 wolf: ['howl', 'mark', 'rush', 'scavenge', 'bed'] };
     w.__only = (a, id) => {
       const S = a._eth; if (!S) return;
@@ -4659,7 +4754,11 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     if (!S) return { none: 'no ethogram state' };
     const mr = Math.random;
     Math.random = () => 0.99;                       // every roll fails 0.60
-    S.cd.den = 0; S.seekAt.den = 0; cg.noEventUntil = 0;
+    // ...and the den is the ONLY thing asked. Zeroing its ledger by hand
+    // left the frame open to whichever sibling appetite happened to be due
+    // â€” which is how adding a fifth event to the cougar turned this green
+    // check red without changing a line of the engine it measures.
+    w.__only(cg, 'den');
     window.__pump(1);
     Math.random = mr;
     const re = (S.seekAt.den || 0) - performance.now();
@@ -4669,6 +4768,87 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     'a den appetite that fails its roll re-asks in seconds, not next act',
     MR.none || `the due re-armed ${Math.round(MR.re / 1000)}s out ` +
       `(the old engine lost it for 140-220s), state ${MR.state}`);
+
+  // ---- 5g. THE ROLL, WHICH WAS NEVER HERE (v0.49) ----------------------
+  // Reported as a regression â€” "he does not roll any more" â€” and it had
+  // never existed: no state, no drawing, nothing in the history of the
+  // file. So what is checked is the thing that was built, and the two
+  // things it must not do. He goes down, works, and gets up: three
+  // postures in that order and no other. He holds the patch he chose, on
+  // the forest floor and out of the water, because the drawing has no
+  // legs under it and nothing that happens on a terrace or in the lake
+  // can be recovered from by an animal in that shape.
+  const RL = await page4.evaluate(`(() => {
+    const w = window.__saiWorld, B = w.bounds;
+    const cg = w.agents.find((a) => a.species === 'cougar');
+    if (!cg) return { none: 'no cougar' };
+    w.__park(['cougar']); w.__prey.clear();
+    w.__free(cg, 0.46 * B.w, 0.58 * B.h, 0);
+    if (w.__until(cg, 'roll', ['cgtoroll', 'cgflop'], 900) < 0) {
+      return { none: 'the roll appetite never started, in 900 frames of asking' };
+    }
+    const R = ['cgflop', 'cgroll', 'cgrise'];
+    const seen = [];
+    let x0 = null, y0 = null, drift = 0, lvl = null, wet = 0, band = '';
+    let frames = 0;
+    for (let i = 0; i < 4000; i++) {
+      const st = cg.state;
+      if (R.indexOf(st) >= 0) {
+        if (x0 === null) { x0 = cg.x; y0 = cg.y; lvl = cg._lvl; }
+        drift = Math.max(drift, Math.hypot(cg.x - x0, cg.y - y0));
+        if (w.inWaterAt(cg.x, cg.y)) wet++;
+        band = w.rockZoneAt(cg.x, cg.y).band;
+        frames++;
+        if (seen[seen.length - 1] !== st) seen.push(st);
+      } else if (seen.length) break;
+      window.__pump(1);
+    }
+    return { none: false, seen: seen, drift: drift, lvl: lvl, band: band,
+             boutMs: Math.round(frames * 16.667), wet: wet, ended: cg.state };
+  })()`);
+  chk(!RL.none && RL.seen.join(',') === 'cgflop,cgroll,cgrise',
+    'the cougar goes over, works the dirt and gets back up',
+    RL.none || `he went ${RL.seen.join(' -> ') || '(nowhere)'} and came out in ${RL.ended}`);
+  // 740ms of drop + 3450-5750 of scrub + 1050 of rise is 5.2-7.5s, and the
+  // three numbers are the stylesheet's own one-shot lengths
+  chk(!RL.none && RL.boutMs > 4800 && RL.boutMs < 8200,
+    'and the bout lasts as long as the drawing does',
+    RL.none || `${(RL.boutMs / 1000).toFixed(1)}s on his back, against the 5.2-7.5s the three animations run`);
+  // LEVEL 0 AND DRY, not "off the rock": cgStandable lets him work the
+  // talus, which is level 0 and is the ground the fanned-out foot added.
+  // What the posture cannot survive is a terrace or the lake.
+  chk(!RL.none && RL.drift < 6 && RL.lvl === 0 && RL.wet === 0
+      && (RL.band === 'forest' || RL.band === 'talus'),
+    'on dry open ground, and he stays on the patch he picked',
+    RL.none || `${RL.drift.toFixed(1)}px of drift on level ${RL.lvl} ` +
+      `(${RL.band}), ${RL.wet} wet frames`);
+
+  // ...and the DRAWING, asked the way the skunk's den pose is: data-state on
+  // a critter arrives through the React snapshot, which runs on the real
+  // clock and does not tick while a pumped bout goes by in a few
+  // milliseconds. So the state is written onto the sprite and put back.
+  const RD = await page4.evaluate(`(function () {
+    var all = Array.prototype.slice.call(document.querySelectorAll('.sai-sprite'));
+    var el = all.find(function (e) { return e.querySelector('.sai-crit--cougar'); });
+    if (!el) return { none: 'no cougar sprite in the DOM' };
+    var shown = function (state, sel) {
+      var was = el.dataset.state; el.dataset.state = state;
+      var q = el.querySelector(sel);
+      var d = q ? getComputedStyle(q).display : 'missing';
+      el.dataset.state = was; return d;
+    };
+    return { none: false,
+             flop: shown('cgflop', '.sai-crit-cgrollpose'),
+             roll: shown('cgroll', '.sai-crit-cgrollpose'),
+             rise: shown('cgrise', '.sai-crit-cgrollpose'),
+             rig:  shown('cgroll', '.sai-crit-body'),
+             wander: shown('wander', '.sai-crit-cgrollpose') };
+  })()`);
+  chk(!RD.none && RD.flop === 'inline' && RD.roll === 'inline' && RD.rise === 'inline'
+      && RD.rig === 'none' && RD.wander === 'none',
+    'and what is drawn is the belly-up posture, not the standing rig',
+    RD.none || `flop/roll/rise show it (${RD.flop}/${RD.roll}/${RD.rise}), ` +
+      `the walking body is ${RD.rig} under it, and a wandering cougar is ${RD.wander}`);
 
   // ---- 6. A HUNTER TAKEN OUT OF HIS OWN STALK HANDS THE PREY BACK ------
   // forceFlee, a fight, a rescue and a drag all write a.state from outside
