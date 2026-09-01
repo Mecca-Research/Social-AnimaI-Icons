@@ -62,8 +62,33 @@ const ROCK_EDGES = {
   EDGE_CLIFF: [[100, 268], [107, 306], [102, 372], [105, 432]],
   EDGE_SHELF: [[105, 432], [113, 448], [116, 474], [114, 536]],
   EDGE_RISER: [[114, 536], [106, 566], [96, 600], [84, 636]],
-  FOOT: [[84, 636], [74, 686], [58, 740], [44, 800], [36, 872],
-         [28, 950], [20, 1010], [-90, 1010]],
+  // THE TALUS APRON. It used to taper away to nothing — 84 per-mille at the
+  // riser's foot and 20 by the bottom of the frame — which left the whole
+  // south-west corner as forest floor and the bluff as a thin wedge nobody
+  // could work at ground level. The owner asked for the bottom of the rock
+  // to reach out as far as its middle does, and its middle is the shelf's
+  // lip at 116: EDGE_SHELF's own widest point, at y 474. So the foot now
+  // fans out to exactly that number instead of pinching in.
+  //
+  // WHAT SETS THE SHAPE IS THE WEST-LOW OAK, twice over, and both numbers
+  // are measured rather than guessed — swept over the stage shapes the tree
+  // rules are checked at, which is where a fixed px offset hung off a
+  // fractional anchor does its damage.
+  //
+  //   its CROWN box covers y 598..751 and its west face never gets west of
+  //   83.6 per-mille, so nothing here may pass ~83 until 758
+  //   its WEST WORKING SPOTS — the deer's bed is the deepest — sit at
+  //   90.5 per-mille and no further west, at latitudes 773..804, and those
+  //   have to be forest floor and not talus: a deer bedding on the bluff
+  //   walks into a riser, is pushed out, and gives the bout up in silence
+  //
+  // So the fan cannot start until 810. Below that the only neighbour left
+  // is the mossy log at (.210,.950), whose painted half-width is 91 * 0.80
+  // px: the swell peaks at 116 above it, at y 908, and eases back across
+  // its latitudes so the stone and the timber never touch at any shape.
+  FOOT: [[84, 636], [76, 672], [70, 716], [74, 758], [82, 800],
+         [98, 840], [112, 878], [116, 908], [112, 944],
+         [106, 980], [102, 1010], [-90, 1010]],
 };
 /** the whole right-hand silhouette as (y -> x), y ascending */
 const ROCK_PROFILE = (() => {

@@ -1,0 +1,162 @@
+/* ======================== v0.49 ========================
+   THE COUGAR'S ROLL — one drawn posture, three states, the same way the
+   den is one drawing across cgsettle/cgsleep/cgstir. The whole point of
+   the animation is that this is NOT sleep: he goes down fast, works his
+   shoulders side to side with all four paws paddling, and gets up again
+   in a single movement with a shake in it. A cat that lay still on its
+   back would read as a dead cat, which is the one thing it must not.
+
+   Keyframe prefix sai-cougar-, unchanged. The verbs already spent by the
+   walk, the swim, the pant, the fold and the den — bound carrylevel
+   drive flank fold hang headline heave pant pitch reach rudder taildrift
+   — are not reused; the five below are flop paddle rock rise scrub.   */
+
+/* the posture is off unless a roll state asks for it, exactly like the
+   scrape and the sleep poses above it */
+.sai-crit--cougar .sai-crit-cgrollpose{ display:none; }
+
+.sai-sprite[data-state="cgflop"] .sai-crit--cougar .sai-crit-cgrollpose,
+.sai-sprite[data-state="cgroll"] .sai-crit--cougar .sai-crit-cgrollpose,
+.sai-sprite[data-state="cgrise"] .sai-crit--cougar .sai-crit-cgrollpose{
+  display:inline; }
+.sai-sprite[data-state="cgflop"] .sai-crit--cougar .sai-crit-body,
+.sai-sprite[data-state="cgflop"] .sai-crit--cougar .sai-crit-head,
+.sai-sprite[data-state="cgflop"] .sai-crit--cougar .sai-crit-tail,
+.sai-sprite[data-state="cgflop"] .sai-crit--cougar .sai-crit-leg,
+.sai-sprite[data-state="cgroll"] .sai-crit--cougar .sai-crit-body,
+.sai-sprite[data-state="cgroll"] .sai-crit--cougar .sai-crit-head,
+.sai-sprite[data-state="cgroll"] .sai-crit--cougar .sai-crit-tail,
+.sai-sprite[data-state="cgroll"] .sai-crit--cougar .sai-crit-leg,
+.sai-sprite[data-state="cgrise"] .sai-crit--cougar .sai-crit-body,
+.sai-sprite[data-state="cgrise"] .sai-crit--cougar .sai-crit-head,
+.sai-sprite[data-state="cgrise"] .sai-crit--cougar .sai-crit-tail,
+.sai-sprite[data-state="cgrise"] .sai-crit--cougar .sai-crit-leg{
+  display:none; }
+.sai-crit--cougar .cgr-trunk, .sai-crit--cougar .cgr-head,
+.sai-crit--cougar .cgr-tail, .sai-crit--cougar .cgr-dust,
+.sai-crit--cougar .cgr-legnear, .sai-crit--cougar .cgr-legfar{
+  transform-box:fill-box; }
+
+/* ---- cgflop: the drop. One-shot and HELD, because he only goes over
+   once. He arrives high and tilted — that is the standing animal the
+   drawing replaced — pivots about where his shoulder meets the ground,
+   overshoots past flat and settles back into it ---- */
+.sai-sprite[data-state="cgflop"] .sai-crit--cougar .sai-crit-cgrollpose{
+  transform-origin:56% 96%;
+  animation:sai-cougar-flop .74s cubic-bezier(.32,.9,.36,1) forwards; }
+@keyframes sai-cougar-flop{
+  0%  { transform:translateY(-13px) rotate(-27deg) scaleY(1.12); }
+  58% { transform:translateY(1.6px) rotate(5.5deg) scaleY(.94); }
+  80% { transform:translateY(0) rotate(-2deg) scaleY(1.02); }
+  100%{ transform:translateY(0) rotate(0deg) scaleY(1); } }
+/* the legs are still catching up as he lands, one beat behind the body */
+.sai-sprite[data-state="cgflop"] .sai-crit--cougar .cgr-legnear,
+.sai-sprite[data-state="cgflop"] .sai-crit--cougar .cgr-legfar{
+  transform-origin:50% 96%;
+  animation:sai-cougar-flop .74s cubic-bezier(.3,.8,.4,1) .07s forwards; }
+
+/* ---- cgroll: the work. The trunk ROCKS about the spine — that is the
+   scrub, and it is the slowest thing in the pose because a shoulder
+   working the dirt is heavy. Everything else is faster and out of phase
+   with it, which is what keeps four legs from reading as one object ---- */
+.sai-sprite[data-state="cgroll"] .sai-crit--cougar .cgr-trunk{
+  transform-origin:50% 82%;
+  animation:sai-cougar-scrub 1.15s ease-in-out infinite; }
+@keyframes sai-cougar-scrub{
+  0%,100%{ transform:rotate(-4.6deg) translate(-1.4px,.3px); }
+  50%    { transform:rotate(4.6deg) translate(1.4px,0); } }
+/* the whole posture rocks a little with it, so the roll is the ANIMAL
+   moving rather than a body panel sliding over a fixed outline */
+.sai-sprite[data-state="cgroll"] .sai-crit--cougar .sai-crit-cgrollpose{
+  transform-origin:56% 96%;
+  animation:sai-cougar-rock 1.15s ease-in-out infinite; }
+@keyframes sai-cougar-rock{
+  0%,100%{ transform:rotate(-2.2deg); }
+  50%    { transform:rotate(2.2deg); } }
+/* THE PADDLE. Near and far pairs on the same clock at opposite ends of
+   it: the near paws come over as the far ones go back, which is the
+   whole reason a rolling cat reads as loose instead of as stuck. */
+.sai-sprite[data-state="cgroll"] .sai-crit--cougar .cgr-legnear{
+  transform-origin:50% 94%;
+  animation:sai-cougar-paddle .58s ease-in-out infinite; }
+.sai-sprite[data-state="cgroll"] .sai-crit--cougar .cgr-legfar{
+  transform-origin:50% 94%;
+  animation:sai-cougar-paddle .58s ease-in-out infinite .29s; }
+@keyframes sai-cougar-paddle{
+  0%,100%{ transform:rotate(-9deg) translate(-1.2px,.6px); }
+  50%    { transform:rotate(9deg) translate(1.2px,-1.1px); } }
+/* the head lolls the OTHER way from the shoulders — a neck under a skull
+   that is already on the ground follows late and short */
+.sai-sprite[data-state="cgroll"] .sai-crit--cougar .cgr-head{
+  transform-origin:22% 60%;
+  animation:sai-cougar-scrub 1.15s ease-in-out infinite reverse; }
+/* the tail flicks on its own clock, slower and lazier than any of it */
+.sai-sprite[data-state="cgroll"] .sai-crit--cougar .cgr-tail{
+  transform-origin:92% 30%;
+  animation:sai-cougar-paddle 2.3s ease-in-out infinite; }
+/* and the dust puffs on the scrub's own beat, twice a cycle, because it
+   is thrown at each end of the rock and not in the middle */
+.sai-sprite[data-state="cgroll"] .sai-crit--cougar .cgr-dust{
+  transform-origin:50% 100%;
+  animation:sai-cougar-dust 1.15s ease-in-out infinite; }
+@keyframes sai-cougar-dust{
+  0%,100%{ opacity:.28; transform:scale(.86,.7) translateY(1px); }
+  25%    { opacity:.85; transform:scale(1.16,1.12) translateY(-1.4px); }
+  50%    { opacity:.34; transform:scale(.9,.78) translateY(.6px); }
+  75%    { opacity:.8;  transform:scale(1.12,1.06) translateY(-1.2px); } }
+
+/* ---- cgrise: back on his feet. One-shot, held, and the mirror of the
+   flop with a SHAKE in the middle of it: he comes up, the loose skin
+   catches up with him, and then he is a standing cat again ---- */
+.sai-sprite[data-state="cgrise"] .sai-crit--cougar .sai-crit-cgrollpose{
+  transform-origin:62% 98%;
+  animation:sai-cougar-rise 1.05s cubic-bezier(.3,.75,.35,1) forwards; }
+/* the last frame is the FOLD'S FIRST ONE, near enough: -9px and a few
+   degrees is where the standing rig's silhouette sits, so the swap back
+   to it at the end of the state is a step and not a jump cut. Anything
+   like the 21 degrees this first had reads as the cat being snatched
+   upright, and it reads twice as badly mirrored. */
+@keyframes sai-cougar-rise{
+  0%  { transform:translateY(0) rotate(0deg) scaleY(1); }
+  22% { transform:translateY(1.2px) rotate(-5deg) scaleY(.9); }
+  55% { transform:translateY(-6px) rotate(7deg) scaleY(1.08); }
+  70% { transform:translateY(-7.4px) rotate(3.5deg) scaleY(1.04) translateX(1.6px); }
+  84% { transform:translateY(-8.6px) rotate(8.5deg) scaleY(1.06) translateX(-1.4px); }
+  100%{ transform:translateY(-10px) rotate(5deg) scaleY(1.14); } }
+/* the legs swing under him as he comes up, which is the difference
+   between getting up and being lifted */
+.sai-sprite[data-state="cgrise"] .sai-crit--cougar .cgr-legnear,
+.sai-sprite[data-state="cgrise"] .sai-crit--cougar .cgr-legfar{
+  transform-origin:50% 96%;
+  animation:sai-cougar-legsunder 1.05s cubic-bezier(.3,.8,.4,1) forwards; }
+@keyframes sai-cougar-legsunder{
+  0%  { transform:rotate(0deg); }
+  50% { transform:rotate(-16deg) translateY(2px); }
+  100%{ transform:rotate(-28deg) translate(-1.4px,5px) scaleY(.8); } }
+/* the dust settles rather than stopping dead */
+.sai-sprite[data-state="cgrise"] .sai-crit--cougar .cgr-dust{
+  transform-origin:50% 100%;
+  animation:sai-cougar-settledust 1.05s ease-out forwards; }
+@keyframes sai-cougar-settledust{
+  0%  { opacity:.8; transform:scale(1.1,1); }
+  100%{ opacity:0; transform:scale(1.5,.55) translateY(2px); } }
+
+@media (prefers-reduced-motion:reduce){
+  .sai-sprite[data-state="cgflop"] .sai-crit--cougar .sai-crit-cgrollpose,
+  .sai-sprite[data-state="cgflop"] .sai-crit--cougar .cgr-legnear,
+  .sai-sprite[data-state="cgflop"] .sai-crit--cougar .cgr-legfar,
+  .sai-sprite[data-state="cgroll"] .sai-crit--cougar .sai-crit-cgrollpose,
+  .sai-sprite[data-state="cgroll"] .sai-crit--cougar .cgr-trunk,
+  .sai-sprite[data-state="cgroll"] .sai-crit--cougar .cgr-head,
+  .sai-sprite[data-state="cgroll"] .sai-crit--cougar .cgr-tail,
+  .sai-sprite[data-state="cgroll"] .sai-crit--cougar .cgr-dust,
+  .sai-sprite[data-state="cgrise"] .sai-crit--cougar .cgr-legnear,
+  .sai-sprite[data-state="cgrise"] .sai-crit--cougar .cgr-legfar,
+  .sai-sprite[data-state="cgrise"] .sai-crit--cougar .cgr-dust{ animation:none; }
+  /* the two pairs that must still MOVE, because a posture nobody sees
+     arrive is a posture that teleports: kept, slowed, and without the
+     rocking that is the part reduced motion is actually about */
+  .sai-sprite[data-state="cgroll"] .sai-crit--cougar .cgr-legnear{
+    animation:sai-cougar-paddle 1.6s ease-in-out infinite; }
+  .sai-sprite[data-state="cgrise"] .sai-crit--cougar .sai-crit-cgrollpose{
+    animation:sai-cougar-rise 1.05s ease-out forwards; } }

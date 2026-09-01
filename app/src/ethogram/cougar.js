@@ -172,6 +172,28 @@ function cougarScrapeGround(a, c) {
 }
 
 /**
+ * WHERE HE ROLLS. Same two rules the scrape has and for the same reasons:
+ * not with a goat in his jaws — a hundred kilos of carcass has no place in
+ * a posture drawn without one — and only from the forest floor, because a
+ * cat on his back with four paws in the air is a cat who is not holding a
+ * terrace, and keepOffRock would put him somewhere else halfway through it.
+ *
+ * The point is vetted at his own feet rather than at an offset: unlike the
+ * scrape, nothing here is thrown clear of him. openGround's own pit test
+ * still applies, which only makes the patch cleaner than it has to be.
+ */
+function cougarRollGround(a, c) {
+  if (a._cgKill) return null;
+  if (standLevel(a, c) !== 0) return null;
+  for (let i = 0; i < 4; i++) {
+    const p = openGround(a, c);
+    if (!p) return null;
+    if (cgStandable(p, c, a, 0)) return p;
+  }
+  return null;
+}
+
+/**
  * WHAT HE CAN ACTUALLY GET TO. The goat lives on the bluff and nowhere else
  * (Prey.js habitatOk, case "rock"); everything else is forest floor, which
  * means off the water and off the terraces, because that is where habitatOk
@@ -522,6 +544,64 @@ defineEthogram("cougar", {
         }
         a._faceDir = 0;
         endEvent(a, c, { reroll: true, quiet: 1200, stop: true });
+      },
+    },
+
+    /* ---- ROLL: over onto his back, and a good scrub in the dirt --------
+     * The owner asked for this one by name and it was never here: no state,
+     * no drawing, nothing in the history of the file. So it is written from
+     * the animal rather than restored — a felid rolls where the ground is
+     * dry and open, and it is a WORKING posture, not a nap. He goes down in
+     * three quarters of a second, scrubs his shoulders side to side with
+     * all four paws paddling, and comes back up in one movement.
+     *
+     * Its appetite sits between the scrape's and the prowl's on purpose:
+     * often enough that a watch of a few minutes contains one, rare enough
+     * that it never competes with the hunt. It is offered AFTER the prowl
+     * and the scrape in array order, which is the order of his priorities —
+     * a view and a territorial notice are both business, and this is not.
+     */
+    {
+      id: "roll", domain: "land", trigger: "seek",
+      every: [44000, 76000], chance: 0.62, miss: 15000, cool: 30000,
+      // missRetry, like the den's: a failed chance roll costs fifteen
+      // seconds rather than the whole cycle, because the measured way a
+      // behaviour disappears from a watch is a full `every` lost to one
+      // unlucky roll and then another.
+      missRetry: true,
+      states: ["cgflop", "cgroll", "cgrise"],
+      goto: { state: "cgtoroll", within: 20, giveUp: 22000, none: 13000,
+              lost: 11000, urgency: 0.26, pick: cougarRollGround },
+      begin(a, c, S, g) {
+        a.vx = 0; a.vy = 0;
+        if (g) { a.x = g.x; a.y = g.y; }        // the vetted patch, exactly
+        // the drawing is not mirrored — the head is drawn at the east end
+        // and the tail west — so the face is pinned the way the scrape's is
+        a._faceDir = 1;
+        a._cgAt = { x: a.x, y: a.y };
+        // the numbers are the STYLESHEET'S. sai-cougar-flop is .74s and
+        // sai-cougar-rise is 1.05s, both one-shot and held, so a state that
+        // ended early would cut a posture mid-fall and one that ended late
+        // would leave him frozen at the end of it.
+        a.state = "cgflop"; a.stateUntil = c.now + 740;
+      },
+      drive(a, c) {
+        // held, exactly as the scrape is: five seconds on his back is long
+        // enough for the crowd separation to walk a lying cat off his patch
+        holdSpot(a, c, a._cgAt || { x: a.x, y: a.y });
+        if (c.now < a.stateUntil) return;
+        if (a.state === "cgflop") {
+          // three to five scrubs at the 1.15s the rock cycle actually runs,
+          // so the bout always ends between beats rather than mid-swing
+          a.state = "cgroll"; a.stateUntil = c.now + c.rand(3450, 5750);
+          return;
+        }
+        if (a.state === "cgroll") {
+          a.state = "cgrise"; a.stateUntil = c.now + 1050;
+          return;
+        }
+        a._faceDir = 0;
+        endEvent(a, c, { reroll: true, quiet: 1300, stop: true });
       },
     },
 

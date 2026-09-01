@@ -3976,7 +3976,7 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
       if (S) { S.domain = 'land'; S.left = 9e6; S.tripUntil = performance.now() + 9e6; }
       a.x = x; a.y = y; a._lvl = lvl || 0; a.vx = 0; a.vy = 0; a.state = 'wander';
     };
-    w.__evs = { cougar: ['prowl', 'scrape', 'ambush', 'den'],
+    w.__evs = { cougar: ['prowl', 'scrape', 'ambush', 'den', 'roll'],
                 wolf: ['howl', 'mark', 'rush', 'scavenge', 'bed'] };
     w.__only = (a, id) => {
       const S = a._eth; if (!S) return;
@@ -4659,7 +4659,11 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     if (!S) return { none: 'no ethogram state' };
     const mr = Math.random;
     Math.random = () => 0.99;                       // every roll fails 0.60
-    S.cd.den = 0; S.seekAt.den = 0; cg.noEventUntil = 0;
+    // ...and the den is the ONLY thing asked. Zeroing its ledger by hand
+    // left the frame open to whichever sibling appetite happened to be due
+    // â€” which is how adding a fifth event to the cougar turned this green
+    // check red without changing a line of the engine it measures.
+    w.__only(cg, 'den');
     window.__pump(1);
     Math.random = mr;
     const re = (S.seekAt.den || 0) - performance.now();
@@ -4669,6 +4673,87 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
     'a den appetite that fails its roll re-asks in seconds, not next act',
     MR.none || `the due re-armed ${Math.round(MR.re / 1000)}s out ` +
       `(the old engine lost it for 140-220s), state ${MR.state}`);
+
+  // ---- 5g. THE ROLL, WHICH WAS NEVER HERE (v0.49) ----------------------
+  // Reported as a regression â€” "he does not roll any more" â€” and it had
+  // never existed: no state, no drawing, nothing in the history of the
+  // file. So what is checked is the thing that was built, and the two
+  // things it must not do. He goes down, works, and gets up: three
+  // postures in that order and no other. He holds the patch he chose, on
+  // the forest floor and out of the water, because the drawing has no
+  // legs under it and nothing that happens on a terrace or in the lake
+  // can be recovered from by an animal in that shape.
+  const RL = await page4.evaluate(`(() => {
+    const w = window.__saiWorld, B = w.bounds;
+    const cg = w.agents.find((a) => a.species === 'cougar');
+    if (!cg) return { none: 'no cougar' };
+    w.__park(['cougar']); w.__prey.clear();
+    w.__free(cg, 0.46 * B.w, 0.58 * B.h, 0);
+    if (w.__until(cg, 'roll', ['cgtoroll', 'cgflop'], 900) < 0) {
+      return { none: 'the roll appetite never started, in 900 frames of asking' };
+    }
+    const R = ['cgflop', 'cgroll', 'cgrise'];
+    const seen = [];
+    let x0 = null, y0 = null, drift = 0, lvl = null, wet = 0, band = '';
+    let frames = 0;
+    for (let i = 0; i < 4000; i++) {
+      const st = cg.state;
+      if (R.indexOf(st) >= 0) {
+        if (x0 === null) { x0 = cg.x; y0 = cg.y; lvl = cg._lvl; }
+        drift = Math.max(drift, Math.hypot(cg.x - x0, cg.y - y0));
+        if (w.inWaterAt(cg.x, cg.y)) wet++;
+        band = w.rockZoneAt(cg.x, cg.y).band;
+        frames++;
+        if (seen[seen.length - 1] !== st) seen.push(st);
+      } else if (seen.length) break;
+      window.__pump(1);
+    }
+    return { none: false, seen: seen, drift: drift, lvl: lvl, band: band,
+             boutMs: Math.round(frames * 16.667), wet: wet, ended: cg.state };
+  })()`);
+  chk(!RL.none && RL.seen.join(',') === 'cgflop,cgroll,cgrise',
+    'the cougar goes over, works the dirt and gets back up',
+    RL.none || `he went ${RL.seen.join(' -> ') || '(nowhere)'} and came out in ${RL.ended}`);
+  // 740ms of drop + 3450-5750 of scrub + 1050 of rise is 5.2-7.5s, and the
+  // three numbers are the stylesheet's own one-shot lengths
+  chk(!RL.none && RL.boutMs > 4800 && RL.boutMs < 8200,
+    'and the bout lasts as long as the drawing does',
+    RL.none || `${(RL.boutMs / 1000).toFixed(1)}s on his back, against the 5.2-7.5s the three animations run`);
+  // LEVEL 0 AND DRY, not "off the rock": cgStandable lets him work the
+  // talus, which is level 0 and is the ground the fanned-out foot added.
+  // What the posture cannot survive is a terrace or the lake.
+  chk(!RL.none && RL.drift < 6 && RL.lvl === 0 && RL.wet === 0
+      && (RL.band === 'forest' || RL.band === 'talus'),
+    'on dry open ground, and he stays on the patch he picked',
+    RL.none || `${RL.drift.toFixed(1)}px of drift on level ${RL.lvl} ` +
+      `(${RL.band}), ${RL.wet} wet frames`);
+
+  // ...and the DRAWING, asked the way the skunk's den pose is: data-state on
+  // a critter arrives through the React snapshot, which runs on the real
+  // clock and does not tick while a pumped bout goes by in a few
+  // milliseconds. So the state is written onto the sprite and put back.
+  const RD = await page4.evaluate(`(function () {
+    var all = Array.prototype.slice.call(document.querySelectorAll('.sai-sprite'));
+    var el = all.find(function (e) { return e.querySelector('.sai-crit--cougar'); });
+    if (!el) return { none: 'no cougar sprite in the DOM' };
+    var shown = function (state, sel) {
+      var was = el.dataset.state; el.dataset.state = state;
+      var q = el.querySelector(sel);
+      var d = q ? getComputedStyle(q).display : 'missing';
+      el.dataset.state = was; return d;
+    };
+    return { none: false,
+             flop: shown('cgflop', '.sai-crit-cgrollpose'),
+             roll: shown('cgroll', '.sai-crit-cgrollpose'),
+             rise: shown('cgrise', '.sai-crit-cgrollpose'),
+             rig:  shown('cgroll', '.sai-crit-body'),
+             wander: shown('wander', '.sai-crit-cgrollpose') };
+  })()`);
+  chk(!RD.none && RD.flop === 'inline' && RD.roll === 'inline' && RD.rise === 'inline'
+      && RD.rig === 'none' && RD.wander === 'none',
+    'and what is drawn is the belly-up posture, not the standing rig',
+    RD.none || `flop/roll/rise show it (${RD.flop}/${RD.roll}/${RD.rise}), ` +
+      `the walking body is ${RD.rig} under it, and a wandering cougar is ${RD.wander}`);
 
   // ---- 6. A HUNTER TAKEN OUT OF HIS OWN STALK HANDS THE PREY BACK ------
   // forceFlee, a fight, a rescue and a drag all write a.state from outside

@@ -525,18 +525,45 @@ function stepOne(world, cfg, dt, now, p) {
     // is not a thing you run from.
     if ((a.z || 0) > SILENT_Z) continue;
     const d = Math.hypot(a.x - p.x, a.y - p.y);
-    // A PREDATOR WITH NOTHING IN MIND IS NOT AN EMERGENCY. Full reach is
-    // owed to a hunter who is actually working — one holding a claim, or in
-    // the beats of a hunt — and a predator merely passing gets two thirds of
-    // it. Measured on the bluff, where the cougar and the goat share a
-    // hundred and seventy pixels of terrace: the goat spent 92 of its 166
-    // seconds on stage in flight, from an animal that was patrolling, so it
-    // never foraged and never took a goal, and the pair of them read as two
-    // animals standing next to each other doing nothing. A hunt still
-    // panics it at the full radius, which is what makes the hunt read.
-    const busy = !!a._huntP || (a._eth && a._eth.goalOwner === "ambush");
-    if (d < FLEE_R(aa, app) * (busy ? 1 : 0.66) && d < td) { threat = a; td = d; }
+    // THIS RADIUS IS NOT DISCOUNTED FOR AN IDLE PREDATOR, and it was for
+    // one release. The goat spending 92 of its 166 stage-seconds fleeing a
+    // merely patrolling cougar was real, but the cause was the cougar's
+    // day and not the goat's nerve — he was standing on the bluff for
+    // forty per cent of a watch — and cutting every prey's reach to two
+    // thirds to fix it took a wood mouse's notice of a bear from 139px to
+    // 92 and left it grazing under one at 110. A prey animal does not
+    // check whether the thing above it has made up its mind.
+    // HABITUATION, and it is the only discount here. An animal it has
+    // already run from for five and a half unbroken seconds, that never came
+    // for it, is one it now WATCHES instead — until it moves in close, or
+    // until it actually takes a claim, either of which cancels this on the
+    // frame. See the bookkeeping below.
+    // eighteen seconds against a five-and-a-half second run is a ceiling
+    // of about a quarter of its life spent in flight from an animal that
+    // is only ever standing there, and none at all once it walks off.
+    if (p._waryOf === a.id && now < p._waryUntil
+        && !(p.hunted && p.claimedBy === a.id)
+        && d > FLEE_R(aa, app) * 0.45) continue;
+    if (d < FLEE_R(aa, app) && d < td) { threat = a; td = d; }
   }
+  // THE RUN THAT NEVER ENDS. The goat and the cougar share a bluff a
+  // hundred and seventy pixels across, so a cougar merely standing on it
+  // is inside the goat's radius for as long as he cares to stand there:
+  // measured at 93 to 125 seconds of flight out of a five-minute life, and
+  // what it reads as is two animals stuck beside each other. Flight is a
+  // burst, not a way of living. Five and a half seconds of it from an
+  // animal that has never claimed him and the goat stops and watches it —
+  // which is what a mountain goat on a ledge actually does — and the guard
+  // above lets that same animal panic him again the moment it comes for
+  // him or comes properly close.
+  if (threat) {
+    if (p._runFrom !== threat.id) { p._runFrom = threat.id; p._runSince = now; }
+    else if (now - p._runSince > 5500 && !(p.hunted && p.claimedBy === threat.id)) {
+      p._waryOf = threat.id; p._waryUntil = now + 18000;
+      p._runFrom = null; p._threat = null; p._fleeUntil = 0;
+      threat = null;
+    }
+  } else p._runFrom = null;
   if (threat) {
     p._threat = threat.id; p._tx = threat.x; p._ty = threat.y;
     // the run outlasts the sighting: it does not stop dead the instant the
@@ -584,29 +611,48 @@ function pace(p, cfg, urgency) {
   return cfg.speed * base * (0.35 + 0.85 * urgency) * wob;
 }
 
-/** move, and refuse any step that would leave the habitat */
-function advance(world, p, dt, vx, vy) {
+/**
+ * Move, and refuse any step that would leave the habitat.
+ *
+ * `slide` is the whole subtlety and it belongs to the CALLER, because a
+ * wall means two different things to a walking animal and a running one.
+ *
+ *   AMBLING (slide true, the default) — a wall is not a dead end. Refusing
+ *   the whole step and dropping the goal is what a goat on a ninety-pixel
+ *   terrace did thirty-one times in two minutes: it walks at something, is
+ *   refused, forgets where it was going, picks again, and the eye reads
+ *   that as pacing back and forth between two points. So the step is tried
+ *   one axis at a time and he slides ALONG the face, which is what an
+ *   animal does.
+ *
+ *   RUNNING (slide false) — driveFlee has its own, better ladder below:
+ *   either perpendicular first, and then the LEAP, which is the whole
+ *   reason a mountain goat is on a bluff at all. Sliding here swallowed
+ *   that: the slide always succeeds, so the ladder was never reached and
+ *   the goat ran up and down its wall instead of going up a band. Which
+ *   is, word for word, "the goat will walk back and forth between a point
+ *   instead of jumping to a higher level".
+ *
+ * _blockedAt is stamped either way. It answers "is this animal against a
+ * face right now", which a prey that had to give up an axis plainly is,
+ * and a hunter reads it to turn a cornered loss into a slip-free.
+ */
+function advance(world, p, dt, vx, vy, slide = true) {
   p.vx = vx; p.vy = vy;
   const nx = p.x + vx * dt, ny = p.y + vy * dt;
   if (!p._in || p.state === PREY_STATES.exit || habitatOk(world, p, nx, ny)) {
     p.x = nx; p.y = ny; return true;
   }
-  // ...BUT A WALL IS NOT A DEAD END. Refusing the whole step and dropping
-  // the goal is what a goat on a ninety-pixel terrace does thirty-one times
-  // in two minutes — it walks at something, is refused, forgets where it was
-  // going, picks again, and the eye reads that as pacing back and forth
-  // between two points. So the step is tried one axis at a time first: he
-  // slides ALONG the face he cannot cross, which is what an animal does.
-  if (vx && habitatOk(world, p, p.x + vx * dt, p.y)) {
-    p.x += vx * dt; p.vy = 0; return true;
+  if (slide) {
+    if (vx && habitatOk(world, p, p.x + vx * dt, p.y)) {
+      p.x += vx * dt; p.vy = 0; p._blockedAt = now0(); return true;
+    }
+    if (vy && habitatOk(world, p, p.x, p.y + vy * dt)) {
+      p.y += vy * dt; p.vx = 0; p._blockedAt = now0(); return true;
+    }
   }
-  if (vy && habitatOk(world, p, p.x, p.y + vy * dt)) {
-    p.y += vy * dt; p.vx = 0; return true;
-  }
-  // genuinely cornered: both axes refused. The heading is dropped so the
-  // next frame picks a new one, and the timestamp is the cross-module
-  // witness a hunter reads — "this animal is against its wall RIGHT NOW" —
-  // which is what turns a cornered loss into a slip-free.
+  // no way through: the heading is dropped so the next frame picks a new
+  // one, and the timestamp is the cross-module witness.
   p.vx = 0; p.vy = 0; p._goal = null;
   p._blockedAt = now0();
   return false;
@@ -729,12 +775,15 @@ function driveFlee(world, p, cfg, dt, now, threat) {
   // A slip-free burst outranks it for a second: he got away, and it shows.
   const paceMul = now < (p._slipUntil || 0) ? 1.25 : (p._chasePace || 1);
   const sp = pace(p, cfg, 0.95 * paceMul);
-  if (!advance(world, p, dt, (ux + zx) * sp, (uy + zy) * sp)) {
+  // NO SLIDING WHILE RUNNING: the three tries below ARE the escape, in
+  // order, and a slide inside the first one would answer "true" every time
+  // and retire the other two — the leap included.
+  if (!advance(world, p, dt, (ux + zx) * sp, (uy + zy) * sp, false)) {
     // cornered against its own habitat edge: run along it — EITHER hand,
     // because in a corner one of the two perpendiculars is also a wall and
     // the old single try left the goat a statue for 83% of its flee frames
-    if (!advance(world, p, dt, -uy * sp, ux * sp)
-        && !advance(world, p, dt, uy * sp, -ux * sp)) {
+    if (!advance(world, p, dt, -uy * sp, ux * sp, false)
+        && !advance(world, p, dt, uy * sp, -ux * sp, false)) {
       // A MOUNTAIN GOAT'S ESCAPE IS THE LEAP. Its signature move was only
       // ever dispatched from wander, so the one moment the species exists
       // for — hunted, against the face — was the one moment it could not
