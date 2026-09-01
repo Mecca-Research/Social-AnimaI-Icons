@@ -2233,6 +2233,8 @@ async function bout(pg, src, ok, tries = 4) {
     (x) => x.wolf && x.wolf.plats.includes("step") && x.wolf.lvls.includes("1")
            && x.wolf.footN > 0 && x.wolf.footBad === 0 && !x.wolf.wall
            && x.wolf.arc && x.wolf.arc.lift > 8 && x.wolf.arc.z1 > x.wolf.arc.z0
+           && (x.wolf.arc.z0 + (x.wolf.arc.z1 - x.wolf.arc.z0) / 2 + x.wolf.arc.lift)
+              > Math.max(x.wolf.arc.z0, x.wolf.arc.z1) + 8
            && x.turtle && x.turtle.plats.length === 0 && x.turtle.end === 0);
   const W = r.wolf, T = r.turtle;
   chk(!!W && W.plats.includes('step'),
@@ -2749,7 +2751,14 @@ async function bout(pg, src, ok, tries = 4) {
   const T2 = await bout(page2, `(() => {
     const w = window.__saiWorld, l = w.__lakeLife();
     const p = l.weeds.find((x) => x.crop > 0) || l.weeds[0];
-    if (!p.crop) { p.crop = 2; p.cropAt = performance.now(); }
+    // CROPPED AND STAMPED EVERY ATTEMPT, not only when the bed is bare.
+    // This is a TIMING assertion — it pumps exactly one regrow window and
+    // reads whether the bed came back — and bout() re-runs it against the
+    // same page, whose clock has already advanced by the previous
+    // attempt's pumping. A second attempt inheriting the first's cropAt
+    // would be watching TWO regrow windows and still reporting one, so a
+    // regrowth quietly slowed to double could pass on the retry.
+    p.crop = 2; p.cropAt = performance.now();
     const was = p.crop;
     const need = Math.ceil(l.regrow / 16.667) + 30;
     for (let i = 0; i < need; i++) window.__pump(1);
@@ -3744,7 +3753,7 @@ async function bout(pg, src, ok, tries = 4) {
              nestI: a._nestI, zAfter: a.z };
   })()`,
     (x) => !x.none && x.glideFrames > 6 && x.maxGlideZ > 30
-           && x.landed && x.zAtStrike >= 0 && x.zAtStrike < 6);
+           && x.landed && x.zAtStrike >= 0 && x.zAtStrike < 6 && x.nestI === 3);
   chk(!O.none && O.glideFrames > 6 && O.maxGlideZ > 30,
     'the owl comes in off the ground: the approach is a glide, not a march',
     O.none || `held ${O.maxGlideZ.toFixed(0)}px up for ${O.glideFrames} frames of glide ` +
@@ -4064,7 +4073,8 @@ async function bout(pg, src, ok, tries = 4) {
     return { owl: yank('owl', 'swoop', ['hoot', 'roost'], 180),
              rac: yank('raccoon', 'ratting', ['berry', 'paws', 'roost', 'crayfish'], 100) };
   })()`,
-    (x) => ['owl', 'rac'].every((k) => x[k] && x[k].held && !x[k].huntP && !x[k].claimedBy));
+    (x) => ['owl', 'rac'].every((k) =>
+      x[k] && x[k].held && !x[k].huntP && !x[k].claimedBy && !x[k].hunted));
   // NEVER TOOK ONE and NEVER GAVE IT BACK are opposite faults with opposite
   // fixes, and reporting both as "still holding" cost a whole cycle to tell
   // apart. They are separate lines now.

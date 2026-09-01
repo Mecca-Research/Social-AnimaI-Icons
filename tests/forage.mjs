@@ -670,7 +670,15 @@ const alone = `for (let oi = 0, o = null; oi < w.agents.length; oi++) {
  * condition, so what is demanded is unchanged and only the number of
  * attempts is not.
  */
-async function chainUntil(species, evId, ms, seed, ok, tries = 4) {
+// TWO, NOT FOUR, AND THE ARITHMETIC IS THE REASON. These callers pass a
+// 140s per-attempt budget, so four exhausted attempts is 9m20s for one
+// animal; the frog and the turtle together would be 18m40s against the
+// suites job's own 20-minute cap in .github/workflows/suites.yml, and a
+// shared float regression would kill the job before either check could
+// report what it saw. Two attempts is 9m20s for the pair, which leaves the
+// other four suites their three and a half minutes and room to spare — and
+// it is exactly what the frog's hand-written retry always did.
+async function chainUntil(species, evId, ms, seed, ok, tries = 2) {
   let r = null;
   for (let i = 1; i <= tries; i++) {
     r = await chain(species, evId, ms, seed);
