@@ -97,6 +97,14 @@ const chk = (ok, l, d) => { (ok ? pass : fail).push(l); console.log(`${ok ? '  â
  * `tries` now passes. That is the price of testing a stochastic system at
  * all, and the failure messages carry `tries` so a check that needed three
  * goes says so instead of looking clean.
+ *
+ * THE ONE WAY TO GET THIS WRONG is a partial `ok`. A predicate that stops
+ * on less than the check asks for retries the parts it names and abandons
+ * the rest: the cougar's stalk was wrapped with a predicate that waited
+ * only for the bout to RUN, so the speed comparison it is actually about
+ * got one attempt exactly as before, and duly went red on the next run.
+ * Every predicate below is its check's own condition, terms and all, and a
+ * new one belongs beside the chk it serves rather than near the fixture.
  */
 async function bout(pg, src, ok, tries = 4) {
   let r = null;
@@ -2206,7 +2214,10 @@ async function bout(pg, src, ok, tries = 4) {
     // shove these two have always had
     return { wolf: await climb("wolf", 20), turtle: await climb("turtle", 20) };
   })(window.__saiWorld)`,
-    (x) => x.wolf && x.wolf.plats.includes("step") && x.wolf.lvls.includes("1") && x.wolf.footN > 0 && x.wolf.footBad === 0 && !x.wolf.wall && x.turtle && x.turtle.plats.length === 0);
+    (x) => x.wolf && x.wolf.plats.includes("step") && x.wolf.lvls.includes("1")
+           && x.wolf.footN > 0 && x.wolf.footBad === 0 && !x.wolf.wall
+           && x.wolf.arc && x.wolf.arc.lift > 8 && x.wolf.arc.z1 > x.wolf.arc.z0
+           && x.turtle && x.turtle.plats.length === 0 && x.turtle.end === 0);
   const W = r.wolf, T = r.turtle;
   chk(!!W && W.plats.includes('step'),
     'a wolf walking at the riser lands on the new ledge',
@@ -3337,7 +3348,8 @@ async function bout(pg, src, ok, tries = 4) {
              placed: placed, frames: Object.keys(states).map(function (k) {
                return k + ' x' + states[k]; }).join(' ') };
   })(window.__saiWorld)`,
-    (x) => !x.none && x.lvls.indexOf("1") > 0 && (x.states.preyclimb || 0) > 0);
+    (x) => !x.none && x.lvls.indexOf("1") > 0 && (x.states.preyclimb || 0) > 0
+           && x.maxZ > 8 && x.on && !x.wall && x.level === x.lvl);
   chk(!climb.none && climb.lvls.indexOf('1') > 0,
     'the goat gets up onto the cave shelf, which he can only do by leaping',
     climb.none ? 'no goat' : `terraces seen: ${climb.lvls}, ending in the ${climb.band}` +
@@ -3714,7 +3726,8 @@ async function bout(pg, src, ok, tries = 4) {
              fed: (seen['owlmantle'] | 0) > 0,
              nestI: a._nestI, zAfter: a.z };
   })()`,
-    (x) => !x.none && x.glideFrames > 6 && x.landed);
+    (x) => !x.none && x.glideFrames > 6 && x.maxGlideZ > 30
+           && x.landed && x.zAtStrike >= 0 && x.zAtStrike < 6);
   chk(!O.none && O.glideFrames > 6 && O.maxGlideZ > 30,
     'the owl comes in off the ground: the approach is a glide, not a march',
     O.none || `held ${O.maxGlideZ.toFixed(0)}px up for ${O.glideFrames} frames of glide ` +
@@ -3861,7 +3874,9 @@ async function bout(pg, src, ok, tries = 4) {
              finished: (seen['raccray'] | 0) + (seen['racempty'] | 0) > 0,
              preyRho: w.lakeRhoAt(g.x, g.y) };
   })()`,
-    (x) => !x.none && x.finished && x.wetAtFix && x.fixFrames >= 100);
+    (x) => !x.none && x.finished && x.wetAtFix && x.fixFrames >= 100
+           && x.rhoAtFix > 0.80 && x.rhoAtFix < 1.00
+           && x.crossedDam === 0 && x.dryWorkFrames === 0);
   chk(!X.none && X.wetAtFix && X.rhoAtFix > 0.80 && X.rhoAtFix < 1.00,
     'the raccoon works the crayfish in the shallows, not out in the lake',
     X.none || (X.rhoAtFix > 0
@@ -3901,7 +3916,7 @@ async function bout(pg, src, ok, tries = 4) {
              fixFrames: seen['racfix'] | 0, grabFrames: seen['racgrab'] | 0,
              finished: (seen['racmunch'] | 0) + (seen['racmiss'] | 0) > 0 };
   })()`,
-    (x) => !x.none && x.finished);
+    (x) => !x.none && x.finished && x.wetFrames === 0);
   chk(!Y.none && Y.finished && Y.wetFrames === 0,
     'the mouse hunt keeps him out of the water entirely',
     Y.none || (Y.finished
@@ -3985,7 +4000,8 @@ async function bout(pg, src, ok, tries = 4) {
     return { rac: land('raccoon', 'ratting', ['berry', 'paws', 'roost', 'crayfish'], 'woodmouse', 100, 'racgrab', w.__frames('raccoon', 'ratting')),
              owl: land('owl', 'swoop', ['hoot', 'roost'], 'gartersnake', 180, 'owlswoop', w.__frames('owl', 'swoop')) };
   })()`,
-    (x) => x.rac && !x.rac.setup && !x.rac.ranOut && x.owl && !x.owl.setup && !x.owl.ranOut);
+    (x) => x.rac && !x.rac.setup && !x.rac.ranOut && x.rac.minD <= 22 && x.rac.goLeft > 0
+           && x.owl && !x.owl.setup && !x.owl.ranOut && x.owl.minD <= 26 && x.owl.goLeft > 0);
   const said = (r, reach, dash) =>
     !r ? 'never got to ask: the fixture returned nothing'
     : r.setup ? `never got to ask: ${r.setup}`
@@ -4286,7 +4302,8 @@ async function bout(pg, src, ok, tries = 4) {
              fixFrames: fixN, fixMoved: fixMoved, dashPx: dashPx, dashFrames: dashN,
              dashBudget: dashBudget };
   })()`,
-    (x) => !x.none && x.creptFrames > 8 && x.fixFrames > 0 && x.dashFrames > 0);
+    (x) => !x.none && x.creptFrames > 8 && x.urg < 0.30 && x.fixFrames > 0
+           && x.fixMoved < 2 && x.dashFrames > 0 && (S.none || x.creepSpeed < S.cruise));
   const cruise = S.none ? 0 : S.cruise;
   chk(!P.none && cruise > 0 && P.creptFrames > 8 && P.urg < 0.30 && P.creepSpeed < cruise,
     'he stalks in at less than his own walking pace',
@@ -5223,7 +5240,9 @@ async function bout(pg, src, ok, tries = 4) {
              spent: bed.spent, inCave: bed.inCave, tried: tried,
              cougarOnShelf: onShelf, onStone: onStone };
   })()`,
-    (x) => !x.none && x.lvl === 1 && !x.onPlat && !x.inCave && x.frames > 40 && x.onStone === "refused" && x.cougarOnShelf === 0 && x.tried > 0);
+    (x) => !x.none && x.lvl === 1 && !x.onPlat && !x.inCave && x.frames > 40
+           && x.spent <= 31000 && x.onStone === "refused"
+           && x.cougarOnShelf === 0 && x.tried > 0);
   chk(!B2.none && B2.lvl === 1 && !B2.onPlat && !B2.inCave && B2.frames > 40
       && B2.spent <= 31000 && B2.onStone === 'refused',
     'he beds down ON the terrace, not on the stone, so nothing moves him after nine seconds',
