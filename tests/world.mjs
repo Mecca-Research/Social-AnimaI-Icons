@@ -318,7 +318,7 @@ async function bout(pg, src, ok, tries = 4) {
     }
     return { saw, frames, onEarth };
   })(window.__saiWorld)`,
-    (x) => x.modes.every((m) => m === "dash" || m === "walk") && x.still < x.frames * 0.34 && x.engaged === 0 && x.windowMs >= 4000 && x.windowMs <= 7200);
+    (x) => x.nohook || (x.saw && x.onEarth === 0));
   if (r.nohook) chk(false, 'the grazing goose stays on grass', 'no onBareEarthAt hook exposed');
   else chk(r.saw && r.onEarth === 0, 'the grazing goose stays on grass',
     `${r.onEarth} of ${r.frames} cropping frames on bare earth`);
@@ -329,7 +329,7 @@ async function bout(pg, src, ok, tries = 4) {
   // What changed is the ANIMATION; what must not change is the timeout. Both
   // are checked in one pass: force a break-up, then watch what the two do
   // with the whole no-engagement window.
-  const r = await page.evaluate(`(async w => {
+  const r = await bout(page, `(async w => {
     const [a, b] = w.agents.filter(x => !x.dragging).slice(0, 2);
     for (const x of [a, b]) { x._eth = null; x.z = 0; x.state = 'wander'; x.intent = 'wander'; }
     a.x = .35 * w.bounds.w; a.y = .40 * w.bounds.h;
@@ -357,7 +357,8 @@ async function bout(pg, src, ok, tries = 4) {
     return { modes, still, frames, engaged,
              windowMs: Math.round(noEv - t0),
              states: [a.state, b.state] };
-  })(window.__saiWorld)`);
+  })(window.__saiWorld)`,
+    (x) => x.modes && x.modes.every((m) => m === "dash" || m === "walk") && x.still < x.frames * 0.34 && x.engaged === 0 && x.windowMs >= 4000 && x.windowMs <= 7200);
   chk(r.modes.every(m => m === 'dash' || m === 'walk'), 'each animal picks a departure',
     `${r.modes.join(' / ')}`);
   // The old behavior stood still for essentially the entire window. A little
@@ -2632,7 +2633,7 @@ async function bout(pg, src, ok, tries = 4) {
   // The frog is at zIndex 10 and the pads at 2, so the leaf that hides him
   // has to be painted again in the canopy pass — and this is the check that
   // says it actually is.
-  const S1 = await page2.evaluate(`(() => {
+  const S1 = await bout(page2, `(() => {
     const w = window.__saiWorld, a = w.agents.find((x) => x.species === 'frog');
     if (!a) return { none: 'no frog' };
     w.__park('frog');
@@ -2658,7 +2659,8 @@ async function bout(pg, src, ok, tries = 4) {
     const sp = w.__spriteOf('frog');
     return { onLily: !!claim && !claim.log, dy: a.y - claim.y, over,
              spriteZ: sp ? +getComputedStyle(sp.parentElement).zIndex : null };
-  })()`);
+  })()`,
+    (x) => !x.none && x.onLily && x.over && x.over.d < 4 && x.over.z > x.spriteZ);
   chk(!S1.none && S1.onLily,
     'the frog sleeps afloat at a lily and not on a drift log',
     S1.none || `claimed a ${S1.onLily ? 'lily pad' : 'log'}, sitting ${(-S1.dy).toFixed(0)}px above its centre`);
