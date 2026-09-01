@@ -47,11 +47,29 @@ const r = await page.evaluate(`(() => { const {gait,SPEED}=window.__saiGait, w=w
     // "how fast does it get around", not "how fast can it go". Fifty seconds
     // so the 8.6s band cycle averages out instead of biasing the reading.
     {
-      const a={species:sp,x:0,y:0,_wet:false};
+      // ...AND THE PHASE IS PINNED, exactly as the burst sample below pins
+      // it. Gait.js seeds the band phase with Math.random() on an animal's
+      // first tick (Gait.js:140), so without this every species is averaged
+      // from a different point on its own two-harmonic band and the
+      // ORDERING checks are comparing unlike samples. Fifty seconds damps
+      // that but does not remove it — the window is 5.8 cycles, not a whole
+      // number — and CI duly measured the turtle and the frog equal when
+      // the table has them a factor of two apart. One phase for all
+      // fourteen is what makes "slower than" mean anything here.
+      const a={species:sp,x:0,y:0,_wet:false,_gph:1};
       const ctx={now:performance.now(),dt:1/60,cfg,isWet:()=>false};
       let sum=0; const N=3000;
       for(let i=0;i<N;i++){ ctx.now+=16.7; sum+=gait(a,ctx,0.30); }
-      o.cruise=Math.round(sum/N);
+      // ROUNDED FOR READING, RAW FOR COMPARING. Rounding before the
+      // comparison throws away exactly the distinction the ordering checks
+      // below are about: the turtle at 23.6 and the frog at 24.4 are both
+      // 24, and the turtle-under-frog assertion is then false for two animals
+      // a whole table apart (speed 1.6 against 3). CI duly produced
+      // "turtle 24 vs next-slowest frog 24" and called it a failure of the
+      // gait model. The messages keep the round number; the assertions read
+      // what was actually measured.
+      o.cruiseRaw=sum/N;
+      o.cruise=Math.round(o.cruiseRaw);
     }
     // Top is CAPABILITY: flat out, while fresh. Three things had to be
     // controlled to read it at all, and each one had corrupted the number
@@ -121,16 +139,16 @@ chk(damped.length === 0, 'bursts survive the speed easing',
   damped.length
     ? damped.map(k => `${k} promised ${r[k].bK}x, got ${(r[k].burst/r[k].top).toFixed(2)}x`).join('; ')
     : `all 14 deliver their table kick (frog ${(r.frog.burst/r.frog.top).toFixed(1)}x of ${r.frog.bK})`);
-chk(r.turtle.cruise < r.frog.cruise, 'turtle is the slowest animal by cruise too',
-  `turtle ${r.turtle.cruise} vs next-slowest frog ${r.frog.cruise}`);
+chk(r.turtle.cruiseRaw < r.frog.cruiseRaw, 'turtle is the slowest animal by cruise too',
+  `turtle ${r.turtle.cruiseRaw.toFixed(1)} vs next-slowest frog ${r.frog.cruiseRaw.toFixed(1)}`);
 chk(r.turtle.cruise > 15, 'turtle still gets around', `${r.turtle.cruise} px/s`);
 chk(r.cougar.top > r.deer.top && r.deer.top > r.bear.top,
   'top speeds follow the real-world order at the fast end',
   `cougar ${r.cougar.top} > deer ${r.deer.top} > bear ${r.bear.top}`);
-chk(r.wolf.cruise > r.cougar.cruise, 'wolf cruises harder than the cougar (endurance vs ambush)',
+chk(r.wolf.cruiseRaw > r.cougar.cruiseRaw, 'wolf cruises harder than the cougar (endurance vs ambush)',
   `wolf ${r.wolf.cruise} vs cougar ${r.cougar.cruise}`);
 chk(r.cougar.top > r.wolf.top, 'cougar out-sprints the wolf', `${r.cougar.top} vs ${r.wolf.top}`);
-chk(r.turtle.cruise < r.hedgehog.cruise && r.hedgehog.cruise < r.skunk.cruise,
+chk(r.turtle.cruiseRaw < r.hedgehog.cruiseRaw && r.hedgehog.cruiseRaw < r.skunk.cruiseRaw,
   'slow end ordered turtle < hedgehog < skunk',
   `${r.turtle.cruise} < ${r.hedgehog.cruise} < ${r.skunk.cruise}`);
 
